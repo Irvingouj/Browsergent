@@ -7,6 +7,7 @@ import type {
 } from "../types/messages";
 import type { BrowserCommand, BrowserResult } from "../types/browser";
 import { AgentLoop } from "../worker/agent-loop";
+import { LuaRuntime } from "../worker/lua-runtime";
 import type { AnthropicConfig } from "../worker/anthropic";
 
 type Tab = "chat" | "lua";
@@ -42,6 +43,7 @@ const App: FunctionalComponent = () => {
   const [luaCode, setLuaCode] = useState("");
   const [luaOutput, setLuaOutput] = useState("");
   const agentLoopRef = useRef<AgentLoop | null>(null);
+  const luaRuntimeRef = useRef<LuaRuntime | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -121,9 +123,41 @@ const App: FunctionalComponent = () => {
     setShowSettings(false);
   }, [apiKey]);
 
-  const handleLuaRun = useCallback(() => {
+  const handleLuaRun = useCallback(async () => {
+    if (!luaCode.trim()) return;
     setTrace([]);
-    setLuaOutput("Lua runtime not yet available.\n");
+    setLuaOutput("");
+
+    if (!luaRuntimeRef.current) {
+      const rt = new LuaRuntime();
+      try {
+        await rt.init();
+        luaRuntimeRef.current = rt;
+      } catch (err) {
+        setLuaOutput(`Failed to initialize Lua runtime: ${err instanceof Error ? err.message : String(err)}\n`);
+        return;
+      }
+    }
+
+    luaRuntimeRef.current.run(luaCode, {
+      onOutput(text) {
+        setLuaOutput((prev) => prev + text);
+      },
+      onTrace(entry) {
+        setTrace((prev) => {
+          const idx = prev.findIndex((e) => e.id === entry.id);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = entry;
+            return updated;
+          }
+          return [...prev, entry];
+        });
+      },
+      executeCommand(command) {
+        return executeBrowserCommand(command);
+      },
+    });
   }, [luaCode]);
 
   const isRunning = status === "running" || status === "waiting_for_model" || status === "executing_tool";
