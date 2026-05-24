@@ -11,10 +11,12 @@ export type PanelToWorker =
   | { type: "settingsUpdated"; settings: WorkerSettings }
   | { type: "luaRun"; id: string; code: string; stdin?: string }
   | { type: "luaStop" }
-  | { type: "luaReset" };
+  | { type: "luaReset" }
+  | { type: "relayResult"; id: string; result: unknown };
 
 export interface WorkerSettings {
   anthropicApiKey?: string;
+  baseUrl?: string;
   model: string;
 }
 
@@ -29,7 +31,8 @@ export type WorkerToPanel =
   | { type: "agentError"; error: BrowsergentError }
   | { type: "luaOutput"; id: string; output: string }
   | { type: "luaTrace"; entry: ActionTraceEntry }
-  | { type: "luaError"; id: string; error: string };
+  | { type: "luaError"; id: string; error: string }
+  | { type: "relayRequest"; id: string; payload: Record<string, unknown> };
 
 // --- Agent Status ---
 

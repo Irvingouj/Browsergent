@@ -42,7 +42,8 @@ function resolveElement(refId: RefId): { ok: true; element: Element } | { ok: fa
 
 function isVisible(el: Element): boolean {
   const htmlEl = el as HTMLElement;
-  if (htmlEl.offsetParent === null && (htmlEl as HTMLInputElement).type !== "hidden") return false;
+  if (htmlEl instanceof HTMLInputElement && htmlEl.type === "hidden") return false;
+  if (htmlEl.offsetParent === null) return false;
   const style = window.getComputedStyle(htmlEl);
   return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
 }
@@ -157,7 +158,18 @@ function executeClear(refId: RefId): BrowserResult {
   const resolved = resolveElement(refId);
   if (!resolved.ok) return resolved;
   const el = resolved.element as HTMLInputElement;
+  const tag = el.tagName.toLowerCase();
+  if (tag !== "input" && tag !== "textarea" && el.contentEditable !== "true") {
+    return { ok: false, error: "Element not fillable", code: "E_NOT_FILLABLE" };
+  }
+  if (el.disabled) {
+    return { ok: false, error: "Element disabled", code: "E_NOT_INTERACTABLE" };
+  }
+  if (el.contentEditable === "true") {
+    el.textContent = "";
+  } else {
   el.value = "";
+  }
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
   return { ok: true, value: { cleared: true } };
@@ -176,8 +188,9 @@ function executeSelect(refId: RefId, value: string): BrowserResult {
 }
 
 function executePress(key: string): BrowserResult {
-  document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
-  document.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
+  const target = document.activeElement ?? document.body;
+  target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
   return { ok: true, value: { pressed: key } };
 }
 
@@ -219,11 +232,15 @@ export function executeCommand(command: BrowserCommand): BrowserResult {
   }
 }
 
-chrome.runtime.onMessage.addListener(
-  (message: { type: "executeCommand"; command: BrowserCommand }, _sender, sendResponse) => {
-    if (message.type !== "executeCommand") return false;
-    const result = executeCommand(message.command);
-    sendResponse({ type: "commandResult", result });
-    return false;
-  }
-);
+if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener(
+    (message: { type: "executeCommand"; command: BrowserCommand }, _sender, sendResponse) => {
+      if (message.type !== "executeCommand") return false;
+      const result = executeCommand(message.command);
+      sendResponse({ type: "commandResult", result });
+      return false;
+    }
+  );
+}
+
+(globalThis as unknown as { __browsergentExecuteCommand?: typeof executeCommand }).__browsergentExecuteCommand = executeCommand;

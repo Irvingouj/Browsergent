@@ -5,6 +5,11 @@ import type { BrowserCommand, BrowserResult } from "../types/browser";
 const CONTENT_SCRIPT_PATH = "content-script.js";
 
 const injectedTabs = new Set<number>();
+let lastPageTabId: number | undefined;
+
+function isExtensionUrl(url: string | undefined): boolean {
+  return typeof url === "string" && url.startsWith(`chrome-extension://${chrome.runtime.id}/`);
+}
 
 async function ensureContentScript(tabId: number): Promise<void> {
   if (injectedTabs.has(tabId)) return;
@@ -23,6 +28,23 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading") {
     injectedTabs.delete(tabId);
   }
+  if (changeInfo.status === "complete") {
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) return;
+      if (!isExtensionUrl(tab.url)) {
+        lastPageTabId = tabId;
+      }
+    });
+  }
+});
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError) return;
+    if (!isExtensionUrl(tab.url)) {
+      lastPageTabId = tabId;
+    }
+  });
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -69,7 +91,12 @@ chrome.runtime.onMessage.addListener(
 async function handleBrowserCommand(
   command: BrowserCommand,
 ): Promise<CommandResponse> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = activeTab && !isExtensionUrl(activeTab.url)
+    ? activeTab
+    : lastPageTabId === undefined
+      ? undefined
+      : await chrome.tabs.get(lastPageTabId);
   if (!tab?.id) {
     return {
       type: "commandResult",

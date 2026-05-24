@@ -36,12 +36,16 @@ function unwrap<T>(json: string): T {
 
 export async function initWasm(): Promise<void> {
   if (wasmReady) return;
-  // Dynamic import of the WASM module from pi-host-web build output
-  // In development, this will be copied from ../pi-oxide/pkg
-  const imports: Record<string, unknown> = {};
-  // @ts-expect-error -- Vite dynamic import for WASM glue code
-  const mod = await import("/pkg/pi_host_web.js");
-  await mod.default(imports);
+  const wasmUrl =
+    typeof chrome !== "undefined" && chrome.runtime?.getURL
+      ? chrome.runtime.getURL("pkg/pi_host_web.js")
+      : "/pkg/pi_host_web.js";
+  const mod = (await import(/* @vite-ignore */ wasmUrl)) as WasmModule & {
+    default?: (moduleOrPath?: unknown) => Promise<unknown>;
+  };
+  if (typeof mod.default === "function") {
+    await mod.default();
+  }
   wasmModule = mod as unknown as WasmModule;
   wasmReady = true;
 }

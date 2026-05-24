@@ -18,7 +18,7 @@ interface LuaRunResult {
   commands: unknown[];
   fuel_exhausted: boolean;
   execution_count: number;
-  status: "done" | "async_wait" | "error";
+  status: "done" | "async_pending";
   pending_command: {
     call_id: number;
     action: string;
@@ -39,7 +39,6 @@ export interface LuaCallbacks {
 }
 
 let luaWasmReady = false;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let WasmSessionCtor: new () => LuaWasmSession;
 
 interface LuaWasmSession {
@@ -53,29 +52,19 @@ interface LuaWasmSession {
 async function initLuaWasm(): Promise<void> {
   if (luaWasmReady) return;
 
-  // Load the WASM JS glue code via script tag
-  // In a Chrome extension, extension pages can load sibling scripts
-  const existingScript = document.querySelector('script[src*="piccolo"]');
-  if (!existingScript) {
-    const script = document.createElement("script");
-    script.src = "./pkg/piccolo_notebook_wasm.js";
-    script.type = "module";
-
-    await new Promise<void>((resolve, reject) => {
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load piccolo WASM JS"));
-      document.head.appendChild(script);
-    });
-  }
-
-  // The wasm-bindgen --target web exports are on the module scope.
-  // Since we loaded via script tag, we need to use dynamic import.
-  // Chrome extension pages support import() for URLs within the extension.
-  const wasmUrl = chrome.runtime.getURL("pkg/piccolo_notebook_wasm.js");
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
-  const mod = await import(/* @vite-ignore */ wasmUrl);
+  const wasmUrl =
+    typeof chrome !== "undefined" && chrome.runtime?.getURL
+      ? chrome.runtime.getURL("pkg/piccolo_notebook_wasm.js")
+      : "/pkg/piccolo_notebook_wasm.js";
+  const mod = (await import(/* @vite-ignore */ wasmUrl)) as {
+    default?: (moduleOrPath?: unknown) => Promise<unknown>;
+    WasmSession?: new () => LuaWasmSession;
+  };
   if (typeof mod.default === "function") {
     await mod.default();
+  }
+  if (!mod.WasmSession) {
+    throw new Error("piccolo WASM module did not export WasmSession");
   }
   WasmSessionCtor = mod.WasmSession;
   luaWasmReady = true;
@@ -85,122 +74,50 @@ async function initLuaWasm(): Promise<void> {
 function mapLuaToCommand(action: string, params: unknown): BrowserCommand {
   const p = params as Record<string, unknown>;
   switch (action) {
-    case "page.snapshot":
-      return { kind: "page.snapshot", options: { onlyVisible: p.only_visible as boolean | undefined } };
-    case "page.click":
-      return { kind: "page.click", refId: p.ref_id as string };
-    case "page.fill":
-      return { kind: "page.fill", refId: p.ref_id as string, text: p.text as string };
-    case "page.clear":
-      return { kind: "page.clear", refId: p.ref_id as string };
-    case "page.select":
-      return { kind: "page.select", refId: p.ref_id as string, value: p.value as string };
-    case "page.press":
+    case "host_browsergent_page_clear":
+      return { kind: "page.clear", refId: p.refId as string };
+    case "host_browsergent_page_extract":
+      return { kind: "page.extract", refId: p.refId as string | undefined };
+    case "page_snapshot":
+      return { kind: "page.snapshot", options: { onlyVisible: p.onlyVisible as boolean | undefined } };
+    case "page_click":
+      return { kind: "page.click", refId: p.refId as string };
+    case "page_fill":
+      return { kind: "page.fill", refId: p.refId as string, text: p.value as string };
+    case "page_clear":
+      return { kind: "page.clear", refId: p.refId as string };
+    case "page_select":
+      return { kind: "page.select", refId: p.refId as string, value: p.value as string };
+    case "page_press":
       return { kind: "page.press", key: p.key as string };
-    case "page.scroll":
+    case "page_scroll":
       return { kind: "page.scroll", direction: p.direction as "up" | "down", amount: p.amount as number | undefined };
-    case "page.extract":
-      return { kind: "page.extract", refId: p.ref_id as string | undefined };
-    case "page.goto":
+    case "page_extract":
+      return { kind: "page.extract", refId: p.refId as string | undefined };
+    case "page_goto":
       return { kind: "page.goto", url: p.url as string };
-    case "page.back":
+    case "page_back":
       return { kind: "page.back" };
-    case "page.forward":
+    case "page_forward":
       return { kind: "page.forward" };
-    case "page.reload":
+    case "page_reload":
       return { kind: "page.reload" };
     default:
-      return { kind: "page.snapshot" };
+      throw new Error(`Unsupported Lua page action: ${action}`);
   }
 }
 
-/** The page.* library source injected into the Lua VM. */
-const PAGE_LIBRARY = `
-local page = {}
-
-function page.snapshot(options)
-  options = options or {}
-  coroutine.yield({
-    action = "page.snapshot",
-    params = { only_visible = options.only_visible }
-  })
+const BROWSERGENT_PAGE_LIBRARY = `
+if page.clear == nil then
+  function page.clear(ref_id)
+    return host.call("browsergent_page_clear", { refId = ref_id })
+  end
 end
 
-function page.click(ref_id)
-  coroutine.yield({
-    action = "page.click",
-    params = { ref_id = ref_id }
-  })
-end
-
-function page.fill(ref_id, text)
-  coroutine.yield({
-    action = "page.fill",
-    params = { ref_id = ref_id, text = text }
-  })
-end
-
-function page.clear(ref_id)
-  coroutine.yield({
-    action = "page.clear",
-    params = { ref_id = ref_id }
-  })
-end
-
-function page.select(ref_id, value)
-  coroutine.yield({
-    action = "page.select",
-    params = { ref_id = ref_id, value = value }
-  })
-end
-
-function page.press(key)
-  coroutine.yield({
-    action = "page.press",
-    params = { key = key }
-  })
-end
-
-function page.scroll(direction, amount)
-  coroutine.yield({
-    action = "page.scroll",
-    params = { direction = direction, amount = amount }
-  })
-end
-
-function page.extract(ref_id)
-  coroutine.yield({
-    action = "page.extract",
-    params = { ref_id = ref_id }
-  })
-end
-
-function page.goto(url)
-  coroutine.yield({
-    action = "page.goto",
-    params = { url = url }
-  })
-end
-
-function page.back()
-  coroutine.yield({
-    action = "page.back",
-    params = {}
-  })
-end
-
-function page.forward()
-  coroutine.yield({
-    action = "page.forward",
-    params = {}
-  })
-end
-
-function page.reload()
-  coroutine.yield({
-    action = "page.reload",
-    params = {}
-  })
+if page.extract == nil then
+  function page.extract(ref_id)
+    return host.call("browsergent_page_extract", { refId = ref_id })
+  end
 end
 `;
 
@@ -212,8 +129,7 @@ export class LuaRuntime {
     await initLuaWasm();
     this.session = new WasmSessionCtor();
     this.session.set_fuel_limit(100000);
-    // Load the page.* library
-    this.session.load_library(PAGE_LIBRARY);
+    this.session.load_library(BROWSERGENT_PAGE_LIBRARY);
   }
 
   async run(code: string, callbacks: LuaCallbacks): Promise<void> {
@@ -227,7 +143,7 @@ export class LuaRuntime {
     let step = 0;
 
     // Handle async yield/resume loop
-    while (result.status === "async_wait" && result.pending_command && !this.aborted) {
+    while (result.status === "async_pending" && result.pending_command && !this.aborted) {
       step++;
       const cmd = result.pending_command;
       const command = mapLuaToCommand(cmd.action, cmd.params);
@@ -252,7 +168,7 @@ export class LuaRuntime {
         timestamp: Date.now(),
       });
 
-      // Output any stdout
+      // Flush stdout produced before this async boundary.
       for (const line of result.stdout) {
         callbacks.onOutput(line + "\n");
       }
@@ -293,6 +209,6 @@ export class LuaRuntime {
 
   reset(): void {
     this.session?.reset();
-    this.session?.load_library(PAGE_LIBRARY);
+    this.session?.load_library(BROWSERGENT_PAGE_LIBRARY);
   }
 }
