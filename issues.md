@@ -115,6 +115,84 @@ Same applies to agent: the worker has `handleAgentStart` with full `AgentLoop` w
 
 ---
 
+## Issue 8: Chat history is wiped on every new prompt
+
+**User report**: After typing a new message, old chat messages disappear.
+
+**Verdict: VALID.**
+
+`src/sidepanel/app.tsx` currently clears the transcript at the start of every chat run:
+
+```typescript
+setMessages([]);
+setTrace([]);
+```
+
+That makes the UI behave like a single-shot task runner, not a chat/playbook session. From the customer's point of view, this is broken: each new prompt should append to the existing transcript so the user can see what they asked, what the assistant answered, and what browser actions happened before.
+
+There is a second related gap: `AgentLoop.run()` starts each provider request from only the current task, so even if the UI preserves old messages, the LLM still does not receive prior chat context. The visible transcript and the model context should match unless the product explicitly shows a separate "new run" boundary.
+
+**Expected behavior**:
+- Sending a new prompt appends a new user message.
+- Previous user, assistant, and system messages remain visible.
+- Prior action trace remains visible or is separated by an explicit run boundary.
+- The task input clears after the run starts.
+- A regression test sends two prompts and asserts the first prompt and first answer remain visible after the second answer appears.
+- If the product is intended to be multi-turn chat, the provider request includes relevant prior messages instead of only the newest task.
+
+**Fix**:
+- Remove `setMessages([])` from `handleRun`.
+- Do not clear `trace` silently on chat runs; either preserve it or append a visible run separator.
+- Clear only `taskInput` after capturing `taskInput.trim()`.
+- Extend `AgentLoop.run()` or its caller to pass prior transcript into the provider message list if multi-turn context is required.
+
+---
+
+## Issue 9: Assistant messages are not rendered streaming
+
+**User report**: The agent's message does not render incrementally while the model is generating.
+
+**Verdict: VALID.**
+
+This is observable from the implementation. `src/worker/anthropic.ts` is explicitly non-streaming:
+
+```typescript
+/**
+ * Anthropic Messages API adapter for Browsergent.
+ * Non-streaming for v1 simplicity.
+ */
+```
+
+`src/worker/agent-loop.ts` also waits for the whole provider response before emitting an assistant message:
+
+```typescript
+const result = await callAnthropic(messages, config, this.abortController?.signal);
+...
+if (result.text) {
+  callbacks.onMessage("assistant", result.text);
+}
+```
+
+So the UI cannot stream today. It only receives one final assistant message after the HTTP request completes and the JSON body is parsed.
+
+This is especially visible with real providers because the status changes to `waiting_for_model`, then the chat area stays unchanged until the full response arrives.
+
+**Expected behavior**:
+- As soon as the provider emits text deltas, the chat panel shows an assistant message.
+- Subsequent deltas append to that same assistant message instead of creating many separate messages.
+- Tool calls still work: streaming text is finalized before tool execution, and tool-use blocks are passed to pi-core after the model turn completes.
+- Stop aborts the provider stream and leaves the partial assistant text visible with an interrupted status.
+- A regression test uses a mocked streaming response with delayed chunks and asserts partial text appears before the final chunk.
+
+**Fix**:
+- Add streaming support to the provider adapter using `stream: true` and Server-Sent Events parsing.
+- Add an `onTextDelta(delta: string)` callback or an `onMessageDelta(id, delta)` callback through `AgentLoopCallbacks`.
+- In the side panel, create one assistant message when the first delta arrives, then update that message by id for later deltas.
+- Preserve the final assembled text for `wasmOnLlmDone()` and provider transcript history.
+- Keep a non-streaming fallback only if the configured provider does not support streaming.
+
+---
+
 ## Summary
 
 | # | Issue | Severity | Status |
@@ -126,5 +204,7 @@ Same applies to agent: the worker has `handleAgentStart` with full `AgentLoop` w
 | 5 | Params shape consistency | None | No issue |
 | 6 | No stdin support | None | Not needed |
 | 7 | Worker handleLuaRun is dead code | **High** | Same fix as #1 |
+| 8 | Chat history is wiped on every new prompt | **High** | Fix needed |
+| 9 | Assistant messages are not rendered streaming | **High** | Fix needed |
 
 **Priority fix**: Move both AgentLoop and LuaRuntime execution into the Web Worker. The worker code is already written and correct — the UI just needs to post messages instead of calling runtimes directly.

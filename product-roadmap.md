@@ -67,11 +67,13 @@ Successful run:
 ```text
 User: Fill the email field with test@example.com and submit.
 Agent: I will inspect the page.
-Trace: page_snapshot -> ok, 5 elements
-Trace: page_fill e2 "test@example.com" -> ok
-Trace: page_click e4 -> ok
+Trace: run_lua -> page.snapshot() -> ok, 5 elements
+Trace: run_lua -> page.fill("e2", "test@example.com") -> ok
+Trace: run_lua -> page.click("e4") -> ok
 Agent: Done. I filled the email field and clicked Submit.
 ```
+
+The LLM generates Lua code, which calls page.* APIs. Each run_lua invocation may contain multiple page.* operations.
 
 Blocked run:
 
@@ -120,17 +122,21 @@ key attributes
 
 ### Page Actions
 
-| Tool | Customer-visible result |
-|------|-------------------------|
-| `page_snapshot` | Agent sees current controls |
-| `page_click` | Agent clicks an element |
-| `page_fill` | Agent fills an input |
-| `page_clear` | Agent clears an input |
-| `page_select` | Agent selects an option |
-| `page_press` | Agent presses a key |
-| `page_scroll` | Agent scrolls |
-| `page_extract` | Agent reads page text |
-| `page_goto/back/forward/reload` | Agent navigates current tab |
+The LLM has a single tool: `run_lua`. It generates Lua code that calls these `page.*` APIs:
+
+| Lua API | Customer-visible result |
+|---------|-------------------------|
+| `page.snapshot()` | Agent sees current controls |
+| `page.click(ref_id)` | Agent clicks an element |
+| `page.fill(ref_id, text)` | Agent fills an input |
+| `page.clear(ref_id)` | Agent clears an input |
+| `page.select(ref_id, value)` | Agent selects an option |
+| `page.press(key)` | Agent presses a key |
+| `page.scroll(direction, amount?)` | Agent scrolls |
+| `page.extract(ref_id?)` | Agent reads page text |
+| `page.goto(url)` / `page.back()` / `page.forward()` / `page.reload()` | Agent navigates current tab |
+
+The LLM never calls these directly — it generates Lua code that calls them.
 
 ### Trace
 
@@ -194,7 +200,9 @@ selector-based actions
 
 ```text
 Agent-first UI with required Lua playbook surface.
-Typed browser tools only (shared by agent and Lua).
+LLM → run_lua → Lua → page.* — the only execution path.
+LLM's only tool is run_lua. LLM does reasoning, Lua does acting.
+Typed browser commands only (shared by agent and Lua).
 ref_id instead of selectors.
 activeTab instead of broad host permissions.
 Side panel Worker owns long-running state.

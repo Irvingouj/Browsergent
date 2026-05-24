@@ -10,8 +10,10 @@ Browsergent has **two required interfaces**:
 
 ```text
 Customer: "Fill the email field with test@example.com and submit."
-Browsergent: snapshots page -> fills field -> clicks submit -> reports result
+Browsergent: LLM generates Lua code -> Lua executes page.snapshot() -> page.fill() -> page.click() -> reports result
 ```
+
+The LLM's only tool is `run_lua`. It generates Lua code to interact with the browser. Lua is the execution layer.
 
 ### 2. Lua Playbooks (required)
 
@@ -29,7 +31,7 @@ Primary product promise:
 "Do this on the page for me."
 ```
 
-Browsergent is not a browser automation SDK, scraping framework, or Puppeteer wrapper. Chat is the primary interface. Lua playbooks are a required, first-class capability for power users and the agent runtime.
+Browsergent is not a browser automation SDK, scraping framework, or Puppeteer wrapper. Chat is the primary interface. Lua playbooks are a required, first-class capability for power users and the agent runtime. The agent uses Lua as its execution layer — the LLM's only tool is `run_lua`.
 
 ## Customer Expectations
 
@@ -71,6 +73,7 @@ Web Worker
   Anthropic provider call
   agent loop and stop/max-step lifecycle
   Lua runtime with page.* API
+  LLM's only tool: run_lua → Lua executes all page.* operations
 
 Background Service Worker
   active tab lookup
@@ -82,6 +85,8 @@ Content Script
   ref_id map
   typed page actions (shared by agent and Lua)
 ```
+
+Agent execution flow: LLM generates Lua code → LuaRuntime.run() → page.* calls yield BrowserCommands → content script executes → results resume back to Lua → Lua output returns to LLM.
 
 ## Existing Assets
 
@@ -109,13 +114,12 @@ piccolo Lua WASM in Worker (required)
 Anthropic Messages API integration
 activeTab + scripting permissions
 Dynamic content-script injection
-page_snapshot, page_click, page_fill, page_clear
-page_select, page_press, page_scroll, page_extract
-page_goto, page_back, page_forward, page_reload
+run_lua as LLM's only tool — LLM generates Lua code to control browser
+Lua page.* API: snapshot, click, fill, clear, select, press, scroll, extract, goto, back, forward, reload
 Action trace (shared by chat and Lua)
 Stop button
 Max steps, default 20
-Lua page.* API using same BrowserCommand path
+Lua page.* API using same BrowserCommand path (shared by agent and user playbooks)
 ```
 
 Do not build in v1:
@@ -187,6 +191,8 @@ Done when tests pass, API key storage works, errors are visible, no `any`/`Objec
 ```text
 Chat first.
 Lua playbooks are required, first-class.
+LLM → run_lua → Lua → page.* → BrowserCommand → content script.
+LLM's only browser tool is run_lua. LLM does reasoning, Lua does acting.
 Typed commands only.
 ref_id only, no selectors.
 activeTab only for v1.

@@ -77,7 +77,7 @@ page.click("e4")
 ## Test
 
 ```bash
-# E2E tests (14 tests)
+# E2E tests
 npx playwright test
 
 # TypeScript type check

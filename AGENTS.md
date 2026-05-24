@@ -14,10 +14,13 @@ Browsergent has **two required interfaces**:
 Architecture:
 
 - **Brain**: pi-core (Rust sans-IO state machine), compiled to WASM, runs in a Web Worker
-- **Reasoning**: Anthropic Claude (LLM streaming)
+- **Reasoning**: Anthropic Claude (LLM) — generates Lua code, does NOT call browser tools directly
+- **Acting**: Lua via piccolo WASM — the agent's ONLY tool is `run_lua`, which executes Lua code that calls `page.*` APIs
 - **Eyes and hands**: Content script with typed command protocol — snapshot, click, fill, scroll
-- **Lua**: Required runtime using piccolo WASM. Both the agent and direct user playbooks use it.
+- **Lua**: Required runtime using piccolo WASM. Both the agent (via `run_lua`) and direct user playbooks use the same `page.*` API.
 - **Platform**: Chrome Manifest V3 extension
+
+Core principle: **LLM does reasoning, Lua does acting.** The LLM's only browser tool is `run_lua`. All page.* operations go through Lua.
 
 ## Project Boundaries
 
@@ -310,7 +313,12 @@ Side Panel (Chat UI)
   ▼
 Web Worker
   ├─ pi-core Agent WASM (the brain — state machine, context projection)
-  ├─ piccolo Lua WASM (required playbook/tooling runtime)
+  ├─ Anthropic API call (LLM reasoning)
+  │     └─ LLM's only tool: run_lua → generates Lua code
+  │           │
+  │           ▼
+  ├─ piccolo Lua WASM (required — execution runtime)
+  │     └─ page.* API → yield BrowserCommand
   │
   │ chrome.runtime.sendMessage
   ▼
@@ -323,4 +331,4 @@ Content Script (in active tab)
   └─ result observation
 ```
 
-Core boundary: Agent emits typed tool calls. TypeScript host executes them. The agent never touches DOM or chrome APIs.
+Core boundary: LLM reasons and generates Lua code. Lua executes page.* operations that yield typed BrowserCommands. TypeScript host executes them. The LLM never touches DOM or chrome APIs — it only writes Lua.

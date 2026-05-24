@@ -288,22 +288,23 @@ never accept CSS selectors
 
 ## Agent Tool Mapping
 
-| pi-core tool | BrowserCommand |
-|--------------|----------------|
-| `page_snapshot` | `page.snapshot` |
-| `page_click` | `page.click` |
-| `page_fill` | `page.fill` |
-| `page_clear` | `page.clear` |
-| `page_select` | `page.select` |
-| `page_press` | `page.press` |
-| `page_scroll` | `page.scroll` |
-| `page_extract` | `page.extract` |
-| `page_goto` | `page.goto` |
-| `page_back` | `page.back` |
-| `page_forward` | `page.forward` |
-| `page_reload` | `page.reload` |
+The LLM has ONE tool: `run_lua`. It generates Lua code to control the browser.
 
-BrowserResult is converted to pi-core `ToolResult` or `ToolError`.
+```json
+{
+  "name": "run_lua",
+  "description": "Execute Lua code to control the browser. Available API:\n- page.snapshot() → returns page elements with ref_ids\n- page.click(ref_id) → click element\n- page.fill(ref_id, text) → fill input\n- page.clear(ref_id) → clear input\n- page.select(ref_id, value) → select option\n- page.press(key) → press key\n- page.scroll(direction, amount?) → scroll\n- page.extract(ref_id?) → extract text\n- page.goto(url) → navigate\n- page.back() / page.forward() / page.reload()",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "code": { "type": "string", "description": "Lua code to execute" }
+    },
+    "required": ["code"]
+  }
+}
+```
+
+The LLM never calls page.* directly. It generates Lua code, and LuaRuntime executes it.
 
 ## Agent Loop
 
@@ -313,17 +314,22 @@ BrowserResult is converted to pi-core `ToolResult` or `ToolError`.
 3. StreamLlm -> Worker calls Anthropic.
 4. Worker streams text to panel.
 5. Worker calls pi-core on_llm_done.
-6. ExecuteTools -> Worker maps ToolCall to BrowserCommand.
-7. Background forwards to content script.
-8. Worker appends trace entry.
-9. Worker calls pi-core on_tool_done.
-10. Repeat until Finished, stopped, error, or maxSteps.
+6. ExecuteTools -> Worker extracts run_lua tool call.
+7. Worker passes Lua code to LuaRuntime.run().
+8. LuaRuntime executes: page.* calls yield BrowserCommands.
+9. Worker sends BrowserCommands to background → content script.
+10. Results resume back to Lua.
+11. Lua execution completes, output returns as tool result.
+12. Worker calls pi-core on_tool_done with Lua output.
+13. Repeat until Finished, stopped, error, or maxSteps.
 ```
+
+Core principle: LLM does reasoning (generates Lua code). Lua does acting (calls page.* APIs).
 
 Step rules:
 
 ```text
-One browser command = one step.
+One run_lua invocation = one step.
 Default maxSteps = 20.
 Stop cancels Anthropic fetch and prevents new browser commands.
 Existing transcript and trace stay visible.
@@ -335,15 +341,18 @@ Existing transcript and trace stay visible.
 Use Messages API.
 Use streaming when available.
 Convert pi-core messages to Anthropic messages.
-Convert pi-core tools to Anthropic tools.
+Provide only one tool: run_lua.
 Group consecutive tool_result messages into one user message.
 Convert tool_use blocks back to pi-core ToolCall.
+run_lua tool_use input contains Lua code, not direct browser commands.
 Surface HTTP/network errors as agentError.
 ```
 
 ## Lua Mode
 
-Lua is a required runtime. Both the agent and direct user playbooks use Lua through the same BrowserCommand path. The product must support chat-driven agent use and manual Lua playbooks as first-class capabilities.
+Lua is a required runtime and the **sole execution layer**. Both the agent (via `run_lua` tool) and direct user playbooks use the same Lua `page.*` API through the same BrowserCommand path. The product must support chat-driven agent use and manual Lua playbooks as first-class capabilities.
+
+The LLM never calls browser tools directly. It generates Lua code. Lua calls `page.*` APIs. Each `page.*` call yields a BrowserCommand. BrowserCommand goes through the content script. Results resume back to Lua. This is the only execution path.
 
 Allowed Lua page API:
 
