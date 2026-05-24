@@ -5,6 +5,6 @@ export default defineConfig({
   timeout: 30000,
   retries: 0,
   use: {
-    headless: false,
+    headless: true,
   },
 });
