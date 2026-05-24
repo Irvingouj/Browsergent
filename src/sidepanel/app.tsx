@@ -5,8 +5,9 @@ import type {
   ActionTraceEntry,
   AgentStatus,
   WorkerToPanel,
+  PanelToWorker,
 } from "../types/messages";
-import type { BrowserResult } from "../types/browser";
+import type { BrowserCommand, BrowserResult } from "../types/browser";
 
 type Tab = "chat" | "lua";
 
@@ -92,7 +93,7 @@ const App: FunctionalComponent = () => {
           setLuaOutput((prev) => prev + `Error: ${msg.error}\n`);
           break;
         case "relayRequest":
-          handleRelayRequest(w, msg.id, msg.payload);
+          handleRelayRequest(w, msg.id, msg.command);
           break;
       }
     };
@@ -101,16 +102,15 @@ const App: FunctionalComponent = () => {
     return () => w.terminate();
   }, []);
 
-function handleRelayRequest(worker: Worker, relayId: string, payload: Record<string, unknown>) {
-  if (payload.type === "browserCommand" && payload.command) {
-    executeBrowserCommandForRelay(payload.command as import("../types/browser").BrowserCommand)
-      .then((result) => {
-        worker.postMessage({ type: "relayResult", id: relayId, result });
-      });
-  }
+function handleRelayRequest(worker: Worker, relayId: string, command: BrowserCommand) {
+  executeBrowserCommandViaBackground(command)
+    .then((result) => {
+      const msg: PanelToWorker = { type: "relayResult", id: relayId, result };
+      worker.postMessage(msg);
+    });
 }
 
-function executeBrowserCommandForRelay(command: import("../types/browser").BrowserCommand): Promise<BrowserResult> {
+function executeBrowserCommandViaBackground(command: BrowserCommand): Promise<BrowserResult> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
       { type: "browserCommand", command },
@@ -150,7 +150,7 @@ function executeBrowserCommandForRelay(command: import("../types/browser").Brows
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, trace]);
 
-  const postToWorker = useCallback((msg: unknown) => {
+  const postToWorker = useCallback((msg: PanelToWorker) => {
     workerRef.current?.postMessage(msg);
   }, []);
 
@@ -319,13 +319,72 @@ function executeBrowserCommandForRelay(command: import("../types/browser").Brows
   );
 };
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderMarkdown(text: string): string {
+  let html = escapeHtml(text);
+
+  // Code blocks
+  html = html.replace(
+    /```([\s\S]*?)```/g,
+    (_m, code: string) => `<pre style="background:#f0f0f0;padding:8px;border-radius:4px;overflow:auto;font-size:12px;line-height:1.4;margin:4px 0;"><code>${code.trim()}</code></pre>`,
+  );
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:12px;">$1</code>');
+
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+  // Italic
+  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#4a90d9;text-decoration:underline;">$1</a>');
+
+  // Bullet lists (simple: lines starting with "- " or "* ")
+  html = html.replace(/^(\s*)[-*]\s+(.*)$/gm, (_m, _indent, item: string) => `<li style="margin-left:16px;">${item}</li>`);
+
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, (match) => `<ul style="margin:4px 0;padding-left:0;">${match}</ul>`);
+
+  // Paragraphs: split on double newlines, skip if already block-level
+  const blocks = html.split(/\n\n+/);
+  html = blocks
+    .map((block) => {
+      const trimmed = block.trim();
+      if (!trimmed) return "";
+      if (/^<(pre|ul|li)/.test(trimmed)) return trimmed;
+      return `<p style="margin:0 0 4px 0;">${trimmed.replace(/\n/g, "<br/>")}</p>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  return html;
+}
+
 function ChatPanel({ messages }: { messages: ChatMessage[] }) {
   return (
     <div>
       {messages.map((msg) => (
-        <div key={msg.id} data-testid={`chat-message-${msg.kind}`} style={{ marginBottom: "8px", padding: "6px 8px", borderRadius: "4px", background: msg.kind === "user" ? "#e3f2fd" : msg.kind === "system" ? "#fff3e0" : "#f5f5f5" }}>
-          <div style={{ fontSize: "11px", color: "#666", marginBottom: "2px" }}>{msg.kind}</div>
-          <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+        <div
+          key={msg.id}
+          data-testid={`chat-message-${msg.kind}`}
+          style={{
+            marginBottom: "8px",
+            padding: "8px 10px",
+            borderRadius: "4px",
+            background: msg.kind === "user" ? "#e3f2fd" : msg.kind === "system" ? "#fff3e0" : "#f5f5f5",
+            lineHeight: "1.5",
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "#666", marginBottom: "4px", textTransform: "capitalize" }}>{msg.kind}</div>
+          <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
         </div>
       ))}
     </div>
