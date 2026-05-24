@@ -8,6 +8,7 @@ import type {
   PanelToWorker,
 } from "../types/messages";
 import type { BrowserCommand, BrowserResult } from "../types/browser";
+import { marked } from "marked";
 
 type Tab = "chat" | "lua";
 
@@ -319,53 +320,25 @@ function executeBrowserCommandViaBackground(command: BrowserCommand): Promise<Br
   );
 };
 
-function escapeHtml(text: string): string {
-  return text
+function renderMarkdown(text: string): string {
+  // Escape raw HTML tags before parsing so that malicious input like
+  // <script> is rendered as text, not executed.
+  const safe = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-}
 
-function renderMarkdown(text: string): string {
-  let html = escapeHtml(text);
+  const html = marked.parse(safe, { async: false }) as string;
 
-  // Code blocks
-  html = html.replace(
-    /```([\s\S]*?)```/g,
-    (_m, code: string) => `<pre style="background:#f0f0f0;padding:8px;border-radius:4px;overflow:auto;font-size:12px;line-height:1.4;margin:4px 0;"><code>${code.trim()}</code></pre>`,
-  );
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:12px;">$1</code>');
-
-  // Bold
-  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-
-  // Italic
-  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#4a90d9;text-decoration:underline;">$1</a>');
-
-  // Bullet lists (simple: lines starting with "- " or "* ")
-  html = html.replace(/^(\s*)[-*]\s+(.*)$/gm, (_m, _indent, item: string) => `<li style="margin-left:16px;">${item}</li>`);
-
-  // Wrap consecutive <li> in <ul>
-  html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, (match) => `<ul style="margin:4px 0;padding-left:0;">${match}</ul>`);
-
-  // Paragraphs: split on double newlines, skip if already block-level
-  const blocks = html.split(/\n\n+/);
-  html = blocks
-    .map((block) => {
-      const trimmed = block.trim();
-      if (!trimmed) return "";
-      if (/^<(pre|ul|li)/.test(trimmed)) return trimmed;
-      return `<p style="margin:0 0 4px 0;">${trimmed.replace(/\n/g, "<br/>")}</p>`;
-    })
-    .filter(Boolean)
-    .join("");
-
-  return html;
+  // Inject compact styling for the elements marked produces.
+  // We do this with inline style attributes so no extra CSS file is needed.
+  return html
+    .replace(/<pre>/g, '<pre style="background:#f0f0f0;padding:8px;border-radius:4px;overflow:auto;font-size:12px;line-height:1.4;margin:4px 0;">')
+    .replace(/<code>/g, '<code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:12px;">')
+    .replace(/<ul>/g, '<ul style="margin:4px 0;padding-left:16px;">')
+    .replace(/<ol>/g, '<ol style="margin:4px 0;padding-left:16px;">')
+    .replace(/<a /g, '<a style="color:#4a90d9;text-decoration:underline;" ')
+    .replace(/<p>/g, '<p style="margin:0 0 4px 0;">');
 }
 
 function ChatPanel({ messages }: { messages: ChatMessage[] }) {
