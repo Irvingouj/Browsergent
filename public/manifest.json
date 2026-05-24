@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Browsergent",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "scripting", "sidePanel", "storage"],
+  "host_permissions": [],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Open Browsergent" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
