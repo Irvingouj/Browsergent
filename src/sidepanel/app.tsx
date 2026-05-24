@@ -4,15 +4,113 @@ import type {
   ChatMessage,
   ActionTraceEntry,
   AgentStatus,
+  WorkerToPanel,
 } from "../types/messages";
-import type { BrowserCommand, BrowserResult } from "../types/browser";
-import { AgentLoop } from "../worker/agent-loop";
-import { LuaRuntime } from "../worker/lua-runtime";
-import type { AnthropicConfig } from "../worker/anthropic";
+import type { BrowserResult } from "../types/browser";
 
 type Tab = "chat" | "lua";
 
-function executeBrowserCommand(command: BrowserCommand): Promise<BrowserResult> {
+const App: FunctionalComponent = () => {
+  const [tab, setTab] = useState<Tab>("chat");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [trace, setTrace] = useState<ActionTraceEntry[]>([]);
+  const [status, setStatus] = useState<AgentStatus>("idle");
+  const [statusReason, setStatusReason] = useState<string | undefined>();
+  const [taskInput, setTaskInput] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("https://api.anthropic.com");
+  const [model, setModel] = useState("claude-sonnet-4-20250514");
+  const [showSettings, setShowSettings] = useState(false);
+  const [luaCode, setLuaCode] = useState("");
+  const [luaOutput, setLuaOutput] = useState("");
+  const workerRef = useRef<Worker | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const w = new Worker(chrome.runtime.getURL("worker.js"), { type: "module" });
+
+    w.onmessage = (e: MessageEvent<WorkerToPanel>) => {
+      const msg = e.data;
+      switch (msg.type) {
+        case "workerReady":
+          setStatus("idle");
+          break;
+        case "agentStatus":
+          setStatus(msg.status);
+          setStatusReason(msg.reason);
+          break;
+        case "agentMessage":
+          setMessages((prev) => [...prev, msg.message]);
+          break;
+        case "agentTextDelta": {
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === msg.messageId);
+            if (idx >= 0) {
+              const next = [...prev];
+              const existing = next[idx];
+              if (existing) {
+                next[idx] = { ...existing, text: existing.text + msg.text };
+              }
+              return next;
+            }
+            return [...prev, { kind: "assistant", id: msg.messageId, text: msg.text, timestamp: Date.now() }];
+          });
+          break;
+        }
+        case "agentTrace":
+          setTrace((prev) => {
+            const idx = prev.findIndex((e) => e.id === msg.entry.id);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = msg.entry;
+              return updated;
+            }
+            return [...prev, msg.entry];
+          });
+          break;
+        case "agentError":
+          setMessages((prev) => [
+            ...prev,
+            { kind: "system", id: crypto.randomUUID(), text: `Error: ${msg.error.message}`, timestamp: Date.now() },
+          ]);
+          break;
+        case "luaOutput":
+          setLuaOutput((prev) => prev + msg.output);
+          break;
+        case "luaTrace":
+          setTrace((prev) => {
+            const idx = prev.findIndex((e) => e.id === msg.entry.id);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = msg.entry;
+              return updated;
+            }
+            return [...prev, msg.entry];
+          });
+          break;
+        case "luaError":
+          setLuaOutput((prev) => prev + `Error: ${msg.error}\n`);
+          break;
+        case "relayRequest":
+          handleRelayRequest(w, msg.id, msg.payload);
+          break;
+      }
+    };
+
+    workerRef.current = w;
+    return () => w.terminate();
+  }, []);
+
+function handleRelayRequest(worker: Worker, relayId: string, payload: Record<string, unknown>) {
+  if (payload.type === "browserCommand" && payload.command) {
+    executeBrowserCommandForRelay(payload.command as import("../types/browser").BrowserCommand)
+      .then((result) => {
+        worker.postMessage({ type: "relayResult", id: relayId, result });
+      });
+  }
+}
+
+function executeBrowserCommandForRelay(command: import("../types/browser").BrowserCommand): Promise<BrowserResult> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
       { type: "browserCommand", command },
@@ -31,134 +129,71 @@ function executeBrowserCommand(command: BrowserCommand): Promise<BrowserResult> 
   });
 }
 
-const App: FunctionalComponent = () => {
-  const [tab, setTab] = useState<Tab>("chat");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [trace, setTrace] = useState<ActionTraceEntry[]>([]);
-  const [status, setStatus] = useState<AgentStatus>("idle");
-  const [statusReason, setStatusReason] = useState<string | undefined>();
-  const [taskInput, setTaskInput] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
-  const [luaCode, setLuaCode] = useState("");
-  const [luaOutput, setLuaOutput] = useState("");
-  const agentLoopRef = useRef<AgentLoop | null>(null);
-  const luaRuntimeRef = useRef<LuaRuntime | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    chrome.storage.local.get("anthropicApiKey", (result: { anthropicApiKey?: string }) => {
-      if (result.anthropicApiKey) {
-        setApiKey(result.anthropicApiKey);
-      }
-    });
+    chrome.storage.local.get(
+      ["anthropicApiKey", "anthropicBaseUrl", "anthropicModel"],
+      (result: { anthropicApiKey?: string; anthropicBaseUrl?: string; anthropicModel?: string }) => {
+        if (result.anthropicApiKey) {
+          setApiKey(result.anthropicApiKey);
+        }
+        if (result.anthropicBaseUrl) {
+          setBaseUrl(result.anthropicBaseUrl);
+        }
+        if (result.anthropicModel) {
+          setModel(result.anthropicModel);
+        }
+      },
+    );
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, trace]);
 
+  const postToWorker = useCallback((msg: unknown) => {
+    workerRef.current?.postMessage(msg);
+  }, []);
+
   const handleRun = useCallback(() => {
-    if (!taskInput.trim()) return;
+    const task = taskInput.trim();
+    if (!task) return;
     if (!apiKey) {
       setShowSettings(true);
       return;
     }
 
-    if (agentLoopRef.current) {
-      agentLoopRef.current.stop();
-    }
+    setTaskInput("");
 
-    const loop = new AgentLoop();
-    agentLoopRef.current = loop;
-
-    setMessages([]);
-    setTrace([]);
-
-    const config: AnthropicConfig = {
-      apiKey,
-      model: "claude-sonnet-4-20250514",
-    };
-
-    loop.run(taskInput.trim(), 20, config, {
-      onStatus(s, reason) {
-        setStatus(s);
-        setStatusReason(reason);
-      },
-      onMessage(kind, text) {
-        setMessages((prev) => [
-          ...prev,
-          { kind, id: crypto.randomUUID(), text, timestamp: Date.now() },
-        ]);
-      },
-      onTrace(entry) {
-        setTrace((prev) => {
-          const idx = prev.findIndex((e) => e.id === entry.id);
-          if (idx >= 0) {
-            const updated = [...prev];
-            updated[idx] = entry;
-            return updated;
-          }
-          return [...prev, entry];
-        });
-      },
-      onError(code, message) {
-        setMessages((prev) => [
-          ...prev,
-          { kind: "system", id: crypto.randomUUID(), text: `Error: ${message}`, timestamp: Date.now() },
-        ]);
-      },
-      executeCommand(command) {
-        return executeBrowserCommand(command);
-      },
+    postToWorker({
+      type: "settingsUpdated",
+      settings: { anthropicApiKey: apiKey, baseUrl, model },
     });
-  }, [taskInput, apiKey]);
+    postToWorker({ type: "agentStart", task, maxSteps: 20 });
+  }, [taskInput, apiKey, baseUrl, model, postToWorker]);
 
   const handleStop = useCallback(() => {
-    agentLoopRef.current?.stop();
-  }, []);
+    postToWorker({ type: "agentStop" });
+  }, [postToWorker]);
 
   const handleSaveApiKey = useCallback(() => {
-    chrome.storage.local.set({ anthropicApiKey: apiKey });
+    chrome.storage.local.set({
+      anthropicApiKey: apiKey,
+      anthropicBaseUrl: baseUrl,
+      anthropicModel: model,
+    });
+    postToWorker({
+      type: "settingsUpdated",
+      settings: { anthropicApiKey: apiKey, baseUrl, model },
+    });
     setShowSettings(false);
-  }, [apiKey]);
+  }, [apiKey, baseUrl, model, postToWorker]);
 
-  const handleLuaRun = useCallback(async () => {
+  const handleLuaRun = useCallback(() => {
     if (!luaCode.trim()) return;
     setTrace([]);
     setLuaOutput("");
-
-    if (!luaRuntimeRef.current) {
-      const rt = new LuaRuntime();
-      try {
-        await rt.init();
-        luaRuntimeRef.current = rt;
-      } catch (err) {
-        setLuaOutput(`Failed to initialize Lua runtime: ${err instanceof Error ? err.message : String(err)}\n`);
-        return;
-      }
-    }
-
-    luaRuntimeRef.current.run(luaCode, {
-      onOutput(text) {
-        setLuaOutput((prev) => prev + text);
-      },
-      onTrace(entry) {
-        setTrace((prev) => {
-          const idx = prev.findIndex((e) => e.id === entry.id);
-          if (idx >= 0) {
-            const updated = [...prev];
-            updated[idx] = entry;
-            return updated;
-          }
-          return [...prev, entry];
-        });
-      },
-      executeCommand(command) {
-        return executeBrowserCommand(command);
-      },
-    });
-  }, [luaCode]);
+    postToWorker({ type: "luaRun", id: crypto.randomUUID(), code: luaCode });
+  }, [luaCode, postToWorker]);
 
   const isRunning = status === "running" || status === "waiting_for_model" || status === "executing_tool";
   const stepCount = trace.length;
@@ -192,14 +227,34 @@ const App: FunctionalComponent = () => {
       {/* Settings */}
       {showSettings && (
         <div style={{ padding: "8px 12px", borderBottom: "1px solid #e0e0e0", background: "#f8f8f8" }}>
-          <label style={{ display: "block", marginBottom: "4px" }}>Anthropic API Key:</label>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ display: "grid", gap: "8px" }}>
+            <label>
+              <span style={{ display: "block", marginBottom: "4px" }}>Anthropic API Key:</span>
             <input
               type="password"
               value={apiKey}
               onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
-              style={{ flex: 1, padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px" }}
+                style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px" }}
             />
+            </label>
+            <label>
+              <span style={{ display: "block", marginBottom: "4px" }}>Base URL:</span>
+              <input
+                type="text"
+                value={baseUrl}
+                onInput={(e) => setBaseUrl((e.target as HTMLInputElement).value)}
+                style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px" }}
+              />
+            </label>
+            <label>
+              <span style={{ display: "block", marginBottom: "4px" }}>Model:</span>
+              <input
+                type="text"
+                value={model}
+                onInput={(e) => setModel((e.target as HTMLInputElement).value)}
+                style={{ width: "100%", padding: "4px 8px", border: "1px solid #ccc", borderRadius: "4px" }}
+              />
+            </label>
             <button onClick={handleSaveApiKey} style={{ padding: "4px 12px", background: "#4a90d9", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>
               Save
             </button>
@@ -268,7 +323,7 @@ function ChatPanel({ messages }: { messages: ChatMessage[] }) {
   return (
     <div>
       {messages.map((msg) => (
-        <div key={msg.id} style={{ marginBottom: "8px", padding: "6px 8px", borderRadius: "4px", background: msg.kind === "user" ? "#e3f2fd" : msg.kind === "system" ? "#fff3e0" : "#f5f5f5" }}>
+        <div key={msg.id} data-testid={`chat-message-${msg.kind}`} style={{ marginBottom: "8px", padding: "6px 8px", borderRadius: "4px", background: msg.kind === "user" ? "#e3f2fd" : msg.kind === "system" ? "#fff3e0" : "#f5f5f5" }}>
           <div style={{ fontSize: "11px", color: "#666", marginBottom: "2px" }}>{msg.kind}</div>
           <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
         </div>
