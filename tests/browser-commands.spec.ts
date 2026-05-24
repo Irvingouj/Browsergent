@@ -1,4 +1,6 @@
-import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { launchExtension } from "./helpers";
 
 const FORM_HTML = `
@@ -40,118 +42,7 @@ const FORM_HTML = `
 
 /** Inject content script into a page and return the executeCommand function. */
 async function injectContentScript(page: Page): Promise<void> {
-  // Load the content script source from the extension
-  const scriptContent = `
-    const refMap = new WeakMap();
-    let nextRefId = 0;
-    
-    function assignRefId(el) {
-      if (refMap.get(el)) return refMap.get(el);
-      const id = 'e' + nextRefId;
-      nextRefId++;
-      refMap.set(el, id);
-      return id;
-    }
-    
-    function isVisible(el) {
-      const htmlEl = el;
-      if (htmlEl.offsetParent === null && htmlEl.type !== 'hidden') return false;
-      const style = window.getComputedStyle(htmlEl);
-      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-    }
-    
-    function getRole(el) {
-      return el.getAttribute('role') || (el.tagName === 'INPUT' ? 'textbox' : el.tagName === 'BUTTON' ? 'button' : el.tagName === 'SELECT' ? 'combobox' : el.tagName === 'TEXTAREA' ? 'textbox' : el.tagName === 'A' ? 'link' : 'generic');
-    }
-    
-    function executeCommand(command) {
-      switch (command.kind) {
-        case 'page.snapshot': {
-          const elements = [];
-          const candidates = document.querySelectorAll('a[href], button, input, select, textarea, [role], [contenteditable="true"], [onclick]');
-          for (const el of candidates) {
-            const visible = isVisible(el);
-            if (command.options && command.options.onlyVisible === false || !command.options || command.options.onlyVisible !== false) {
-              if (!visible) continue;
-            }
-            const refId = assignRefId(el);
-            const tag = el.tagName.toLowerCase();
-            const text = (el.textContent || '').trim().substring(0, 200);
-            const role = getRole(el);
-            const label = el.getAttribute('aria-label') || undefined;
-            const placeholder = el.placeholder || undefined;
-            let value;
-            if (tag === 'input' && el.type !== 'password') value = el.value || undefined;
-            else if (tag === 'textarea') value = el.value || undefined;
-            else if (tag === 'select') value = el.value || undefined;
-            elements.push({ refId, role, tag, text, label, placeholder, value, enabled: !el.disabled, visible });
-          }
-          return { ok: true, value: { url: location.href, title: document.title, timestamp: Date.now(), elements } };
-        }
-        case 'page.click': {
-          const el = document.querySelector('[data-browsergent-id="' + command.refId + '"]');
-          // Fallback: find by ref map
-          const all = document.querySelectorAll('a[href], button, input, select, textarea, [role], [contenteditable="true"], [onclick]');
-          let found = null;
-          for (const e of all) {
-            if (refMap.get(e) === command.refId) { found = e; break; }
-          }
-          if (!found) return { ok: false, error: 'No element with ref_id ' + command.refId, code: 'E_STALE' };
-          if (!found.isConnected) return { ok: false, error: 'Element disconnected', code: 'E_STALE' };
-          found.click();
-          return { ok: true, value: { clicked: true } };
-        }
-        case 'page.fill': {
-          const all = document.querySelectorAll('a[href], button, input, select, textarea, [role], [contenteditable="true"], [onclick]');
-          let found = null;
-          for (const e of all) {
-            if (refMap.get(e) === command.refId) { found = e; break; }
-          }
-          if (!found) return { ok: false, error: 'No element with ref_id ' + command.refId, code: 'E_STALE' };
-          found.value = command.text;
-          found.dispatchEvent(new Event('input', { bubbles: true }));
-          found.dispatchEvent(new Event('change', { bubbles: true }));
-          return { ok: true, value: { filled: true } };
-        }
-        case 'page.clear': {
-          const all = document.querySelectorAll('a[href], button, input, select, textarea, [role], [contenteditable="true"], [onclick]');
-          let found = null;
-          for (const e of all) {
-            if (refMap.get(e) === command.refId) { found = e; break; }
-          }
-          if (!found) return { ok: false, error: 'No element', code: 'E_STALE' };
-          found.value = '';
-          found.dispatchEvent(new Event('input', { bubbles: true }));
-          found.dispatchEvent(new Event('change', { bubbles: true }));
-          return { ok: true, value: { cleared: true } };
-        }
-        case 'page.select': {
-          const all = document.querySelectorAll('a[href], button, input, select, textarea, [role], [contenteditable="true"], [onclick]');
-          let found = null;
-          for (const e of all) {
-            if (refMap.get(e) === command.refId) { found = e; break; }
-          }
-          if (!found) return { ok: false, error: 'No element', code: 'E_STALE' };
-          found.value = command.value;
-          found.dispatchEvent(new Event('change', { bubbles: true }));
-          return { ok: true, value: { selected: true } };
-        }
-        case 'page.extract': {
-          if (command.refId) {
-            const all = document.querySelectorAll('a[href], button, input, select, textarea, [role], [contenteditable="true"], [onclick]');
-            for (const e of all) {
-              if (refMap.get(e) === command.refId) return { ok: true, value: { text: (e.textContent || '').trim() } };
-            }
-            return { ok: false, error: 'No element', code: 'E_STALE' };
-          }
-          return { ok: true, value: { text: document.body.innerText } };
-        }
-        default:
-          return { ok: false, error: 'Unknown command: ' + command.kind, code: 'E_UNSUPPORTED' };
-      }
-    }
-    window.__executeCommand = executeCommand;
-  `;
+  const scriptContent = await fs.readFile(path.resolve("dist/content-script.js"), "utf8");
   await page.evaluate(scriptContent);
 }
 
@@ -162,7 +53,7 @@ test("snapshot returns page elements with ref_ids", async () => {
   await injectContentScript(testPage);
   
   const result = await testPage.evaluate(() => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.snapshot" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.snapshot" });
   }) as { ok: boolean; value: { elements: Array<{ refId: string; tag: string; role: string; enabled: boolean }> } };
   
   expect(result.ok).toBe(true);
@@ -190,7 +81,7 @@ test("fill modifies input value", async () => {
   
   // First snapshot to get ref_ids
   const snap = await testPage.evaluate(() => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.snapshot" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.snapshot" });
   }) as { ok: boolean; value: { elements: Array<{ refId: string; tag: string; placeholder?: string }> } };
   
   const emailEl = snap.value.elements.find((e) => e.tag === "input" && e.placeholder === "Enter email");
@@ -198,7 +89,7 @@ test("fill modifies input value", async () => {
   
   // Fill the email input
   const fillResult = await testPage.evaluate((refId) => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.fill", refId, text: "test@example.com" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.fill", refId, text: "test@example.com" });
   }, emailEl!.refId) as { ok: boolean };
   
   expect(fillResult.ok).toBe(true);
@@ -217,14 +108,14 @@ test("click triggers button handler", async () => {
   await injectContentScript(testPage);
   
   const snap = await testPage.evaluate(() => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.snapshot" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.snapshot" });
   }) as { ok: boolean; value: { elements: Array<{ refId: string; tag: string; text: string }> } };
   
   const btn = snap.value.elements.find((e) => e.tag === "button" && e.text.includes("Click Me"));
   expect(btn).toBeDefined();
   
   await testPage.evaluate((refId) => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.click", refId });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.click", refId });
   }, btn!.refId);
   
   await expect(testPage.locator("#click-log")).toHaveText("clicked");
@@ -240,19 +131,19 @@ test("fill and submit completes workflow", async () => {
   
   // Snapshot
   const snap = await testPage.evaluate(() => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.snapshot" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.snapshot" });
   }) as { ok: boolean; value: { elements: Array<{ refId: string; tag: string; placeholder?: string; text?: string }> } };
   
   // Fill email
   const emailEl = snap.value.elements.find((e) => e.tag === "input" && e.placeholder === "Enter email");
   await testPage.evaluate((refId) => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.fill", refId, text: "test@example.com" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.fill", refId, text: "test@example.com" });
   }, emailEl!.refId);
   
   // Click submit
   const submitBtn = snap.value.elements.find((e) => e.tag === "button" && e.text.includes("Submit"));
   await testPage.evaluate((refId) => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.click", refId });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.click", refId });
   }, submitBtn!.refId);
   
   // Verify submission
@@ -268,7 +159,7 @@ test("stale ref returns E_STALE", async () => {
   await injectContentScript(testPage);
   
   const result = await testPage.evaluate(() => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.click", refId: "nonexistent" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.click", refId: "nonexistent" });
   }) as { ok: boolean; error: string; code: string };
   
   expect(result.ok).toBe(false);
@@ -284,14 +175,14 @@ test("select changes dropdown value", async () => {
   await injectContentScript(testPage);
   
   const snap = await testPage.evaluate(() => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.snapshot" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.snapshot" });
   }) as { ok: boolean; value: { elements: Array<{ refId: string; tag: string }> } };
   
   const selectEl = snap.value.elements.find((e) => e.tag === "select");
   expect(selectEl).toBeDefined();
   
   await testPage.evaluate((refId) => {
-    return (window as unknown as { __executeCommand: (cmd: unknown) => unknown }).__executeCommand({ kind: "page.select", refId, value: "blue" });
+    return (window as unknown as { __browsergentExecuteCommand: (cmd: unknown) => unknown }).__browsergentExecuteCommand({ kind: "page.select", refId, value: "blue" });
   }, selectEl!.refId);
   
   const value = await testPage.locator("#color").inputValue();

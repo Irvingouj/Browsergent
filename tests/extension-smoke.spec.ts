@@ -58,3 +58,45 @@ test("Lua tab shows editor", async () => {
   
   await close();
 });
+
+test("Lua tab runs a basic playbook", async () => {
+  const { sidePanel, close } = await launchExtension();
+
+  // Give Worker time to initialize WASM
+  await sidePanel.waitForTimeout(2000);
+
+  await sidePanel.locator("text=Lua").click();
+  await sidePanel.locator("textarea").fill('print("hello from lua")');
+  await sidePanel.locator("text=Run Lua").click();
+
+  await expect(sidePanel.locator("text=hello from lua")).toBeVisible({ timeout: 15000 });
+
+  await close();
+});
+
+test("Lua playbook emits typed browser command trace", async () => {
+  const { sidePanel, context, close } = await launchExtension();
+
+  // Give the Worker time to initialize WASM
+  await sidePanel.waitForTimeout(2000);
+
+  // Create a test page so there's a target tab for browser commands
+  const testPage = await createTestPage(context, `
+    <html><body>
+      <input id="email" type="text" />
+    </body></html>
+  `);
+
+  // Focus the test page so content script can be injected
+  await testPage.bringToFront();
+  await sidePanel.bringToFront();
+
+  await sidePanel.locator("text=Lua").click();
+  await sidePanel.locator("textarea").fill('page.fill("e0", "test@example.com")');
+  await sidePanel.locator("text=Run Lua").click();
+
+  // Wait for trace to appear
+  await expect(sidePanel.locator("text=page.fill")).toBeVisible({ timeout: 15000 });
+
+  await close();
+});
