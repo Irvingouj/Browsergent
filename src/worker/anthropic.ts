@@ -1,9 +1,10 @@
 /**
  * Anthropic Messages API adapter for Browsergent.
- * Non-streaming for v1 simplicity.
+ * Streaming via SSE; text deltas are emitted as they arrive.
+ *
+ * The LLM has ONE tool: run_lua. It generates Lua code to control the browser.
+ * All page.* operations go through Lua — the LLM never calls browser tools directly.
  */
-
-import type { BrowserCommand, PageSnapshot } from "../types/browser";
 
 // --- Anthropic API types ---
 
@@ -23,144 +24,81 @@ interface AnthropicTool {
   input_schema: Record<string, unknown>;
 }
 
-interface AnthropicResponse {
-  id: string;
-  type: "message";
-  role: "assistant";
-  content: AnthropicContentBlock[];
-  model: string;
-  stop_reason: "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | null;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-    cache_creation_input_tokens?: number;
-    cache_read_input_tokens?: number;
-  };
+// --- Streaming SSE types ---
+
+type AnthropicStreamEvent =
+  | { type: "message_start"; message: unknown }
+  | {
+      type: "content_block_start";
+      index: number;
+      content_block:
+        | { type: "text"; text: string }
+        | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> };
+    }
+  | {
+      type: "content_block_delta";
+      index: number;
+      delta:
+        | { type: "text_delta"; text: string }
+        | { type: "input_json_delta"; partial_json: string };
+    }
+  | { type: "content_block_stop"; index: number }
+  | { type: "message_delta"; delta: { stop_reason: string | null; stop_sequence: string | null } }
+  | { type: "message_stop" };
+
+function isAnthropicStreamEvent(value: unknown): value is AnthropicStreamEvent {
+  if (typeof value !== "object" || value === null) return false;
+  const type = (value as { type?: unknown }).type;
+  return (
+    type === "message_start" ||
+    type === "content_block_start" ||
+    type === "content_block_delta" ||
+    type === "content_block_stop" ||
+    type === "message_delta" ||
+    type === "message_stop"
+  );
 }
 
-// --- Tool definitions for Anthropic ---
+// --- Tool definition for Anthropic (single tool: run_lua) ---
 
 const BROWSER_TOOLS: AnthropicTool[] = [
   {
-    name: "page_snapshot",
-    description: "Take a snapshot of the current page. Returns visible interactive elements with ref_ids.",
+    name: "run_lua",
+    description:
+      "Execute Lua code to control the browser. Available API:\n" +
+      "- page.snapshot() → returns page elements with ref_ids\n" +
+      "- page.click(ref_id) → click element\n" +
+      "- page.fill(ref_id, text) → fill input\n" +
+      "- page.clear(ref_id) → clear input\n" +
+      "- page.select(ref_id, value) → select option\n" +
+      "- page.press(key) → press key\n" +
+      "- page.scroll(direction, amount?) → scroll\n" +
+      "- page.extract(ref_id?) → extract text\n" +
+      "- page.goto(url) → navigate\n" +
+      "- page.back() / page.forward() / page.reload()",
     input_schema: {
       type: "object",
       properties: {
-        only_visible: { type: "boolean", description: "Only include visible elements", default: true },
+        code: { type: "string", description: "Lua code to execute" },
       },
+      required: ["code"],
     },
-  },
-  {
-    name: "page_click",
-    description: "Click an element by its ref_id.",
-    input_schema: {
-      type: "object",
-      properties: { ref_id: { type: "string", description: "The ref_id from page_snapshot" } },
-      required: ["ref_id"],
-    },
-  },
-  {
-    name: "page_fill",
-    description: "Fill an input field with text.",
-    input_schema: {
-      type: "object",
-      properties: {
-        ref_id: { type: "string", description: "The ref_id from page_snapshot" },
-        text: { type: "string", description: "Text to fill" },
-      },
-      required: ["ref_id", "text"],
-    },
-  },
-  {
-    name: "page_clear",
-    description: "Clear an input field.",
-    input_schema: {
-      type: "object",
-      properties: { ref_id: { type: "string", description: "The ref_id from page_snapshot" } },
-      required: ["ref_id"],
-    },
-  },
-  {
-    name: "page_select",
-    description: "Select an option in a dropdown.",
-    input_schema: {
-      type: "object",
-      properties: {
-        ref_id: { type: "string", description: "The ref_id from page_snapshot" },
-        value: { type: "string", description: "Option value to select" },
-      },
-      required: ["ref_id", "value"],
-    },
-  },
-  {
-    name: "page_press",
-    description: "Press a key (Enter, Tab, Escape, Backspace, etc).",
-    input_schema: {
-      type: "object",
-      properties: { key: { type: "string", description: "Key to press" } },
-      required: ["key"],
-    },
-  },
-  {
-    name: "page_scroll",
-    description: "Scroll the page.",
-    input_schema: {
-      type: "object",
-      properties: {
-        direction: { type: "string", enum: ["up", "down"] },
-        amount: { type: "number", description: "Pixels to scroll" },
-      },
-      required: ["direction"],
-    },
-  },
-  {
-    name: "page_extract",
-    description: "Extract text from the page or a specific element.",
-    input_schema: {
-      type: "object",
-      properties: {
-        ref_id: { type: "string", description: "Optional ref_id. If omitted, extracts full page text." },
-      },
-    },
-  },
-  {
-    name: "page_goto",
-    description: "Navigate to a URL.",
-    input_schema: {
-      type: "object",
-      properties: { url: { type: "string", description: "URL to navigate to" } },
-      required: ["url"],
-    },
-  },
-  {
-    name: "page_back",
-    description: "Go back in browser history.",
-    input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "page_forward",
-    description: "Go forward in browser history.",
-    input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "page_reload",
-    description: "Reload the current page.",
-    input_schema: { type: "object", properties: {} },
   },
 ];
 
-const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You can see web pages and interact with them.
+const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating Lua code.
 
 Your workflow:
-1. Use page_snapshot to see what's on the page.
-2. Use page_fill, page_click, page_select, etc. to interact with elements.
+1. Use run_lua to execute Lua code that calls page.snapshot() to see what's on the page.
+2. Use run_lua to execute Lua code that interacts with elements (page.fill, page.click, etc.).
 3. Each element has a ref_id (like "e0", "e1"). Use these ref_ids to target elements.
 4. Report what you did and what happened.
 
 Rules:
 - Always snapshot before acting to get fresh ref_ids.
 - Never guess ref_ids.
+- Generate valid Lua code in the "code" field of run_lua.
+- You can combine multiple page.* calls in a single run_lua invocation.
 - Report errors clearly.
 - Complete the task the user asked for.`;
 
@@ -176,10 +114,125 @@ export interface AnthropicCallResult {
   stopReason: "end_turn" | "tool_use";
 }
 
+// --- SSE parser ---
+
+async function parseAnthropicStream(
+  response: Response,
+  onTextDelta: (text: string) => void,
+  abortSignal?: AbortSignal,
+): Promise<AnthropicCallResult> {
+  if (!response.body) {
+    throw new Error("Response has no body");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  const toolBlocks: Array<{ id: string; name: string; partialJson: string }> = [];
+  let stopReason: AnthropicCallResult["stopReason"] = "end_turn";
+
+  try {
+    while (true) {
+      if (abortSignal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE events are separated by blank lines
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        if (!event.trim()) continue;
+
+        let eventType = "";
+        let data = "";
+
+        for (const line of event.split("\n")) {
+          if (line.startsWith("event:")) {
+            eventType = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            data = line.slice(5).trim();
+          }
+        }
+
+        if (!eventType || !data) continue;
+        if (data === "[DONE]") continue;
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          continue;
+        }
+
+        if (!isAnthropicStreamEvent(parsed)) continue;
+
+        switch (parsed.type) {
+          case "message_start":
+          case "message_stop":
+          case "content_block_stop":
+            break;
+          case "content_block_start": {
+            if (parsed.content_block.type === "tool_use") {
+              toolBlocks[parsed.index] = {
+                id: parsed.content_block.id,
+                name: parsed.content_block.name,
+                partialJson: "",
+              };
+            }
+            break;
+          }
+          case "content_block_delta": {
+            if (parsed.delta.type === "text_delta") {
+              text += parsed.delta.text;
+              onTextDelta(parsed.delta.text);
+            } else if (parsed.delta.type === "input_json_delta") {
+              const block = toolBlocks[parsed.index];
+              if (block) {
+                block.partialJson += parsed.delta.partial_json;
+              }
+            }
+            break;
+          }
+          case "message_delta": {
+            if (parsed.delta.stop_reason === "tool_use") {
+              stopReason = "tool_use";
+            }
+            break;
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const toolCalls = toolBlocks.map((b) => {
+    let args: Record<string, unknown> = {};
+    if (b.partialJson) {
+      const parsed: unknown = JSON.parse(b.partialJson);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        args = parsed as Record<string, unknown>;
+      }
+    }
+    return { id: b.id, name: b.name, arguments: args };
+  });
+
+  return { text, toolCalls, stopReason };
+}
+
+// --- Public API ---
+
 export async function callAnthropic(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   config: AnthropicConfig,
-  abortSignal?: AbortSignal,
+  abortSignal: AbortSignal | undefined,
+  onTextDelta: (text: string) => void,
 ): Promise<AnthropicCallResult> {
   const baseUrl = config.baseUrl ?? "https://api.anthropic.com";
   const anthropicMessages: AnthropicMessage[] = messages.map((m) => ({
@@ -193,92 +246,26 @@ export async function callAnthropic(
     system: SYSTEM_PROMPT,
     messages: anthropicMessages,
     tools: BROWSER_TOOLS,
+    stream: true,
   };
 
+  const isFireworks = baseUrl.includes("fireworks.ai");
   const resp = await fetch(`${baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01",
+      ...(isFireworks
+        ? { Authorization: `Bearer ${config.apiKey}` }
+        : { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" }),
     },
     body: JSON.stringify(body),
     signal: abortSignal ?? null,
   });
 
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Anthropic API error ${resp.status}: ${text}`);
+    const errorText = await resp.text();
+    throw new Error(`Anthropic API error ${resp.status}: ${errorText}`);
   }
 
-  const data = (await resp.json()) as AnthropicResponse;
-
-  let text = "";
-  const toolCalls: AnthropicCallResult["toolCalls"] = [];
-
-  for (const block of data.content) {
-    if (block.type === "text") {
-      text += block.text;
-    } else if (block.type === "tool_use") {
-      toolCalls.push({
-        id: block.id,
-        name: block.name,
-        arguments: block.input,
-      });
-    }
-  }
-
-  return {
-    text,
-    toolCalls,
-    stopReason: data.stop_reason === "tool_use" ? "tool_use" : "end_turn",
-  };
-}
-
-/** Map Anthropic tool name + args to a BrowserCommand. */
-export function mapToolToCommand(
-  name: string,
-  args: Record<string, unknown>,
-): BrowserCommand {
-  switch (name) {
-    case "page_snapshot":
-      return { kind: "page.snapshot", options: { onlyVisible: args.only_visible as boolean | undefined } };
-    case "page_click":
-      return { kind: "page.click", refId: args.ref_id as string };
-    case "page_fill":
-      return { kind: "page.fill", refId: args.ref_id as string, text: args.text as string };
-    case "page_clear":
-      return { kind: "page.clear", refId: args.ref_id as string };
-    case "page_select":
-      return { kind: "page.select", refId: args.ref_id as string, value: args.value as string };
-    case "page_press":
-      return { kind: "page.press", key: args.key as string };
-    case "page_scroll":
-      return { kind: "page.scroll", direction: args.direction as "up" | "down", amount: args.amount as number | undefined };
-    case "page_extract":
-      return { kind: "page.extract", refId: args.ref_id as string | undefined };
-    case "page_goto":
-      return { kind: "page.goto", url: args.url as string };
-    case "page_back":
-      return { kind: "page.back" };
-    case "page_forward":
-      return { kind: "page.forward" };
-    case "page_reload":
-      return { kind: "page.reload" };
-    default:
-      return { kind: "page.snapshot" };
-  }
-}
-
-/** Format a BrowserResult into text for the LLM. */
-export function formatToolResult(command: BrowserCommand, result: unknown): string {
-  if (typeof result === "object" && result !== null) {
-    const snapshot = result as Partial<PageSnapshot>;
-    if (snapshot.elements && Array.isArray(snapshot.elements)) {
-      return `Page: ${snapshot.url}\nTitle: ${snapshot.title}\n\nElements:\n${snapshot.elements
-        .map((e) => `  [${e.refId}] <${e.tag}> role=${e.role} text="${e.text}"${e.label ? ` label="${e.label}"` : ""}${e.placeholder ? ` placeholder="${e.placeholder}"` : ""}${e.value ? ` value="${e.value}"` : ""} enabled=${e.enabled}`)
-        .join("\n")}`;
-    }
-  }
-  return JSON.stringify(result);
+  return parseAnthropicStream(resp, onTextDelta, abortSignal);
 }
