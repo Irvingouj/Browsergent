@@ -4,11 +4,23 @@
 
 Browsergent is a Chrome side panel agent that uses the current web page for the customer.
 
-The customer opens a page, types a plain English task, watches the agent inspect and act, and can stop it at any time.
+Browsergent has **two required interfaces**:
+
+### 1. Agent Chat (primary)
 
 ```text
 Customer: "Fill the email field with test@example.com and submit."
 Browsergent: snapshots page -> fills field -> clicks submit -> reports result
+```
+
+### 2. Lua Playbooks (required)
+
+```text
+User writes:
+  local snap = page.snapshot()
+  page.fill("e2", "test@example.com")
+  page.click("e4")
+Browsergent executes typed commands through the same content-script path.
 ```
 
 Primary product promise:
@@ -17,7 +29,7 @@ Primary product promise:
 "Do this on the page for me."
 ```
 
-Browsergent is not only a Lua notebook, browser automation SDK, scraping framework, or Puppeteer wrapper. Chat is the primary customer interface, and Lua playbooks are a required product capability.
+Browsergent is not a browser automation SDK, scraping framework, or Puppeteer wrapper. Chat is the primary interface. Lua playbooks are a required, first-class capability for power users and the agent runtime.
 
 ## Customer Expectations
 
@@ -51,13 +63,14 @@ The first v1 customer win:
 
 ```text
 Side Panel UI
-  chat, trace, status, settings
+  chat, lua playbook editor, trace, status, settings
 
 Web Worker
   pi-core WASM agent
-  piccolo Lua WASM
+  piccolo Lua WASM (required)
   Anthropic provider call
   agent loop and stop/max-step lifecycle
+  Lua runtime with page.* API
 
 Background Service Worker
   active tab lookup
@@ -67,7 +80,7 @@ Background Service Worker
 Content Script
   DOM snapshot
   ref_id map
-  typed page actions
+  typed page actions (shared by agent and Lua)
 ```
 
 ## Existing Assets
@@ -89,18 +102,20 @@ Build:
 
 ```text
 Chrome MV3 side panel extension
-Chat UI
+Chat UI (primary)
+Lua playbook UI (required)
 pi-core WASM in Worker
+piccolo Lua WASM in Worker (required)
 Anthropic Messages API integration
 activeTab + scripting permissions
 Dynamic content-script injection
 page_snapshot, page_click, page_fill, page_clear
 page_select, page_press, page_scroll, page_extract
 page_goto, page_back, page_forward, page_reload
-Action trace
+Action trace (shared by chat and Lua)
 Stop button
 Max steps, default 20
-Required Lua playbook/tool mode
+Lua page.* API using same BrowserCommand path
 ```
 
 Do not build in v1:
@@ -122,7 +137,7 @@ payment/purchase/destructive submission without explicit confirmation
 
 ### M1 - Extension and WASM
 
-Done when the extension loads unpacked, side panel opens, Worker starts, pi-core WASM loads, and `Agent.start_turn("hello")` returns `StreamLlm`.
+Done when the extension loads unpacked, side panel opens, Worker starts, pi-core WASM loads, piccolo Lua WASM loads, and `Agent.start_turn("hello")` returns `StreamLlm`.
 
 ### M2 - Chat and LLM
 
@@ -140,6 +155,10 @@ Done when `page_fill`, `page_click`, `page_select`, `page_scroll`, and `page_ext
 
 Done when the agent completes one real fill-and-submit task through `StreamLlm -> ExecuteTools -> on_tool_done -> StreamLlm -> Finished`, with trace and max-step enforcement.
 
+### M5.5 - Lua Playbooks
+
+Done when the user can write and run a Lua playbook using `page.snapshot()`, `page.fill(ref, text)`, `page.click(ref)` that completes a real fill-and-submit task, with trace showing every command, using the same content-script BrowserCommand executor as the agent.
+
 ### M6 - v1 Hardening
 
 Done when tests pass, API key storage works, errors are visible, no `any`/`Object` exists in TypeScript, no `console.log` remains, and README explains build/load/test.
@@ -148,29 +167,33 @@ Done when tests pass, API key storage works, errors are visible, no `any`/`Objec
 
 ```text
 1. Extension loads with no Chrome extension errors.
-2. Side panel opens to chat, not notebook cells.
+2. Side panel opens to chat (primary) with Lua playbook tab.
 3. pi-core WASM initializes in Worker.
-4. Customer can enter a task and receive an LLM response.
-5. page_snapshot returns active-tab elements with ref_ids.
-6. page_fill changes a real input.
-7. page_click clicks a real element.
-8. Every browser action appears in trace.
-9. Agent completes one fill-and-submit workflow.
-10. Stop interrupts a running workflow.
-11. No arbitrary page JS eval.
-12. No broad host permissions.
+4. piccolo Lua WASM initializes in Worker.
+5. Customer can enter a task and receive an LLM response.
+6. page_snapshot returns active-tab elements with ref_ids.
+7. page_fill changes a real input.
+8. page_click clicks a real element.
+9. Every browser action appears in trace (agent and Lua).
+10. Agent completes one fill-and-submit workflow.
+11. Lua playbook completes one fill-and-submit workflow.
+12. Stop interrupts a running workflow (agent and Lua).
+13. No arbitrary page JS eval.
+14. No broad host permissions.
 ```
 
 ## Hard Rules
 
 ```text
 Chat first.
+Lua playbooks are required, first-class.
 Typed commands only.
 ref_id only, no selectors.
 activeTab only for v1.
 Rust owns agent decisions.
 TypeScript owns side effects.
-Every action is visible.
+Every action is visible (agent and Lua share the trace).
 Every boundary is typed.
 No TypeScript any or Object.
+Lua never touches DOM/chrome directly.
 ```

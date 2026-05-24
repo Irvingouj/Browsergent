@@ -2,9 +2,10 @@
 
 ## Product
 
-Browsergent is an AI browser operator in the Chrome side panel.
+Browsergent is an AI browser operator in the Chrome side panel with two required interfaces:
 
-The customer says what they want done on the current page. Browsergent sees the page, uses visible controls, and reports the result.
+1. **Agent Chat** (primary): Customer says what they want done, Browsergent sees the page, uses visible controls, and reports the result.
+2. **Lua Playbooks** (required): Power users write Lua scripts that control the browser through the same typed command protocol.
 
 ## Customer Point of View
 
@@ -38,10 +39,11 @@ They should never need:
 DOM knowledge
 CSS selectors
 JavaScript
-Lua
 Chrome API knowledge
 LLM tool-call knowledge
 ```
+
+Lua playbook users need Lua knowledge. That is expected and supported as a first-class capability.
 
 ## First Screen
 
@@ -50,7 +52,9 @@ Browsergent
 Current tab: example.com
 Status: Ready
 
-[conversation and action trace]
+[Chat] [Lua]                     <- tab switcher
+
+[conversation and action trace]   <- shared trace for both modes
 
 [Stop] Steps: 0/20
 [Type a task...              ][Run]
@@ -88,9 +92,11 @@ Trace remains visible
 
 ### Chat
 
-The side panel shows user messages, assistant messages, action trace, run status, step count, stop control, and settings.
+The side panel shows user messages, assistant messages, action trace, run status, step count, stop control, and settings. Chat is the primary interface.
 
-Notebook cells are not the primary interface, but Lua playbooks are a required product capability.
+### Lua Playbooks
+
+The side panel provides a Lua code editor and run button. Users write playbooks using the `page.*` API. Playbooks execute through the same content-script BrowserCommand path as the agent. Action trace is shared and always visible. Lua playbooks are a required, first-class capability.
 
 ### Page Awareness
 
@@ -162,34 +168,37 @@ selector-based actions
 
 | Milestone | Customer-visible result |
 |-----------|-------------------------|
-| M1 Extension Opens | Side panel opens and agent runtime loads |
+| M1 Extension Opens | Side panel opens, agent runtime and Lua runtime load |
 | M2 Agent Talks | Customer sends task and gets assistant response |
 | M3 Agent Sees | Agent describes active tab from snapshot |
 | M4 Agent Acts | Agent fills, clicks, selects, scrolls, extracts |
 | M5 Agent Completes Task | Agent completes one simple workflow end to end |
-| M6 Usable v1 | Repeated manual use works with clear errors and tests |
+| M5.5 Lua Playbooks | User writes Lua playbook that fills and clicks real elements |
+| M6 Usable v1 | Both surfaces work with clear errors, shared trace, and tests |
 
 ## v1 Success Criteria
 
 ```text
 1. A non-technical user understands the first screen.
-2. Tasks are entered in plain English.
+2. Tasks are entered in plain English (chat) or Lua (playbooks).
 3. Agent can inspect the active page.
 4. Agent can fill and click real elements.
-5. Every action is visible.
-6. Stop works.
-7. Blocked states are clear.
-8. No broad host permissions are required.
+5. Lua playbooks can fill and click real elements.
+6. Every action is visible in shared trace.
+7. Stop works for both agent and Lua.
+8. Blocked states are clear.
+9. No broad host permissions are required.
 ```
 
 ## Design Rules
 
 ```text
-Agent-first UI.
-Typed browser tools only.
+Agent-first UI with required Lua playbook surface.
+Typed browser tools only (shared by agent and Lua).
 ref_id instead of selectors.
 activeTab instead of broad host permissions.
 Side panel Worker owns long-running state.
 Background only routes.
 Content script only executes typed commands.
+Lua page.* API yields BrowserCommand through the same content-script path.
 ```

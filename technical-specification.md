@@ -34,13 +34,14 @@ acceptance checks
 
 ```text
 Side Panel UI
-  chat, trace, status, settings
+  chat, lua playbook editor, trace, status, settings
 
 Worker
   pi-core WASM
-  piccolo WASM
+  piccolo Lua WASM (required)
   Anthropic calls
   agent loop
+  Lua runtime with page.* API
   stop/max-step control
 
 Background
@@ -51,15 +52,16 @@ Background
 Content Script
   snapshot DOM
   keep ref_id map
-  execute typed BrowserCommand
+  execute typed BrowserCommand (shared by agent and Lua)
 ```
 
 | State | Owner |
 |-------|-------|
 | Agent transcript | pi-core in Worker |
+| Lua VM state | piccolo WASM in Worker |
 | Run status | Worker |
 | API key | `chrome.storage.local` |
-| Action trace | UI from Worker events |
+| Action trace | UI from Worker events (shared by agent and Lua) |
 | ref_id map | Content script |
 | Injection cache | Background |
 
@@ -105,6 +107,7 @@ type PanelToWorker =
   | { type: "agentReset" }
   | { type: "settingsUpdated"; settings: WorkerSettings }
   | { type: "luaRun"; id: string; code: string; stdin?: string }
+  | { type: "luaStop" }
   | { type: "luaReset" };
 
 interface WorkerSettings {
@@ -119,7 +122,9 @@ type WorkerToPanel =
   | { type: "agentTextDelta"; messageId: string; text: string }
   | { type: "agentTrace"; entry: ActionTraceEntry }
   | { type: "agentError"; error: BrowsergentError }
-  | { type: "luaResult"; id: string; data: RunResult };
+  | { type: "luaOutput"; id: string; output: string }
+  | { type: "luaTrace"; entry: ActionTraceEntry }
+  | { type: "luaError"; id: string; error: string };
 
 type AgentStatus =
   | "idle"
@@ -338,7 +343,7 @@ Surface HTTP/network errors as agentError.
 
 ## Lua Mode
 
-Lua is required and uses the same BrowserCommand path as the agent. The product must support both chat-driven agent use and manual Lua playbooks.
+Lua is a required runtime. Both the agent and direct user playbooks use Lua through the same BrowserCommand path. The product must support chat-driven agent use and manual Lua playbooks as first-class capabilities.
 
 Allowed Lua page API:
 
@@ -392,7 +397,8 @@ dist/
 
 ```text
 extension loads
-worker loads WASM
+worker loads pi-core WASM
+worker loads piccolo Lua WASM
 chat response
 snapshot active tab
 fill input
@@ -402,7 +408,8 @@ scroll page
 extract text
 invalid ref returns E_STALE
 fake agent completes fill + click
-stop cancels run
+Lua playbook completes fill + click
+stop cancels run (agent and Lua)
 ```
 
 ## Acceptance
@@ -413,11 +420,13 @@ TypeScript checks pass
 Playwright extension tests pass
 extension loads unpacked
 side panel chat works
+Lua playbook editor works
 page_snapshot works
 page_fill and page_click modify page
-trace records every command
+trace records every command (agent and Lua)
 agent completes one simple task
-stop works
+Lua playbook completes one simple task
+stop works (agent and Lua)
 no any/Object in TypeScript
 no broad host_permissions
 no arbitrary JS eval

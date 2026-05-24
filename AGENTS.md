@@ -6,11 +6,17 @@ Project and behavioral guidelines for agents working in this repository.
 
 Browsergent is **Claude Code for the browser** — an AI agent that lives in a Chrome side panel, sees web pages, and acts on them autonomously.
 
-- **Interface**: Chat. User types a task in plain English, agent reasons and executes.
+Browsergent has **two required interfaces**:
+
+1. **Agent Chat** (primary): User types a task in plain English, agent reasons and executes.
+2. **Lua Playbooks** (required): User writes and runs Lua scripts that control the browser through typed commands.
+
+Architecture:
+
 - **Brain**: pi-core (Rust sans-IO state machine), compiled to WASM, runs in a Web Worker
 - **Reasoning**: Anthropic Claude (LLM streaming)
 - **Eyes and hands**: Content script with typed command protocol — snapshot, click, fill, scroll
-- **Lua**: Required playbook/tooling capability. NOT the main interface, but not optional.
+- **Lua**: Required runtime using piccolo WASM. Both the agent and direct user playbooks use it.
 - **Platform**: Chrome Manifest V3 extension
 
 ## Project Boundaries
@@ -248,23 +254,27 @@ interface ElementSnapshot {
 
 ```typescript
 // UI → Worker
-type WorkerRequest =
-  | { type: "runCell"; id: CellId; code: string; stdin?: string }
-  | { type: "resumeCell"; id: CellId; result: string }
-  | { type: "stop" }
-  | { type: "reset" }
+type PanelToWorker =
   | { type: "agentStart"; task: string; maxSteps: number }
-  | { type: "agentStop" };
+  | { type: "agentStop" }
+  | { type: "agentReset" }
+  | { type: "luaRun"; id: string; code: string; stdin?: string }
+  | { type: "luaStop" }
+  | { type: "luaReset" }
+  | { type: "settingsUpdated"; settings: WorkerSettings };
 
 // Worker → UI
-type WorkerResponse =
-  | { type: "result"; id: CellId; data: RunResult }
-  | { type: "asyncRelay"; id: CellId; command: AsyncCommand }
-  | { type: "agentTrace"; step: number; command: BrowserCommand; result: BrowserResult }
-  | { type: "agentStatus"; status: AgentStatus; reason?: string };
+type WorkerToPanel =
+  | { type: "workerReady" }
+  | { type: "agentStatus"; status: AgentStatus; reason?: string }
+  | { type: "agentMessage"; message: ChatMessage }
+  | { type: "agentTextDelta"; messageId: string; text: string }
+  | { type: "agentTrace"; entry: ActionTraceEntry }
+  | { type: "agentError"; error: BrowsergentError }
+  | { type: "luaOutput"; id: string; data: RunResult }
+  | { type: "luaTrace"; entry: ActionTraceEntry };
 
-type AgentStatus = "running" | "done" | "error" | "stopped";
-type CellId = string;
+type AgentStatus = "idle" | "loading" | "running" | "waiting_for_model" | "executing_tool" | "done" | "stopped" | "error";
 ```
 
 ## Build and Test
