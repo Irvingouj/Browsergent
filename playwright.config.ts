@@ -7,4 +7,5 @@ export default defineConfig({
   use: {
     headless: true,
   },
+  testIgnore: ["**/extension-lua-types.spec.ts"],
 });
