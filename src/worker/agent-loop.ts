@@ -72,10 +72,15 @@ function projectToolResult(text: string): string {
 		: normalized;
 }
 
-function toolResultText(result: { content?: Array<{ type: string; text?: string }> }): string {
+function toolResultText(result: {
+	content?: Array<{ type: string; text?: string }>;
+}): string {
 	return (
 		result.content
-			?.filter((item): item is { type: "text"; text: string } => item.type === "text" && typeof item.text === "string")
+			?.filter(
+				(item): item is { type: "text"; text: string } =>
+					item.type === "text" && typeof item.text === "string",
+			)
 			.map((item) => item.text)
 			.join("\n") ?? ""
 	);
@@ -83,11 +88,14 @@ function toolResultText(result: { content?: Array<{ type: string; text?: string 
 
 function toolErrorText(result: unknown): string {
 	// SDK tool_execution_end passes ToolResult for errors too — content may hold the error text
-	const fromContent = toolResultText(result as { content?: Array<{ type: string; text?: string }> });
+	const fromContent = toolResultText(
+		result as { content?: Array<{ type: string; text?: string }> },
+	);
 	if (fromContent) return fromContent;
 
 	if (typeof result === "object" && result !== null && "error" in result) {
-		const err = (result as { error?: { code?: string; message?: string } }).error;
+		const err = (result as { error?: { code?: string; message?: string } })
+			.error;
 		if (typeof err?.message === "string") return `Error: ${err.message}`;
 		if (typeof err?.code === "string") return `Error: ${err.code}`;
 	}
@@ -153,7 +161,10 @@ function renderMarkdownDocs(entries: ExtensionLuaApiEntry[]): string {
 		.join("\n\n");
 }
 
-async function getExtensionLuaDocs(format: string, namespace?: string): Promise<string> {
+async function getExtensionLuaDocs(
+	format: string,
+	namespace?: string,
+): Promise<string> {
 	const module = (await import(
 		"@pi-oxide/extension-lua/dist/extension_lua.js"
 	)) as { generateApiDocs: (format: string) => string };
@@ -265,10 +276,7 @@ export class AgentLoop {
 		];
 
 		try {
-			const provider = new AnthropicProvider(
-				config,
-				this.abortController.signal,
-			);
+			const provider = new AnthropicProvider(config);
 
 			await this.agent.run(task, {
 				llm: provider,
@@ -282,8 +290,10 @@ export class AgentLoop {
 						this.stepCount++;
 
 						const args = call.arguments as Record<string, unknown>;
-						const format = typeof args.format === "string" ? args.format : "markdown";
-						const namespace = typeof args.namespace === "string" ? args.namespace : undefined;
+						const format =
+							typeof args.format === "string" ? args.format : "markdown";
+						const namespace =
+							typeof args.namespace === "string" ? args.namespace : undefined;
 
 						callbacks.onTrace({
 							id: call.id,
@@ -356,6 +366,7 @@ export class AgentLoop {
 				onEvent: (event: AgentEvent) => {
 					this.handleEvent(event, callbacks, messages);
 				},
+				signal: this.abortController.signal,
 			});
 
 			if (!this.aborted) callbacks.onStatus("done");
@@ -378,6 +389,7 @@ export class AgentLoop {
 	stop(): void {
 		this.aborted = true;
 		this.abortController?.abort();
+		this.agent?.stop();
 	}
 
 	private handleEvent(
@@ -417,7 +429,8 @@ export class AgentLoop {
 				const errorText = event.is_error
 					? toolErrorText(event.result)
 					: toolResultText(event.result).slice(0, 8000);
-				const resolvedToolName = this.toolCallNames.get(event.tool_call_id) ?? "run_lua";
+				const resolvedToolName =
+					this.toolCallNames.get(event.tool_call_id) ?? "run_lua";
 				callbacks.onTrace({
 					id: event.tool_call_id,
 					step: this.stepCount,
@@ -430,7 +443,8 @@ export class AgentLoop {
 				break;
 			}
 			case "tool_execution_cancelled": {
-				const cancelledToolName = this.toolCallNames.get(event.tool_call_id) ?? "run_lua";
+				const cancelledToolName =
+					this.toolCallNames.get(event.tool_call_id) ?? "run_lua";
 				callbacks.onTrace({
 					id: event.tool_call_id,
 					step: this.stepCount,

@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { createTestPage, launchExtension } from "./helpers";
+import { expect, test } from "@playwright/test";
+import { launchExtension } from "./helpers";
 
 test("manifest grants host access for normal web pages", async () => {
 	const manifestPath = path.resolve("dist/manifest.json");
@@ -53,4 +53,3 @@ test("settings panel stores API key", async () => {
 
 	await close();
 });
-

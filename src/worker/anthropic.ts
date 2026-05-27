@@ -315,12 +315,12 @@ function toStopReason(raw: string | null): StopReason {
 // ---------------------------------------------------------------------------
 
 export class AnthropicProvider implements LlmProvider {
-	constructor(
-		private config: AnthropicConfig,
-		private abortSignal?: AbortSignal,
-	) {}
+	constructor(private config: AnthropicConfig) {}
 
-	async call(context: LlmContext): Promise<LlmStream> {
+	async call(
+		context: LlmContext,
+		signal?: AbortSignal,
+	): Promise<LlmStream> {
 		const baseUrl = this.config.baseUrl ?? "https://api.anthropic.com";
 		const isFireworks = baseUrl.includes("fireworks.ai");
 
@@ -345,7 +345,7 @@ export class AnthropicProvider implements LlmProvider {
 						}),
 			},
 			body: JSON.stringify(body),
-			signal: this.abortSignal ?? null,
+			signal: signal ?? null,
 		});
 
 		if (!resp.ok) {
@@ -353,10 +353,10 @@ export class AnthropicProvider implements LlmProvider {
 			throw new Error(`Anthropic API error ${resp.status}: ${errorText}`);
 		}
 
-		return this.createStream(resp);
+		return this.createStream(resp, signal);
 	}
 
-	private createStream(resp: Response): LlmStream {
+	private createStream(resp: Response, signal?: AbortSignal): LlmStream {
 		const body = resp.body;
 		if (!body) {
 			throw new Error("Anthropic response has no body");
@@ -418,7 +418,7 @@ export class AnthropicProvider implements LlmProvider {
 		const readLoop = async (): Promise<void> => {
 			try {
 				while (true) {
-					if (this.abortSignal?.aborted) {
+					if (signal?.aborted) {
 						resultResolve?.({
 							Err: {
 								error: {
@@ -476,7 +476,13 @@ export class AnthropicProvider implements LlmProvider {
 									model: this.config.model,
 									stop_reason: "end_turn",
 									timestamp: Date.now(),
-									usage: { input: 0, output: 0, cache_read: 0, cache_write: 0, total_tokens: 0 },
+									usage: {
+										input: 0,
+										output: 0,
+										cache_read: 0,
+										cache_write: 0,
+										total_tokens: 0,
+									},
 								});
 								break;
 							}

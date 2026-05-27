@@ -1,14 +1,27 @@
 /** Panel <-> Worker message types. */
 
+import type { BrowsergentError } from "../errors/browsergent-error";
 import type { CellResult } from "./extension-lua";
+
+export type { BrowsergentError };
 
 // --- Panel -> Worker ---
 
+export type ConversationMessage = {
+	role: "user" | "assistant";
+	content: string;
+};
+
 export type PanelToWorker =
-	| { type: "agentStart"; task: string }
-	| { type: "agentStop" }
+	| {
+			type: "agentStart";
+			runId: string;
+			task: string;
+			settings: WorkerSettings;
+			priorMessages?: ConversationMessage[];
+	  }
+	| { type: "agentStop"; runId?: string }
 	| { type: "agentReset" }
-	| { type: "settingsUpdated"; settings: WorkerSettings }
 	| { type: "luaRun"; id: string; code: string }
 	| { type: "luaStop" }
 	| { type: "luaReset" }
@@ -25,11 +38,12 @@ export interface WorkerSettings {
 
 export type WorkerToPanel =
 	| { type: "workerReady" }
-	| { type: "agentStatus"; status: AgentStatus; reason?: string }
-	| { type: "agentMessage"; message: ChatMessage }
-	| { type: "agentTextDelta"; messageId: string; text: string }
-	| { type: "agentTrace"; entry: AgentTraceEntry }
-	| { type: "agentError"; error: BrowsergentError }
+	| { type: "agentStatus"; runId: string; status: AgentStatus; reason?: string }
+	| { type: "agentMessage"; runId: string; message: ChatMessage }
+	| { type: "agentTextDelta"; runId: string; messageId: string; text: string }
+	| { type: "agentTrace"; runId: string; entry: AgentTraceEntry }
+	| { type: "agentError"; runId: string; error: BrowsergentError }
+	| { type: "agentHistory"; runId: string; messages: ConversationMessage[] }
 	| { type: "luaOutput"; id: string; output: string }
 	| { type: "luaError"; id: string; error: string }
 	| { type: "luaRunRequest"; id: string; code: string };
@@ -63,12 +77,4 @@ export interface AgentTraceEntry {
 	toolInput?: string;
 	result?: string;
 	timestamp: number;
-}
-
-// --- Error ---
-
-export interface BrowsergentError {
-	code: string;
-	message: string;
-	details?: Record<string, unknown>;
 }

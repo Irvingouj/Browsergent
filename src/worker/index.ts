@@ -14,6 +14,7 @@ import { formatError } from "../types/extension-lua";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
+	WorkerSettings,
 	WorkerToPanel,
 } from "../types/messages";
 import { AgentLoop } from "./agent-loop";
@@ -22,14 +23,7 @@ import type { AnthropicConfig } from "./anthropic";
 declare const self: DedicatedWorkerGlobalScope;
 
 let agentLoop: AgentLoop | null = null;
-let currentApiKey: string | undefined;
-let currentBaseUrl: string | undefined;
-let currentModel = "claude-sonnet-4-20250514";
-let conversationHistory: Array<{
-	role: "user" | "assistant";
-	content: string;
-}> = [];
-let agentRunId = 0;
+let currentRunId: string | null = null;
 
 function post(message: WorkerToPanel): void {
 	self.postMessage(message);
@@ -93,12 +87,24 @@ function handleLuaRelayError(id: string, error: string): void {
 
 // --- Agent handling ---
 
-function handleAgentStart(task: string): void {
-	if (!currentApiKey) {
+function postIfCurrentRun(runId: string, message: WorkerToPanel): void {
+	if (runId === currentRunId) {
+		post(message);
+	}
+}
+
+function handleAgentStart(
+	task: string,
+	settings: WorkerSettings,
+	runId: string,
+	priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
+): void {
+	if (!settings.anthropicApiKey) {
 		post({
 			type: "agentError",
+			runId,
 			error: {
-				code: "no_api_key",
+				code: "E_NO_API_KEY",
 				message: "Set your Anthropic API key in settings",
 			},
 		});
@@ -110,12 +116,12 @@ function handleAgentStart(task: string): void {
 	}
 
 	agentLoop = new AgentLoop();
-	const runId = ++agentRunId;
+	currentRunId = runId;
 
 	const config: AnthropicConfig = {
-		apiKey: currentApiKey,
-		baseUrl: currentBaseUrl,
-		model: currentModel,
+		apiKey: settings.anthropicApiKey,
+		baseUrl: settings.baseUrl,
+		model: settings.model,
 	};
 
 	agentLoop
@@ -124,11 +130,17 @@ function handleAgentStart(task: string): void {
 			config,
 			{
 				onStatus(status, reason) {
-					post({ type: "agentStatus", status, reason });
+					postIfCurrentRun(runId, {
+						type: "agentStatus",
+						runId,
+						status,
+						reason,
+					});
 				},
 				onMessage(kind, text) {
-					post({
+					postIfCurrentRun(runId, {
 						type: "agentMessage",
+						runId,
 						message: {
 							kind,
 							id: crypto.randomUUID(),
@@ -138,30 +150,50 @@ function handleAgentStart(task: string): void {
 					});
 				},
 				onTextDelta(messageId, text) {
-					post({ type: "agentTextDelta", messageId, text });
+					postIfCurrentRun(runId, {
+						type: "agentTextDelta",
+						runId,
+						messageId,
+						text,
+					});
 				},
 				onTrace(entry: AgentTraceEntry) {
-					post({ type: "agentTrace", entry });
+					postIfCurrentRun(runId, { type: "agentTrace", runId, entry });
 				},
 				onError(code, message) {
-					post({ type: "agentError", error: { code, message } });
+					postIfCurrentRun(runId, {
+						type: "agentError",
+						runId,
+						error: {
+							code: code as import("../types/messages").BrowsergentError["code"],
+							message,
+						},
+					});
 				},
 				runLua(code) {
 					return relayLuaExecution(code);
 				},
 			},
-			conversationHistory,
+			priorMessages,
 		)
 		.then((finalMessages) => {
-			if (runId === agentRunId) {
-				conversationHistory = finalMessages;
+			if (runId === currentRunId) {
+				post({ type: "agentHistory", runId, messages: finalMessages });
 			}
 		});
 }
 
-function handleAgentStop(): void {
+function handleAgentStop(runId?: string): void {
+	if (runId && runId !== currentRunId) {
+		return;
+	}
 	agentLoop?.stop();
-	post({ type: "agentStatus", status: "stopped", reason: "Stopped by user" });
+	post({
+		type: "agentStatus",
+		runId: currentRunId ?? "unknown",
+		status: "stopped",
+		reason: "Stopped by user",
+	});
 	rejectAllPendingLuaRelays("Agent stopped");
 }
 
@@ -169,18 +201,8 @@ function handleAgentReset(): void {
 	agentLoop?.stop();
 	rejectAllPendingLuaRelays("Agent reset");
 	agentLoop = null;
-	conversationHistory = [];
-	post({ type: "agentStatus", status: "idle" });
-}
-
-function handleSettingsUpdated(settings: {
-	anthropicApiKey?: string;
-	baseUrl?: string;
-	model: string;
-}): void {
-	currentApiKey = settings.anthropicApiKey;
-	currentBaseUrl = settings.baseUrl;
-	currentModel = settings.model;
+	currentRunId = null;
+	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
 
 // --- Standalone Lua tab handling ---
@@ -207,16 +229,13 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 	const msg = event.data;
 	switch (msg.type) {
 		case "agentStart":
-			handleAgentStart(msg.task);
+			handleAgentStart(msg.task, msg.settings, msg.runId, msg.priorMessages);
 			break;
 		case "agentStop":
-			handleAgentStop();
+			handleAgentStop(msg.runId);
 			break;
 		case "agentReset":
 			handleAgentReset();
-			break;
-		case "settingsUpdated":
-			handleSettingsUpdated(msg.settings);
 			break;
 		case "luaRun":
 			void handleLuaRun(msg.id, msg.code);

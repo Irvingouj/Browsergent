@@ -1,140 +1,126 @@
 import { marked } from "marked";
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import type {
-	AgentStatus,
-	AgentTraceEntry,
-	ChatMessage,
-	PanelToWorker,
-	WorkerToPanel,
-} from "../types/messages";
-import { ExtensionLuaClient, isLuaRelayRequest } from "./extension-lua-client";
+import { exportConversation } from "../controllers/export-controller";
+import { LuaController } from "../controllers/lua-controller";
+import { SessionController } from "../controllers/session-controller";
+import { SettingsController } from "../controllers/settings-controller";
+import { WorkerBridge } from "../controllers/worker-bridge";
+import {
+	type BrowsergentStore,
+	browsergentStore,
+	useStore,
+} from "../state/store";
+import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 
 const App: FunctionalComponent = () => {
-	const [messages, setMessages] = useState<ChatMessage[]>([]);
-	const [trace, setTrace] = useState<AgentTraceEntry[]>([]);
-	const [status, setStatus] = useState<AgentStatus>("idle");
-	const [statusReason, setStatusReason] = useState<string | undefined>();
-	const [taskInput, setTaskInput] = useState("");
-	const [apiKey, setApiKey] = useState("");
-	const [baseUrl, setBaseUrl] = useState("https://api.anthropic.com");
-	const [model, setModel] = useState("claude-sonnet-4-20250514");
-	const [showSettings, setShowSettings] = useState(false);
-	const workerRef = useRef<Worker | null>(null);
+	const messages = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.chat.messages,
+	);
+	const trace = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.trace.entries,
+	);
+	const status = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.agent.status,
+	);
+	const statusReason = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.agent.statusReason,
+	);
+	const taskInput = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.ui.taskDraft,
+	);
+	const apiKey = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.settings.anthropicApiKey,
+	);
+	const baseUrl = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.settings.baseUrl,
+	);
+	const model = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.settings.model,
+	);
+	const showSettings = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.ui.settingsOpen,
+	);
+	const bridgeRef = useRef<WorkerBridge | null>(null);
+	const luaControllerRef = useRef<LuaController | null>(null);
+	const settingsControllerRef = useRef<SettingsController | null>(null);
+	const sessionControllerRef = useRef<SessionController | null>(null);
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
+	if (!bridgeRef.current) {
+		bridgeRef.current = new WorkerBridge({
+			onLuaRunRequest: (msg) => {
+				luaControllerRef.current?.handleRelayRequest(msg);
+			},
+			onAgentHistory: (messages) => {
+				sessionControllerRef.current?.saveHistory(messages).catch((err: unknown) => {
+					console.warn("History save failed:", err);
+				});
+			},
+		});
+	}
+
+	if (!luaControllerRef.current) {
+		luaControllerRef.current = new LuaController(bridgeRef.current!);
+	}
+
+	if (!settingsControllerRef.current) {
+		settingsControllerRef.current = new SettingsController();
+	}
+
+	if (!sessionControllerRef.current) {
+		sessionControllerRef.current = new SessionController();
+	}
+
 	useEffect(() => {
-		const client = ExtensionLuaClient.getInstance();
-
-		// Initialize extension-lua session
-		client.init().catch((err: unknown) => {
-			console.warn("Extension-lua init failed:", err);
+		luaControllerRef.current?.init().catch((err: unknown) => {
+			console.warn("Lua init failed:", err);
 		});
-
-		// Wire relay callback: when client has a response for the worker,
-		// forward it via postMessage
-		ExtensionLuaClient.relayCallback = (msg) => {
-			workerRef.current?.postMessage(msg);
-		};
-
-		const w = new Worker(chrome.runtime.getURL("worker.js"), {
-			type: "module",
-		});
-
-		w.onmessage = (e: MessageEvent<WorkerToPanel>) => {
-			const msg = e.data;
-			switch (msg.type) {
-				case "workerReady":
-					setStatus("idle");
-					break;
-				case "agentStatus":
-					setStatus(msg.status);
-					setStatusReason(msg.reason);
-					break;
-				case "agentMessage":
-					setMessages((prev) => [...prev, msg.message]);
-					break;
-				case "agentTextDelta": {
-					setMessages((prev) => {
-						const idx = prev.findIndex((m) => m.id === msg.messageId);
-						if (idx >= 0) {
-							const next = [...prev];
-							const existing = next[idx];
-							if (existing) {
-								next[idx] = { ...existing, text: existing.text + msg.text };
-							}
-							return next;
-						}
-						return [
-							...prev,
-							{
-								kind: "assistant",
-								id: msg.messageId,
-								text: msg.text,
-								timestamp: Date.now(),
-							},
-						];
-					});
-					break;
+		bridgeRef.current?.start();
+		sessionControllerRef.current
+			?.load()
+			.then((session) => {
+				if (session) {
+					browsergentStore.getState().hydrateChat(session.messages);
+					browsergentStore.getState().hydrateTrace(session.trace);
 				}
-				case "agentTrace":
-					setTrace((prev) => {
-						const idx = prev.findIndex((e) => e.id === msg.entry.id);
-						if (idx >= 0) {
-							const updated = [...prev];
-							updated[idx] = { ...prev[idx], ...msg.entry };
-							return updated;
-						}
-						return [...prev, msg.entry];
-					});
-					break;
-				case "agentError":
-					setMessages((prev) => [
-						...prev,
-						{
-							kind: "system",
-							id: crypto.randomUUID(),
-							text: `Error: ${msg.error.message}`,
-							timestamp: Date.now(),
-						},
-					]);
-					break;
-				case "luaRunRequest":
-					if (isLuaRelayRequest(msg)) {
-						client.handleRelayRequest(msg);
-					}
-					break;
-			}
-		};
-
-		workerRef.current = w;
+				if (sessionControllerRef.current) {
+					sessionControllerRef.current.hydrated = true;
+				}
+			})
+			.catch((err: unknown) => {
+				console.warn("Session load failed:", err);
+				if (sessionControllerRef.current) {
+					sessionControllerRef.current.hydrated = true;
+				}
+			});
 
 		return () => {
-			ExtensionLuaClient.relayCallback = null;
-			w.terminate();
-			client.dispose().catch(() => {});
+			bridgeRef.current?.stop();
+			luaControllerRef.current?.dispose().catch((err: unknown) => {
+			console.warn("Lua dispose failed:", err);
+		});
+			sessionControllerRef.current?.cancelPendingSave();
 		};
 	}, []);
 
 	useEffect(() => {
-		chrome.storage.local.get(
-			["anthropicApiKey", "anthropicBaseUrl", "anthropicModel"],
-			(result: {
-				anthropicApiKey?: string;
-				anthropicBaseUrl?: string;
-				anthropicModel?: string;
-			}) => {
-				if (result.anthropicApiKey) {
-					setApiKey(result.anthropicApiKey);
-				}
-				if (result.anthropicBaseUrl) {
-					setBaseUrl(result.anthropicBaseUrl);
-				}
-				if (result.anthropicModel) {
-					setModel(result.anthropicModel);
-				}
-			},
-		);
+		sessionControllerRef.current?.scheduleSave(messages, trace);
+	}, [messages, trace]);
+
+	useEffect(() => {
+		settingsControllerRef.current?.load().catch((err: unknown) => {
+			console.warn("Settings load failed:", err);
+		});
 	}, []);
 
 	// Auto-scroll chat to bottom whenever messages or trace update
@@ -144,59 +130,52 @@ const App: FunctionalComponent = () => {
 		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages, trace]);
 
-	const postToWorker = useCallback((msg: PanelToWorker) => {
-		workerRef.current?.postMessage(msg);
-	}, []);
-
-	const handleRun = useCallback(() => {
+	const handleRun = useCallback(async () => {
 		const task = taskInput.trim();
 		if (!task) return;
 		if (!apiKey) {
-			setShowSettings(true);
+			browsergentStore.getState().setSettingsOpen(true);
 			return;
 		}
 
-		setTaskInput("");
+		browsergentStore.getState().setTaskDraft("");
 
-		postToWorker({
-			type: "settingsUpdated",
+		const runId = crypto.randomUUID();
+		browsergentStore.getState().agentRunRequested(runId);
+
+		const priorMessages = await sessionControllerRef.current?.loadHistory();
+
+		bridgeRef.current?.post({
+			type: "agentStart",
+			runId,
+			task,
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
+			priorMessages: priorMessages ?? undefined,
 		});
-		postToWorker({ type: "agentStart", task });
-	}, [taskInput, apiKey, baseUrl, model, postToWorker]);
+	}, [taskInput, apiKey, baseUrl, model]);
 
 	const handleStop = useCallback(() => {
-		postToWorker({ type: "agentStop" });
-	}, [postToWorker]);
+		const runId = browsergentStore.getState().agent.activeRunId;
+		bridgeRef.current?.post({ type: "agentStop", runId });
+	}, []);
 
 	const handleSaveApiKey = useCallback(() => {
-		chrome.storage.local.set({
-			anthropicApiKey: apiKey,
-			anthropicBaseUrl: baseUrl,
-			anthropicModel: model,
-		});
-		postToWorker({
-			type: "settingsUpdated",
-			settings: { anthropicApiKey: apiKey, baseUrl, model },
-		});
-		setShowSettings(false);
-	}, [apiKey, baseUrl, model, postToWorker]);
+		settingsControllerRef.current
+			?.save({ anthropicApiKey: apiKey, baseUrl, model })
+			.then(() => {
+				browsergentStore.getState().setSettingsOpen(false);
+			})
+			.catch((err: unknown) => {
+				console.warn("Settings save failed:", err);
+			});
+	}, [apiKey, baseUrl, model]);
 
 	const handleExportConversation = useCallback(() => {
-		const payload = {
+		exportConversation({
 			exportedAt: new Date().toISOString(),
 			messages,
 			trace,
-		};
-		const blob = new Blob([JSON.stringify(payload, null, 2)], {
-			type: "application/json",
 		});
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = `browsergent-conversation-${Date.now()}.json`;
-		a.click();
-		URL.revokeObjectURL(url);
 	}, [messages, trace]);
 
 	const isRunning =
@@ -226,11 +205,15 @@ const App: FunctionalComponent = () => {
 				}}
 			>
 				<div style={{ display: "flex", alignItems: "center" }}>
-					<span style={{ fontWeight: "bold", fontSize: "14px" }}>Browsergent</span>
+					<span style={{ fontWeight: "bold", fontSize: "14px" }}>
+						Browsergent
+					</span>
 				</div>
 				<button
 					type="button"
-					onClick={() => setShowSettings(!showSettings)}
+					onClick={() =>
+						browsergentStore.getState().setSettingsOpen(!showSettings)
+					}
 					style={{
 						padding: "4px 8px",
 						border: "1px solid #ccc",
@@ -260,7 +243,12 @@ const App: FunctionalComponent = () => {
 							<input
 								type="password"
 								value={apiKey}
-								onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
+								onInput={(e) => {
+									const val = (e.target as HTMLInputElement).value;
+									browsergentStore.getState().settingsDraftChanged({
+										anthropicApiKey: val,
+									});
+								}}
 								style={{
 									width: "100%",
 									padding: "4px 8px",
@@ -276,9 +264,12 @@ const App: FunctionalComponent = () => {
 							<input
 								type="text"
 								value={baseUrl}
-								onInput={(e) =>
-									setBaseUrl((e.target as HTMLInputElement).value)
-								}
+								onInput={(e) => {
+									const val = (e.target as HTMLInputElement).value;
+									browsergentStore.getState().settingsDraftChanged({
+										baseUrl: val,
+									});
+								}}
 								style={{
 									width: "100%",
 									padding: "4px 8px",
@@ -294,7 +285,12 @@ const App: FunctionalComponent = () => {
 							<input
 								type="text"
 								value={model}
-								onInput={(e) => setModel((e.target as HTMLInputElement).value)}
+								onInput={(e) => {
+									const val = (e.target as HTMLInputElement).value;
+									browsergentStore.getState().settingsDraftChanged({
+										model: val,
+									});
+								}}
 								style={{
 									width: "100%",
 									padding: "4px 8px",
@@ -368,7 +364,11 @@ const App: FunctionalComponent = () => {
 				<input
 					type="text"
 					value={taskInput}
-					onInput={(e) => setTaskInput((e.target as HTMLInputElement).value)}
+					onInput={(e) =>
+						browsergentStore
+							.getState()
+							.setTaskDraft((e.target as HTMLInputElement).value)
+					}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" && !isRunning) handleRun();
 					}}
@@ -529,7 +529,8 @@ function TraceEntryCompact({ entry }: { entry: AgentTraceEntry }) {
 				overflow: "hidden",
 			}}
 		>
-			<div
+			<button
+				type="button"
 				onClick={() => setExpanded(!expanded)}
 				style={{
 					padding: "6px 10px",
@@ -538,6 +539,10 @@ function TraceEntryCompact({ entry }: { entry: AgentTraceEntry }) {
 					gap: "6px",
 					cursor: "pointer",
 					fontFamily: "monospace",
+					width: "100%",
+					border: "none",
+					background: "transparent",
+					textAlign: "left",
 				}}
 			>
 				<span style={{ color }}>{icon}</span>
@@ -556,7 +561,7 @@ function TraceEntryCompact({ entry }: { entry: AgentTraceEntry }) {
 						{entry.toolInput.slice(0, 60)}
 					</span>
 				)}
-			</div>
+			</button>
 			{expanded && (
 				<div
 					style={{
@@ -568,9 +573,7 @@ function TraceEntryCompact({ entry }: { entry: AgentTraceEntry }) {
 				>
 					{entry.toolInput && (
 						<div style={{ marginBottom: "6px" }}>
-							<div style={{ color: "#666", marginBottom: "2px" }}>
-								Input:
-							</div>
+							<div style={{ color: "#666", marginBottom: "2px" }}>Input:</div>
 							<div
 								style={{
 									whiteSpace: "pre-wrap",
@@ -586,9 +589,7 @@ function TraceEntryCompact({ entry }: { entry: AgentTraceEntry }) {
 					)}
 					{entry.result && (
 						<div>
-							<div style={{ color: "#666", marginBottom: "2px" }}>
-								Result:
-							</div>
+							<div style={{ color: "#666", marginBottom: "2px" }}>Result:</div>
 							<div
 								style={{
 									whiteSpace: "pre-wrap",

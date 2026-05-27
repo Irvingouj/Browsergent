@@ -1,37 +1,37 @@
 {
-  "name": "@pi-oxide/pi-host-web",
-  "type": "module",
-  "collaborators": [
-    "Irving Ou <irving@pi-oxide.dev>"
-  ],
-  "description": "WASM host for pi-core. Browser FileSystem Access API, fetch(), JS event loop.",
-  "version": "0.3.1",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/pi-oxide/pi-oxide"
-  },
-  "files": [
-    "pi_host_web_bg.wasm",
-    "pi_host_web.js",
-    "pi_host_web.d.ts",
-    "sdk/index.js",
-    "sdk/index.d.ts"
-  ],
-  "main": "pi_host_web.js",
-  "types": "pi_host_web.d.ts",
-  "sideEffects": [
-    "./snippets/*"
-  ],
-  "exports": {
-    ".": {
-      "import": "./sdk/index.js",
-      "types": "./sdk/index.d.ts"
-    },
-    "./raw": {
-      "import": "./pi_host_web.js",
-      "types": "./pi_host_web.d.ts"
-    },
-    "./package.json": "./package.json"
-  }
+	"name": "@pi-oxide/pi-host-web",
+	"type": "module",
+	"collaborators": [
+		"Irving Ou <irving@pi-oxide.dev>"
+	],
+	"description": "WASM host for pi-core. Browser FileSystem Access API, fetch(), JS event loop.",
+	"version": "0.3.1",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/pi-oxide/pi-oxide"
+	},
+	"files": [
+		"pi_host_web_bg.wasm",
+		"pi_host_web.js",
+		"pi_host_web.d.ts",
+		"sdk/index.js",
+		"sdk/index.d.ts"
+	],
+	"main": "pi_host_web.js",
+	"types": "pi_host_web.d.ts",
+	"sideEffects": [
+		"./snippets/*"
+	],
+	"exports": {
+		".": {
+			"import": "./sdk/index.js",
+			"types": "./sdk/index.d.ts"
+		},
+		"./raw": {
+			"import": "./pi_host_web.js",
+			"types": "./pi_host_web.d.ts"
+		},
+		"./package.json": "./package.json"
+	}
 }

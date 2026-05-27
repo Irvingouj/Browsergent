@@ -57,4 +57,3 @@ export function formatError(error: WasmCellError): string {
 			return `[internal error] ${error.message}`;
 	}
 }
-

@@ -4,14 +4,14 @@
  *
  * Run: FIREWORKS_KEY=fpk_xxx npx vitest run tests/real-provider-smoke.spec.ts
  */
+
+import { Agent, toolError, toolResult } from "@pi-oxide/pi-host-web";
 import { describe, expect, test } from "vitest";
-import { Agent, toolResult, toolError } from "@pi-oxide/pi-host-web";
 import { AnthropicProvider, SYSTEM_PROMPT } from "../src/worker/anthropic";
 
 const FIREWORKS_KEY = process.env.FIREWORKS_KEY ?? "";
 const FIREWORKS_MODEL =
-	process.env.FIREWORKS_MODEL ??
-	"accounts/fireworks/routers/kimi-k2p6-turbo";
+	process.env.FIREWORKS_MODEL ?? "accounts/fireworks/routers/kimi-k2p6-turbo";
 const FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference";
 
 const skip = !FIREWORKS_KEY;
@@ -99,7 +99,7 @@ describe.skipIf(skip)("real provider smoke", () => {
 
 		expect(events.length).toBeGreaterThan(0);
 		expect(events).toContain("message_update");
-			expect(events).toContain("message_end");
+		expect(events).toContain("message_end");
 		expect(responseText.length).toBeGreaterThan(0);
 
 		agent.destroy();
