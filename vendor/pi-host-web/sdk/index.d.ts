@@ -26,7 +26,7 @@ export interface LlmStream {
 }
 
 export interface LlmProvider {
-  call(context: LlmContext): Promise<LlmStream> | LlmStream;
+  call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream> | LlmStream;
 }
 
 export type ToolMap = Record<
@@ -38,11 +38,13 @@ export interface AgentRunConfig {
   llm: LlmProvider;
   tools: ToolMap;
   onEvent?: (event: AgentEvent) => void;
+  signal?: AbortSignal;
 }
 
 export declare class Agent {
   static create(options: AgentOptions): Promise<Agent>;
   run(promptText: string, config: AgentRunConfig): Promise<AgentAction>;
+  stop(): void;
   reset(): void;
   state(): AgentState;
   getSessionState(): SessionState;

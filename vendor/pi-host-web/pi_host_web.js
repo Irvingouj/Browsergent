@@ -2,6 +2,15 @@
 
 /**
  * @param {number} handle
+ * @returns {StepResult}
+ */
+export function abort(handle) {
+    const ret = wasm.abort(handle);
+    return ret;
+}
+
+/**
+ * @param {number} handle
  * @param {SessionEntry} entry
  * @returns {EmptyResult}
  */

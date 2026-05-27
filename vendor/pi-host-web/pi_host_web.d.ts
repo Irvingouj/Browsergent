@@ -389,6 +389,8 @@ export type ToolOutputStream = "stdout" | "stderr" | "status";
 export type WaitMode = "steering" | "follow_up" | "any";
 
 
+export function abort(handle: number): StepResult;
+
 export function appendSessionEntry(handle: number, entry: SessionEntry): EmptyResult;
 
 export function continueTurn(handle: number): StepResult;
@@ -441,6 +443,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly abort: (a: number) => any;
     readonly appendSessionEntry: (a: number, b: any) => any;
     readonly continueTurn: (a: number) => any;
     readonly createAgent: (a: any) => any;
