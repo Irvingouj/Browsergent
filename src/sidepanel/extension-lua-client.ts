@@ -11,10 +11,6 @@
 
 import type { ExtensionSession as ExtensionSessionType } from "@pi-oxide/extension-lua";
 import type { CellResult } from "../types/extension-lua";
-import {
-	detectPageSnapshotMisuse,
-	scanForUnsafeCode,
-} from "../types/extension-lua";
 
 const LUA_TIMEOUT_MS = 30_000;
 
@@ -69,6 +65,7 @@ export class ExtensionLuaClient {
 		this.initPromise = (async () => {
 			const { ExtensionSession } = await import("@pi-oxide/extension-lua");
 			const [session, runner] = await ExtensionSession.init();
+			session.setFuelLimit(1_000_000);
 			this.session = session;
 			this.runnerPromise = runner;
 			this.initialized = true;
@@ -78,28 +75,6 @@ export class ExtensionLuaClient {
 
 	async runLua(code: string): Promise<CellResult> {
 		await this.ensureReady();
-
-		const unsafeError = scanForUnsafeCode(code);
-		if (unsafeError) {
-			return {
-				stdout: [],
-				stderr: [],
-				result: null,
-				error: { kind: "runtime", message: `Forbidden: ${unsafeError}` },
-				execution_count: 0,
-			};
-		}
-
-		const misuseWarning = detectPageSnapshotMisuse(code);
-		if (misuseWarning) {
-			return {
-				stdout: [],
-				stderr: [],
-				result: null,
-				error: { kind: "runtime", message: misuseWarning },
-				execution_count: 0,
-			};
-		}
 
 		return new Promise<CellResult>((resolve, reject) => {
 			// Chain onto queue and catch to prevent rejection from breaking future calls

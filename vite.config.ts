@@ -13,7 +13,7 @@ export default defineConfig({
         const outDir = options.dir ?? "dist";
         const src = path.resolve(
           __dirname,
-          "node_modules/@pi-oxide/extension-lua/content-script.js",
+          "node_modules/@pi-oxide/extension-lua/dist/content-script.js",
         );
         const dest = path.resolve(outDir, "content-script.js");
         try {

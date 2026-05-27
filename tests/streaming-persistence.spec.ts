@@ -134,11 +134,11 @@ test("two prompts keep all messages visible and prior transcript included in sec
 
 	expect(mock.requestBodies.length).toBe(2);
 	const secondRequest = mock.requestBodies[1] as {
-		messages: Array<{ role: string; content: string }>;
+		messages: Array<{ role: string; content: unknown }>;
 	};
 	expect(secondRequest.messages).toEqual([
 		{ role: "user", content: "task one" },
-		{ role: "assistant", content: "First response" },
+		{ role: "assistant", content: [{ type: "text", text: "First response" }] },
 		{ role: "user", content: "task two" },
 	]);
 
@@ -188,7 +188,7 @@ test("stop preserves partial streamed text", async () => {
 	mock.server.close();
 });
 
-test("text before run_lua tool call does not send null content to pi-core", async () => {
+test("text before run_lua tool call continues after run_lua tool result", async () => {
 	const mock = startMockAnthropicServer({
 		responses: [
 			{
@@ -232,6 +232,56 @@ test("text before run_lua tool call does not send null content to pi-core", asyn
 		timeout: 5000,
 	});
 	await expect(sidePanel.locator("text=invalid type: null")).toHaveCount(0);
+
+	await close();
+	mock.server.close();
+});
+
+test("get_doc tool returns Lua API docs and continues the agent turn", async () => {
+	const mock = startMockAnthropicServer({
+		responses: [
+			{
+				chunks: [
+					`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-doc-1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+					`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "toolu_doc_1", name: "get_doc", input: {} } })}\n\n`,
+					`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: '{"namespace":"tab","format":"markdown"}' } })}\n\n`,
+					`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+				],
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: [
+					`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-doc-2", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+					`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
+					`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Docs loaded." } })}\n\n`,
+					`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+				],
+				delays: [0, 0, 0, 0],
+				stopReason: "end_turn",
+			},
+		],
+	});
+
+	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.locator('input[type="password"]').fill("fake-key");
+	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.getByRole("button", { name: "Save" }).click();
+
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("check lua docs");
+	await sidePanel.getByRole("button", { name: "Run" }).click();
+
+	await expect(sidePanel.locator("text=Docs loaded.")).toBeVisible({
+		timeout: 10000,
+	});
+
+	const secondRequest = mock.requestBodies[1] as {
+		messages: Array<{ content: unknown }>;
+	};
+	expect(JSON.stringify(secondRequest.messages)).toContain("tab.current");
 
 	await close();
 	mock.server.close();

@@ -93,7 +93,7 @@ function handleLuaRelayError(id: string, error: string): void {
 
 // --- Agent handling ---
 
-function handleAgentStart(task: string, maxSteps: number): void {
+function handleAgentStart(task: string): void {
 	if (!currentApiKey) {
 		post({
 			type: "agentError",
@@ -121,7 +121,6 @@ function handleAgentStart(task: string, maxSteps: number): void {
 	agentLoop
 		.run(
 			task,
-			maxSteps,
 			config,
 			{
 				onStatus(status, reason) {
@@ -162,6 +161,7 @@ function handleAgentStart(task: string, maxSteps: number): void {
 
 function handleAgentStop(): void {
 	agentLoop?.stop();
+	post({ type: "agentStatus", status: "stopped", reason: "Stopped by user" });
 	rejectAllPendingLuaRelays("Agent stopped");
 }
 
@@ -207,7 +207,7 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 	const msg = event.data;
 	switch (msg.type) {
 		case "agentStart":
-			handleAgentStart(msg.task, msg.maxSteps);
+			handleAgentStart(msg.task);
 			break;
 		case "agentStop":
 			handleAgentStop();

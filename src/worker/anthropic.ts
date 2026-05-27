@@ -97,47 +97,50 @@ function isStreamEvent(value: unknown): value is AnthropicStreamEvent {
 // Constants — kept for use by agent-loop.ts when creating the Agent
 // ---------------------------------------------------------------------------
 
+const BROWSERGENT_LUA_GUIDANCE = [
+	"Execute Lua code to control the browser via extension-lua runtime.",
+	"ALWAYS call get_doc first when you need any tab.*, chrome.*, json, runtime, or web API. Do not guess function names, argument shapes, or return types.",
+	"",
+	"## Browsergent-specific rules",
+	"- The target web page is controlled through tab.* APIs. Start with `local tab_id = tab.current()`.",
+	"- Use `tab.snapshot(tab_id)` to inspect the target page and obtain current ref_ids.",
+	"- Use `tab.url(tab_id)` and `tab.title(tab_id)` for page metadata.",
+	"- Use `tab.open(url)` to navigate/open a URL when the user asks to go somewhere.",
+	"- Ref_ids are snapshot-scoped. Never guess them, and refresh the snapshot before acting if the page changed.",
+	"- You can combine multiple tab.* calls in one Lua block when the sequence is clear.",
+	"- Use `print(...)` to return concise observations to the trace.",
+	"- Do not use `page.snapshot()` for browser automation; it captures the extension side panel, not the target page.",
+	"- Do not use `tab.evaluate`, `tab.execute_script`, or `chrome.scripting.executeScript`; Browsergent forbids arbitrary JS execution.",
+	"",
+	"## Common patterns",
+	"Current page:",
+	"```lua",
+	"local tab_id = tab.current()",
+	'print("Tab:", tab_id)',
+	'print("URL:", tab.url(tab_id))',
+	'print("Title:", tab.title(tab_id))',
+	"```",
+	"",
+	"Navigate:",
+	"```lua",
+	'tab.open("https://www.linkedin.com")',
+	"```",
+	"",
+	"Inspect and interact:",
+	"```lua",
+	"local tab_id = tab.current()",
+	"local snap = tab.snapshot(tab_id)",
+	"-- choose a real ref_id from snap, then:",
+	'-- tab.fill(tab_id, "e3", "search text")',
+	'-- tab.click(tab_id, "e4")',
+	"```",
+].join("\n");
+
 /** Tool definition in Anthropic wire format — used when constructing the agent. */
 export const BROWSER_TOOLS: AnthropicTool[] = [
 	{
 		name: "run_lua",
-		description: [
-			"Execute Lua code to control the browser via extension-lua runtime.",
-			"All tab.* functions are async (yield/resume).",
-			"",
-			"## Browsergent tab.* API",
-			"tab.current()                  → get active tab ID",
-			"tab.url(tab_id)                → get page URL",
-			"tab.title(tab_id)              → get page title",
-			"tab.snapshot(tab_id)           → snapshot page, returns elements with ref_ids",
-			"tab.click(tab_id, ref_id)      → click element",
-			"tab.fill(tab_id, ref_id, text) → fill input/textarea",
-			"tab.scroll_to(tab_id, ref_id)  → scroll to element",
-			"tab.back(tab_id)               → browser back",
-			"tab.open(url)                  → open new tab",
-			"tab.close(tab_id)              → close tab",
-			"tab.focus(tab_id)              → focus/activate tab",
-			"tab.reload(tab_id)             → reload page",
-			"tab.fetch(tab_id, url, opts?)  → fetch URL in tab context",
-			"tab.query({})                  → query all tabs",
-			"tab.wait_for_load(tab_id)      → wait for page load (use with caution)",
-			"",
-			"## JSON (json.*)",
-			"json.encode(table)             → serialize table to JSON string",
-			"json.decode(string)            → parse JSON string to table",
-			"json.pretty(table)             → pretty-print table as JSON",
-			"",
-			"## Globals",
-			"print(...)                     → output text (space-separated, tab-delimited)",
-			"json.encode/decode/pretty      → JSON utilities (sync)",
-			"runtime.inspect()              → list all global variables with type/value info",
-			"",
-			"IMPORTANT: Never use page.snapshot — it captures the extension's side panel, not the target web page. Always use tab.snapshot(tab_id) instead.",
-			"",
-			"## Lua Standard Library (available)",
-			"string.*, math.*, table.*, pairs, ipairs, pcall, error, tostring, tonumber, type",
-			"os, io, debug are nil (sandboxed)",
-		].join("\n"),
+		description: BROWSERGENT_LUA_GUIDANCE,
 		input_schema: {
 			type: "object",
 			properties: {
@@ -146,9 +149,31 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 			required: ["code"],
 		},
 	},
+	{
+		name: "get_doc",
+		description:
+			"Return extension-lua API documentation. Call this BEFORE every run_lua that uses APIs you are not 100% sure about. Prefer get_doc over guessing.",
+		input_schema: {
+			type: "object",
+			properties: {
+				format: {
+					type: "string",
+					enum: ["markdown", "json"],
+					description: "Documentation format. Defaults to markdown.",
+				},
+				namespace: {
+					type: "string",
+					description:
+						"Optional namespace filter, such as tab, chrome.tabs, json, runtime, or web.",
+				},
+			},
+		},
+	},
 ];
 
 export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating Lua code via the run_lua tool.
+
+Use get_doc proactively. Before any run_lua that touches APIs you are not 100% sure about, call get_doc to verify exact function names, argument order, and return types. Prefer get_doc over guessing.
 
 Your workflow:
 1. OBSERVE: Use tab.current() to get the tab ID, then tab.snapshot(tab_id) to see what's on the page (returns elements with ref_ids).
@@ -164,6 +189,7 @@ Key rules:
 - Use tab.url(tab_id) and tab.title(tab_id) for page metadata.
 - Use print() for debug output — it appears in the trace.
 - Generate only valid Lua code. Use local variables, pcall for error handling.
+- Do not use tab.evaluate, tab.execute_script, or chrome.scripting.executeScript.
 - Report what you did and what happened clearly.`;
 
 // ---------------------------------------------------------------------------
@@ -441,7 +467,19 @@ export class AnthropicProvider implements LlmProvider {
 						if (!isStreamEvent(parsed)) continue;
 
 						switch (parsed.type) {
-							case "message_start":
+							case "message_start": {
+								enqueue({
+									kind: "start",
+									content: [],
+									api: "anthropic",
+									provider: "anthropic",
+									model: this.config.model,
+									stop_reason: "end_turn",
+									timestamp: Date.now(),
+									usage: { input: 0, output: 0, cache_read: 0, cache_write: 0, total_tokens: 0 },
+								});
+								break;
+							}
 							case "message_stop":
 							case "content_block_stop":
 								break;

@@ -10,10 +10,7 @@ import type {
 } from "../types/messages";
 import { ExtensionLuaClient, isLuaRelayRequest } from "./extension-lua-client";
 
-type Tab = "chat" | "lua";
-
 const App: FunctionalComponent = () => {
-	const [tab, setTab] = useState<Tab>("chat");
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [trace, setTrace] = useState<AgentTraceEntry[]>([]);
 	const [status, setStatus] = useState<AgentStatus>("idle");
@@ -23,15 +20,11 @@ const App: FunctionalComponent = () => {
 	const [baseUrl, setBaseUrl] = useState("https://api.anthropic.com");
 	const [model, setModel] = useState("claude-sonnet-4-20250514");
 	const [showSettings, setShowSettings] = useState(false);
-	const [luaCode, setLuaCode] = useState("");
-	const [luaOutput, setLuaOutput] = useState("");
 	const workerRef = useRef<Worker | null>(null);
-	const luaClientRef = useRef<ExtensionLuaClient | null>(null);
-	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
 	useEffect(() => {
 		const client = ExtensionLuaClient.getInstance();
-		luaClientRef.current = client;
 
 		// Initialize extension-lua session
 		client.init().catch((err: unknown) => {
@@ -89,7 +82,7 @@ const App: FunctionalComponent = () => {
 						const idx = prev.findIndex((e) => e.id === msg.entry.id);
 						if (idx >= 0) {
 							const updated = [...prev];
-							updated[idx] = msg.entry;
+							updated[idx] = { ...prev[idx], ...msg.entry };
 							return updated;
 						}
 						return [...prev, msg.entry];
@@ -105,12 +98,6 @@ const App: FunctionalComponent = () => {
 							timestamp: Date.now(),
 						},
 					]);
-					break;
-				case "luaOutput":
-					setLuaOutput((prev) => prev + msg.output);
-					break;
-				case "luaError":
-					setLuaOutput((prev) => `${prev}Error: ${msg.error}\n`);
 					break;
 				case "luaRunRequest":
 					if (isLuaRelayRequest(msg)) {
@@ -150,8 +137,11 @@ const App: FunctionalComponent = () => {
 		);
 	}, []);
 
+	// Auto-scroll chat to bottom whenever messages or trace update
 	useEffect(() => {
-		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+		const el = chatScrollRef.current;
+		if (!el) return;
+		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages, trace]);
 
 	const postToWorker = useCallback((msg: PanelToWorker) => {
@@ -172,7 +162,7 @@ const App: FunctionalComponent = () => {
 			type: "settingsUpdated",
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
 		});
-		postToWorker({ type: "agentStart", task, maxSteps: 20 });
+		postToWorker({ type: "agentStart", task });
 	}, [taskInput, apiKey, baseUrl, model, postToWorker]);
 
 	const handleStop = useCallback(() => {
@@ -192,12 +182,22 @@ const App: FunctionalComponent = () => {
 		setShowSettings(false);
 	}, [apiKey, baseUrl, model, postToWorker]);
 
-	const handleLuaRun = useCallback(() => {
-		if (!luaCode.trim()) return;
-		setTrace([]);
-		setLuaOutput("");
-		postToWorker({ type: "luaRun", id: crypto.randomUUID(), code: luaCode });
-	}, [luaCode, postToWorker]);
+	const handleExportConversation = useCallback(() => {
+		const payload = {
+			exportedAt: new Date().toISOString(),
+			messages,
+			trace,
+		};
+		const blob = new Blob([JSON.stringify(payload, null, 2)], {
+			type: "application/json",
+		});
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = `browsergent-conversation-${Date.now()}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}, [messages, trace]);
 
 	const isRunning =
 		status === "running" ||
@@ -225,33 +225,8 @@ const App: FunctionalComponent = () => {
 					alignItems: "center",
 				}}
 			>
-				<div style={{ display: "flex", gap: "8px" }}>
-					<button
-						type="button"
-						onClick={() => setTab("chat")}
-						style={{
-							fontWeight: tab === "chat" ? "bold" : "normal",
-							padding: "4px 8px",
-							border: "none",
-							background: "none",
-							cursor: "pointer",
-						}}
-					>
-						Chat
-					</button>
-					<button
-						type="button"
-						onClick={() => setTab("lua")}
-						style={{
-							fontWeight: tab === "lua" ? "bold" : "normal",
-							padding: "4px 8px",
-							border: "none",
-							background: "none",
-							cursor: "pointer",
-						}}
-					>
-						Lua
-					</button>
+				<div style={{ display: "flex", alignItems: "center" }}>
+					<span style={{ fontWeight: "bold", fontSize: "14px" }}>Browsergent</span>
 				</div>
 				<button
 					type="button"
@@ -342,43 +317,31 @@ const App: FunctionalComponent = () => {
 						>
 							Save
 						</button>
+						<button
+							type="button"
+							onClick={handleExportConversation}
+							style={{
+								padding: "4px 12px",
+								background: "#666",
+								color: "white",
+								border: "none",
+								borderRadius: "4px",
+								cursor: "pointer",
+							}}
+						>
+							Export conversation
+						</button>
 					</div>
 				</div>
 			)}
 
 			{/* Main content */}
-			<div style={{ flex: 1, overflow: "auto", padding: "8px 12px" }}>
-				{tab === "chat" ? (
-					<ChatPanel messages={messages} />
-				) : (
-					<LuaPanel
-						code={luaCode}
-						output={luaOutput}
-						onCodeChange={setLuaCode}
-						onRun={handleLuaRun}
-					/>
-				)}
+			<div
+				ref={chatScrollRef}
+				style={{ flex: 1, overflow: "auto", padding: "8px 12px" }}
+			>
+				<ChatPanel messages={messages} trace={trace} />
 			</div>
-
-			{/* Trace */}
-			{trace.length > 0 && (
-				<div
-					style={{
-						borderTop: "1px solid #e0e0e0",
-						padding: "8px 12px",
-						maxHeight: "200px",
-						overflow: "auto",
-						background: "#fafafa",
-					}}
-				>
-					<div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-						Trace ({stepCount} steps)
-					</div>
-					{trace.map((entry) => (
-						<TraceEntryView key={entry.id} entry={entry} />
-					))}
-				</div>
-			)}
 
 			{/* Status bar */}
 			<div
@@ -390,69 +353,66 @@ const App: FunctionalComponent = () => {
 				}}
 			>
 				Status: {status}
-				{statusReason ? ` — ${statusReason}` : ""} | Steps: {stepCount}/20
+				{statusReason ? ` — ${statusReason}` : ""} | Tool calls: {stepCount}
 			</div>
 
 			{/* Input */}
-			{tab === "chat" ? (
-				<div
-					style={{
-						padding: "8px 12px",
-						borderTop: "1px solid #e0e0e0",
-						display: "flex",
-						gap: "8px",
+			<div
+				style={{
+					padding: "8px 12px",
+					borderTop: "1px solid #e0e0e0",
+					display: "flex",
+					gap: "8px",
+				}}
+			>
+				<input
+					type="text"
+					value={taskInput}
+					onInput={(e) => setTaskInput((e.target as HTMLInputElement).value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" && !isRunning) handleRun();
 					}}
-				>
-					<input
-						type="text"
-						value={taskInput}
-						onInput={(e) => setTaskInput((e.target as HTMLInputElement).value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && !isRunning) handleRun();
-						}}
-						placeholder="Type a task..."
-						disabled={isRunning}
+					placeholder="Type a task..."
+					disabled={isRunning}
+					style={{
+						flex: 1,
+						padding: "6px 8px",
+						border: "1px solid #ccc",
+						borderRadius: "4px",
+					}}
+				/>
+				{isRunning ? (
+					<button
+						type="button"
+						onClick={handleStop}
 						style={{
-							flex: 1,
-							padding: "6px 8px",
-							border: "1px solid #ccc",
+							padding: "6px 16px",
+							background: "#d94a4a",
+							color: "white",
+							border: "none",
 							borderRadius: "4px",
+							cursor: "pointer",
 						}}
-					/>
-					{isRunning ? (
-						<button
-							type="button"
-							onClick={handleStop}
-							style={{
-								padding: "6px 16px",
-								background: "#d94a4a",
-								color: "white",
-								border: "none",
-								borderRadius: "4px",
-								cursor: "pointer",
-							}}
-						>
-							Stop
-						</button>
-					) : (
-						<button
-							type="button"
-							onClick={handleRun}
-							style={{
-								padding: "6px 16px",
-								background: "#4a90d9",
-								color: "white",
-								border: "none",
-								borderRadius: "4px",
-								cursor: "pointer",
-							}}
-						>
-							Run
-						</button>
-					)}
-				</div>
-			) : null}
-			<div ref={messagesEndRef} />
+					>
+						Stop
+					</button>
+				) : (
+					<button
+						type="button"
+						onClick={handleRun}
+						style={{
+							padding: "6px 16px",
+							background: "#4a90d9",
+							color: "white",
+							border: "none",
+							borderRadius: "4px",
+							cursor: "pointer",
+						}}
+					>
+						Run
+					</button>
+				)}
+			</div>
 		</div>
 	);
 };
@@ -480,130 +440,169 @@ function renderMarkdown(text: string): string {
 		.replace(/<p>/g, '<p style="margin:0 0 4px 0;">');
 }
 
-function ChatPanel({ messages }: { messages: ChatMessage[] }) {
+function ChatPanel({
+	messages,
+	trace,
+}: {
+	messages: ChatMessage[];
+	trace: AgentTraceEntry[];
+}) {
+	const timeline = [
+		...messages.map((m) => ({
+			type: "message" as const,
+			data: m,
+			ts: m.timestamp,
+			id: m.id,
+		})),
+		...trace.map((t) => ({
+			type: "trace" as const,
+			data: t,
+			ts: t.timestamp,
+			id: t.id,
+		})),
+	];
+	timeline.sort((a, b) => a.ts - b.ts);
+
 	return (
 		<div>
-			{messages.map((msg) => (
-				<div
-					key={msg.id}
-					data-testid={`chat-message-${msg.kind}`}
-					style={{
-						marginBottom: "8px",
-						padding: "8px 10px",
-						borderRadius: "4px",
-						background:
-							msg.kind === "user"
-								? "#e3f2fd"
-								: msg.kind === "system"
-									? "#fff3e0"
-									: "#f5f5f5",
-						lineHeight: "1.5",
-					}}
-				>
-					<div
-						style={{
-							fontSize: "11px",
-							color: "#666",
-							marginBottom: "4px",
-							textTransform: "capitalize",
-						}}
-					>
-						{msg.kind}
-					</div>
-					<div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
-				</div>
-			))}
-		</div>
-	);
-}
-
-function LuaPanel({
-	code,
-	output,
-	onCodeChange,
-	onRun,
-}: {
-	code: string;
-	output: string;
-	onCodeChange: (code: string) => void;
-	onRun: () => void;
-}) {
-	return (
-		<div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-			<div style={{ marginBottom: "4px", fontWeight: "bold" }}>
-				Lua Playbook
-			</div>
-			<textarea
-				value={code}
-				onInput={(e) => onCodeChange((e.target as HTMLTextAreaElement).value)}
-				placeholder={`-- Example playbook\nlocal tab_id = tab.current()\nlocal snap = tab.snapshot(tab_id)\nprint(snap)\ntab.fill(tab_id, "e2", "test@example.com")\ntab.click(tab_id, "e4")`}
-				style={{
-					flex: 1,
-					minHeight: "200px",
-					padding: "8px",
-					border: "1px solid #ccc",
-					borderRadius: "4px",
-					fontFamily: "monospace",
-					fontSize: "12px",
-					resize: "vertical",
-				}}
-			/>
-			<button
-				type="button"
-				onClick={onRun}
-				style={{
-					marginTop: "8px",
-					padding: "6px 16px",
-					background: "#4a90d9",
-					color: "white",
-					border: "none",
-					borderRadius: "4px",
-					cursor: "pointer",
-				}}
-			>
-				Run Lua
-			</button>
-			{output && (
-				<div
-					style={{
-						marginTop: "8px",
-						padding: "8px",
-						background: "#f5f5f5",
-						borderRadius: "4px",
-						fontFamily: "monospace",
-						fontSize: "12px",
-						whiteSpace: "pre-wrap",
-					}}
-				>
-					{output}
-				</div>
+			{timeline.map((item) =>
+				item.type === "message" ? (
+					<MessageBubble key={item.id} message={item.data} />
+				) : (
+					<TraceEntryCompact key={item.id} entry={item.data} />
+				),
 			)}
 		</div>
 	);
 }
 
-function TraceEntryView({ entry }: { entry: AgentTraceEntry }) {
+function MessageBubble({ message }: { message: ChatMessage }) {
+	return (
+		<div
+			data-testid={`chat-message-${message.kind}`}
+			style={{
+				marginBottom: "8px",
+				padding: "8px 10px",
+				borderRadius: "4px",
+				background:
+					message.kind === "user"
+						? "#e3f2fd"
+						: message.kind === "system"
+							? "#fff3e0"
+							: "#f5f5f5",
+				lineHeight: "1.5",
+			}}
+		>
+			<div
+				style={{
+					fontSize: "11px",
+					color: "#666",
+					marginBottom: "4px",
+					textTransform: "capitalize",
+				}}
+			>
+				{message.kind}
+			</div>
+			<div dangerouslySetInnerHTML={{ __html: renderMarkdown(message.text) }} />
+		</div>
+	);
+}
+
+function TraceEntryCompact({ entry }: { entry: AgentTraceEntry }) {
+	const [expanded, setExpanded] = useState(false);
 	const icon =
 		entry.status === "done" ? "✓" : entry.status === "error" ? "✗" : "…";
 	const color =
 		entry.status === "done"
-			? "green"
+			? "#22c55e"
 			: entry.status === "error"
-				? "red"
-				: "orange";
+				? "#ef4444"
+				: "#f59e0b";
 
 	return (
 		<div
-			style={{ fontSize: "11px", padding: "2px 0", fontFamily: "monospace" }}
+			style={{
+				fontSize: "12px",
+				borderRadius: "4px",
+				border: "1px solid #e0e0e0",
+				background: "#fafafa",
+				overflow: "hidden",
+			}}
 		>
-			<span style={{ color }}>{icon}</span>{" "}
-			<span style={{ color: "#666" }}>#{entry.step}</span>{" "}
-			<span style={{ fontWeight: "bold" }}>{entry.toolName}</span>
-			{entry.toolInput && (
-				<span style={{ color: "#666" }}> {entry.toolInput.slice(0, 60)}</span>
-			)}
-			{entry.result && (
-				<span style={{ color: "#999" }}> → {entry.result.slice(0, 80)}</span>
+			<div
+				onClick={() => setExpanded(!expanded)}
+				style={{
+					padding: "6px 10px",
+					display: "flex",
+					alignItems: "center",
+					gap: "6px",
+					cursor: "pointer",
+					fontFamily: "monospace",
+				}}
+			>
+				<span style={{ color }}>{icon}</span>
+				<span style={{ color: "#666" }}>#{entry.step}</span>
+				<span style={{ fontWeight: "bold" }}>{entry.toolName}</span>
+				{!expanded && entry.toolInput && (
+					<span
+						style={{
+							color: "#999",
+							overflow: "hidden",
+							textOverflow: "ellipsis",
+							whiteSpace: "nowrap",
+							flex: 1,
+						}}
+					>
+						{entry.toolInput.slice(0, 60)}
+					</span>
+				)}
+			</div>
+			{expanded && (
+				<div
+					style={{
+						padding: "8px 10px",
+						borderTop: "1px solid #e0e0e0",
+						fontFamily: "monospace",
+						fontSize: "11px",
+					}}
+				>
+					{entry.toolInput && (
+						<div style={{ marginBottom: "6px" }}>
+							<div style={{ color: "#666", marginBottom: "2px" }}>
+								Input:
+							</div>
+							<div
+								style={{
+									whiteSpace: "pre-wrap",
+									color: "#333",
+									background: "#f0f0f0",
+									padding: "4px 6px",
+									borderRadius: "3px",
+								}}
+							>
+								{entry.toolInput}
+							</div>
+						</div>
+					)}
+					{entry.result && (
+						<div>
+							<div style={{ color: "#666", marginBottom: "2px" }}>
+								Result:
+							</div>
+							<div
+								style={{
+									whiteSpace: "pre-wrap",
+									color: "#333",
+									background: "#f0f0f0",
+									padding: "4px 6px",
+									borderRadius: "3px",
+								}}
+							>
+								{entry.result}
+							</div>
+						</div>
+					)}
+				</div>
 			)}
 		</div>
 	);

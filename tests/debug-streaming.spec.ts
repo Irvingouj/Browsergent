@@ -1,0 +1,38 @@
+import { expect, test } from "@playwright/test";
+import { launchExtension, startMockAnthropicServer } from "./helpers";
+
+test("debug mock server reachability", async () => {
+	const mock = startMockAnthropicServer({
+		responses: [
+			{
+				chunks: [
+					`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-d1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+					`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
+					`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Debug" } })}\n\n`,
+					`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+				],
+				delays: [0, 0, 100, 0],
+				stopReason: "end_turn",
+			},
+		],
+	});
+
+	const { sidePanel, close } = await launchExtension();
+
+	await sidePanel.locator("text=Settings").click();
+	await sidePanel.locator('input[type="password"]').fill("fake-key");
+	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.locator("text=Save").click();
+
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("debug task");
+	await sidePanel.locator("text=Run").click();
+
+	await sidePanel.waitForTimeout(3000);
+
+	expect(mock.requestBodies.length).toBeGreaterThanOrEqual(1);
+
+	await close();
+	mock.server.close();
+});

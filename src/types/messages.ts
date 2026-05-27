@@ -5,7 +5,7 @@ import type { CellResult } from "./extension-lua";
 // --- Panel -> Worker ---
 
 export type PanelToWorker =
-	| { type: "agentStart"; task: string; maxSteps: number }
+	| { type: "agentStart"; task: string }
 	| { type: "agentStop" }
 	| { type: "agentReset" }
 	| { type: "settingsUpdated"; settings: WorkerSettings }

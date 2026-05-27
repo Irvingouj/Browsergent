@@ -1,7 +1,8 @@
 /**
  * Agent loop: drives the SDK Agent through LLM calls and Lua tool execution.
  *
- * The LLM has ONE tool: run_lua. It generates Lua code.
+ * The LLM executes browser actions through run_lua and can inspect the
+ * extension-lua API through get_doc.
  * AgentLoop delegates execution to the side panel's ExtensionSession
  * via the runLua relay — it never touches the Lua runtime directly.
  */
@@ -38,7 +39,145 @@ const RUN_LUA_TOOL = {
 	execution_mode: "sequential" as const,
 };
 
+const GET_DOC_TOOL = {
+	name: "get_doc",
+	label: "Get Lua Docs",
+	description:
+		"Return extension-lua API documentation. Use before guessing Lua function names, parameters, or return types.",
+	parameters: {
+		type: "object",
+		properties: {
+			format: {
+				type: "string",
+				enum: ["markdown", "json"],
+				description: "Documentation format. Defaults to markdown.",
+			},
+			namespace: {
+				type: "string",
+				description:
+					"Optional namespace filter, such as tab, chrome.tabs, json, runtime, or web.",
+			},
+		},
+	},
+	execution_mode: "sequential" as const,
+};
+
 const MAX_TOOL_RESULT_CHARS = 8000;
+const EMPTY_TOOL_RESULT = "[run_lua completed successfully with no output]";
+
+function projectToolResult(text: string): string {
+	const normalized = text.trim() || EMPTY_TOOL_RESULT;
+	return normalized.length > MAX_TOOL_RESULT_CHARS
+		? `${normalized.slice(0, MAX_TOOL_RESULT_CHARS)}\n[...truncated]`
+		: normalized;
+}
+
+function toolResultText(result: { content?: Array<{ type: string; text?: string }> }): string {
+	return (
+		result.content
+			?.filter((item): item is { type: "text"; text: string } => item.type === "text" && typeof item.text === "string")
+			.map((item) => item.text)
+			.join("\n") ?? ""
+	);
+}
+
+function toolErrorText(result: unknown): string {
+	// SDK tool_execution_end passes ToolResult for errors too — content may hold the error text
+	const fromContent = toolResultText(result as { content?: Array<{ type: string; text?: string }> });
+	if (fromContent) return fromContent;
+
+	if (typeof result === "object" && result !== null && "error" in result) {
+		const err = (result as { error?: { code?: string; message?: string } }).error;
+		if (typeof err?.message === "string") return `Error: ${err.message}`;
+		if (typeof err?.code === "string") return `Error: ${err.code}`;
+	}
+	return "Tool failed";
+}
+
+interface ExtensionLuaApiEntry {
+	namespace: string;
+	name: string;
+	action: string;
+	description: string;
+	params: ReadonlyArray<{
+		name: string;
+		lua_type: string;
+		required: boolean;
+		description: string;
+	}>;
+	returns: {
+		lua_type: string;
+		description: string;
+	};
+}
+
+function isApiEntry(value: unknown): value is ExtensionLuaApiEntry {
+	if (typeof value !== "object" || value === null) return false;
+	const entry = value as Record<string, unknown>;
+	return (
+		typeof entry.namespace === "string" &&
+		typeof entry.name === "string" &&
+		typeof entry.action === "string" &&
+		typeof entry.description === "string" &&
+		Array.isArray(entry.params) &&
+		typeof entry.returns === "object" &&
+		entry.returns !== null
+	);
+}
+
+function renderMarkdownDocs(entries: ExtensionLuaApiEntry[]): string {
+	if (entries.length === 0) return "No API documentation matched that filter.";
+	return entries
+		.map((entry) => {
+			const params =
+				entry.params.length === 0
+					? "- none"
+					: entry.params
+							.map((param) => {
+								const required = param.required ? "required" : "optional";
+								return `- \`${param.name}\` (\`${param.lua_type}\`, ${required}): ${param.description}`;
+							})
+							.join("\n");
+			return [
+				`### \`${entry.namespace}.${entry.name}\` _(action: \`${entry.action}\`)_`,
+				"",
+				entry.description,
+				"",
+				"**Parameters**",
+				"",
+				params,
+				"",
+				`**Returns** \`${entry.returns.lua_type}\`: ${entry.returns.description}`,
+			].join("\n");
+		})
+		.join("\n\n");
+}
+
+async function getExtensionLuaDocs(format: string, namespace?: string): Promise<string> {
+	const module = (await import(
+		"@pi-oxide/extension-lua/dist/extension_lua.js"
+	)) as { generateApiDocs: (format: string) => string };
+	const normalizedFormat = format === "json" ? "json" : "markdown";
+
+	if (!namespace?.trim()) {
+		return module.generateApiDocs(normalizedFormat);
+	}
+
+	const rawJson = module.generateApiDocs("json");
+	const parsed: unknown = JSON.parse(rawJson);
+	const entries = Array.isArray(parsed) ? parsed.filter(isApiEntry) : [];
+	const wanted = namespace.trim();
+	const filtered = entries.filter(
+		(entry) =>
+			entry.namespace === wanted ||
+			entry.namespace.startsWith(`${wanted}.`) ||
+			`${entry.namespace}.${entry.name}`.startsWith(`${wanted}.`),
+	);
+
+	return normalizedFormat === "json"
+		? JSON.stringify(filtered, null, 2)
+		: renderMarkdownDocs(filtered);
+}
 
 function toSdkMessages(
 	messages: Array<{ role: "user" | "assistant"; content: string }>,
@@ -75,16 +214,17 @@ export class AgentLoop {
 	private aborted = false;
 	private abortController: AbortController | null = null;
 	private stepCount = 0;
+	private toolCallNames = new Map<string, string>();
 
 	async run(
 		task: string,
-		maxSteps: number,
 		config: AnthropicConfig,
 		callbacks: AgentLoopCallbacks,
 		priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
 	): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
 		this.aborted = false;
 		this.stepCount = 0;
+		this.toolCallNames.clear();
 		this.abortController = new AbortController();
 
 		callbacks.onStatus("loading");
@@ -108,7 +248,7 @@ export class AgentLoop {
 				cost: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
 			},
 			thinking_level: "off",
-			tools: [RUN_LUA_TOOL],
+			tools: [RUN_LUA_TOOL, GET_DOC_TOOL],
 			tool_execution_mode: "sequential",
 			messages:
 				priorMessages.length > 0
@@ -133,16 +273,41 @@ export class AgentLoop {
 			await this.agent.run(task, {
 				llm: provider,
 				tools: {
+					get_doc: async (call: ToolCall) => {
+						if (this.aborted) {
+							return toolError("aborted", "Agent stopped");
+						}
+
+						this.toolCallNames.set(call.id, call.name);
+						this.stepCount++;
+
+						const args = call.arguments as Record<string, unknown>;
+						const format = typeof args.format === "string" ? args.format : "markdown";
+						const namespace = typeof args.namespace === "string" ? args.namespace : undefined;
+
+						callbacks.onTrace({
+							id: call.id,
+							step: this.stepCount,
+							status: "running",
+							toolName: call.name,
+							toolInput: `format=${format}${namespace ? ` namespace=${namespace}` : ""}`,
+							timestamp: Date.now(),
+						});
+
+						try {
+							const docs = await getExtensionLuaDocs(format, namespace);
+							return toolResult(projectToolResult(docs));
+						} catch (err) {
+							const msg = err instanceof Error ? err.message : String(err);
+							return toolError("doc_error", msg);
+						}
+					},
 					run_lua: async (call: ToolCall) => {
 						if (this.aborted) {
 							return toolError("aborted", "Agent stopped");
 						}
 
-						if (this.stepCount >= maxSteps) {
-							this.aborted = true;
-							callbacks.onStatus("stopped", `Max steps reached (${maxSteps})`);
-							return toolError("max_steps", `Max steps reached (${maxSteps})`);
-						}
+						this.toolCallNames.set(call.id, call.name);
 						this.stepCount++;
 
 						const args = call.arguments as Record<string, unknown>;
@@ -155,29 +320,26 @@ export class AgentLoop {
 						}
 
 						callbacks.onTrace({
-							id: `lua-${Date.now()}`,
+							id: call.id,
 							step: this.stepCount,
 							status: "running",
-							toolName: "run_lua",
-							toolInput: code.slice(0, 200),
+							toolName: call.name,
+							toolInput: code.slice(0, 2000),
 							timestamp: Date.now(),
 						});
 
 						try {
 							const cell = await callbacks.runLua(code);
 							const text = formatCellResult(cell);
+							const projected = projectToolResult(text);
 							messages.push({
 								role: "user",
 								content:
 									cell.error === null
-										? `[run_lua]\n${text}`
+										? `[run_lua]\n${projected}`
 										: `[run_lua] ERROR: ${text}`,
 							});
 							if (cell.error === null) {
-								const projected =
-									text.length > MAX_TOOL_RESULT_CHARS
-										? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n[...truncated]`
-										: text;
 								return toolResult(projected);
 							}
 							return toolError("lua_error", text);
@@ -249,6 +411,34 @@ export class AgentLoop {
 			}
 			case "tool_execution_start": {
 				callbacks.onStatus("executing_tool");
+				break;
+			}
+			case "tool_execution_end": {
+				const errorText = event.is_error
+					? toolErrorText(event.result)
+					: toolResultText(event.result).slice(0, 8000);
+				const resolvedToolName = this.toolCallNames.get(event.tool_call_id) ?? "run_lua";
+				callbacks.onTrace({
+					id: event.tool_call_id,
+					step: this.stepCount,
+					status: event.is_error ? "error" : "done",
+					toolName: resolvedToolName,
+					result: errorText,
+					timestamp: Date.now(),
+				});
+				callbacks.onStatus("running");
+				break;
+			}
+			case "tool_execution_cancelled": {
+				const cancelledToolName = this.toolCallNames.get(event.tool_call_id) ?? "run_lua";
+				callbacks.onTrace({
+					id: event.tool_call_id,
+					step: this.stepCount,
+					status: "error",
+					toolName: cancelledToolName,
+					result: `Cancelled: ${event.reason}`,
+					timestamp: Date.now(),
+				});
 				break;
 			}
 			case "turn_start":

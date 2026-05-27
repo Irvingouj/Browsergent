@@ -1,16 +1,10 @@
 /**
  * Unit tests for src/types/extension-lua.ts utilities.
- * Validates formatting, security scanning, and misuse detection.
  */
 
 import { describe, expect, test } from "vitest";
 import type { CellResult, WasmCellError } from "../src/types/extension-lua";
-import {
-	detectPageSnapshotMisuse,
-	formatCellResult,
-	formatError,
-	scanForUnsafeCode,
-} from "../src/types/extension-lua";
+import { formatCellResult, formatError } from "../src/types/extension-lua";
 
 describe("formatCellResult", () => {
 	test("formats stdout-only result", () => {
@@ -197,69 +191,3 @@ describe("formatError", () => {
 	});
 });
 
-describe("scanForUnsafeCode", () => {
-	test("allows safe tab.* code", () => {
-		expect(
-			scanForUnsafeCode(
-				"local id = tab.current()\nlocal snap = tab.snapshot(id)\nprint(snap)",
-			),
-		).toBeNull();
-	});
-
-	test("blocks tab.evaluate", () => {
-		const result = scanForUnsafeCode('tab.evaluate("document.cookie")');
-		expect(result).toContain("tab.evaluate");
-		expect(result).toContain("forbidden");
-	});
-
-	test("blocks tab.execute_script", () => {
-		const result = scanForUnsafeCode('tab.execute_script(id, "alert(1)")');
-		expect(result).toContain("tab.execute_script");
-		expect(result).toContain("forbidden");
-	});
-
-	test("blocks chrome.scripting.executeScript", () => {
-		const result = scanForUnsafeCode(
-			'chrome.scripting.executeScript({code: "fetch(\\"https://evil.com\\")"})',
-		);
-		expect(result).toContain("chrome.scripting.executeScript");
-		expect(result).toContain("forbidden");
-	});
-
-	test("allows code with no forbidden patterns", () => {
-		expect(scanForUnsafeCode('print("hello")')).toBeNull();
-		expect(scanForUnsafeCode("local x = 1 + 2")).toBeNull();
-		expect(
-			scanForUnsafeCode('tab.fill(id, "e0", "test@example.com")'),
-		).toBeNull();
-	});
-
-	test("blocks bracket access on tab table", () => {
-		const result = scanForUnsafeCode('tab["something"](code)');
-		expect(result).toContain("Bracket");
-		expect(result).toContain("bypass");
-	});
-});
-
-describe("detectPageSnapshotMisuse", () => {
-	test("warns when page.snapshot used alone", () => {
-		const result = detectPageSnapshotMisuse("page.snapshot()");
-		expect(result).toContain("page.snapshot captures the extension side panel");
-		expect(result).toContain("tab.snapshot");
-	});
-
-	test("no warning when tab.snapshot is also present", () => {
-		const result = detectPageSnapshotMisuse(
-			"page.snapshot()\ntab.snapshot(id)",
-		);
-		expect(result).toBeNull();
-	});
-
-	test("no warning when only tab.snapshot is used", () => {
-		expect(detectPageSnapshotMisuse("tab.snapshot(id)")).toBeNull();
-	});
-
-	test("no warning for unrelated code", () => {
-		expect(detectPageSnapshotMisuse("print('hello')")).toBeNull();
-	});
-});

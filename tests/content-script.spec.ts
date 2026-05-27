@@ -49,7 +49,7 @@ async function injectExtensionLuaContentScript(
 		path.resolve("dist/content-script.js"),
 		"utf8",
 	);
-	await page.addScriptTag({ content: scriptContent });
+	await page.addScriptTag({ content: `(function(){${scriptContent}})()` });
 }
 
 test("extension-lua content script initializes on page", async () => {
