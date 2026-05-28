@@ -9,10 +9,10 @@ import { formatCellResult, formatError } from "../src/types/extension-lua";
 describe("formatCellResult", () => {
 	test("formats stdout-only result", () => {
 		const cell: CellResult = {
+			status: "ok",
 			stdout: ["hello", "world"],
 			stderr: [],
 			result: null,
-			error: null,
 			execution_count: 1,
 		};
 		expect(formatCellResult(cell)).toBe("hello\nworld");
@@ -20,10 +20,10 @@ describe("formatCellResult", () => {
 
 	test("formats result value", () => {
 		const cell: CellResult = {
+			status: "ok",
 			stdout: [],
 			stderr: [],
 			result: "42",
-			error: null,
 			execution_count: 2,
 		};
 		expect(formatCellResult(cell)).toBe("42");
@@ -31,10 +31,10 @@ describe("formatCellResult", () => {
 
 	test("combines stdout and result", () => {
 		const cell: CellResult = {
+			status: "ok",
 			stdout: ["running..."],
 			stderr: [],
 			result: "done",
-			error: null,
 			execution_count: 3,
 		};
 		expect(formatCellResult(cell)).toBe("running...\ndone");
@@ -47,9 +47,9 @@ describe("formatCellResult", () => {
 			line: 5,
 		};
 		const cell: CellResult = {
+			status: "err",
 			stdout: [],
 			stderr: [],
-			result: null,
 			error,
 			execution_count: 4,
 		};
@@ -65,29 +65,48 @@ describe("formatCellResult", () => {
 			line: null,
 		};
 		const cell: CellResult = {
+			status: "err",
 			stdout: [],
 			stderr: [],
-			result: null,
 			error,
 			execution_count: 5,
 		};
 		expect(formatCellResult(cell)).toBe("[compile error] syntax error");
 	});
 
-	test("formats runtime error", () => {
+	test("formats runtime error with line number", () => {
 		const error: WasmCellError = {
 			kind: "runtime",
 			message: "attempt to call nil value",
+			line: 12,
 		};
 		const cell: CellResult = {
+			status: "err",
 			stdout: [],
 			stderr: [],
-			result: null,
 			error,
 			execution_count: 6,
 		};
 		expect(formatCellResult(cell)).toBe(
-			"[runtime error] attempt to call nil value",
+			"[runtime error] line 12: attempt to call nil value",
+		);
+	});
+
+	test("formats runtime error without line number", () => {
+		const error: WasmCellError = {
+			kind: "runtime",
+			message: "something went wrong",
+			line: null,
+		};
+		const cell: CellResult = {
+			status: "err",
+			stdout: [],
+			stderr: [],
+			error,
+			execution_count: 6,
+		};
+		expect(formatCellResult(cell)).toBe(
+			"[runtime error] something went wrong",
 		);
 	});
 
@@ -97,9 +116,9 @@ describe("formatCellResult", () => {
 			variable: "undefined_var",
 		};
 		const cell: CellResult = {
+			status: "err",
 			stdout: [],
 			stderr: [],
-			result: null,
 			error,
 			execution_count: 7,
 		};
@@ -111,9 +130,9 @@ describe("formatCellResult", () => {
 	test("formats fuel_exhausted error", () => {
 		const error: WasmCellError = { kind: "fuel_exhausted" };
 		const cell: CellResult = {
+			status: "err",
 			stdout: [],
 			stderr: [],
-			result: null,
 			error,
 			execution_count: 8,
 		};
@@ -128,9 +147,9 @@ describe("formatCellResult", () => {
 			message: "WASM trap",
 		};
 		const cell: CellResult = {
+			status: "err",
 			stdout: [],
 			stderr: [],
-			result: null,
 			error,
 			execution_count: 9,
 		};
@@ -141,11 +160,12 @@ describe("formatCellResult", () => {
 		const error: WasmCellError = {
 			kind: "runtime",
 			message: "something went wrong",
+			line: null,
 		};
 		const cell: CellResult = {
+			status: "err",
 			stdout: [],
 			stderr: ["debug trace line 1", "debug trace line 2"],
-			result: null,
 			error,
 			execution_count: 10,
 		};
@@ -167,7 +187,11 @@ describe("formatError", () => {
 				expected: "[compile error] err",
 			},
 			{
-				error: { kind: "runtime", message: "oops" },
+				error: { kind: "runtime", message: "oops", line: 3 },
+				expected: "[runtime error] line 3: oops",
+			},
+			{
+				error: { kind: "runtime", message: "oops", line: null },
 				expected: "[runtime error] oops",
 			},
 			{

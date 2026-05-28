@@ -28,6 +28,7 @@ export async function launchExtension(): Promise<{
 
 	const sidePanel = await context.newPage();
 	await sidePanel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+	await sidePanel.waitForSelector('[data-initialized="true"]', { timeout: 10000 });
 
 	return {
 		context,

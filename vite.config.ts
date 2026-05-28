@@ -5,6 +5,17 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
 	base: "./",
+	resolve: {
+		alias: [
+			{
+				find: /.*\/worker\.ts$/,
+				replacement: path.resolve(
+					__dirname,
+					"node_modules/@pi-oxide/extension-lua/dist/worker.js",
+				),
+			},
+		],
+	},
 	plugins: [
 		preact(),
 		{

@@ -1,3 +1,4 @@
+import type { StorageBackend } from "../storage/storage-backend";
 import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 
 interface SessionSnapshot {
@@ -6,22 +7,26 @@ interface SessionSnapshot {
 	timestamp: number;
 }
 
-const STORAGE_KEY = "browsergentSession";
-const HISTORY_KEY = "browsergentConversationHistory";
-
 export class SessionController {
 	private saveTimer: ReturnType<typeof setTimeout> | null = null;
 	hydrated = false;
+
+	constructor(private readonly storage: StorageBackend) {}
 
 	async load(): Promise<{
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
 	} | null> {
 		try {
-			const result = await chrome.storage.local.get([STORAGE_KEY]);
-			const snapshot = result[STORAGE_KEY] as SessionSnapshot | undefined;
-			if (!snapshot) return null;
-			return { messages: snapshot.messages, trace: snapshot.trace };
+			const raw = await this.storage.get<SessionSnapshot>("sessions", "current");
+			if (!raw || typeof raw !== "object") return null;
+			if (!Array.isArray(raw.messages) || !Array.isArray(raw.trace)) {
+				return null;
+			}
+			return {
+				messages: raw.messages as ChatMessage[],
+				trace: raw.trace as AgentTraceEntry[],
+			};
 		} catch (err) {
 			console.warn("Session load failed:", err);
 			return null;
@@ -52,7 +57,7 @@ export class SessionController {
 				trace,
 				timestamp: Date.now(),
 			};
-			await chrome.storage.local.set({ [STORAGE_KEY]: snapshot });
+			await this.storage.set("sessions", "current", snapshot);
 		} catch (err) {
 			console.warn("Session save failed:", err);
 		}
@@ -60,8 +65,8 @@ export class SessionController {
 
 	async clear(): Promise<void> {
 		try {
-			await chrome.storage.local.remove(STORAGE_KEY);
-			await chrome.storage.local.remove(HISTORY_KEY);
+			await this.storage.remove("sessions", "current");
+			await this.storage.remove("history", "current");
 		} catch (err) {
 			console.warn("Session clear failed:", err);
 		}
@@ -71,7 +76,11 @@ export class SessionController {
 		messages: Array<{ role: "user" | "assistant"; content: string }>,
 	): Promise<void> {
 		try {
-			await chrome.storage.local.set({ [HISTORY_KEY]: messages });
+			await this.storage.set("history", "current", {
+				id: "current",
+				timestamp: Date.now(),
+				messages,
+			});
 		} catch (err) {
 			console.warn("History save failed:", err);
 		}
@@ -82,10 +91,13 @@ export class SessionController {
 		content: string;
 	}> | null> {
 		try {
-			const result = await chrome.storage.local.get([HISTORY_KEY]);
-			const raw = result[HISTORY_KEY];
-			if (!Array.isArray(raw)) return null;
-			const valid = raw.filter(
+			const raw = await this.storage.get<{
+				id: string;
+				timestamp: number;
+				messages: Array<{ role: "user" | "assistant"; content: string }>;
+			}>("history", "current");
+			if (!raw || !Array.isArray(raw.messages)) return null;
+			const valid = raw.messages.filter(
 				(m): m is { role: "user" | "assistant"; content: string } =>
 					m !== null &&
 					typeof m === "object" &&

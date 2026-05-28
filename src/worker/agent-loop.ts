@@ -43,7 +43,7 @@ const GET_DOC_TOOL = {
 	name: "get_doc",
 	label: "Get Lua Docs",
 	description:
-		"Return extension-lua API documentation. Use before guessing Lua function names, parameters, or return types.",
+		"Return extension-lua API documentation. Call this BEFORE any run_lua that uses APIs you are not 100% sure about.\n\nWorkflow:\n1. Call get_doc with no arguments to get a compact index of all namespaces (e.g. tab, chrome.tabs, json, runtime, web).\n2. Call get_doc with namespace='tab' (or whichever namespace you need) to get full parameter and return-type details for that namespace.\n\nNever guess function names or argument shapes — always verify with get_doc first.",
 	parameters: {
 		type: "object",
 		properties: {
@@ -55,7 +55,7 @@ const GET_DOC_TOOL = {
 			namespace: {
 				type: "string",
 				description:
-					"Optional namespace filter, such as tab, chrome.tabs, json, runtime, or web.",
+					"Namespace to get full docs for, such as tab, chrome.tabs, json, runtime, or web. Omit to get the compact index of all namespaces.",
 			},
 		},
 	},
@@ -105,7 +105,7 @@ function toolErrorText(result: unknown): string {
 interface ExtensionLuaApiEntry {
 	namespace: string;
 	name: string;
-	action: string;
+	action: string | null;
 	description: string;
 	params: ReadonlyArray<{
 		name: string;
@@ -125,7 +125,7 @@ function isApiEntry(value: unknown): value is ExtensionLuaApiEntry {
 	return (
 		typeof entry.namespace === "string" &&
 		typeof entry.name === "string" &&
-		typeof entry.action === "string" &&
+		(entry.action === null || typeof entry.action === "string") &&
 		typeof entry.description === "string" &&
 		Array.isArray(entry.params) &&
 		typeof entry.returns === "object" &&
@@ -146,8 +146,9 @@ function renderMarkdownDocs(entries: ExtensionLuaApiEntry[]): string {
 								return `- \`${param.name}\` (\`${param.lua_type}\`, ${required}): ${param.description}`;
 							})
 							.join("\n");
+			const actionTag = entry.action ? ` _(action: \`${entry.action}\`)_` : "";
 			return [
-				`### \`${entry.namespace}.${entry.name}\` _(action: \`${entry.action}\`)_`,
+				`### \`${entry.namespace}.${entry.name}\`${actionTag}`,
 				"",
 				entry.description,
 				"",
@@ -161,24 +162,57 @@ function renderMarkdownDocs(entries: ExtensionLuaApiEntry[]): string {
 		.join("\n\n");
 }
 
+function renderNamespaceIndex(entries: ExtensionLuaApiEntry[]): string {
+	if (entries.length === 0) return "No API documentation matched that filter.";
+
+	// Group by namespace
+	const byNamespace = new Map<string, ExtensionLuaApiEntry[]>();
+	for (const entry of entries) {
+		const list = byNamespace.get(entry.namespace) ?? [];
+		list.push(entry);
+		byNamespace.set(entry.namespace, list);
+	}
+
+	const sortedNamespaces = [...byNamespace.keys()].sort();
+	return sortedNamespaces
+		.map((ns) => {
+			const list = byNamespace.get(ns)!;
+			const functions = list
+				.map((e) => {
+					const sig = e.action
+						? `${e.name}(...) -> ${e.returns.lua_type}`
+						: `${e.name} = ${e.returns.lua_type}`;
+					return `- \`${sig}\``;
+				})
+				.join("\n");
+			return `### ${ns} (${list.length})\n${functions}`;
+		})
+		.join("\n\n");
+}
+
 async function getExtensionLuaDocs(
 	format: string,
 	namespace?: string,
 ): Promise<string> {
-	const module = (await import(
-		"@pi-oxide/extension-lua/dist/extension_lua.js"
-	)) as { generateApiDocs: (format: string) => string };
+	// Polyfill: extension-lua WASM init may reference window; Web Workers only have self.
+	if (typeof self !== "undefined" && typeof window === "undefined") {
+		(globalThis as unknown as Record<string, unknown>).window = self;
+	}
+	const { generateApiDocsJson } = await import("@pi-oxide/extension-lua");
 	const normalizedFormat = format === "json" ? "json" : "markdown";
 
-	if (!namespace?.trim()) {
-		return module.generateApiDocs(normalizedFormat);
+	const allEntries = generateApiDocsJson().filter(isApiEntry);
+
+	const wanted = namespace?.trim();
+	if (!wanted) {
+		// No namespace: return compact index so the model knows what namespaces exist.
+		return normalizedFormat === "json"
+			? JSON.stringify(allEntries, null, 2)
+			: renderNamespaceIndex(allEntries);
 	}
 
-	const rawJson = module.generateApiDocs("json");
-	const parsed: unknown = JSON.parse(rawJson);
-	const entries = Array.isArray(parsed) ? parsed.filter(isApiEntry) : [];
-	const wanted = namespace.trim();
-	const filtered = entries.filter(
+	// Namespace filter: exact match, child namespaces, or function prefix.
+	const filtered = allEntries.filter(
 		(entry) =>
 			entry.namespace === wanted ||
 			entry.namespace.startsWith(`${wanted}.`) ||
@@ -345,11 +379,11 @@ export class AgentLoop {
 							messages.push({
 								role: "user",
 								content:
-									cell.error === null
+									cell.status === "ok"
 										? `[run_lua]\n${projected}`
 										: `[run_lua] ERROR: ${text}`,
 							});
-							if (cell.error === null) {
+							if (cell.status === "ok") {
 								return toolResult(projected);
 							}
 							return toolError("lua_error", text);

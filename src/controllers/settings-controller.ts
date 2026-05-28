@@ -1,3 +1,4 @@
+import type { StorageBackend } from "../storage/storage-backend";
 import { browsergentStore } from "../state/store";
 
 export interface SettingsValues {
@@ -7,20 +8,17 @@ export interface SettingsValues {
 }
 
 export class SettingsController {
+	constructor(private readonly storage: StorageBackend) {}
+
 	async load(): Promise<void> {
-		const result = await chrome.storage.local.get([
-			"anthropicApiKey",
-			"anthropicBaseUrl",
-			"anthropicModel",
-		]);
+		const apiKey = await this.storage.get<string>("settings", "apiKey");
+		const baseUrl = await this.storage.get<string>("settings", "baseUrl");
+		const model = await this.storage.get<string>("settings", "model");
 		const current = browsergentStore.getState().settings;
 		browsergentStore.getState().settingsLoaded({
-			anthropicApiKey:
-				(result.anthropicApiKey as string | undefined) ??
-				current.anthropicApiKey,
-			baseUrl:
-				(result.anthropicBaseUrl as string | undefined) ?? current.baseUrl,
-			model: (result.anthropicModel as string | undefined) ?? current.model,
+			anthropicApiKey: apiKey ?? current.anthropicApiKey,
+			baseUrl: baseUrl ?? current.baseUrl,
+			model: model ?? current.model,
 			loaded: true,
 		});
 	}
@@ -28,11 +26,9 @@ export class SettingsController {
 	async save(settings: SettingsValues): Promise<void> {
 		try {
 			browsergentStore.getState().settingsSaveStarted();
-			await chrome.storage.local.set({
-				anthropicApiKey: settings.anthropicApiKey,
-				anthropicBaseUrl: settings.baseUrl,
-				anthropicModel: settings.model,
-			});
+			await this.storage.set("settings", "apiKey", settings.anthropicApiKey);
+			await this.storage.set("settings", "baseUrl", settings.baseUrl);
+			await this.storage.set("settings", "model", settings.model);
 			browsergentStore.getState().settingsSaved({
 				anthropicApiKey: settings.anthropicApiKey,
 				baseUrl: settings.baseUrl,

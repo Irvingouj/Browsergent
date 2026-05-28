@@ -11,24 +11,32 @@
  * Keep in sync with: node_modules/@pi-oxide/extension-lua/extension_lua.d.ts
  */
 
-export interface CellResult {
-	stdout: string[];
-	stderr: string[];
-	result: string | null;
-	error: WasmCellError | null;
-	execution_count: number;
-}
+export type CellResult =
+	| {
+			status: "ok";
+			stdout: string[];
+			stderr: string[];
+			result: string | null;
+			execution_count: number;
+	  }
+	| {
+			status: "err";
+			stdout: string[];
+			stderr: string[];
+			error: WasmCellError;
+			execution_count: number;
+	  };
 
 export type WasmCellError =
 	| { kind: "compile"; message: string; line: number | null }
-	| { kind: "runtime"; message: string }
+	| { kind: "runtime"; message: string; line: number | null }
 	| { kind: "strict_mode"; variable: string }
 	| { kind: "fuel_exhausted" }
 	| { kind: "internal"; message: string };
 
 /** Format a CellResult into a human-readable text string for the agent. */
 export function formatCellResult(cell: CellResult): string {
-	if (cell.error) {
+	if (cell.status === "err") {
 		const errorPrefix = formatError(cell.error);
 		const stderr = cell.stderr.join("\n");
 		return stderr ? `${errorPrefix}\n${stderr}` : errorPrefix;
@@ -52,7 +60,9 @@ export function formatError(error: WasmCellError): string {
 		case "strict_mode":
 			return `[strict mode] undefined variable: ${error.variable}`;
 		case "runtime":
-			return `[runtime error] ${error.message}`;
+			return error.line !== null
+				? `[runtime error] line ${error.line}: ${error.message}`
+				: `[runtime error] ${error.message}`;
 		case "internal":
 			return `[internal error] ${error.message}`;
 	}

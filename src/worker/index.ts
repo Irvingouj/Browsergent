@@ -99,6 +99,8 @@ function handleAgentStart(
 	runId: string,
 	priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
 ): void {
+	currentRunId = runId;
+
 	if (!settings.anthropicApiKey) {
 		post({
 			type: "agentError",
@@ -116,7 +118,6 @@ function handleAgentStart(
 	}
 
 	agentLoop = new AgentLoop();
-	currentRunId = runId;
 
 	const config: AnthropicConfig = {
 		apiKey: settings.anthropicApiKey,
@@ -210,7 +211,7 @@ function handleAgentReset(): void {
 async function handleLuaRun(id: string, code: string): Promise<void> {
 	try {
 		const result = await relayLuaExecution(code);
-		const output = result.error
+		const output = result.status === "err"
 			? formatError(result.error)
 			: result.stdout.join("\n");
 		post({ type: "luaOutput", id, output });

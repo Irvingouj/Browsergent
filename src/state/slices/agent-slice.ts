@@ -37,7 +37,13 @@ export function createAgentSlice(
 		agent: { status: "idle" },
 		agentRunRequested(runId) {
 			set((state) => ({
-				agent: { ...state.agent, activeRunId: runId, status: "loading" },
+				agent: {
+					...state.agent,
+					activeRunId: runId,
+					status: "loading",
+					lastError: undefined,
+					statusReason: undefined,
+				},
 			}));
 		},
 		agentStatusChanged(status, reason) {
@@ -46,7 +52,7 @@ export function createAgentSlice(
 					...state.agent,
 					status,
 					statusReason: reason,
-					lastError: undefined,
+					lastError: status === "error" ? state.agent.lastError : undefined,
 				},
 			}));
 		},
@@ -61,7 +67,14 @@ export function createAgentSlice(
 			}));
 		},
 		agentReset() {
-			set({ agent: { status: "idle", activeRunId: undefined } });
+			set({
+				agent: {
+					status: "idle",
+					activeRunId: undefined,
+					lastError: undefined,
+					statusReason: undefined,
+				},
+			});
 		},
 	};
 }

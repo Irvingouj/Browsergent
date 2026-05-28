@@ -58,7 +58,10 @@ async function injectContentScript(
 		path.resolve("dist/content-script.js"),
 		"utf8",
 	);
-	await page.addScriptTag({ content: `(function(){${scriptContent}})()` });
+	// 0.3.0 ships content-script.js as an ES module (contains `export {};`).
+	// Remove the export so it runs as a plain script tag.
+	const plain = scriptContent.replace(/\nexport\s+\{\};\s*$/, "");
+	await page.addScriptTag({ content: `(function(){${plain}})()` });
 }
 
 test("extension-lua content script injects without error", async () => {

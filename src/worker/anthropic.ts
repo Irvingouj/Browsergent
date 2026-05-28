@@ -103,13 +103,14 @@ const BROWSERGENT_LUA_GUIDANCE = [
 	"",
 	"## Browsergent-specific rules",
 	"- The target web page is controlled through tab.* APIs. Start with `local tab_id = tab.current()`.",
-	"- Use `tab.snapshot(tab_id)` to inspect the target page and obtain current ref_ids.",
+	"- Use `tab.snapshot(tab_id)` to get a human-readable page summary for observation.",
+	"- Use `tab.snapshot_data(tab_id)` only when you need structured element nodes with ref_ids.",
 	"- Use `tab.url(tab_id)` and `tab.title(tab_id)` for page metadata.",
 	"- Use `tab.open(url)` to navigate/open a URL when the user asks to go somewhere.",
-	"- Ref_ids are snapshot-scoped. Never guess them, and refresh the snapshot before acting if the page changed.",
+	"- Ref_ids from snapshot_data are snapshot-scoped. Never guess them, and refresh the snapshot_data before acting if the page changed.",
 	"- You can combine multiple tab.* calls in one Lua block when the sequence is clear.",
 	"- Use `print(...)` to return concise observations to the trace.",
-	"- Do not use `page.snapshot()` for browser automation; it captures the extension side panel, not the target page.",
+	"- Use tab.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.",
 	"- Do not use `tab.evaluate`, `tab.execute_script`, or `chrome.scripting.executeScript`; Browsergent forbids arbitrary JS execution.",
 	"",
 	"## Common patterns",
@@ -119,6 +120,7 @@ const BROWSERGENT_LUA_GUIDANCE = [
 	'print("Tab:", tab_id)',
 	'print("URL:", tab.url(tab_id))',
 	'print("Title:", tab.title(tab_id))',
+	'print(tab.snapshot(tab_id))',
 	"```",
 	"",
 	"Navigate:",
@@ -126,13 +128,18 @@ const BROWSERGENT_LUA_GUIDANCE = [
 	'tab.open("https://www.linkedin.com")',
 	"```",
 	"",
-	"Inspect and interact:",
+	"Inspect and interact (structured):",
 	"```lua",
 	"local tab_id = tab.current()",
-	"local snap = tab.snapshot(tab_id)",
-	"-- choose a real ref_id from snap, then:",
+	"local data = tab.snapshot_data(tab_id)",
+	"-- choose a real ref_id from data, then:",
 	'-- tab.fill(tab_id, "e3", "search text")',
 	'-- tab.click(tab_id, "e4")',
+	"-- tab.type(tab_id, ref_id, text)",
+	"-- tab.press(tab_id, ref_id, key)",
+	"-- tab.select(tab_id, ref_id, value)",
+	"-- tab.check(tab_id, ref_id)",
+	"-- tab.scroll(tab_id, direction, amount)",
 	"```",
 ].join("\n");
 
@@ -175,22 +182,15 @@ export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. Y
 
 Use get_doc proactively. Before any run_lua that touches APIs you are not 100% sure about, call get_doc to verify exact function names, argument order, and return types. Prefer get_doc over guessing.
 
-Your workflow:
-1. OBSERVE: Use tab.current() to get the tab ID, then tab.snapshot(tab_id) to see what's on the page (returns elements with ref_ids).
-2. ACT: Use tab.fill, tab.click, tab.scroll_to, etc. with ref_ids to interact.
-3. VERIFY: Snapshot again to confirm the result.
-4. Repeat until the task is complete.
-
 Key rules:
-- ALWAYS get the tab ID via tab.current() first.
-- ALWAYS snapshot before acting — ref_ids change on every snapshot.
-- NEVER guess ref_ids. Always get them from the latest snapshot.
-- You can combine multiple tab.* calls in a single run_lua block.
-- Use tab.url(tab_id) and tab.title(tab_id) for page metadata.
-- Use print() for debug output — it appears in the trace.
-- Generate only valid Lua code. Use local variables, pcall for error handling.
-- Do not use tab.evaluate, tab.execute_script, or chrome.scripting.executeScript.
-- Report what you did and what happened clearly.`;
+1. Observe before acting.
+2. Use latest snapshot refs — never guess ref_ids.
+3. Prefer tab.snapshot() for readable page observation; use tab.snapshot_data() only when structured nodes are needed.
+4. Verify after action.
+5. Use docs instead of guessing.
+
+Use tab.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
+Do not use tab.evaluate, tab.execute_script, or chrome.scripting.executeScript.`;
 
 // ---------------------------------------------------------------------------
 // Config type — used by worker/index.ts

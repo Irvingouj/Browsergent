@@ -17,6 +17,15 @@ type AgentHistoryHandler = (
 	messages: Array<{ role: "user" | "assistant"; content: string }>,
 ) => void;
 
+export function isStaleRunId(
+	runId: string,
+	activeRunId?: string,
+): boolean {
+	if (runId === "unknown") return false;
+	if (activeRunId === undefined) return true;
+	return runId !== activeRunId;
+}
+
 export class WorkerBridge {
 	private worker: Worker | null = null;
 	private onLuaRunRequest: LuaRunRequestHandler | null = null;
@@ -62,12 +71,6 @@ export class WorkerBridge {
 		this.worker?.postMessage(message);
 	}
 
-	private isStaleRunId(runId: string): boolean {
-		const activeRunId = browsergentStore.getState().agent.activeRunId;
-		if (runId === "unknown") return false;
-		return activeRunId !== undefined && runId !== activeRunId;
-	}
-
 	private handleMessage(raw: unknown): void {
 		if (!isWorkerToPanel(raw)) {
 			browsergentStore.getState().appendSystemMessage({
@@ -84,12 +87,12 @@ export class WorkerBridge {
 				browsergentStore.getState().agentReset();
 				break;
 			case "agentStatus": {
-				if (this.isStaleRunId(raw.runId)) return;
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				browsergentStore.getState().agentStatusChanged(raw.status, raw.reason);
 				break;
 			}
 			case "agentMessage": {
-				if (this.isStaleRunId(raw.runId)) return;
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				const { message } = raw;
 				if (message.kind === "user") {
 					browsergentStore.getState().appendUserMessage(message);
@@ -101,19 +104,19 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentTextDelta": {
-				if (this.isStaleRunId(raw.runId)) return;
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				browsergentStore
 					.getState()
 					.appendAssistantDelta(raw.messageId, raw.text);
 				break;
 			}
 			case "agentTrace": {
-				if (this.isStaleRunId(raw.runId)) return;
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				browsergentStore.getState().traceUpdated(raw.entry);
 				break;
 			}
 			case "agentError": {
-				if (this.isStaleRunId(raw.runId)) return;
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				const error = raw.error;
 				browsergentStore.getState().agentFailed({
 					code:
@@ -133,7 +136,7 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentHistory": {
-				if (this.isStaleRunId(raw.runId)) return;
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				if (this.onAgentHistory && Array.isArray(raw.messages)) {
 					this.onAgentHistory(raw.messages);
 				}

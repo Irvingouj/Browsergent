@@ -1,4 +1,7 @@
 import type {
+	BrowsergentErrorCode,
+} from "../errors/browsergent-error";
+import type {
 	AgentStatus,
 	AgentTraceEntry,
 	ChatMessage,
@@ -61,11 +64,27 @@ function isAgentTraceEntry(entry: unknown): entry is AgentTraceEntry {
 	return true;
 }
 
-function isBrowsergentError(
+const BROWSERGENT_ERROR_CODES: readonly string[] = [
+	"E_NO_API_KEY",
+	"E_BAD_SETTINGS",
+	"E_WORKER_CRASH",
+	"E_LLM_REQUEST",
+	"E_LUA_COMPILE",
+	"E_LUA_RUNTIME",
+	"E_LUA_TIMEOUT",
+	"E_LUA_RELAY",
+	"E_CHROME_PERMISSION",
+	"E_CONTENT_SCRIPT",
+	"E_PROTOCOL",
+	"E_UNKNOWN",
+];
+
+export function isBrowsergentError(
 	err: unknown,
-): err is { code: string; message: string; details?: Record<string, unknown> } {
+): err is { code: BrowsergentErrorCode; message: string; details?: Record<string, unknown> } {
 	if (!isObject(err)) return false;
 	if (!isString(err.code)) return false;
+	if (!BROWSERGENT_ERROR_CODES.includes(err.code)) return false;
 	if (!isString(err.message)) return false;
 	if ("details" in err && err.details !== undefined) {
 		if (!isObject(err.details)) return false;

@@ -1,3 +1,4 @@
+import { useStore } from "zustand/react";
 import { marked } from "marked";
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
@@ -6,12 +7,15 @@ import { LuaController } from "../controllers/lua-controller";
 import { SessionController } from "../controllers/session-controller";
 import { SettingsController } from "../controllers/settings-controller";
 import { WorkerBridge } from "../controllers/worker-bridge";
+import { IndexedDBStorage } from "../storage/indexeddb-storage";
+import { MemoryStorage } from "../storage/memory-storage";
+import { migrateFromChromeStorage } from "../storage/migrate";
 import {
 	type BrowsergentStore,
 	browsergentStore,
-	useStore,
 } from "../state/store";
 import type { AgentTraceEntry, ChatMessage } from "../types/messages";
+import type { StorageBackend } from "../storage/storage-backend";
 
 const App: FunctionalComponent = () => {
 	const messages = useStore(
@@ -50,78 +54,102 @@ const App: FunctionalComponent = () => {
 		browsergentStore,
 		(s: BrowsergentStore) => s.ui.settingsOpen,
 	);
+	const [initialized, setInitialized] = useState(false);
 	const bridgeRef = useRef<WorkerBridge | null>(null);
 	const luaControllerRef = useRef<LuaController | null>(null);
 	const settingsControllerRef = useRef<SettingsController | null>(null);
 	const sessionControllerRef = useRef<SessionController | null>(null);
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
-	if (!bridgeRef.current) {
-		bridgeRef.current = new WorkerBridge({
-			onLuaRunRequest: (msg) => {
-				luaControllerRef.current?.handleRelayRequest(msg);
-			},
-			onAgentHistory: (messages) => {
-				sessionControllerRef.current?.saveHistory(messages).catch((err: unknown) => {
-					console.warn("History save failed:", err);
-				});
-			},
-		});
-	}
-
-	if (!luaControllerRef.current) {
-		luaControllerRef.current = new LuaController(bridgeRef.current!);
-	}
-
-	if (!settingsControllerRef.current) {
-		settingsControllerRef.current = new SettingsController();
-	}
-
-	if (!sessionControllerRef.current) {
-		sessionControllerRef.current = new SessionController();
-	}
-
 	useEffect(() => {
-		luaControllerRef.current?.init().catch((err: unknown) => {
-			console.warn("Lua init failed:", err);
-		});
-		bridgeRef.current?.start();
-		sessionControllerRef.current
-			?.load()
-			.then((session) => {
-				if (session) {
-					browsergentStore.getState().hydrateChat(session.messages);
-					browsergentStore.getState().hydrateTrace(session.trace);
-				}
-				if (sessionControllerRef.current) {
-					sessionControllerRef.current.hydrated = true;
-				}
-			})
-			.catch((err: unknown) => {
-				console.warn("Session load failed:", err);
-				if (sessionControllerRef.current) {
-					sessionControllerRef.current.hydrated = true;
-				}
+		let cancelled = false;
+		let storageRef: StorageBackend | null = null;
+
+		async function init() {
+			try {
+				const storage = new IndexedDBStorage();
+				await storage.init();
+				if (cancelled) { storage.close(); return; }
+				await migrateFromChromeStorage(storage);
+				if (cancelled) { storage.close(); return; }
+				storageRef = storage;
+			} catch (err) {
+				console.warn("Storage init failed, using memory fallback:", err);
+				storageRef = new MemoryStorage();
+				if (cancelled) return;
+			}
+
+			if (cancelled) return;
+
+			const storage = storageRef;
+
+			const bridge = new WorkerBridge({
+				onLuaRunRequest: (msg) => {
+					luaControllerRef.current?.handleRelayRequest(msg);
+				},
+				onAgentHistory: (messages) => {
+					sessionControllerRef.current?.saveHistory(messages).catch((err: unknown) => {
+						console.warn("History save failed:", err);
+					});
+				},
 			});
+			bridgeRef.current = bridge;
+
+			const lua = new LuaController(bridge);
+			luaControllerRef.current = lua;
+
+			const settingsCtrl = new SettingsController(storage);
+			settingsControllerRef.current = settingsCtrl;
+
+			const sessionCtrl = new SessionController(storage);
+			sessionControllerRef.current = sessionCtrl;
+
+			lua.init().catch((err: unknown) => {
+				console.warn("Lua init failed:", err);
+			});
+			bridge.start();
+			sessionCtrl
+				.load()
+				.then((session) => {
+					if (session) {
+						browsergentStore.getState().hydrateChat(session.messages);
+						browsergentStore.getState().hydrateTrace(session.trace);
+					}
+					sessionCtrl.hydrated = true;
+				})
+				.catch((err: unknown) => {
+					console.warn("Session load failed:", err);
+					sessionCtrl.hydrated = true;
+				});
+
+			settingsCtrl
+				.load()
+				.catch((err: unknown) => {
+					console.warn("Settings load failed:", err);
+				});
+
+			setInitialized(true);
+		}
+
+		void init();
 
 		return () => {
+			cancelled = true;
 			bridgeRef.current?.stop();
-			luaControllerRef.current?.dispose().catch((err: unknown) => {
-			console.warn("Lua dispose failed:", err);
-		});
+			const lua = luaControllerRef.current;
+			if (lua) {
+				lua.dispose().catch((err: unknown) => {
+					console.warn("Lua dispose failed:", err);
+				});
+			}
 			sessionControllerRef.current?.cancelPendingSave();
+			void storageRef?.close();
 		};
 	}, []);
 
 	useEffect(() => {
 		sessionControllerRef.current?.scheduleSave(messages, trace);
 	}, [messages, trace]);
-
-	useEffect(() => {
-		settingsControllerRef.current?.load().catch((err: unknown) => {
-			console.warn("Settings load failed:", err);
-		});
-	}, []);
 
 	// Auto-scroll chat to bottom whenever messages or trace update
 	useEffect(() => {
@@ -179,6 +207,7 @@ const App: FunctionalComponent = () => {
 	}, [messages, trace]);
 
 	const isRunning =
+		status === "loading" ||
 		status === "running" ||
 		status === "waiting_for_model" ||
 		status === "executing_tool";
@@ -186,6 +215,7 @@ const App: FunctionalComponent = () => {
 
 	return (
 		<div
+			data-initialized={initialized}
 			style={{
 				display: "flex",
 				flexDirection: "column",

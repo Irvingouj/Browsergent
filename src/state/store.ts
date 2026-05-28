@@ -1,4 +1,3 @@
-import { useStore } from "zustand/react";
 import { createStore } from "zustand/vanilla";
 import { type AgentSlice, createAgentSlice } from "./slices/agent-slice";
 import { type ChatSlice, createChatSlice } from "./slices/chat-slice";
@@ -27,4 +26,4 @@ export const browsergentStore = createStore<BrowsergentStore>((set, get) => ({
 	...createUiSlice(set, get),
 }));
 
-export { useStore };
+
