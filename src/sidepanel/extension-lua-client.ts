@@ -10,7 +10,7 @@
  */
 
 import type { ExtensionSession as ExtensionSessionType } from "@pi-oxide/extension-lua";
-import type { CellResult } from "../types/extension-lua";
+import type { LuaRunResult } from "@pi-oxide/extension-lua";
 
 const LUA_TIMEOUT_MS = 30_000;
 
@@ -23,7 +23,7 @@ interface LuaRelayRequest {
 interface LuaRelayResult {
 	type: "luaRunResult";
 	id: string;
-	result: CellResult;
+	result: LuaRunResult;
 }
 
 interface LuaRelayError {
@@ -73,10 +73,10 @@ export class ExtensionLuaClient {
 		await this.initPromise;
 	}
 
-	async runLua(code: string): Promise<CellResult> {
+	async runLua(code: string): Promise<LuaRunResult> {
 		await this.ensureReady();
 
-		return new Promise<CellResult>((resolve, reject) => {
+		return new Promise<LuaRunResult>((resolve, reject) => {
 			// Chain onto queue and catch to prevent rejection from breaking future calls
 			this.queue = this.queue
 				.then(async () => {
@@ -149,7 +149,7 @@ export class ExtensionLuaClient {
 		}
 	}
 
-	private async executeWithTimeout(code: string): Promise<CellResult> {
+	private async executeWithTimeout(code: string): Promise<LuaRunResult> {
 		if (!this.session) {
 			throw new Error("ExtensionSession not available");
 		}

@@ -19,10 +19,14 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 	});
 
 	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.getByRole("button", { name: "Save" }).click();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -56,10 +60,14 @@ test("final streamed response is one assistant message", async () => {
 	});
 
 	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.getByRole("button", { name: "Save" }).click();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -104,10 +112,14 @@ test("two prompts keep all messages visible and prior transcript included in sec
 	});
 
 	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.getByRole("button", { name: "Save" }).click();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -163,10 +175,14 @@ test("stop preserves partial streamed text", async () => {
 	});
 
 	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.getByRole("button", { name: "Save" }).click();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -218,10 +234,14 @@ test("text before run_lua tool call continues after run_lua tool result", async 
 	});
 
 	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.getByRole("button", { name: "Save" }).click();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -264,10 +284,14 @@ test("get_doc tool returns Lua API docs and continues the agent turn", async () 
 	});
 
 	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.getByRole("button", { name: "Save" }).click();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')

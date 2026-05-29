@@ -25,6 +25,10 @@ export class MemoryStorage implements StorageBackend {
 		return Array.from(this.stores.get(store)?.values() ?? []) as T[];
 	}
 
+	async getAllKeys(store: string): Promise<string[]> {
+		return Array.from(this.stores.get(store)?.keys() ?? []);
+	}
+
 	async clear(): Promise<void> {
 		this.stores.clear();
 	}

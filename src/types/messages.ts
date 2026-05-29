@@ -1,7 +1,7 @@
 /** Panel <-> Worker message types. */
 
 import type { BrowsergentError } from "../errors/browsergent-error";
-import type { CellResult } from "./extension-lua";
+import type { LuaRunResult } from "@pi-oxide/extension-lua";
 
 export type { BrowsergentError };
 
@@ -25,7 +25,7 @@ export type PanelToWorker =
 	| { type: "luaRun"; id: string; code: string }
 	| { type: "luaStop" }
 	| { type: "luaReset" }
-	| { type: "luaRunResult"; id: string; result: CellResult }
+	| { type: "luaRunResult"; id: string; result: LuaRunResult }
 	| { type: "luaRunError"; id: string; error: string };
 
 export interface WorkerSettings {

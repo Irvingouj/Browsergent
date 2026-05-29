@@ -81,7 +81,7 @@ export class IndexedDBStorage implements StorageBackend {
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.put(value, key);
 
-			request.onsuccess = () => resolve();
+			tx.oncomplete = () => resolve();
 			request.onerror = () => {
 				reject(new Error(`Failed to set ${key}: ${request.error?.message}`));
 			};
@@ -99,7 +99,7 @@ export class IndexedDBStorage implements StorageBackend {
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.delete(key);
 
-			request.onsuccess = () => resolve();
+			tx.oncomplete = () => resolve();
 			request.onerror = () => {
 				reject(new Error(`Failed to remove ${key}: ${request.error?.message}`));
 			};
@@ -125,6 +125,26 @@ export class IndexedDBStorage implements StorageBackend {
 			};
 			tx.onerror = () => {
 				reject(new Error(`Transaction failed for getAll`));
+			};
+		});
+	}
+
+	async getAllKeys(store: string): Promise<string[]> {
+		if (!this.db) throw new Error("IndexedDB not initialized");
+
+		return new Promise((resolve, reject) => {
+			const tx = this.db!.transaction(store, "readonly");
+			const objectStore = tx.objectStore(store);
+			const request = objectStore.getAllKeys();
+
+			request.onsuccess = () => {
+				resolve(request.result as string[]);
+			};
+			request.onerror = () => {
+				reject(new Error(`Failed to getAllKeys: ${request.error?.message}`));
+			};
+			tx.onerror = () => {
+				reject(new Error(`Transaction failed for getAllKeys`));
 			};
 		});
 	}

@@ -16,7 +16,9 @@ test("extension loads and side panel opens", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	await expect(sidePanel.locator("text=Browsergent")).toBeVisible();
-	await expect(sidePanel.locator("text=Settings")).toBeVisible();
+	await expect(
+		sidePanel.getByRole("button", { name: "More options" }),
+	).toBeVisible();
 
 	await close();
 });
@@ -36,7 +38,8 @@ test("side panel has task input and run button", async () => {
 test("settings panel stores API key", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	await sidePanel.locator("text=Settings").click();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
 
 	const apiKeyInput = sidePanel.locator('input[type="password"]');
 	await expect(apiKeyInput).toBeVisible();
@@ -46,7 +49,7 @@ test("settings panel stores API key", async () => {
 
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
 
-	await sidePanel.locator("text=Settings").click();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await expect(sidePanel.locator('input[type="password"]')).toHaveValue(
 		"test-key-123",
 	);

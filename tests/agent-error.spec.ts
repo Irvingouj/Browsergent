@@ -40,11 +40,15 @@ test("agent shows error when API returns 401", async () => {
 
 	const { sidePanel, close } = await launchExtension();
 
-	await sidePanel.locator("text=Settings").click();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("bad-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.locator("text=Save").click();
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel.locator('input[placeholder="Type a task..."]').fill("test error");
 	await sidePanel.locator("text=Run").click();

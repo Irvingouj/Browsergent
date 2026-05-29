@@ -1,16 +1,21 @@
 /**
- * Unit tests for src/types/extension-lua.ts utilities.
+ * Unit tests for src/types/lua-utils.ts utilities.
  */
 
 import { describe, expect, test } from "vitest";
-import type { CellResult, WasmCellError } from "../src/types/extension-lua";
-import { formatCellResult, formatError } from "../src/types/extension-lua";
+import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import { formatCellResult, formatError } from "../src/types/lua-utils";
+
+type WasmCellError = Extract<LuaRunResult, { status: "err" }>["error"];
 
 describe("formatCellResult", () => {
 	test("formats stdout-only result", () => {
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "ok",
-			stdout: ["hello", "world"],
+			stdout: [
+				{ type: "stdout", line: "hello" },
+				{ type: "auto", line: "world" },
+			],
 			stderr: [],
 			result: null,
 			execution_count: 1,
@@ -19,7 +24,7 @@ describe("formatCellResult", () => {
 	});
 
 	test("formats result value", () => {
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "ok",
 			stdout: [],
 			stderr: [],
@@ -30,9 +35,9 @@ describe("formatCellResult", () => {
 	});
 
 	test("combines stdout and result", () => {
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "ok",
-			stdout: ["running..."],
+			stdout: [{ type: "stdout", line: "running..." }],
 			stderr: [],
 			result: "done",
 			execution_count: 3,
@@ -46,7 +51,7 @@ describe("formatCellResult", () => {
 			message: "unexpected symbol",
 			line: 5,
 		};
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -64,7 +69,7 @@ describe("formatCellResult", () => {
 			message: "syntax error",
 			line: null,
 		};
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -80,7 +85,7 @@ describe("formatCellResult", () => {
 			message: "attempt to call nil value",
 			line: 12,
 		};
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -98,7 +103,7 @@ describe("formatCellResult", () => {
 			message: "something went wrong",
 			line: null,
 		};
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -115,7 +120,7 @@ describe("formatCellResult", () => {
 			kind: "strict_mode",
 			variable: "undefined_var",
 		};
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -129,7 +134,7 @@ describe("formatCellResult", () => {
 
 	test("formats fuel_exhausted error", () => {
 		const error: WasmCellError = { kind: "fuel_exhausted" };
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -146,7 +151,7 @@ describe("formatCellResult", () => {
 			kind: "internal",
 			message: "WASM trap",
 		};
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -162,7 +167,7 @@ describe("formatCellResult", () => {
 			message: "something went wrong",
 			line: null,
 		};
-		const cell: CellResult = {
+		const cell: LuaRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: ["debug trace line 1", "debug trace line 2"],

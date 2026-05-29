@@ -9,8 +9,8 @@
 
 /// <reference lib="webworker" />
 
-import type { CellResult } from "../types/extension-lua";
-import { formatError } from "../types/extension-lua";
+import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import { formatError } from "../types/lua-utils";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
@@ -36,7 +36,7 @@ const LUA_RELAY_TIMEOUT_MS = 30_000;
 const pendingLuaRelays = new Map<
 	string,
 	{
-		resolve: (result: CellResult) => void;
+		resolve: (result: LuaRunResult) => void;
 		reject: (error: Error) => void;
 		timeoutId: ReturnType<typeof setTimeout>;
 	}
@@ -51,10 +51,10 @@ function rejectAllPendingLuaRelays(reason: string): void {
 }
 
 /** Send Lua code to the side panel for execution via ExtensionSession. */
-function relayLuaExecution(code: string): Promise<CellResult> {
+function relayLuaExecution(code: string): Promise<LuaRunResult> {
 	const relayId = `lua-${++luaRelayCounter}`;
 
-	const promise = new Promise<CellResult>((resolve, reject) => {
+	const promise = new Promise<LuaRunResult>((resolve, reject) => {
 		const timeoutId = setTimeout(() => {
 			pendingLuaRelays.delete(relayId);
 			reject(new Error(`Lua relay timed out after ${LUA_RELAY_TIMEOUT_MS}ms`));
@@ -67,7 +67,7 @@ function relayLuaExecution(code: string): Promise<CellResult> {
 	return promise;
 }
 
-function handleLuaRelayResult(id: string, result: CellResult): void {
+function handleLuaRelayResult(id: string, result: LuaRunResult): void {
 	const entry = pendingLuaRelays.get(id);
 	if (entry) {
 		clearTimeout(entry.timeoutId);
@@ -213,7 +213,7 @@ async function handleLuaRun(id: string, code: string): Promise<void> {
 		const result = await relayLuaExecution(code);
 		const output = result.status === "err"
 			? formatError(result.error)
-			: result.stdout.join("\n");
+			: result.stdout.map((s) => s.line).join("\n");
 		post({ type: "luaOutput", id, output });
 	} catch (err) {
 		post({

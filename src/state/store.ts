@@ -3,6 +3,10 @@ import { type AgentSlice, createAgentSlice } from "./slices/agent-slice";
 import { type ChatSlice, createChatSlice } from "./slices/chat-slice";
 import { createLuaSlice, type LuaSlice } from "./slices/lua-slice";
 import {
+	createSessionSlice,
+	type SessionSlice,
+} from "./slices/session-slice";
+import {
 	createSettingsSlice,
 	type SettingsSlice,
 } from "./slices/settings-slice";
@@ -15,7 +19,8 @@ export interface BrowsergentStore
 		AgentSlice,
 		TraceSlice,
 		LuaSlice,
-		UiSlice {}
+		UiSlice,
+		SessionSlice {}
 
 export const browsergentStore = createStore<BrowsergentStore>((set, get) => ({
 	...createSettingsSlice(set, get),
@@ -24,6 +29,7 @@ export const browsergentStore = createStore<BrowsergentStore>((set, get) => ({
 	...createTraceSlice(set, get),
 	...createLuaSlice(set, get),
 	...createUiSlice(set, get),
+	...createSessionSlice(set, get),
 }));
 
 

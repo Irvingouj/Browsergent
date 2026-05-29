@@ -50,6 +50,20 @@ describe("IndexedDBStorage", () => {
 		expect(all).toEqual([]);
 	});
 
+	test("getAllKeys returns all keys in a store", async () => {
+		await storage.set("settings", "alpha", 1);
+		await storage.set("settings", "beta", 2);
+		await storage.set("settings", "gamma", 3);
+		const keys = await storage.getAllKeys("settings");
+		expect(keys).toHaveLength(3);
+		expect(keys.sort()).toEqual(["alpha", "beta", "gamma"]);
+	});
+
+	test("getAllKeys returns empty array for empty store", async () => {
+		const keys = await storage.getAllKeys("sessions");
+		expect(keys).toEqual([]);
+	});
+
 	test("clear removes all data", async () => {
 		await storage.set("settings", "a", 1);
 		await storage.set("sessions", "b", 2);

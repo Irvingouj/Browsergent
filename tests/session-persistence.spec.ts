@@ -30,11 +30,15 @@ test("chat messages accumulate across multiple runs", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	// Configure settings
-	await sidePanel.locator("text=Settings").click();
+	await sidePanel.getByRole("button", { name: "More options" }).click();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.locator("text=Save").click();
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
+
+	// Close session panel so it doesn't block the Run button
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	// First run
 	await sidePanel.locator('input[placeholder="Type a task..."]').fill("first task");

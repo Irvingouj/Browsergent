@@ -13,7 +13,7 @@
 		"test:all": "vitest run && npx playwright test"
 	},
 	"dependencies": {
-		"@pi-oxide/extension-lua": "^0.3.0",
+		"@pi-oxide/extension-lua": "^0.4.0",
 		"@pi-oxide/pi-host-web": "file:vendor/pi-host-web",
 		"marked": "^18.0.4",
 		"preact": "^10.25.0",

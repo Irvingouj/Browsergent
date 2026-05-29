@@ -5,13 +5,13 @@ import { type BrowserContext, chromium, type Page } from "@playwright/test";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionPath = path.resolve(__dirname, "../dist");
 
-export async function launchExtension(): Promise<{
+export async function launchExtension(userDataDir?: string): Promise<{
 	context: BrowserContext;
 	extensionId: string;
 	sidePanel: Page;
 	close: () => Promise<void>;
 }> {
-	const context = await chromium.launchPersistentContext("", {
+	const context = await chromium.launchPersistentContext(userDataDir ?? "", {
 		channel: "chromium",
 		headless: true,
 		args: [

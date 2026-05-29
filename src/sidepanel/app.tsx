@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { exportConversation } from "../controllers/export-controller";
 import { LuaController } from "../controllers/lua-controller";
 import { SessionController } from "../controllers/session-controller";
+import { SessionPanel } from "./session-panel";
 import { SettingsController } from "../controllers/settings-controller";
 import { WorkerBridge } from "../controllers/worker-bridge";
 import { IndexedDBStorage } from "../storage/indexeddb-storage";
@@ -54,11 +55,24 @@ const App: FunctionalComponent = () => {
 		browsergentStore,
 		(s: BrowsergentStore) => s.ui.settingsOpen,
 	);
+	const sessionPanelOpen = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.session.sessionPanelOpen,
+	);
+	const sessions = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.session.sessions,
+	);
+	const activeSessionId = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.session.activeSessionId,
+	);
 	const [initialized, setInitialized] = useState(false);
 	const bridgeRef = useRef<WorkerBridge | null>(null);
 	const luaControllerRef = useRef<LuaController | null>(null);
 	const settingsControllerRef = useRef<SettingsController | null>(null);
 	const sessionControllerRef = useRef<SessionController | null>(null);
+	const titleGeneratedForSession = useRef<Set<string>>(new Set());
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
 	useEffect(() => {
@@ -103,6 +117,7 @@ const App: FunctionalComponent = () => {
 
 			const sessionCtrl = new SessionController(storage);
 			sessionControllerRef.current = sessionCtrl;
+			await sessionCtrl.init();
 
 			lua.init().catch((err: unknown) => {
 				console.warn("Lua init failed:", err);
@@ -121,6 +136,9 @@ const App: FunctionalComponent = () => {
 					console.warn("Session load failed:", err);
 					sessionCtrl.hydrated = true;
 				});
+			const sessionList = await sessionCtrl.listSessions();
+			browsergentStore.getState().sessionListLoaded(sessionList);
+			browsergentStore.getState().activeSessionChanged(sessionCtrl.getActiveSessionId() || "");
 
 			settingsCtrl
 				.load()
@@ -157,6 +175,86 @@ const App: FunctionalComponent = () => {
 		if (!el) return;
 		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages, trace]);
+
+	// Auto-generate title when agent finishes
+	useEffect(() => {
+		if (status !== "done" && status !== "stopped") return;
+		const activeId = sessionControllerRef.current?.getActiveSessionId();
+		if (!activeId) return;
+		if (messages.length < 2) return;
+		if (titleGeneratedForSession.current.has(activeId)) return;
+
+		const activeSession = browsergentStore
+			.getState()
+			.session.sessions.find((s) => s.id === activeId);
+		if (
+			activeSession &&
+			activeSession.title &&
+			!activeSession.title.startsWith("Session ")
+		) {
+			titleGeneratedForSession.current.add(activeId);
+			return;
+		}
+
+		const targetSessionId = activeId;
+
+		async function generateTitle() {
+			const prompt = `Summarize this conversation in 5 words or less.\n\n${messages.map((m) => `${m.kind}: ${m.text}`).join("\n")}`;
+			const key = apiKey;
+			const url = baseUrl || "https://api.anthropic.com";
+			const modelName = model || "claude-sonnet-4-20250514";
+
+			// Skip title generation in test environments (localhost/mock URLs)
+			const isLocalhost = (() => {
+				try {
+					const u = new URL(url);
+					return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "0.0.0.0" || u.hostname === "::1";
+				} catch {
+					return false;
+				}
+			})();
+			if (isLocalhost) {
+				titleGeneratedForSession.current.add(targetSessionId);
+				return;
+			}
+
+			try {
+				const response = await fetch(`${url}/v1/messages`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"x-api-key": key,
+					},
+					body: JSON.stringify({
+						model: modelName,
+						max_tokens: 20,
+						messages: [{ role: "user", content: prompt }],
+					}),
+				});
+
+				if (!response.ok) return;
+
+				const data = (await response.json()) as {
+					content?: Array<{ text?: string }>;
+				};
+				const title = data.content?.[0]?.text?.trim();
+				if (!title) return;
+
+				await sessionControllerRef.current?.updateTitle(
+					targetSessionId,
+					title,
+					false,
+				);
+				browsergentStore.getState().sessionTitleUpdated(targetSessionId, title);
+			} catch {
+				// Silently ignore failures
+			} finally {
+				titleGeneratedForSession.current.add(targetSessionId);
+			}
+		}
+
+		void generateTitle();
+	}, [status, apiKey, baseUrl, model, messages]);
 
 	const handleRun = useCallback(async () => {
 		const task = taskInput.trim();
@@ -206,6 +304,71 @@ const App: FunctionalComponent = () => {
 		});
 	}, [messages, trace]);
 
+	const reloadSessionList = useCallback(async () => {
+		const list = await sessionControllerRef.current?.listSessions();
+		if (list) {
+			browsergentStore.getState().sessionListLoaded(list);
+		}
+	}, []);
+
+	const handleSwitchSession = useCallback(
+		async (id: string) => {
+			sessionControllerRef.current?.cancelPendingSave();
+			const data = await sessionControllerRef.current?.switchSession(id);
+			if (data) {
+				browsergentStore.getState().hydrateChat(data.messages);
+				browsergentStore.getState().hydrateTrace(data.trace);
+			}
+			browsergentStore.getState().activeSessionChanged(id);
+			browsergentStore.getState().agentReset();
+			browsergentStore.getState().sessionPanelOpenChanged(false);
+			browsergentStore.getState().setSettingsOpen(false);
+			await reloadSessionList();
+		},
+		[reloadSessionList],
+	);
+
+	const handleCreateSession = useCallback(async () => {
+		sessionControllerRef.current?.cancelPendingSave();
+		const newId = await sessionControllerRef.current?.createSession();
+		if (!newId) return;
+		browsergentStore.getState().clearChat();
+		browsergentStore.getState().clearTrace();
+		browsergentStore.getState().agentReset();
+		browsergentStore.getState().sessionCreated(newId);
+		browsergentStore.getState().sessionPanelOpenChanged(false);
+		await reloadSessionList();
+	}, [reloadSessionList]);
+
+	const handleDeleteSession = useCallback(
+		async (id: string) => {
+			sessionControllerRef.current?.cancelPendingSave();
+			const wasActive =
+				sessionControllerRef.current?.getActiveSessionId() === id;
+			await sessionControllerRef.current?.deleteSession(id);
+			browsergentStore.getState().sessionDeleted(id);
+			const activeId = sessionControllerRef.current?.getActiveSessionId();
+			if (activeId && wasActive) {
+				const data = await sessionControllerRef.current?.load();
+				if (data) {
+					browsergentStore.getState().hydrateChat(data.messages);
+					browsergentStore.getState().hydrateTrace(data.trace);
+				}
+				browsergentStore.getState().activeSessionChanged(activeId);
+			}
+			await reloadSessionList();
+		},
+		[reloadSessionList],
+	);
+
+	const handleUpdateTitle = useCallback(
+		async (id: string, title: string) => {
+			await sessionControllerRef.current?.updateTitle(id, title, true);
+			browsergentStore.getState().sessionTitleUpdated(id, title);
+		},
+		[],
+	);
+
 	const isRunning =
 		status === "loading" ||
 		status === "running" ||
@@ -232,6 +395,9 @@ const App: FunctionalComponent = () => {
 					display: "flex",
 					justifyContent: "space-between",
 					alignItems: "center",
+					position: "relative",
+					zIndex: 102,
+					background: "#fff",
 				}}
 			>
 				<div style={{ display: "flex", alignItems: "center" }}>
@@ -242,17 +408,32 @@ const App: FunctionalComponent = () => {
 				<button
 					type="button"
 					onClick={() =>
-						browsergentStore.getState().setSettingsOpen(!showSettings)
+						browsergentStore
+							.getState()
+							.sessionPanelOpenChanged(!sessionPanelOpen)
 					}
 					style={{
 						padding: "4px 8px",
-						border: "1px solid #ccc",
+						border: "none",
 						background: "none",
 						cursor: "pointer",
 						borderRadius: "4px",
+						display: "flex",
+						alignItems: "center",
 					}}
+					title="More options"
 				>
-					Settings
+					<svg
+						width="16"
+						height="16"
+						viewBox="0 0 16 16"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<circle cx="8" cy="4" r="1.5" fill="currentColor" />
+						<circle cx="8" cy="8" r="1.5" fill="currentColor" />
+						<circle cx="8" cy="12" r="1.5" fill="currentColor" />
+					</svg>
 				</button>
 			</div>
 
@@ -263,6 +444,8 @@ const App: FunctionalComponent = () => {
 						padding: "8px 12px",
 						borderBottom: "1px solid #e0e0e0",
 						background: "#f8f8f8",
+						position: "relative",
+						zIndex: 102,
 					}}
 				>
 					<div style={{ display: "grid", gap: "8px" }}>
@@ -364,8 +547,28 @@ const App: FunctionalComponent = () => {
 			{/* Main content */}
 			<div
 				ref={chatScrollRef}
-				style={{ flex: 1, overflow: "auto", padding: "8px 12px" }}
+				style={{ flex: 1, overflow: "auto", padding: "8px 12px", position: "relative" }}
 			>
+				{messages.length > 0 && !isRunning && (
+					<button
+						type="button"
+						onClick={handleCreateSession}
+						style={{
+							position: "absolute",
+							top: "8px",
+							left: "12px",
+							padding: "4px 8px",
+							fontSize: "11px",
+							border: "1px solid #ccc",
+							borderRadius: "4px",
+							background: "white",
+							cursor: "pointer",
+							zIndex: 1,
+						}}
+					>
+						New
+					</button>
+				)}
 				<ChatPanel messages={messages} trace={trace} />
 			</div>
 
@@ -443,6 +646,20 @@ const App: FunctionalComponent = () => {
 					</button>
 				)}
 			</div>
+
+			{sessionPanelOpen && sessionControllerRef.current && (
+				<SessionPanel
+					sessionController={sessionControllerRef.current}
+					onSwitchSession={handleSwitchSession}
+					onCreateSession={handleCreateSession}
+					onDeleteSession={handleDeleteSession}
+					onUpdateTitle={handleUpdateTitle}
+					onSettingsClick={() =>
+						browsergentStore.getState().setSettingsOpen(true)
+					}
+					canSwitch={!isRunning}
+				/>
+			)}
 		</div>
 	);
 };

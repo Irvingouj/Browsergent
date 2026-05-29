@@ -9,8 +9,8 @@
 
 import type { AgentEvent, AgentMessage, ToolCall } from "@pi-oxide/pi-host-web";
 import { Agent, toolError, toolResult } from "@pi-oxide/pi-host-web";
-import type { CellResult } from "../types/extension-lua";
-import { formatCellResult } from "../types/extension-lua";
+import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import { formatCellResult } from "../types/lua-utils";
 import type { AgentStatus, AgentTraceEntry } from "../types/messages";
 import type { AnthropicConfig } from "./anthropic";
 import { AnthropicProvider, SYSTEM_PROMPT } from "./anthropic";
@@ -21,7 +21,7 @@ export interface AgentLoopCallbacks {
 	onTextDelta?: (messageId: string, text: string) => void;
 	onTrace: (entry: AgentTraceEntry) => void;
 	onError: (code: string, message: string) => void;
-	runLua: (code: string) => Promise<CellResult>;
+	runLua: (code: string) => Promise<LuaRunResult>;
 }
 
 const RUN_LUA_TOOL = {
