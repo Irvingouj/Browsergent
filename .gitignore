@@ -3,3 +3,8 @@ dist/
 *.wasm
 .DS_Store
 *.log
+/*.jpeg
+test-results/
+vendor/
+.opencode/
+.claude/
