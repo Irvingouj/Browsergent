@@ -20,6 +20,7 @@ export type BrowsergentErrorCode =
 	| "E_CHROME_PERMISSION"
 	| "E_CONTENT_SCRIPT"
 	| "E_PROTOCOL"
+	| "E_AGENT_RUN"
 	| "E_UNKNOWN";
 
 export interface BrowsergentError {

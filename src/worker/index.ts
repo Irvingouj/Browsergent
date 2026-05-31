@@ -14,6 +14,7 @@ import { formatError } from "../types/lua-utils";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
+	SdkSessionState,
 	WorkerSettings,
 	WorkerToPanel,
 } from "../types/messages";
@@ -98,6 +99,7 @@ function handleAgentStart(
 	settings: WorkerSettings,
 	runId: string,
 	priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
+	priorSessionState?: SdkSessionState,
 ): void {
 	currentRunId = runId;
 
@@ -176,10 +178,26 @@ function handleAgentStart(
 				},
 			},
 			priorMessages,
+			priorSessionState,
 		)
-		.then((finalMessages) => {
+		.then(({ messages, sessionState }) => {
 			if (runId === currentRunId) {
-				post({ type: "agentHistory", runId, messages: finalMessages });
+				post({ type: "agentHistory", runId, messages });
+				if (sessionState) {
+					post({ type: "agentSessionState", runId, sessionState });
+				}
+			}
+		})
+		.catch((err) => {
+			if (runId === currentRunId) {
+				post({
+					type: "agentError",
+					runId,
+					error: {
+						code: "E_AGENT_RUN",
+						message: err instanceof Error ? err.message : String(err),
+					},
+				});
 			}
 		});
 }
@@ -199,10 +217,9 @@ function handleAgentStop(runId?: string): void {
 }
 
 function handleAgentReset(): void {
-	agentLoop?.stop();
+	agentLoop?.reset();
 	rejectAllPendingLuaRelays("Agent reset");
 	agentLoop = null;
-	currentRunId = null;
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
 
@@ -230,7 +247,13 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 	const msg = event.data;
 	switch (msg.type) {
 		case "agentStart":
-			handleAgentStart(msg.task, msg.settings, msg.runId, msg.priorMessages);
+			handleAgentStart(
+				msg.task,
+				msg.settings,
+				msg.runId,
+				msg.priorMessages,
+				msg.priorSessionState,
+			);
 			break;
 		case "agentStop":
 			handleAgentStop(msg.runId);

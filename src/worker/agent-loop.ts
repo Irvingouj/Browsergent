@@ -7,8 +7,8 @@
  * via the runLua relay — it never touches the Lua runtime directly.
  */
 
-import type { AgentEvent, AgentMessage, ToolCall } from "@pi-oxide/pi-host-web";
-import { Agent, toolError, toolResult } from "@pi-oxide/pi-host-web";
+import type { AgentEvent, AgentMessage, ContextProjectionState, LlmContext, LlmProvider, LlmStream, ProjectionStrategy, SessionState as SdkSessionState, ToolCall, ToolResultContext } from "@pi-oxide/pi-host-web";
+import { Agent, projectContext, toolError } from "@pi-oxide/pi-host-web";
 import type { LuaRunResult } from "@pi-oxide/extension-lua";
 import { formatCellResult } from "../types/lua-utils";
 import type { AgentStatus, AgentTraceEntry } from "../types/messages";
@@ -62,14 +62,31 @@ const GET_DOC_TOOL = {
 	execution_mode: "sequential" as const,
 };
 
-const MAX_TOOL_RESULT_CHARS = 8000;
 const EMPTY_TOOL_RESULT = "[run_lua completed successfully with no output]";
 
-function projectToolResult(text: string): string {
+function toolStrategy(toolName: string): ProjectionStrategy {
+	if (toolName === "run_lua") {
+		return { type: "fixed", shape: { type: "head_tail", head_chars: 8000, tail_chars: 8000 } };
+	}
+	return { type: "fixed", shape: { type: "keep_full" } };
+}
+
+function buildToolResult(
+	text: string,
+	contentKind: ToolResultContext["content_kind"],
+	toolName: string,
+	truncated = false,
+): { content: Array<{ type: "text"; text: string }>; details: ToolResultContext } {
 	const normalized = text.trim() || EMPTY_TOOL_RESULT;
-	return normalized.length > MAX_TOOL_RESULT_CHARS
-		? `${normalized.slice(0, MAX_TOOL_RESULT_CHARS)}\n[...truncated]`
-		: normalized;
+	return {
+		content: [{ type: "text", text: normalized }],
+		details: {
+			content_kind: contentKind,
+			strategy: toolStrategy(toolName),
+			original_chars: text.length,
+			truncated_by_tool: truncated,
+		},
+	};
 }
 
 function toolResultText(result: {
@@ -88,9 +105,14 @@ function toolResultText(result: {
 
 function toolErrorText(result: unknown): string {
 	// SDK tool_execution_end passes ToolResult for errors too — content may hold the error text
-	const fromContent = toolResultText(
-		result as { content?: Array<{ type: string; text?: string }> },
-	);
+	const fromContent =
+		typeof result === "object" &&
+		result !== null &&
+		"content" in result
+			? toolResultText(
+					result as { content?: Array<{ type: string; text?: string }> },
+				)
+			: "";
 	if (fromContent) return fromContent;
 
 	if (typeof result === "object" && result !== null && "error" in result) {
@@ -254,6 +276,43 @@ function toSdkMessages(
 	);
 }
 
+
+class ProjectingLlmProvider implements LlmProvider {
+	constructor(
+		private inner: LlmProvider,
+		private state: ContextProjectionState,
+	) {}
+
+	async call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream> {
+		const result = projectContext({
+			system_prompt: context.system_prompt,
+			messages: context.messages,
+			budget: {
+				max_tool_result_chars: 50000,
+				max_context_tokens: 100000,
+				microcompact_after_turns: 5,
+				compaction_threshold: 0.75,
+			},
+			state: this.state,
+		});
+
+		if (!result.ok || !result.data) {
+			console.debug("projection error:", result.error);
+			return this.inner.call(context, signal);
+		}
+
+		this.state = result.data.updated_state;
+		return this.inner.call(
+			{ ...context, messages: result.data.projected_messages },
+			signal,
+		);
+	}
+
+	getState(): ContextProjectionState {
+		return this.state;
+	}
+}
+
 export class AgentLoop {
 	private agent: Agent | null = null;
 	private aborted = false;
@@ -266,7 +325,11 @@ export class AgentLoop {
 		config: AnthropicConfig,
 		callbacks: AgentLoopCallbacks,
 		priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
-	): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
+		priorSessionState?: SdkSessionState,
+	): Promise<{
+		messages: Array<{ role: "user" | "assistant"; content: string }>;
+		sessionState: SdkSessionState | null;
+	}> {
 		this.aborted = false;
 		this.stepCount = 0;
 		this.toolCallNames.clear();
@@ -299,6 +362,7 @@ export class AgentLoop {
 				priorMessages.length > 0
 					? toSdkMessages(priorMessages, config.model)
 					: undefined,
+			session_state: priorSessionState ?? null,
 		});
 
 		callbacks.onStatus("running");
@@ -309,11 +373,21 @@ export class AgentLoop {
 			{ role: "user", content: task },
 		];
 
+		let projectingProvider: ProjectingLlmProvider | null = null;
+		const agent = this.agent;
 		try {
 			const provider = new AnthropicProvider(config);
+			const projectionState: ContextProjectionState =
+				priorSessionState?.projection_state ?? {
+					tools: {},
+					current_turn: 0,
+					last_api_usage: null,
+					turns_since_compaction: 0,
+				};
+			projectingProvider = new ProjectingLlmProvider(provider, projectionState);
 
 			await this.agent.run(task, {
-				llm: provider,
+				llm: projectingProvider,
 				tools: {
 					get_doc: async (call: ToolCall) => {
 						if (this.aborted) {
@@ -340,7 +414,7 @@ export class AgentLoop {
 
 						try {
 							const docs = await getExtensionLuaDocs(format, namespace);
-							return toolResult(projectToolResult(docs));
+							return buildToolResult(docs, "search_results", "get_doc");
 						} catch (err) {
 							const msg = err instanceof Error ? err.message : String(err);
 							return toolError("doc_error", msg);
@@ -375,16 +449,15 @@ export class AgentLoop {
 						try {
 							const cell = await callbacks.runLua(code);
 							const text = formatCellResult(cell);
-							const projected = projectToolResult(text);
 							messages.push({
 								role: "user",
 								content:
 									cell.status === "ok"
-										? `[run_lua]\n${projected}`
+										? `[run_lua]\n${text}`
 										: `[run_lua] ERROR: ${text}`,
 							});
 							if (cell.status === "ok") {
-								return toolResult(projected);
+								return buildToolResult(text, "command_output", "run_lua");
 							}
 							return toolError("lua_error", text);
 						} catch (err) {
@@ -412,18 +485,41 @@ export class AgentLoop {
 				callbacks.onError("agent_error", message);
 				callbacks.onStatus("error", message);
 			}
-		} finally {
-			this.agent?.destroy();
-			this.agent = null;
 		}
 
-		return messages;
+		let sessionState: SdkSessionState | null = null;
+		try {
+			sessionState = agent?.getSessionState() ?? null;
+		} catch {
+			// ignore
+		}
+		agent?.destroy();
+		this.agent = null;
+
+		if (sessionState && projectingProvider) {
+			const finalProjectionState = projectingProvider.getState();
+			if (finalProjectionState) {
+				sessionState = {
+					...sessionState,
+					projection_state: finalProjectionState,
+				};
+			}
+		}
+
+		return { messages, sessionState };
 	}
 
 	stop(): void {
 		this.aborted = true;
 		this.abortController?.abort();
 		this.agent?.stop();
+	}
+
+	reset(): void {
+		this.aborted = true;
+		this.abortController?.abort();
+		this.agent?.reset();
+		this.agent = null;
 	}
 
 	private handleEvent(

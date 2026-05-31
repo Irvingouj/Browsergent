@@ -106,6 +106,11 @@ const App: FunctionalComponent = () => {
 						console.warn("History save failed:", err);
 					});
 				},
+				onAgentSessionState: (sessionState) => {
+					sessionControllerRef.current?.saveSdkSessionState(sessionState).catch((err: unknown) => {
+						console.warn("SDK session state save failed:", err);
+					});
+				},
 			});
 			bridgeRef.current = bridge;
 
@@ -269,7 +274,10 @@ const App: FunctionalComponent = () => {
 		const runId = crypto.randomUUID();
 		browsergentStore.getState().agentRunRequested(runId);
 
-		const priorMessages = await sessionControllerRef.current?.loadHistory();
+		const [priorMessages, priorSessionState] = await Promise.all([
+			sessionControllerRef.current?.loadHistory(),
+			sessionControllerRef.current?.loadSdkSessionState(),
+		]);
 
 		bridgeRef.current?.post({
 			type: "agentStart",
@@ -277,6 +285,7 @@ const App: FunctionalComponent = () => {
 			task,
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
 			priorMessages: priorMessages ?? undefined,
+			priorSessionState: priorSessionState ?? undefined,
 		});
 	}, [taskInput, apiKey, baseUrl, model]);
 

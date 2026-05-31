@@ -1,3 +1,4 @@
+import type { SessionState as SdkSessionState } from "@pi-oxide/pi-host-web";
 import type { StorageBackend } from "../storage/storage-backend";
 import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 
@@ -9,6 +10,7 @@ interface SessionData {
 	title?: string;
 	customTitle?: string;
 	messageCount: number;
+	sdkSessionState?: SdkSessionState;
 }
 
 interface SessionMeta {
@@ -194,12 +196,25 @@ export class SessionController {
 	): Promise<void> {
 		try {
 			const activeId = this.meta?.activeSessionId;
+			let existing: SessionData | null = null;
+			if (activeId) {
+				existing = await this.storage.get<SessionData>(
+					SESSION_STORE,
+					`${SESSION_PREFIX}${activeId}`,
+				);
+			} else {
+				existing = await this.storage.get<SessionData>(
+					SESSION_STORE,
+					OLD_SESSION_KEY,
+				);
+			}
 			const snapshot: SessionData = {
 				id: activeId || crypto.randomUUID(),
 				messages,
 				trace,
 				timestamp: Date.now(),
 				messageCount: messages.length,
+				sdkSessionState: existing?.sdkSessionState,
 			};
 			if (activeId) {
 				await this.storage.set(
@@ -296,6 +311,60 @@ export class SessionController {
 			return valid.length > 0 ? valid : null;
 		} catch (err) {
 			console.warn("History load failed:", err);
+			return null;
+		}
+	}
+
+	async saveSdkSessionState(sessionState: SdkSessionState): Promise<void> {
+		if (!this.hydrated) return;
+		try {
+			const activeId = this.meta?.activeSessionId;
+			if (!activeId) return;
+			const data = await this.storage.get<SessionData>(
+				SESSION_STORE,
+				`${SESSION_PREFIX}${activeId}`,
+			);
+			if (data) {
+				data.sdkSessionState = sessionState;
+				await this.storage.set(
+					SESSION_STORE,
+					`${SESSION_PREFIX}${activeId}`,
+					data,
+				);
+			} else {
+				const minimal: SessionData = {
+					id: activeId,
+					messages: [],
+					trace: [],
+					timestamp: Date.now(),
+					messageCount: 0,
+					sdkSessionState: sessionState,
+				};
+				await this.storage.set(
+					SESSION_STORE,
+					`${SESSION_PREFIX}${activeId}`,
+					minimal,
+				);
+			}
+		} catch (err) {
+			console.warn("SDK session state save failed:", err);
+		}
+	}
+
+	async loadSdkSessionState(): Promise<SdkSessionState | null> {
+		try {
+			const activeId = this.meta?.activeSessionId;
+			if (!activeId) return null;
+			const data = await this.storage.get<SessionData>(
+				SESSION_STORE,
+				`${SESSION_PREFIX}${activeId}`,
+			);
+			if (data?.sdkSessionState) {
+				return data.sdkSessionState;
+			}
+			return null;
+		} catch (err) {
+			console.warn("SDK session state load failed:", err);
 			return null;
 		}
 	}

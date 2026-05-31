@@ -17,6 +17,10 @@ type AgentHistoryHandler = (
 	messages: Array<{ role: "user" | "assistant"; content: string }>,
 ) => void;
 
+type AgentSessionStateHandler = (
+	sessionState: import("../types/messages").SdkSessionState,
+) => void;
+
 export function isStaleRunId(
 	runId: string,
 	activeRunId?: string,
@@ -30,13 +34,16 @@ export class WorkerBridge {
 	private worker: Worker | null = null;
 	private onLuaRunRequest: LuaRunRequestHandler | null = null;
 	private onAgentHistory: AgentHistoryHandler | null = null;
+	private onAgentSessionState: AgentSessionStateHandler | null = null;
 
 	constructor(options?: {
 		onLuaRunRequest?: LuaRunRequestHandler;
 		onAgentHistory?: AgentHistoryHandler;
+		onAgentSessionState?: AgentSessionStateHandler;
 	}) {
 		this.onLuaRunRequest = options?.onLuaRunRequest ?? null;
 		this.onAgentHistory = options?.onAgentHistory ?? null;
+		this.onAgentSessionState = options?.onAgentSessionState ?? null;
 	}
 
 	start(): void {
@@ -139,6 +146,13 @@ export class WorkerBridge {
 				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				if (this.onAgentHistory && Array.isArray(raw.messages)) {
 					this.onAgentHistory(raw.messages);
+				}
+				break;
+			}
+			case "agentSessionState": {
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				if (this.onAgentSessionState && raw.sessionState) {
+					this.onAgentSessionState(raw.sessionState);
 				}
 				break;
 			}

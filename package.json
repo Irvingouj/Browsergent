@@ -14,7 +14,7 @@
 	},
 	"dependencies": {
 		"@pi-oxide/extension-lua": "^0.4.0",
-		"@pi-oxide/pi-host-web": "file:vendor/pi-host-web",
+		"@pi-oxide/pi-host-web": "file:../pi-oxide/pi-host-web/pkg",
 		"marked": "^18.0.4",
 		"preact": "^10.25.0",
 		"zustand": "^5.0.13"

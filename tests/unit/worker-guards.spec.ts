@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { isStaleRunId } from "../../src/controllers/worker-bridge";
 import {
+	isAgentSessionState,
 	isBrowsergentError,
 	isConversationMessage,
 } from "../../src/protocol/worker-guards";
@@ -59,5 +60,60 @@ describe("isConversationMessage", () => {
 
 	test("rejects non-string content", () => {
 		expect(isConversationMessage({ role: "user", content: 42 })).toBe(false);
+	});
+});
+
+describe("isAgentSessionState", () => {
+	test("accepts valid message", () => {
+		expect(
+			isAgentSessionState({
+				type: "agentSessionState",
+				runId: "run-1",
+				sessionState: {},
+			}),
+		).toBe(true);
+	});
+
+	test("rejects invalid type", () => {
+		expect(
+			isAgentSessionState({
+				type: "notAgentSessionState",
+				runId: "run-1",
+				sessionState: {},
+			}),
+		).toBe(false);
+	});
+
+	test("rejects non-string runId", () => {
+		expect(
+			isAgentSessionState({
+				type: "agentSessionState",
+				runId: 42,
+				sessionState: {},
+			}),
+		).toBe(false);
+	});
+
+	test("rejects non-object sessionState", () => {
+		expect(
+			isAgentSessionState({
+				type: "agentSessionState",
+				runId: "run-1",
+				sessionState: "string",
+			}),
+		).toBe(false);
+		expect(
+			isAgentSessionState({
+				type: "agentSessionState",
+				runId: "run-1",
+				sessionState: null,
+			}),
+		).toBe(false);
+	});
+
+	test("rejects non-object input", () => {
+		expect(isAgentSessionState("string")).toBe(false);
+		expect(isAgentSessionState(42)).toBe(false);
+		expect(isAgentSessionState(null)).toBe(false);
 	});
 });
