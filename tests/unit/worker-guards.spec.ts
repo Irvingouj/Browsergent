@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { isStaleRunId } from "../../src/controllers/worker-bridge";
 import {
-	isAgentSessionState,
+	isAgentPersistData,
 	isBrowsergentError,
 	isConversationMessage,
 } from "../../src/protocol/worker-guards";
@@ -63,57 +63,57 @@ describe("isConversationMessage", () => {
 	});
 });
 
-describe("isAgentSessionState", () => {
+describe("isAgentPersistData", () => {
 	test("accepts valid message", () => {
 		expect(
-			isAgentSessionState({
-				type: "agentSessionState",
+			isAgentPersistData({
+				type: "agentPersistData",
 				runId: "run-1",
-				sessionState: {},
+				persistData: {},
 			}),
 		).toBe(true);
 	});
 
 	test("rejects invalid type", () => {
 		expect(
-			isAgentSessionState({
-				type: "notAgentSessionState",
+			isAgentPersistData({
+				type: "notAgentPersistData",
 				runId: "run-1",
-				sessionState: {},
+				persistData: {},
 			}),
 		).toBe(false);
 	});
 
 	test("rejects non-string runId", () => {
 		expect(
-			isAgentSessionState({
-				type: "agentSessionState",
+			isAgentPersistData({
+				type: "agentPersistData",
 				runId: 42,
-				sessionState: {},
+				persistData: {},
 			}),
 		).toBe(false);
 	});
 
-	test("rejects non-object sessionState", () => {
+	test("rejects non-object persistData", () => {
 		expect(
-			isAgentSessionState({
-				type: "agentSessionState",
+			isAgentPersistData({
+				type: "agentPersistData",
 				runId: "run-1",
-				sessionState: "string",
+				persistData: "string",
 			}),
 		).toBe(false);
 		expect(
-			isAgentSessionState({
-				type: "agentSessionState",
+			isAgentPersistData({
+				type: "agentPersistData",
 				runId: "run-1",
-				sessionState: null,
+				persistData: null,
 			}),
 		).toBe(false);
 	});
 
 	test("rejects non-object input", () => {
-		expect(isAgentSessionState("string")).toBe(false);
-		expect(isAgentSessionState(42)).toBe(false);
-		expect(isAgentSessionState(null)).toBe(false);
+		expect(isAgentPersistData("string")).toBe(false);
+		expect(isAgentPersistData(42)).toBe(false);
+		expect(isAgentPersistData(null)).toBe(false);
 	});
 });

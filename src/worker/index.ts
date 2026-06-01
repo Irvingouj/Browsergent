@@ -11,10 +11,10 @@
 
 import type { LuaRunResult } from "@pi-oxide/extension-lua";
 import { formatError } from "../types/lua-utils";
+import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
-	SdkSessionState,
 	WorkerSettings,
 	WorkerToPanel,
 } from "../types/messages";
@@ -99,7 +99,7 @@ function handleAgentStart(
 	settings: WorkerSettings,
 	runId: string,
 	priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
-	priorSessionState?: SdkSessionState,
+	priorPersistData?: PersistData,
 ): void {
 	currentRunId = runId;
 
@@ -117,6 +117,13 @@ function handleAgentStart(
 
 	if (agentLoop) {
 		agentLoop.stop();
+	}
+
+	// Warn if priorMessages exist but no persistData
+	if (priorMessages.length > 0 && !priorPersistData) {
+		console.warn(
+			"Prior messages provided but no PersistData. Agent will start fresh — prior messages are for UI display only.",
+		);
 	}
 
 	agentLoop = new AgentLoop();
@@ -178,13 +185,13 @@ function handleAgentStart(
 				},
 			},
 			priorMessages,
-			priorSessionState,
+			priorPersistData,
 		)
-		.then(({ messages, sessionState }) => {
+		.then(({ messages, persistData }) => {
 			if (runId === currentRunId) {
 				post({ type: "agentHistory", runId, messages });
-				if (sessionState) {
-					post({ type: "agentSessionState", runId, sessionState });
+				if (persistData) {
+					post({ type: "agentPersistData", runId, persistData });
 				}
 			}
 		})
@@ -252,7 +259,7 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 				msg.settings,
 				msg.runId,
 				msg.priorMessages,
-				msg.priorSessionState,
+				msg.priorPersistData,
 			);
 			break;
 		case "agentStop":

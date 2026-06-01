@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, vi } from "vitest";
-import type { SessionState as SdkSessionState } from "@pi-oxide/pi-host-web";
+import type { PersistData } from "@pi-oxide/pi-host-web";
 import { SessionController } from "../../src/controllers/session-controller";
 import { MemoryStorage } from "../../src/storage/memory-storage";
 
@@ -344,7 +344,7 @@ describe("SessionController multi-session", () => {
 	});
 });
 
-describe("SessionController sdkSessionState", () => {
+describe("SessionController persistData", () => {
 	let storage: MemoryStorage;
 	let ctrl: SessionController;
 
@@ -353,23 +353,23 @@ describe("SessionController sdkSessionState", () => {
 		ctrl = new SessionController(storage);
 	});
 
-	test("saveSdkSessionState saves to active session when it exists", async () => {
+	test("savePersistData saves to active session when it exists", async () => {
 		await ctrl.init();
 		ctrl.hydrated = true;
-		const mockState = { someKey: "someValue" } as unknown as SdkSessionState;
-		await ctrl.saveSdkSessionState(mockState);
-		const result = await ctrl.loadSdkSessionState();
+		const mockState = { turn_number: 0, system_prompt: "test" } as unknown as PersistData;
+		await ctrl.savePersistData(mockState);
+		const result = await ctrl.loadPersistData();
 		expect(result).toEqual(mockState);
 	});
 
-	test("saveSdkSessionState creates minimal record when active session does not exist", async () => {
+	test("savePersistData creates minimal record when active session does not exist", async () => {
 		await ctrl.init();
 		ctrl.hydrated = true;
 		const activeId = ctrl.getActiveSessionId()!;
 		await storage.remove("sessions", `session_${activeId}`);
 
-		const mockState = { foo: "bar" } as unknown as SdkSessionState;
-		await ctrl.saveSdkSessionState(mockState);
+		const mockState = { turn_number: 1, system_prompt: "test2" } as unknown as PersistData;
+		await ctrl.savePersistData(mockState);
 
 		const data = await storage.get("sessions", `session_${activeId}`);
 		expect(data).toEqual({
@@ -378,46 +378,46 @@ describe("SessionController sdkSessionState", () => {
 			trace: [],
 			timestamp: expect.any(Number),
 			messageCount: 0,
-			sdkSessionState: mockState,
+			persistData: mockState,
 		});
 	});
 
-	test("saveSdkSessionState does nothing before init", async () => {
-		const mockState = { key: "value" } as unknown as SdkSessionState;
-		await ctrl.saveSdkSessionState(mockState);
+	test("savePersistData does nothing before init", async () => {
+		const mockState = { turn_number: 0, system_prompt: "test" } as unknown as PersistData;
+		await ctrl.savePersistData(mockState);
 		const keys = await storage.getAllKeys("sessions");
 		expect(keys).toEqual([]);
 	});
 
-	test("loadSdkSessionState returns saved state", async () => {
+	test("loadPersistData returns saved state", async () => {
 		await ctrl.init();
 		ctrl.hydrated = true;
-		const mockState = { myState: 123 } as unknown as SdkSessionState;
-		await ctrl.saveSdkSessionState(mockState);
-		const result = await ctrl.loadSdkSessionState();
+		const mockState = { turn_number: 2, system_prompt: "test3" } as unknown as PersistData;
+		await ctrl.savePersistData(mockState);
+		const result = await ctrl.loadPersistData();
 		expect(result).toEqual(mockState);
 	});
 
-	test("loadSdkSessionState returns null when no state exists", async () => {
+	test("loadPersistData returns null when no state exists", async () => {
 		await ctrl.init();
-		const result = await ctrl.loadSdkSessionState();
+		const result = await ctrl.loadPersistData();
 		expect(result).toBeNull();
 	});
 
-	test("saveSdkSessionState / loadSdkSessionState roundtrip", async () => {
+	test("savePersistData / loadPersistData roundtrip", async () => {
 		await ctrl.init();
 		ctrl.hydrated = true;
-		const mockState = { roundtrip: true, data: [1, 2, 3] } as unknown as SdkSessionState;
-		await ctrl.saveSdkSessionState(mockState);
-		const result = await ctrl.loadSdkSessionState();
+		const mockState = { turn_number: 3, system_prompt: "test4" } as unknown as PersistData;
+		await ctrl.savePersistData(mockState);
+		const result = await ctrl.loadPersistData();
 		expect(result).toEqual(mockState);
 	});
 
-	test("save preserves sdkSessionState", async () => {
+	test("save preserves persistData", async () => {
 		await ctrl.init();
 		ctrl.hydrated = true;
-		const mockState = { preserved: true } as unknown as SdkSessionState;
-		await ctrl.saveSdkSessionState(mockState);
+		const mockState = { turn_number: 4, system_prompt: "test5" } as unknown as PersistData;
+		await ctrl.savePersistData(mockState);
 
 		const messages = [
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
@@ -433,7 +433,61 @@ describe("SessionController sdkSessionState", () => {
 		];
 		await ctrl.save(messages, trace);
 
-		const result = await ctrl.loadSdkSessionState();
+		const result = await ctrl.loadPersistData();
 		expect(result).toEqual(mockState);
+	});
+
+	test("loadPersistData returns null and logs warning for old sdkSessionState shape", async () => {
+		await ctrl.init();
+		const activeId = ctrl.getActiveSessionId()!;
+		const oldState = { projection_state: "some_state", messages: [] };
+		await storage.set("sessions", `session_${activeId}`, {
+			id: activeId,
+			messages: [],
+			trace: [],
+			timestamp: Date.now(),
+			messageCount: 0,
+			sdkSessionState: oldState,
+		});
+
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const result = await ctrl.loadPersistData();
+		expect(result).toBeNull();
+		expect(warnSpy).toHaveBeenCalledWith(
+			"Old session state detected (SdkSessionState). Agent will start fresh. Chat history is preserved.",
+		);
+		warnSpy.mockRestore();
+	});
+
+	test("save() preserves existing persistData", async () => {
+		await ctrl.init();
+		ctrl.hydrated = true;
+		const activeId = ctrl.getActiveSessionId()!;
+		const mockState = { turn_number: 5, system_prompt: "test6" } as unknown as PersistData;
+		await storage.set("sessions", `session_${activeId}`, {
+			id: activeId,
+			messages: [{ id: "1", kind: "user" as const, text: "hi", timestamp: 1 }],
+			trace: [],
+			timestamp: Date.now(),
+			messageCount: 1,
+			persistData: mockState,
+		});
+
+		const messages = [
+			{ id: "2", kind: "user" as const, text: "hello", timestamp: 2 },
+		];
+		const trace = [
+			{
+				id: "t1",
+				step: 1,
+				status: "done" as const,
+				toolName: "run_lua",
+				timestamp: 1,
+			},
+		];
+		await ctrl.save(messages, trace);
+
+		const data = await storage.get("sessions", `session_${activeId}`);
+		expect(data.persistData).toEqual(mockState);
 	});
 });

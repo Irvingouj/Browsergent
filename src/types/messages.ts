@@ -1,11 +1,11 @@
 /** Panel <-> Worker message types. */
 
-import type { SessionState as SdkSessionState } from "@pi-oxide/pi-host-web";
+import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { LuaRunResult } from "@pi-oxide/extension-lua";
 
 export type { BrowsergentError };
-export type { SdkSessionState };
+export type { PersistData };
 
 // --- Panel -> Worker ---
 
@@ -21,7 +21,7 @@ export type PanelToWorker =
 			task: string;
 			settings: WorkerSettings;
 			priorMessages?: ConversationMessage[];
-			priorSessionState?: SdkSessionState;
+			priorPersistData?: PersistData;
 	  }
 	| { type: "agentStop"; runId?: string }
 	| { type: "agentReset" }
@@ -47,7 +47,7 @@ export type WorkerToPanel =
 	| { type: "agentTrace"; runId: string; entry: AgentTraceEntry }
 	| { type: "agentError"; runId: string; error: BrowsergentError }
 	| { type: "agentHistory"; runId: string; messages: ConversationMessage[] }
-	| { type: "agentSessionState"; runId: string; sessionState: SdkSessionState }
+	| { type: "agentPersistData"; runId: string; persistData: PersistData }
 	| { type: "luaOutput"; id: string; output: string }
 	| { type: "luaError"; id: string; error: string }
 	| { type: "luaRunRequest"; id: string; code: string };

@@ -1,4 +1,4 @@
-import type { SessionState as SdkSessionState } from "@pi-oxide/pi-host-web";
+import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type { StorageBackend } from "../storage/storage-backend";
 import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 
@@ -10,7 +10,9 @@ interface SessionData {
 	title?: string;
 	customTitle?: string;
 	messageCount: number;
-	sdkSessionState?: SdkSessionState;
+	persistData?: PersistData;
+	// Old field name — kept for migration reading
+	sdkSessionState?: unknown;
 }
 
 interface SessionMeta {
@@ -214,6 +216,9 @@ export class SessionController {
 				trace,
 				timestamp: Date.now(),
 				messageCount: messages.length,
+				// PRESERVE persistData from existing record — do not drop it
+				persistData: existing?.persistData,
+				// Keep old field for backward compatibility during migration period
 				sdkSessionState: existing?.sdkSessionState,
 			};
 			if (activeId) {
@@ -315,7 +320,7 @@ export class SessionController {
 		}
 	}
 
-	async saveSdkSessionState(sessionState: SdkSessionState): Promise<void> {
+	async savePersistData(persistData: PersistData): Promise<void> {
 		if (!this.hydrated) return;
 		try {
 			const activeId = this.meta?.activeSessionId;
@@ -325,7 +330,9 @@ export class SessionController {
 				`${SESSION_PREFIX}${activeId}`,
 			);
 			if (data) {
-				data.sdkSessionState = sessionState;
+				data.persistData = persistData;
+				// Clean up old field if present
+				delete (data as unknown as Record<string, unknown>).sdkSessionState;
 				await this.storage.set(
 					SESSION_STORE,
 					`${SESSION_PREFIX}${activeId}`,
@@ -338,7 +345,7 @@ export class SessionController {
 					trace: [],
 					timestamp: Date.now(),
 					messageCount: 0,
-					sdkSessionState: sessionState,
+					persistData,
 				};
 				await this.storage.set(
 					SESSION_STORE,
@@ -347,11 +354,11 @@ export class SessionController {
 				);
 			}
 		} catch (err) {
-			console.warn("SDK session state save failed:", err);
+			console.warn("Persist data save failed:", err);
 		}
 	}
 
-	async loadSdkSessionState(): Promise<SdkSessionState | null> {
+	async loadPersistData(): Promise<PersistData | null> {
 		try {
 			const activeId = this.meta?.activeSessionId;
 			if (!activeId) return null;
@@ -359,12 +366,37 @@ export class SessionController {
 				SESSION_STORE,
 				`${SESSION_PREFIX}${activeId}`,
 			);
-			if (data?.sdkSessionState) {
-				return data.sdkSessionState;
+
+			// Check for new field first
+			if (data?.persistData) {
+				return data.persistData;
 			}
+
+			// Migration: check for old SdkSessionState
+			if (data?.sdkSessionState) {
+				const oldState = data.sdkSessionState;
+				// Heuristic: old SdkSessionState has `projection_state` or lacks `T`/`A` fields
+				// New PersistData has `T` (transcript) and `A` (artifacts) fields
+				const isOldShape =
+					typeof oldState === "object" &&
+					oldState !== null &&
+					("projection_state" in oldState ||
+						!("T" in oldState || "A" in oldState || "turn_number" in oldState));
+
+				if (isOldShape) {
+					console.warn(
+						"Old session state detected (SdkSessionState). Agent will start fresh. Chat history is preserved.",
+					);
+					return null;
+				}
+
+				// If it looks like PersistData, try to use it
+				return oldState as PersistData;
+			}
+
 			return null;
 		} catch (err) {
-			console.warn("SDK session state load failed:", err);
+			console.warn("Persist data load failed:", err);
 			return null;
 		}
 	}

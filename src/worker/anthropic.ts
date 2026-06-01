@@ -1,5 +1,5 @@
 /**
- * AnthropicProvider — implements LlmProvider from @pi-oxide/pi-host-web.
+ * AnthropicProvider — streams LLM responses for the raw WASM host API.
  *
  * Converts SDK AgentMessage[] → Anthropic wire format, streams SSE back as
  * LlmChunk / LlmResult.  The LLM has ONE tool: run_lua.
@@ -10,12 +10,12 @@ import type {
 	Content,
 	LlmChunk,
 	LlmContext,
-	LlmProvider,
 	LlmResult,
-	LlmStream,
 	StopReason,
 	ToolDefinition,
-} from "@pi-oxide/pi-host-web";
+} from "@pi-oxide/pi-host-web/raw";
+
+import type { LlmStream } from "./llm-streamer";
 
 // ---------------------------------------------------------------------------
 // Anthropic wire-format helpers (file-local, never exported)
@@ -314,7 +314,7 @@ function toStopReason(raw: string | null): StopReason {
 // AnthropicProvider
 // ---------------------------------------------------------------------------
 
-export class AnthropicProvider implements LlmProvider {
+export class AnthropicProvider {
 	constructor(private config: AnthropicConfig) {}
 
 	async call(

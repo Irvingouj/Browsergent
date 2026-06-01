@@ -179,16 +179,16 @@ export function isAgentHistory(msg: unknown): msg is {
 	return true;
 }
 
-export function isAgentSessionState(msg: unknown): msg is {
-	type: "agentSessionState";
+export function isAgentPersistData(msg: unknown): msg is {
+	type: "agentPersistData";
 	runId: string;
-	sessionState: unknown;
+	persistData: unknown;
 } {
-	// SdkSessionState is an opaque SDK type; we only validate the envelope here.
+	// PersistData is an opaque SDK type; we only validate the envelope here.
 	if (!isObject(msg)) return false;
-	if (msg.type !== "agentSessionState") return false;
+	if (msg.type !== "agentPersistData") return false;
 	if (!isString(msg.runId)) return false;
-	if (!isObject(msg.sessionState)) return false;
+	if (!isObject(msg.persistData)) return false;
 	return true;
 }
 
@@ -231,7 +231,7 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isAgentTrace(msg) ||
 		isAgentError(msg) ||
 		isAgentHistory(msg) ||
-		isAgentSessionState(msg) ||
+		isAgentPersistData(msg) ||
 		isLuaOutput(msg) ||
 		isLuaError(msg) ||
 		isLuaRunRequest(msg)
