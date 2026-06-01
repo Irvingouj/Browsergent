@@ -2,7 +2,7 @@
 
 import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type { BrowsergentError } from "../errors/browsergent-error";
-import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import type { LuaRunResult } from "./lua-utils";
 
 export type { BrowsergentError };
 export type { PersistData };

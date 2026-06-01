@@ -13,10 +13,11 @@
 		"test:all": "vitest run && npx playwright test"
 	},
 	"dependencies": {
-		"@pi-oxide/extension-lua": "^0.4.0",
+		"@pi-oxide/extension-js": "file:../web-js/crates/extension-js/js",
 		"@pi-oxide/pi-host-web": "file:../pi-oxide/pi-host-web/pkg",
 		"marked": "^18.0.4",
 		"preact": "^10.25.0",
+		"zod": "^3.23.8",
 		"zustand": "^5.0.13"
 	},
 	"devDependencies": {

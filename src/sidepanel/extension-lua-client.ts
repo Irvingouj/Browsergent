@@ -1,18 +1,20 @@
 /**
- * Singleton adapter for @pi-oxide/extension-lua.
+ * Singleton adapter for @pi-oxide/extension-js.
  *
  * Owns the ExtensionSession lifecycle on the side panel main thread.
- * Both the agent (via worker relay) and the standalone Lua tab share
+ * Both the agent (via worker relay) and the standalone JS tab share
  * this single instance, with access serialized through a queue.
  *
- * Why singleton: extension-lua's runner uses a module-level AbortController.
+ * Why singleton: extension-js's runner uses a module-level AbortController.
  * Multiple ExtensionSession instances would race on the same abort signal.
  */
 
-import type { ExtensionSession as ExtensionSessionType } from "@pi-oxide/extension-lua";
-import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import type { JsRunResult, ExtensionSession as ExtensionSessionType } from "@pi-oxide/extension-js";
 
-const LUA_TIMEOUT_MS = 30_000;
+const JS_TIMEOUT_MS = 30_000;
+
+// Keep LuaRunResult as a local alias to minimize changes across the codebase
+export type LuaRunResult = JsRunResult;
 
 interface LuaRelayRequest {
 	type: "luaRunRequest";
@@ -63,7 +65,7 @@ export class ExtensionLuaClient {
 	async init(): Promise<void> {
 		if (this.initialized) return;
 		this.initPromise = (async () => {
-			const { ExtensionSession } = await import("@pi-oxide/extension-lua");
+			const { ExtensionSession } = await import("@pi-oxide/extension-js");
 			const [session, runner] = await ExtensionSession.init();
 			session.setFuelLimit(1_000_000);
 			this.session = session;
@@ -88,7 +90,7 @@ export class ExtensionLuaClient {
 							err instanceof Error
 								? err
 								: new Error(
-										typeof err === "string" ? err : "Lua execution failed",
+										typeof err === "string" ? err : "JS execution failed",
 									),
 						);
 					}
@@ -161,9 +163,9 @@ export class ExtensionLuaClient {
 					setTimeout(
 						() =>
 							reject(
-								new Error(`Lua execution timed out after ${LUA_TIMEOUT_MS}ms`),
+								new Error(`JS execution timed out after ${JS_TIMEOUT_MS}ms`),
 							),
-						LUA_TIMEOUT_MS,
+						JS_TIMEOUT_MS,
 					);
 				}),
 			]);

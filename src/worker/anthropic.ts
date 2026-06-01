@@ -2,7 +2,7 @@
  * AnthropicProvider — streams LLM responses for the raw WASM host API.
  *
  * Converts SDK AgentMessage[] → Anthropic wire format, streams SSE back as
- * LlmChunk / LlmResult.  The LLM has ONE tool: run_lua.
+ * LlmChunk / LlmResult.  The LLM has ONE tool: run_js.
  */
 
 import type {
@@ -97,61 +97,60 @@ function isStreamEvent(value: unknown): value is AnthropicStreamEvent {
 // Constants — kept for use by agent-loop.ts when creating the Agent
 // ---------------------------------------------------------------------------
 
-const BROWSERGENT_LUA_GUIDANCE = [
-	"Execute Lua code to control the browser via extension-lua runtime.",
-	"ALWAYS call get_doc first when you need any tab.*, chrome.*, json, runtime, or web API. Do not guess function names, argument shapes, or return types.",
+const BROWSERGENT_JS_GUIDANCE = [
+	"Execute JavaScript code to control the browser via the extension-js runtime.",
+	"ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. Do not guess function names, argument shapes, or return types.",
 	"",
 	"## Browsergent-specific rules",
-	"- The target web page is controlled through tab.* APIs. Start with `local tab_id = tab.current()`.",
-	"- Use `tab.snapshot(tab_id)` to get a human-readable page summary for observation.",
-	"- Use `tab.snapshot_data(tab_id)` only when you need structured element nodes with ref_ids.",
-	"- Use `tab.url(tab_id)` and `tab.title(tab_id)` for page metadata.",
-	"- Use `tab.open(url)` to navigate/open a URL when the user asks to go somewhere.",
+	"- The target web page is controlled through page.* APIs.",
+	"- Use `await page.snapshot()` to get a human-readable page summary for observation.",
+	"- Use `await page.snapshot_data()` only when you need structured element nodes with ref_ids.",
+	"- Use `await page.url()` and `await page.title()` for page metadata.",
+	"- Use `await page.goto(url)` to navigate/open a URL when the user asks to go somewhere.",
 	"- Ref_ids from snapshot_data are snapshot-scoped. Never guess them, and refresh the snapshot_data before acting if the page changed.",
-	"- You can combine multiple tab.* calls in one Lua block when the sequence is clear.",
-	"- Use `print(...)` to return concise observations to the trace.",
-	"- Use tab.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.",
-	"- Do not use `tab.evaluate`, `tab.execute_script`, or `chrome.scripting.executeScript`; Browsergent forbids arbitrary JS execution.",
+	"- You can combine multiple page.* calls in one async function block when the sequence is clear.",
+	"- Use `console.log(...)` or `web.log(...)` to return concise observations to the trace.",
+	"- Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.",
+	"- Do not use `page.evaluate`, `chrome.scripting.executeScript`, or `tab.evaluate`; Browsergent forbids arbitrary JS execution.",
 	"",
 	"## Common patterns",
 	"Current page:",
-	"```lua",
-	"local tab_id = tab.current()",
-	'print("Tab:", tab_id)',
-	'print("URL:", tab.url(tab_id))',
-	'print("Title:", tab.title(tab_id))',
-	'print(tab.snapshot(tab_id))',
+	"```js",
+	'const tabId = await page.active_tab();',
+	'console.log("Tab:", tabId);',
+	'console.log("URL:", await page.url());',
+	'console.log("Title:", await page.title());',
+	'console.log(await page.snapshot());',
 	"```",
 	"",
 	"Navigate:",
-	"```lua",
-	'tab.open("https://www.linkedin.com")',
+	"```js",
+	'await page.goto("https://www.linkedin.com");',
 	"```",
 	"",
 	"Inspect and interact (structured):",
-	"```lua",
-	"local tab_id = tab.current()",
-	"local data = tab.snapshot_data(tab_id)",
-	"-- choose a real ref_id from data, then:",
-	'-- tab.fill(tab_id, "e3", "search text")',
-	'-- tab.click(tab_id, "e4")',
-	"-- tab.type(tab_id, ref_id, text)",
-	"-- tab.press(tab_id, ref_id, key)",
-	"-- tab.select(tab_id, ref_id, value)",
-	"-- tab.check(tab_id, ref_id)",
-	"-- tab.scroll(tab_id, direction, amount)",
+	"```js",
+	'const data = await page.snapshot_data();',
+	"// choose a real ref_id from data, then:",
+	'// await page.fill("e3", "search text");',
+	'// await page.click("e4");',
+	"// await page.type(ref_id, text);",
+	"// await page.press(key);",
+	"// await page.select(ref_id, value);",
+	"// await page.check(ref_id);",
+	"// await page.scroll(direction, amount);",
 	"```",
 ].join("\n");
 
 /** Tool definition in Anthropic wire format — used when constructing the agent. */
 export const BROWSER_TOOLS: AnthropicTool[] = [
 	{
-		name: "run_lua",
-		description: BROWSERGENT_LUA_GUIDANCE,
+		name: "run_js",
+		description: BROWSERGENT_JS_GUIDANCE,
 		input_schema: {
 			type: "object",
 			properties: {
-				code: { type: "string", description: "Lua code to execute" },
+				code: { type: "string", description: "JavaScript code to execute" },
 			},
 			required: ["code"],
 		},
@@ -159,7 +158,7 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 	{
 		name: "get_doc",
 		description:
-			"Return extension-lua API documentation. Call this BEFORE every run_lua that uses APIs you are not 100% sure about. Prefer get_doc over guessing.",
+			"Return extension-js API documentation. Call this BEFORE every run_js that uses APIs you are not 100% sure about. Prefer get_doc over guessing.",
 		input_schema: {
 			type: "object",
 			properties: {
@@ -171,26 +170,26 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 				namespace: {
 					type: "string",
 					description:
-						"Optional namespace filter, such as tab, chrome.tabs, json, runtime, or web.",
+						"Optional namespace filter, such as page, chrome, web, fs, or sidepanel.",
 				},
 			},
 		},
 	},
 ];
 
-export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating Lua code via the run_lua tool.
+export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating JavaScript code via the run_js tool.
 
-Use get_doc proactively. Before any run_lua that touches APIs you are not 100% sure about, call get_doc to verify exact function names, argument order, and return types. Prefer get_doc over guessing.
+Use get_doc proactively. Before any run_js that touches APIs you are not 100% sure about, call get_doc to verify exact function names, argument order, and return types. Prefer get_doc over guessing.
 
 Key rules:
 1. Observe before acting.
 2. Use latest snapshot refs — never guess ref_ids.
-3. Prefer tab.snapshot() for readable page observation; use tab.snapshot_data() only when structured nodes are needed.
+3. Prefer page.snapshot() for readable page observation; use page.snapshot_data() only when structured nodes are needed.
 4. Verify after action.
 5. Use docs instead of guessing.
 
-Use tab.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
-Do not use tab.evaluate, tab.execute_script, or chrome.scripting.executeScript.`;
+Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
+Do not use page.evaluate, chrome.scripting.executeScript, or tab.evaluate.`;
 
 // ---------------------------------------------------------------------------
 // Config type — used by worker/index.ts

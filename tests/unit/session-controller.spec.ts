@@ -66,7 +66,7 @@ describe("SessionController.load", () => {
 				id: "t1",
 				step: 1,
 				status: "done" as const,
-				toolName: "run_lua",
+				toolName: "run_js",
 				timestamp: 1,
 			},
 		];
@@ -114,7 +114,7 @@ describe("SessionController multi-session", () => {
 					id: "t1",
 					step: 1,
 					status: "done",
-					toolName: "run_lua",
+					toolName: "run_js",
 					timestamp: 1,
 				},
 			],
@@ -153,7 +153,7 @@ describe("SessionController multi-session", () => {
 				id: "t1",
 				step: 1,
 				status: "done" as const,
-				toolName: "run_lua",
+				toolName: "run_js",
 				timestamp: 1,
 			},
 		];
@@ -175,7 +175,7 @@ describe("SessionController multi-session", () => {
 				id: "t1",
 				step: 1,
 				status: "done" as const,
-				toolName: "run_lua",
+				toolName: "run_js",
 				timestamp: 1,
 			},
 		];
@@ -427,7 +427,7 @@ describe("SessionController persistData", () => {
 				id: "t1",
 				step: 1,
 				status: "done" as const,
-				toolName: "run_lua",
+				toolName: "run_js",
 				timestamp: 1,
 			},
 		];
@@ -481,7 +481,7 @@ describe("SessionController persistData", () => {
 				id: "t1",
 				step: 1,
 				status: "done" as const,
-				toolName: "run_lua",
+				toolName: "run_js",
 				timestamp: 1,
 			},
 		];

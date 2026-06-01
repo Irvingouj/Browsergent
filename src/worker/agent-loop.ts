@@ -1,7 +1,7 @@
 import { Agent } from "@pi-oxide/pi-host-web";
 import type { AgentRunResult } from "@pi-oxide/pi-host-web";
 import type { PersistData } from "@pi-oxide/pi-host-web/raw";
-import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import type { LuaRunResult } from "../types/lua-utils";
 import type { AgentStatus, AgentTraceEntry } from "../types/messages";
 import type { AnthropicConfig } from "./anthropic";
 import { SYSTEM_PROMPT } from "./anthropic";

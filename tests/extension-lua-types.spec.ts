@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "vitest";
-import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import type { LuaRunResult } from "../src/types/lua-utils";
 import { formatCellResult, formatError } from "../src/types/lua-utils";
 
 type WasmCellError = Extract<LuaRunResult, { status: "err" }>["error"];
@@ -12,10 +12,7 @@ describe("formatCellResult", () => {
 	test("formats stdout-only result", () => {
 		const cell: LuaRunResult = {
 			status: "ok",
-			stdout: [
-				{ type: "stdout", line: "hello" },
-				{ type: "auto", line: "world" },
-			],
+			stdout: ["hello", "world"],
 			stderr: [],
 			result: null,
 			execution_count: 1,
@@ -37,7 +34,7 @@ describe("formatCellResult", () => {
 	test("combines stdout and result", () => {
 		const cell: LuaRunResult = {
 			status: "ok",
-			stdout: [{ type: "stdout", line: "running..." }],
+			stdout: ["running..."],
 			stderr: [],
 			result: "done",
 			execution_count: 3,
@@ -115,23 +112,6 @@ describe("formatCellResult", () => {
 		);
 	});
 
-	test("formats strict_mode error", () => {
-		const error: WasmCellError = {
-			kind: "strict_mode",
-			variable: "undefined_var",
-		};
-		const cell: LuaRunResult = {
-			status: "err",
-			stdout: [],
-			stderr: [],
-			error,
-			execution_count: 7,
-		};
-		expect(formatCellResult(cell)).toBe(
-			"[strict mode] undefined variable: undefined_var",
-		);
-	});
-
 	test("formats fuel_exhausted error", () => {
 		const error: WasmCellError = { kind: "fuel_exhausted" };
 		const cell: LuaRunResult = {
@@ -198,10 +178,6 @@ describe("formatError", () => {
 			{
 				error: { kind: "runtime", message: "oops", line: null },
 				expected: "[runtime error] oops",
-			},
-			{
-				error: { kind: "strict_mode", variable: "x" },
-				expected: "[strict mode] undefined variable: x",
 			},
 			{
 				error: { kind: "fuel_exhausted" },

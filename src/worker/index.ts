@@ -3,13 +3,13 @@
  * Owns agent loop state, WASM loading, and message routing.
  *
  * The Worker never touches chrome.* APIs directly.
- * All Lua execution is relayed to the main thread via postMessage,
- * where ExtensionSession (from @pi-oxide/extension-lua) runs.
+ * All JS execution is relayed to the main thread via postMessage,
+ * where ExtensionSession (from @pi-oxide/extension-js) runs.
  */
 
 /// <reference lib="webworker" />
 
-import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import type { LuaRunResult } from "../types/lua-utils";
 import { formatError } from "../types/lua-utils";
 import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type {
@@ -237,7 +237,7 @@ async function handleLuaRun(id: string, code: string): Promise<void> {
 		const result = await relayLuaExecution(code);
 		const output = result.status === "err"
 			? formatError(result.error)
-			: result.stdout.map((s) => s.line).join("\n");
+			: result.stdout.join("\n");
 		post({ type: "luaOutput", id, output });
 	} catch (err) {
 		post({

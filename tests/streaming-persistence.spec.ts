@@ -204,7 +204,7 @@ test("stop preserves partial streamed text", async () => {
 	mock.server.close();
 });
 
-test("text before run_lua tool call continues after run_lua tool result", async () => {
+test("text before run_js tool call continues after run_js tool result", async () => {
 	const mock = startMockAnthropicServer({
 		responses: [
 			{
@@ -213,7 +213,7 @@ test("text before run_lua tool call continues after run_lua tool result", async 
 					`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
 					`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "I'll check the page." } })}\n\n`,
 					`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
-					`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_1", name: "run_lua", input: {} } })}\n\n`,
+					`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_1", name: "run_js", input: {} } })}\n\n`,
 					`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"code":"print(\'checked\')"}' } })}\n\n`,
 					`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 1 })}\n\n`,
 				],

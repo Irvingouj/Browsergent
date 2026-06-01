@@ -8,10 +8,10 @@ export default defineConfig({
 	resolve: {
 		alias: [
 			{
-				find: /.*\/worker\.ts$/,
+				find: "@pi-oxide/extension-js",
 				replacement: path.resolve(
 					__dirname,
-					"node_modules/@pi-oxide/extension-lua/dist/worker.js",
+					"node_modules/@pi-oxide/extension-js/index.ts",
 				),
 			},
 		],
@@ -19,19 +19,19 @@ export default defineConfig({
 	plugins: [
 		preact(),
 		{
-			name: "copy-extension-lua-assets",
+			name: "copy-extension-js-assets",
 			writeBundle(options) {
 				const outDir = options.dir ?? "dist";
 				const src = path.resolve(
 					__dirname,
-					"node_modules/@pi-oxide/extension-lua/dist/content-script.js",
+					"node_modules/@pi-oxide/extension-js/dist/content-script.js",
 				);
 				const dest = path.resolve(outDir, "content-script.js");
 				try {
 					copyFileSync(src, dest);
 				} catch {
 					console.warn(
-						"extension-lua content-script.js not found, skipping copy",
+						"extension-js content-script.js not found, skipping copy",
 					);
 				}
 			},

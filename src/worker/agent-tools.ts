@@ -1,25 +1,25 @@
 import type { AgentTools, AgentToolDefinition } from "@pi-oxide/pi-host-web";
-import type { LuaRunResult } from "@pi-oxide/extension-lua";
+import type { LuaRunResult } from "../types/lua-utils";
 import { formatCellResult } from "../types/lua-utils";
 
-interface ExtensionLuaApiEntry {
+interface ExtensionJsApiEntry {
 	namespace: string;
 	name: string;
 	action: string | null;
 	description: string;
 	params: ReadonlyArray<{
 		name: string;
-		lua_type: string;
+		js_type: string;
 		required: boolean;
 		description: string;
 	}>;
 	returns: {
-		lua_type: string;
+		js_type: string;
 		description: string;
 	};
 }
 
-function isApiEntry(value: unknown): value is ExtensionLuaApiEntry {
+function isApiEntry(value: unknown): value is ExtensionJsApiEntry {
 	if (typeof value !== "object" || value === null) return false;
 	const entry = value as Record<string, unknown>;
 	return (
@@ -33,7 +33,7 @@ function isApiEntry(value: unknown): value is ExtensionLuaApiEntry {
 	);
 }
 
-function renderMarkdownDocs(entries: ExtensionLuaApiEntry[]): string {
+function renderMarkdownDocs(entries: ExtensionJsApiEntry[]): string {
 	if (entries.length === 0) return "No API documentation matched that filter.";
 	return entries
 		.map((entry) => {
@@ -43,7 +43,7 @@ function renderMarkdownDocs(entries: ExtensionLuaApiEntry[]): string {
 					: entry.params
 							.map((param) => {
 								const required = param.required ? "required" : "optional";
-								return `- \`${param.name}\` (\`${param.lua_type}\`, ${required}): ${param.description}`;
+								return `- \`${param.name}\` (\`${param.js_type}\`, ${required}): ${param.description}`;
 							})
 							.join("\n");
 			const actionTag = entry.action ? ` _(action: \`${entry.action}\`)_` : "";
@@ -56,16 +56,16 @@ function renderMarkdownDocs(entries: ExtensionLuaApiEntry[]): string {
 				"",
 				params,
 				"",
-				`**Returns** \`${entry.returns.lua_type}\`: ${entry.returns.description}`,
+				`**Returns** \`${entry.returns.js_type}\`: ${entry.returns.description}`,
 			].join("\n");
 		})
 		.join("\n\n");
 }
 
-function renderNamespaceIndex(entries: ExtensionLuaApiEntry[]): string {
+function renderNamespaceIndex(entries: ExtensionJsApiEntry[]): string {
 	if (entries.length === 0) return "No API documentation matched that filter.";
 
-	const byNamespace = new Map<string, ExtensionLuaApiEntry[]>();
+	const byNamespace = new Map<string, ExtensionJsApiEntry[]>();
 	for (const entry of entries) {
 		const list = byNamespace.get(entry.namespace) ?? [];
 		list.push(entry);
@@ -79,8 +79,8 @@ function renderNamespaceIndex(entries: ExtensionLuaApiEntry[]): string {
 			const functions = list
 				.map((e) => {
 					const sig = e.action
-						? `${e.name}(...) -> ${e.returns.lua_type}`
-						: `${e.name} = ${e.returns.lua_type}`;
+						? `${e.name}(...) -> ${e.returns.js_type}`
+						: `${e.name} = ${e.returns.js_type}`;
 					return `- \`${sig}\``;
 				})
 				.join("\n");
@@ -89,17 +89,18 @@ function renderNamespaceIndex(entries: ExtensionLuaApiEntry[]): string {
 		.join("\n\n");
 }
 
-async function getExtensionLuaDocs(
+async function getExtensionJsDocs(
 	format: string,
 	namespace?: string,
 ): Promise<string> {
 	if (typeof self !== "undefined" && typeof window === "undefined") {
 		(globalThis as unknown as Record<string, unknown>).window = self;
 	}
-	const { generateApiDocsJson } = await import("@pi-oxide/extension-lua");
+	const { generateApiDocs } = await import("@pi-oxide/extension-js");
 	const normalizedFormat = format === "json" ? "json" : "markdown";
 
-	const allEntries = generateApiDocsJson().filter(isApiEntry);
+	const rawDocs = generateApiDocs("json");
+	const allEntries = JSON.parse(rawDocs).filter(isApiEntry);
 
 	const wanted = namespace?.trim();
 	if (!wanted) {
@@ -109,7 +110,7 @@ async function getExtensionLuaDocs(
 	}
 
 	const filtered = allEntries.filter(
-		(entry) =>
+		(entry: ExtensionJsApiEntry) =>
 			entry.namespace === wanted ||
 			entry.namespace.startsWith(`${wanted}.`) ||
 			`${entry.namespace}.${entry.name}`.startsWith(`${wanted}.`),
@@ -127,32 +128,60 @@ function truncateToolResult(text: string, maxChars: number): string {
 	return `${text.slice(0, head)}\n\n... [truncated ${text.length - maxChars} chars] ...\n\n${text.slice(-tail)}`;
 }
 
-const RUN_LUA_DESCRIPTION = `Execute Lua code to control the browser via extension-lua runtime.
-ALWAYS call get_doc first when you need any tab.*, chrome.*, json, runtime, or web API. Do not guess function names, argument shapes, or return types.
+const RUN_JS_DESCRIPTION = `Execute JavaScript code to control the browser via the extension-js runtime.
+ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. Do not guess function names, argument shapes, or return types.
 
 ## Browsergent-specific rules
-- The target web page is controlled through tab.* APIs. Start with \`local tab_id = tab.current()\`.
-- Use \`tab.snapshot(tab_id)\` to get a human-readable page summary for observation.
-- Use \`tab.snapshot_data(tab_id)\` only when you need structured element nodes with ref_ids.
-- Use \`tab.url(tab_id)\` and \`tab.title(tab_id)\` for page metadata.
-- Use \`tab.open(url)\` to navigate/open a URL when the user asks to go somewhere.
+- The target web page is controlled through page.* APIs.
+- Use \`await page.snapshot()\` to get a human-readable page summary for observation.
+- Use \`await page.snapshot_data()\` only when you need structured element nodes with ref_ids.
+- Use \`await page.url()\` and \`await page.title()\` for page metadata.
+- Use \`await page.goto(url)\` to navigate/open a URL when the user asks to go somewhere.
 - Ref_ids from snapshot_data are snapshot-scoped. Never guess them, and refresh the snapshot_data before acting if the page changed.
-- You can combine multiple tab.* calls in one Lua block when the sequence is clear.
-- Use \`print(...)\` to return concise observations to the trace.
-- Use tab.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
-- Do not use \`tab.evaluate\`, \`tab.execute_script\`, or \`chrome.scripting.executeScript\`; Browsergent forbids arbitrary JS execution.`;
+- You can combine multiple page.* calls in one async function block when the sequence is clear.
+- Use \`console.log(...)\` or \`web.log(...)\` to return concise observations to the trace.
+- Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
+- Do not use \`page.evaluate\`, \`chrome.scripting.executeScript\`, or \`tab.evaluate\`; Browsergent forbids arbitrary JS execution outside the sandboxed runtime.
+
+## Common patterns
+Current page:
+\`\`\`js
+const tabId = await page.active_tab();
+console.log("Tab:", tabId);
+console.log("URL:", await page.url());
+console.log("Title:", await page.title());
+console.log(await page.snapshot());
+\`\`\`
+
+Navigate:
+\`\`\`js
+await page.goto("https://www.linkedin.com");
+\`\`\`
+
+Inspect and interact (structured):
+\`\`\`js
+const data = await page.snapshot_data();
+// choose a real ref_id from data, then:
+// await page.fill("e3", "search text");
+// await page.click("e4");
+// await page.type(ref_id, text);
+// await page.press(key);
+// await page.select(ref_id, value);
+// await page.check(ref_id);
+// await page.scroll(direction, amount);
+\`\`\``;
 
 export function createAgentTools(
 	runLua: (code: string) => Promise<LuaRunResult>,
 ): AgentTools {
 	const definitions: AgentToolDefinition[] = [
 		{
-			name: "run_lua",
-			description: RUN_LUA_DESCRIPTION,
+			name: "run_js",
+			description: RUN_JS_DESCRIPTION,
 			inputSchema: {
 				type: "object",
 				properties: {
-					code: { type: "string", description: "Lua code to execute" },
+					code: { type: "string", description: "JavaScript code to execute" },
 				},
 				required: ["code"],
 			},
@@ -160,7 +189,7 @@ export function createAgentTools(
 				const args = input as Record<string, unknown>;
 				const code = args.code;
 				if (typeof code !== "string" || !code.trim()) {
-					return "run_lua requires a non-empty 'code' string";
+					return "run_js requires a non-empty 'code' string";
 				}
 				const result = await runLua(code);
 				const text = formatCellResult(result);
@@ -170,7 +199,7 @@ export function createAgentTools(
 		{
 			name: "get_doc",
 			description:
-				"Return extension-lua API documentation. Call this BEFORE every run_lua that uses APIs you are not 100% sure about.\n\nWorkflow:\n1. Call get_doc with no arguments to get a compact index of all namespaces.\n2. Call get_doc with namespace='tab' (or whichever) to get full details.\n\nNever guess function names or argument shapes — always verify with get_doc first.",
+				"Return extension-js API documentation. Call this BEFORE every run_js that uses APIs you are not 100% sure about.\n\nWorkflow:\n1. Call get_doc with no arguments to get a compact index of all namespaces.\n2. Call get_doc with namespace='page' (or whichever) to get full details.\n\nNever guess function names or argument shapes — always verify with get_doc first.",
 			inputSchema: {
 				type: "object",
 				properties: {
@@ -182,7 +211,7 @@ export function createAgentTools(
 					namespace: {
 						type: "string",
 						description:
-							"Namespace to get full docs for, such as tab, chrome.tabs, json, runtime, or web. Omit to get the compact index.",
+							"Namespace to get full docs for, such as page, chrome, web, fs, or sidepanel. Omit to get the compact index.",
 					},
 				},
 			},
@@ -190,7 +219,7 @@ export function createAgentTools(
 				const args = input as Record<string, unknown>;
 				const format = typeof args.format === "string" ? args.format : "markdown";
 				const namespace = typeof args.namespace === "string" ? args.namespace : undefined;
-				const docs = await getExtensionLuaDocs(format, namespace);
+				const docs = await getExtensionJsDocs(format, namespace);
 				return truncateToolResult(docs, 50000);
 			},
 		},

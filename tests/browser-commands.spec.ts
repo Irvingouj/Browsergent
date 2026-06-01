@@ -1,7 +1,7 @@
 /**
- * Tests for extension-lua content script.
+ * Tests for extension-js content script.
  *
- * The content script is now provided by @pi-oxide/extension-lua.
+ * The content script is now provided by @pi-oxide/extension-js.
  * It uses a message-based protocol via chrome.runtime.onMessage
  * instead of __browsergentExecuteCommand.
  *
@@ -50,7 +50,7 @@ const FORM_HTML = `
 </html>
 `;
 
-/** Inject extension-lua content script into a page. */
+/** Inject extension-js content script into a page. */
 async function injectContentScript(
 	page: import("@playwright/test").Page,
 ): Promise<void> {
@@ -64,7 +64,7 @@ async function injectContentScript(
 	await page.addScriptTag({ content: `(function(){${plain}})()` });
 }
 
-test("extension-lua content script injects without error", async () => {
+test("extension-js content script injects without error", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, FORM_HTML);
 
@@ -80,7 +80,7 @@ test("extension-lua content script injects without error", async () => {
 	await close();
 });
 
-test("extension-lua content script assigns ref IDs to interactive elements", async () => {
+test("extension-js content script assigns ref IDs to interactive elements", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, FORM_HTML);
 	await injectContentScript(testPage);

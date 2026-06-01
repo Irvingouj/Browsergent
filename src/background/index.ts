@@ -1,8 +1,8 @@
 /**
  * Background service worker.
  *
- * After the extension-lua migration, browser command routing is handled
- * by extension-lua's runner directly from the side panel main thread.
+ * Browser command routing is handled by extension-js's runner directly
+ * from the side panel main thread.
  * This service worker only handles side panel opening and tab tracking.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Tests for extension-lua content script (from @pi-oxide/extension-lua).
+ * Tests for extension-js content script (from @pi-oxide/extension-js).
  *
  * Validates that the content script correctly:
  * - Injects and initializes on a page
@@ -55,7 +55,7 @@ async function injectExtensionLuaContentScript(
 	await page.addScriptTag({ content: `(function(){${plain}})()` });
 }
 
-test("extension-lua content script initializes on page", async () => {
+test("extension-js content script initializes on page", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, TEST_FORM_HTML);
 	await injectExtensionLuaContentScript(testPage);
@@ -69,7 +69,7 @@ test("extension-lua content script initializes on page", async () => {
 	await close();
 });
 
-test("extension-lua content script assigns data-ref-id attributes", async () => {
+test("extension-js content script assigns data-ref-id attributes", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, TEST_FORM_HTML);
 	await injectExtensionLuaContentScript(testPage);

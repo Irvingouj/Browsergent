@@ -31,7 +31,7 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
 		];
 		const trace = [
-			{ id: "t1", step: 1, status: "done" as const, toolName: "run_lua", timestamp: 1 },
+			{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 },
 		];
 		await controller.save(messages, trace);
 		const result = await controller.load();
@@ -42,7 +42,7 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 
 	test("clear() removes data", async () => {
 		const messages = [{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 }];
-		const trace = [{ id: "t1", step: 1, status: "done" as const, toolName: "run_lua", timestamp: 1 }];
+		const trace = [{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 }];
 		await controller.save(messages, trace);
 		await controller.saveHistory([{ role: "user" as const, content: "hi" }]);
 
@@ -118,7 +118,7 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
 		];
 		const trace = [
-			{ id: "t1", step: 1, status: "done" as const, toolName: "run_lua", timestamp: 1 },
+			{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 },
 		];
 		await controller.save(messages, trace);
 		const result = await controller.load();
