@@ -44,42 +44,10 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 		const messages = [{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 }];
 		const trace = [{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 }];
 		await controller.save(messages, trace);
-		await controller.saveHistory([{ role: "user" as const, content: "hi" }]);
 
 		await controller.clear();
 
 		expect(await controller.load()).toBeNull();
-		expect(await controller.loadHistory()).toBeNull();
-	});
-
-	test("saveHistory() / loadHistory() roundtrip", async () => {
-		const history = [
-			{ role: "user" as const, content: "hi" },
-			{ role: "assistant" as const, content: "hello" },
-		];
-		await controller.saveHistory(history);
-		const result = await controller.loadHistory();
-		expect(result).toEqual(history);
-	});
-
-	test("loadHistory() filters invalid entries", async () => {
-		await storage.set("history", "current", {
-			id: "current",
-			timestamp: Date.now(),
-			messages: [
-				{ role: "user", content: "valid" },
-				{ role: "invalid", content: "bad" },
-				null,
-				{ role: "assistant", text: "missing content" },
-			],
-		});
-		const result = await controller.loadHistory();
-		expect(result).toEqual([{ role: "user", content: "valid" }]);
-	});
-
-	test("loadHistory() returns null when empty", async () => {
-		const result = await controller.loadHistory();
-		expect(result).toBeNull();
 	});
 
 	test("load() rejects malformed session", async () => {
@@ -127,15 +95,13 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 		expect(result?.trace).toEqual(trace);
 	});
 
-	test("clear() removes active session and history", async () => {
+	test("clear() removes active session", async () => {
 		await controller.save(
 			[{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 }],
 			[],
 		);
-		await controller.saveHistory([{ role: "user" as const, content: "hi" }]);
 		await controller.clear();
 		expect(await controller.load()).toBeNull();
-		expect(await controller.loadHistory()).toBeNull();
 	});
 
 	test("createSession() creates a new session and switches active", async () => {
@@ -168,13 +134,12 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 		]);
 	});
 
-	test("deleteSession() removes session and history", async () => {
+	test("deleteSession() removes session", async () => {
 		const id1 = controller.getActiveSessionId();
 		await controller.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
 			[],
 		);
-		await controller.saveHistory([{ role: "user", content: "hi" }]);
 		const id2 = await controller.createSession();
 		await controller.save(
 			[{ id: "2", kind: "user" as const, text: "b", timestamp: 2 }],
@@ -218,29 +183,4 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 		expect(list[0].title).toBe("My Title");
 	});
 
-	test("saveHistory() / loadHistory() roundtrip", async () => {
-		const history = [
-			{ role: "user" as const, content: "hi" },
-			{ role: "assistant" as const, content: "hello" },
-		];
-		await controller.saveHistory(history);
-		const result = await controller.loadHistory();
-		expect(result).toEqual(history);
-	});
-
-	test("loadHistory() filters invalid entries", async () => {
-		const id = controller.getActiveSessionId();
-		await storage.set("history", `session_${id}`, {
-			id: `session_${id}`,
-			timestamp: Date.now(),
-			messages: [
-				{ role: "user", content: "valid" },
-				{ role: "invalid", content: "bad" },
-				null,
-				{ role: "assistant", text: "missing content" },
-			],
-		});
-		const result = await controller.loadHistory();
-		expect(result).toEqual([{ role: "user", content: "valid" }]);
-	});
 });
