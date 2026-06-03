@@ -10,6 +10,7 @@ import type {
 import type { AnthropicConfig } from "./anthropic";
 import { AnthropicProvider } from "./anthropic";
 import type { LlmStream } from "./llm-streamer";
+import { streamLog } from "../utils/stream-logger";
 
 import type {
 	AgentMessage,
@@ -82,7 +83,11 @@ export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 				if (signal?.aborted) return;
 
 				switch (chunk.kind) {
+					case "start":
+						yield { type: "start", payload: chunk };
+						break;
 					case "text_delta":
+						streamLog("model.yield_delta", { len: chunk.text.length });
 						yield { type: "text_delta", payload: chunk.text };
 						break;
 					case "tool_call_delta":

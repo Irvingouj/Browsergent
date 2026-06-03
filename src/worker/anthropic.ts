@@ -16,6 +16,7 @@ import type {
 } from "@pi-oxide/pi-host-web/raw";
 
 import type { LlmStream } from "./llm-streamer";
+import { streamLog } from "../utils/stream-logger";
 
 // ---------------------------------------------------------------------------
 // Anthropic wire-format helpers (file-local, never exported)
@@ -432,7 +433,10 @@ export class AnthropicProvider {
 					}
 
 					const { done, value } = await reader.read();
-					if (done) break;
+					if (done) {
+						streamLog("anthropic.sse_done");
+						break;
+					}
 
 					buffer += decoder.decode(value, { stream: true });
 
@@ -467,6 +471,7 @@ export class AnthropicProvider {
 
 						switch (parsed.type) {
 							case "message_start": {
+								streamLog("anthropic.sse_start");
 								enqueue({
 									kind: "start",
 									content: [],
@@ -502,6 +507,7 @@ export class AnthropicProvider {
 
 							case "content_block_delta": {
 								if (parsed.delta.type === "text_delta") {
+									streamLog("anthropic.sse_delta", { len: parsed.delta.text.length, text: parsed.delta.text.slice(0, 30) });
 									textBlocks.push({
 										type: "text",
 										text: parsed.delta.text,

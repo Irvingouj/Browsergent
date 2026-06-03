@@ -21,7 +21,8 @@ export type BrowsergentErrorCode =
 	| "E_CONTENT_SCRIPT"
 	| "E_PROTOCOL"
 	| "E_AGENT_RUN"
-	| "E_UNKNOWN";
+	| "E_UNKNOWN"
+	| "agent_error";
 
 export interface BrowsergentError {
 	code: BrowsergentErrorCode;
