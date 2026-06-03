@@ -1,17 +1,18 @@
-import { Agent } from "@pi-oxide/pi-host-web";
+import { Agent, indexedDbStore } from "@pi-oxide/pi-host-web";
 import type { AgentRunResult } from "@pi-oxide/pi-host-web";
-import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type { LuaRunResult } from "../types/lua-utils";
 import type { AgentStatus, AgentTraceEntry } from "../types/messages";
 import type { AnthropicConfig } from "./anthropic";
 import { SYSTEM_PROMPT } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
 import { createAgentTools } from "./agent-tools";
+import { streamLog } from "../utils/stream-logger";
 
 export interface AgentLoopCallbacks {
 	onStatus: (status: AgentStatus, reason?: string) => void;
-	onMessage: (kind: "user" | "assistant" | "system", text: string) => void;
+	onMessage: (kind: "user" | "assistant" | "system", text: string, id?: string) => void;
 	onTextDelta?: (messageId: string, text: string) => void;
+	onMessageEnd?: (messageId: string) => void;
 	onTrace: (entry: AgentTraceEntry) => void;
 	onError: (code: string, message: string) => void;
 	runLua: (code: string) => Promise<LuaRunResult>;
@@ -33,19 +34,19 @@ export class AgentLoop {
 	private agent: Agent | null = null;
 	private aborted = false;
 	private stepCount = 0;
+	private assistantMessageId: string | null = null;
+	private assistantText = "";
 
 	async run(
+		sessionId: string,
 		task: string,
 		config: AnthropicConfig,
 		callbacks: AgentLoopCallbacks,
-		priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
-		priorPersistData?: PersistData,
-	): Promise<{
-		messages: Array<{ role: "user" | "assistant"; content: string }>;
-		persistData: PersistData | null;
-	}> {
+	): Promise<void> {
 		this.aborted = false;
 		this.stepCount = 0;
+		this.assistantMessageId = null;
+		this.assistantText = "";
 
 		callbacks.onStatus("loading");
 
@@ -53,9 +54,10 @@ export class AgentLoop {
 		const tools = createAgentTools(callbacks.runLua);
 
 		this.agent = new Agent({
-			sessionId: `session-${Date.now()}`,
+			sessionId,
 			model,
 			tools,
+			store: indexedDbStore(),
 			instructions: SYSTEM_PROMPT,
 			context: {
 				maxTokens: 100_000,
@@ -64,14 +66,16 @@ export class AgentLoop {
 			},
 		});
 
-		const messages: Array<{ role: "user" | "assistant"; content: string }> = [
-			...priorMessages,
-			{ role: "user", content: task },
-		];
-
 		// Wire SDK events → existing callbacks
 		this.agent.on("text", (delta: string) => {
-			callbacks.onTextDelta?.(Date.now().toString(), delta);
+			if (!this.assistantMessageId) {
+				this.assistantMessageId = crypto.randomUUID();
+				this.assistantText = "";
+				callbacks.onMessage("assistant", "", this.assistantMessageId);
+			}
+			this.assistantText += delta;
+			callbacks.onTextDelta?.(this.assistantMessageId, delta);
+			streamLog("agentloop.text_delta", { msgId: this.assistantMessageId?.slice(0, 8), len: delta.length });
 		});
 
 		this.agent.on("status", (s: { state: string; message?: string }) => {
@@ -115,9 +119,14 @@ export class AgentLoop {
 					.filter((c): c is { type: "text"; text: string } => c.type === "text")
 					.map((c) => c.text)
 					.join("");
-				if (text) {
-					messages.push({ role: "assistant", content: text });
+				if (text && !this.assistantMessageId) {
+					callbacks.onMessage("assistant", text);
 				}
+				if (this.assistantMessageId) {
+					callbacks.onMessageEnd?.(this.assistantMessageId);
+				}
+				this.assistantMessageId = null;
+				this.assistantText = "";
 			}
 		});
 
@@ -127,8 +136,6 @@ export class AgentLoop {
 
 		callbacks.onStatus("running");
 		callbacks.onMessage("user", task);
-
-		let persistData: PersistData | null = null;
 
 		try {
 			const result: AgentRunResult = await this.agent.run(task);
@@ -159,8 +166,6 @@ export class AgentLoop {
 			// ignore
 		}
 		this.agent = null;
-
-		return { messages, persistData };
 	}
 
 	stop(): void {

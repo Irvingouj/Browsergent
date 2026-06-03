@@ -64,27 +64,11 @@ function isAgentTraceEntry(entry: unknown): entry is AgentTraceEntry {
 	return true;
 }
 
-const BROWSERGENT_ERROR_CODES: readonly string[] = [
-	"E_NO_API_KEY",
-	"E_BAD_SETTINGS",
-	"E_WORKER_CRASH",
-	"E_LLM_REQUEST",
-	"E_LUA_COMPILE",
-	"E_LUA_RUNTIME",
-	"E_LUA_TIMEOUT",
-	"E_LUA_RELAY",
-	"E_CHROME_PERMISSION",
-	"E_CONTENT_SCRIPT",
-	"E_PROTOCOL",
-	"E_UNKNOWN",
-];
-
 export function isBrowsergentError(
 	err: unknown,
 ): err is { code: BrowsergentErrorCode; message: string; details?: Record<string, unknown> } {
 	if (!isObject(err)) return false;
 	if (!isString(err.code)) return false;
-	if (!BROWSERGENT_ERROR_CODES.includes(err.code)) return false;
 	if (!isString(err.message)) return false;
 	if ("details" in err && err.details !== undefined) {
 		if (!isObject(err.details)) return false;
@@ -145,6 +129,18 @@ export function isAgentTrace(
 	return true;
 }
 
+export function isAgentMessageEnd(msg: unknown): msg is {
+	type: "agentMessageEnd";
+	runId: string;
+	messageId: string;
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "agentMessageEnd") return false;
+	if (!isString(msg.runId)) return false;
+	if (!isString(msg.messageId)) return false;
+	return true;
+}
+
 export function isAgentError(msg: unknown): msg is {
 	type: "agentError";
 	runId: string;
@@ -154,41 +150,6 @@ export function isAgentError(msg: unknown): msg is {
 	if (msg.type !== "agentError") return false;
 	if (!isString(msg.runId)) return false;
 	if (!isBrowsergentError(msg.error)) return false;
-	return true;
-}
-
-export function isConversationMessage(
-	msg: unknown,
-): msg is { role: "user" | "assistant"; content: string } {
-	if (!isObject(msg)) return false;
-	if (msg.role !== "user" && msg.role !== "assistant") return false;
-	if (!isString(msg.content)) return false;
-	return true;
-}
-
-export function isAgentHistory(msg: unknown): msg is {
-	type: "agentHistory";
-	runId: string;
-	messages: Array<{ role: "user" | "assistant"; content: string }>;
-} {
-	if (!isObject(msg)) return false;
-	if (msg.type !== "agentHistory") return false;
-	if (!isString(msg.runId)) return false;
-	if (!Array.isArray(msg.messages)) return false;
-	if (!msg.messages.every(isConversationMessage)) return false;
-	return true;
-}
-
-export function isAgentPersistData(msg: unknown): msg is {
-	type: "agentPersistData";
-	runId: string;
-	persistData: unknown;
-} {
-	// PersistData is an opaque SDK type; we only validate the envelope here.
-	if (!isObject(msg)) return false;
-	if (msg.type !== "agentPersistData") return false;
-	if (!isString(msg.runId)) return false;
-	if (!isObject(msg.persistData)) return false;
 	return true;
 }
 
@@ -229,9 +190,8 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isAgentMessage(msg) ||
 		isAgentTextDelta(msg) ||
 		isAgentTrace(msg) ||
+		isAgentMessageEnd(msg) ||
 		isAgentError(msg) ||
-		isAgentHistory(msg) ||
-		isAgentPersistData(msg) ||
 		isLuaOutput(msg) ||
 		isLuaError(msg) ||
 		isLuaRunRequest(msg)

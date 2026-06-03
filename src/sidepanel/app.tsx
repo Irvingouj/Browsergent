@@ -1,7 +1,7 @@
 import { useStore } from "zustand/react";
-import { marked } from "marked";
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useSignalEffect } from "@preact/signals";
 import { exportConversation } from "../controllers/export-controller";
 import { LuaController } from "../controllers/lua-controller";
 import { SessionController } from "../controllers/session-controller";
@@ -17,11 +17,25 @@ import {
 } from "../state/store";
 import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 import type { StorageBackend } from "../storage/storage-backend";
+import { getStreamingSignal } from "../state/streaming-signals";
+import {
+	renderMarkdown,
+	createStreamingMarkdownRenderer,
+} from "../utils/markdown-stream";
+import { streamLog } from "../utils/stream-logger";
 
 const App: FunctionalComponent = () => {
-	const messages = useStore(
+	const messageIds = useStore(
 		browsergentStore,
-		(s: BrowsergentStore) => s.chat.messages,
+		(s: BrowsergentStore) => s.chat.messageIds,
+	);
+	const messagesById = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.chat.messagesById,
+	);
+	const messages = useMemo(
+		() => messageIds.map((id) => messagesById[id]).filter((m): m is ChatMessage => !!m),
+		[messageIds, messagesById],
 	);
 	const trace = useStore(
 		browsergentStore,
@@ -101,16 +115,6 @@ const App: FunctionalComponent = () => {
 				onLuaRunRequest: (msg) => {
 					luaControllerRef.current?.handleRelayRequest(msg);
 				},
-				onAgentHistory: (messages) => {
-					sessionControllerRef.current?.saveHistory(messages).catch((err: unknown) => {
-						console.warn("History save failed:", err);
-					});
-				},
-			onAgentPersistData: (persistData) => {
-				sessionControllerRef.current?.savePersistData(persistData).catch((err: unknown) => {
-					console.warn("Persist data save failed:", err);
-				});
-			},
 			});
 			bridgeRef.current = bridge;
 
@@ -261,31 +265,27 @@ const App: FunctionalComponent = () => {
 		void generateTitle();
 	}, [status, apiKey, baseUrl, model, messages]);
 
-	const handleRun = useCallback(async () => {
+	const handleRun = useCallback(() => {
 		const task = taskInput.trim();
 		if (!task) return;
 		if (!apiKey) {
 			browsergentStore.getState().setSettingsOpen(true);
 			return;
 		}
+		const sessionId = sessionControllerRef.current?.getActiveSessionId();
+		if (!sessionId) return;
 
 		browsergentStore.getState().setTaskDraft("");
 
 		const runId = crypto.randomUUID();
 		browsergentStore.getState().agentRunRequested(runId);
 
-		const [priorMessages, priorPersistData] = await Promise.all([
-			sessionControllerRef.current?.loadHistory(),
-			sessionControllerRef.current?.loadPersistData(),
-		]);
-
 		bridgeRef.current?.post({
 			type: "agentStart",
 			runId,
+			sessionId,
 			task,
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
-			priorMessages: priorMessages ?? undefined,
-			priorPersistData: priorPersistData ?? undefined,
 		});
 	}, [taskInput, apiKey, baseUrl, model]);
 
@@ -578,7 +578,7 @@ const App: FunctionalComponent = () => {
 						New
 					</button>
 				)}
-				<ChatPanel messages={messages} trace={trace} />
+				<ChatPanel messageIds={messageIds} trace={trace} />
 			</div>
 
 			{/* Status bar */}
@@ -673,66 +673,80 @@ const App: FunctionalComponent = () => {
 	);
 };
 
-function renderMarkdown(text: string): string {
-	const safe = text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
-
-	const html = marked.parse(safe, { async: false }) as string;
-
-	return html
-		.replace(
-			/<pre>/g,
-			'<pre style="background:#f0f0f0;padding:8px;border-radius:4px;overflow:auto;font-size:12px;line-height:1.4;margin:4px 0;">',
-		)
-		.replace(
-			/<code>/g,
-			'<code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:12px;">',
-		)
-		.replace(/<ul>/g, '<ul style="margin:4px 0;padding-left:16px;">')
-		.replace(/<ol>/g, '<ol style="margin:4px 0;padding-left:16px;">')
-		.replace(/<a /g, '<a style="color:#4a90d9;text-decoration:underline;" ')
-		.replace(/<p>/g, '<p style="margin:0 0 4px 0;">');
-}
-
 function ChatPanel({
-	messages,
+	messageIds,
 	trace,
 }: {
-	messages: ChatMessage[];
+	messageIds: string[];
 	trace: AgentTraceEntry[];
 }) {
-	const timeline = [
-		...messages.map((m) => ({
-			type: "message" as const,
-			data: m,
-			ts: m.timestamp,
-			id: m.id,
-		})),
-		...trace.map((t) => ({
-			type: "trace" as const,
-			data: t,
-			ts: t.timestamp,
-			id: t.id,
-		})),
-	];
-	timeline.sort((a, b) => a.ts - b.ts);
+	const messagesById = useStore(
+		browsergentStore,
+		(s: BrowsergentStore) => s.chat.messagesById,
+	);
+
+	const timeline = useMemo(() => {
+		const items = [
+			...messageIds.map((id) => ({
+				type: "message" as const,
+				id,
+				ts: messagesById[id]?.timestamp ?? 0,
+			})),
+			...trace.map((t) => ({
+				type: "trace" as const,
+				id: t.id,
+				ts: t.timestamp,
+			})),
+		];
+		items.sort((a, b) => a.ts - b.ts);
+		return items;
+	}, [messageIds, messagesById, trace]);
 
 	return (
 		<div>
 			{timeline.map((item) =>
 				item.type === "message" ? (
-					<MessageBubble key={item.id} message={item.data} />
+					<MessageBubble key={item.id} messageId={item.id} />
 				) : (
-					<TraceEntryCompact key={item.id} entry={item.data} />
+					<TraceEntryCompact key={item.id} entry={trace.find((t) => t.id === item.id)!} />
 				),
 			)}
 		</div>
 	);
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({ messageId }: { messageId: string }) {
+	const message = useStore(
+		browsergentStore,
+		useCallback((s: BrowsergentStore) => s.chat.messagesById[messageId], [messageId]),
+	);
+	const [, forceUpdate] = useState(0);
+
+	const streamingSig = getStreamingSignal(messageId);
+	useSignalEffect(() => {
+		if (streamingSig) {
+			void streamingSig.value;
+			forceUpdate((n) => n + 1);
+		}
+	});
+
+	if (!message) return null;
+
+	const isStreaming = !!streamingSig;
+	const text = isStreaming ? streamingSig!.value : message.text;
+
+	const rendererRef = useRef<ReturnType<typeof createStreamingMarkdownRenderer> | null>(null);
+	if (isStreaming && !rendererRef.current) {
+		rendererRef.current = createStreamingMarkdownRenderer();
+	}
+	if (!isStreaming && rendererRef.current) {
+		rendererRef.current = null;
+	}
+
+	const html = isStreaming && rendererRef.current
+		? rendererRef.current(text)
+		: renderMarkdown(text);
+
 	return (
 		<div
 			data-testid={`chat-message-${message.kind}`}
@@ -759,7 +773,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 			>
 				{message.kind}
 			</div>
-			<div dangerouslySetInnerHTML={{ __html: renderMarkdown(message.text) }} />
+			<div dangerouslySetInnerHTML={{ __html: html }} />
 		</div>
 	);
 }

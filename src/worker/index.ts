@@ -11,7 +11,6 @@
 
 import type { LuaRunResult } from "../types/lua-utils";
 import { formatError } from "../types/lua-utils";
-import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
@@ -20,6 +19,9 @@ import type {
 } from "../types/messages";
 import { AgentLoop } from "./agent-loop";
 import type { AnthropicConfig } from "./anthropic";
+import { enableStreamDebug, streamLog } from "../utils/stream-logger";
+
+enableStreamDebug();
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -95,11 +97,10 @@ function postIfCurrentRun(runId: string, message: WorkerToPanel): void {
 }
 
 function handleAgentStart(
+	sessionId: string,
 	task: string,
 	settings: WorkerSettings,
 	runId: string,
-	priorMessages: Array<{ role: "user" | "assistant"; content: string }> = [],
-	priorPersistData?: PersistData,
 ): void {
 	currentRunId = runId;
 
@@ -119,13 +120,6 @@ function handleAgentStart(
 		agentLoop.stop();
 	}
 
-	// Warn if priorMessages exist but no persistData
-	if (priorMessages.length > 0 && !priorPersistData) {
-		console.warn(
-			"Prior messages provided but no PersistData. Agent will start fresh — prior messages are for UI display only.",
-		);
-	}
-
 	agentLoop = new AgentLoop();
 
 	const config: AnthropicConfig = {
@@ -136,6 +130,7 @@ function handleAgentStart(
 
 	agentLoop
 		.run(
+			sessionId,
 			task,
 			config,
 			{
@@ -147,25 +142,33 @@ function handleAgentStart(
 						reason,
 					});
 				},
-				onMessage(kind, text) {
+				onMessage(kind, text, id) {
 					postIfCurrentRun(runId, {
 						type: "agentMessage",
 						runId,
 						message: {
 							kind,
-							id: crypto.randomUUID(),
+							id: id ?? crypto.randomUUID(),
 							text,
 							timestamp: Date.now(),
 						},
 					});
 				},
 				onTextDelta(messageId, text) {
+					streamLog("worker.post_delta", { msgId: messageId.slice(0, 8), len: text.length });
 					postIfCurrentRun(runId, {
 						type: "agentTextDelta",
 						runId,
 						messageId,
 						text,
 					});
+				},
+				onMessageEnd(messageId) {
+						postIfCurrentRun(runId, {
+								type: "agentMessageEnd",
+								runId,
+								messageId,
+						});
 				},
 				onTrace(entry: AgentTraceEntry) {
 					postIfCurrentRun(runId, { type: "agentTrace", runId, entry });
@@ -184,17 +187,7 @@ function handleAgentStart(
 					return relayLuaExecution(code);
 				},
 			},
-			priorMessages,
-			priorPersistData,
 		)
-		.then(({ messages, persistData }) => {
-			if (runId === currentRunId) {
-				post({ type: "agentHistory", runId, messages });
-				if (persistData) {
-					post({ type: "agentPersistData", runId, persistData });
-				}
-			}
-		})
 		.catch((err) => {
 			if (runId === currentRunId) {
 				post({
@@ -255,11 +248,10 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 	switch (msg.type) {
 		case "agentStart":
 			handleAgentStart(
+				msg.sessionId,
 				msg.task,
 				msg.settings,
 				msg.runId,
-				msg.priorMessages,
-				msg.priorPersistData,
 			);
 			break;
 		case "agentStop":

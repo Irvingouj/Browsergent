@@ -5,6 +5,13 @@ import {
 	isWorkerToPanel,
 } from "../protocol/worker-guards";
 import { browsergentStore } from "../state/store";
+import {
+	appendStreamingDelta,
+	finalizeAllStreamingSignals,
+	finalizeStreamingSignal,
+	getStreamingSignal,
+	initStreamingSignal,
+} from "../state/streaming-signals";
 import type { PanelToWorker } from "../types/messages";
 
 type LuaRunRequestHandler = (msg: {
@@ -12,14 +19,6 @@ type LuaRunRequestHandler = (msg: {
 	id: string;
 	code: string;
 }) => void;
-
-type AgentHistoryHandler = (
-	messages: Array<{ role: "user" | "assistant"; content: string }>,
-) => void;
-
-type AgentPersistDataHandler = (
-	persistData: import("../types/messages").PersistData,
-) => void;
 
 export function isStaleRunId(
 	runId: string,
@@ -33,17 +32,11 @@ export function isStaleRunId(
 export class WorkerBridge {
 	private worker: Worker | null = null;
 	private onLuaRunRequest: LuaRunRequestHandler | null = null;
-	private onAgentHistory: AgentHistoryHandler | null = null;
-	private onAgentPersistData: AgentPersistDataHandler | null = null;
 
 	constructor(options?: {
 		onLuaRunRequest?: LuaRunRequestHandler;
-		onAgentHistory?: AgentHistoryHandler;
-		onAgentPersistData?: AgentPersistDataHandler;
 	}) {
 		this.onLuaRunRequest = options?.onLuaRunRequest ?? null;
-		this.onAgentHistory = options?.onAgentHistory ?? null;
-		this.onAgentPersistData = options?.onAgentPersistData ?? null;
 	}
 
 	start(): void {
@@ -80,10 +73,13 @@ export class WorkerBridge {
 
 	private handleMessage(raw: unknown): void {
 		if (!isWorkerToPanel(raw)) {
+			const text = typeof raw === "object" && raw !== null
+				? `Received invalid message from worker: type=${(raw as Record<string, unknown>).type ?? "undefined"} ${JSON.stringify(raw).slice(0, 200)}`
+				: `Received invalid message from worker: ${String(raw).slice(0, 200)}`;
 			browsergentStore.getState().appendSystemMessage({
 				kind: "system",
 				id: crypto.randomUUID(),
-				text: "Received invalid message from worker",
+				text,
 				timestamp: Date.now(),
 			});
 			return;
@@ -96,6 +92,9 @@ export class WorkerBridge {
 			case "agentStatus": {
 				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
 				browsergentStore.getState().agentStatusChanged(raw.status, raw.reason);
+				if (raw.status === "stopped" || raw.status === "error" || raw.status === "done") {
+					this.finalizeActiveSignals();
+				}
 				break;
 			}
 			case "agentMessage": {
@@ -104,6 +103,7 @@ export class WorkerBridge {
 				if (message.kind === "user") {
 					browsergentStore.getState().appendUserMessage(message);
 				} else if (message.kind === "assistant") {
+					initStreamingSignal(message.id);
 					browsergentStore.getState().appendAssistantMessage(message);
 				} else {
 					browsergentStore.getState().appendSystemMessage(message);
@@ -112,9 +112,12 @@ export class WorkerBridge {
 			}
 			case "agentTextDelta": {
 				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
-				browsergentStore
-					.getState()
-					.appendAssistantDelta(raw.messageId, raw.text);
+				appendStreamingDelta(raw.messageId, raw.text);
+				break;
+			}
+			case "agentMessageEnd": {
+				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				this.finalizeMessageSignal(raw.messageId);
 				break;
 			}
 			case "agentTrace": {
@@ -142,20 +145,6 @@ export class WorkerBridge {
 				});
 				break;
 			}
-			case "agentHistory": {
-				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
-				if (this.onAgentHistory && Array.isArray(raw.messages)) {
-					this.onAgentHistory(raw.messages);
-				}
-				break;
-			}
-		case "agentPersistData": {
-			if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
-			if (this.onAgentPersistData && raw.persistData) {
-				this.onAgentPersistData(raw.persistData);
-			}
-			break;
-		}
 			case "luaOutput": {
 				if (isLuaOutput(raw)) {
 					browsergentStore.getState().luaOutputAppended(raw.output);
@@ -177,6 +166,23 @@ export class WorkerBridge {
 					this.onLuaRunRequest(raw);
 				}
 				break;
+		}
+	}
+
+	private finalizeMessageSignal(messageId: string): void {
+		const sig = getStreamingSignal(messageId);
+		const text = sig?.value ?? "";
+		browsergentStore.getState().finalizeAssistantMessage(messageId, text);
+		finalizeStreamingSignal(messageId);
+	}
+
+	private finalizeActiveSignals(): void {
+		const pending = finalizeAllStreamingSignals();
+		const store = browsergentStore.getState();
+		for (const { messageId, text } of pending) {
+			if (text) {
+				store.finalizeAssistantMessage(messageId, text);
+			}
 		}
 	}
 }

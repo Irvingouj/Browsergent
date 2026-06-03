@@ -1,27 +1,19 @@
 /** Panel <-> Worker message types. */
 
-import type { PersistData } from "@pi-oxide/pi-host-web/raw";
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { LuaRunResult } from "./lua-utils";
 
 export type { BrowsergentError };
-export type { PersistData };
 
 // --- Panel -> Worker ---
-
-export type ConversationMessage = {
-	role: "user" | "assistant";
-	content: string;
-};
 
 export type PanelToWorker =
 	| {
 			type: "agentStart";
 			runId: string;
+			sessionId: string;
 			task: string;
 			settings: WorkerSettings;
-			priorMessages?: ConversationMessage[];
-			priorPersistData?: PersistData;
 	  }
 	| { type: "agentStop"; runId?: string }
 	| { type: "agentReset" }
@@ -45,9 +37,8 @@ export type WorkerToPanel =
 	| { type: "agentMessage"; runId: string; message: ChatMessage }
 	| { type: "agentTextDelta"; runId: string; messageId: string; text: string }
 	| { type: "agentTrace"; runId: string; entry: AgentTraceEntry }
+	| { type: "agentMessageEnd"; runId: string; messageId: string }
 	| { type: "agentError"; runId: string; error: BrowsergentError }
-	| { type: "agentHistory"; runId: string; messages: ConversationMessage[] }
-	| { type: "agentPersistData"; runId: string; persistData: PersistData }
 	| { type: "luaOutput"; id: string; output: string }
 	| { type: "luaError"; id: string; error: string }
 	| { type: "luaRunRequest"; id: string; code: string };
