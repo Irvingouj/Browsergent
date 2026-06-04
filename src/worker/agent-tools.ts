@@ -1,6 +1,7 @@
-import type { AgentTools, AgentToolDefinition } from "@pi-oxide/pi-host-web";
+import type { AgentToolDefinition, AgentTools } from "@pi-oxide/pi-host-web";
 import type { LuaRunResult } from "../types/lua-utils";
 import { formatCellResult } from "../types/lua-utils";
+import { formatToolError } from "./tool-error-result";
 
 interface ExtensionJsApiEntry {
 	namespace: string;
@@ -75,7 +76,7 @@ function renderNamespaceIndex(entries: ExtensionJsApiEntry[]): string {
 	const sortedNamespaces = [...byNamespace.keys()].sort();
 	return sortedNamespaces
 		.map((ns) => {
-			const list = byNamespace.get(ns)!;
+			const list = byNamespace.get(ns) ?? [];
 			const functions = list
 				.map((e) => {
 					const sig = e.action
@@ -126,6 +127,28 @@ function truncateToolResult(text: string, maxChars: number): string {
 	const head = Math.floor(maxChars / 2);
 	const tail = maxChars - head;
 	return `${text.slice(0, head)}\n\n... [truncated ${text.length - maxChars} chars] ...\n\n${text.slice(-tail)}`;
+}
+
+function classifyError(source: { kind?: string; message?: string }): {
+	code: string;
+	hint: string;
+} {
+	if (source.kind === "compile" || source.message?.includes("compile error"))
+		return { code: "E_LUA_COMPILE", hint: "Fix the syntax error and retry." };
+	if (source.kind === "fuel_exhausted" || source.message?.includes("timed out"))
+		return {
+			code: "E_LUA_TIMEOUT",
+			hint: "The runtime has been rebuilt. Retry the same code.",
+		};
+	if (source.message?.includes("runtime error"))
+		return {
+			code: "E_LUA_RUNTIME",
+			hint: "Check the error, fix the code, and retry.",
+		};
+	return {
+		code: "E_LUA_RUNTIME",
+		hint: "Check the error details and try a different approach.",
+	};
 }
 
 const RUN_JS_DESCRIPTION = `Execute JavaScript code to control the browser via the extension-js runtime.
@@ -191,9 +214,20 @@ export function createAgentTools(
 				if (typeof code !== "string" || !code.trim()) {
 					return "run_js requires a non-empty 'code' string";
 				}
-				const result = await runLua(code);
-				const text = formatCellResult(result);
-				return truncateToolResult(text, 50000);
+				try {
+					const result = await runLua(code);
+					if (result.status === "err") {
+						const { code: errCode, hint } = classifyError({
+							kind: result.error.kind,
+						});
+						return formatToolError(errCode, formatCellResult(result), hint);
+					}
+					return truncateToolResult(formatCellResult(result), 50000);
+				} catch (err) {
+					const msg = err instanceof Error ? err.message : String(err);
+					const { code: errCode, hint } = classifyError({ message: msg });
+					return formatToolError(errCode, msg, hint);
+				}
 			},
 		},
 		{
@@ -217,10 +251,21 @@ export function createAgentTools(
 			},
 			run: async (input: unknown) => {
 				const args = input as Record<string, unknown>;
-				const format = typeof args.format === "string" ? args.format : "markdown";
-				const namespace = typeof args.namespace === "string" ? args.namespace : undefined;
-				const docs = await getExtensionJsDocs(format, namespace);
-				return truncateToolResult(docs, 50000);
+				const format =
+					typeof args.format === "string" ? args.format : "markdown";
+				const namespace =
+					typeof args.namespace === "string" ? args.namespace : undefined;
+				try {
+					const docs = await getExtensionJsDocs(format, namespace);
+					return truncateToolResult(docs, 50000);
+				} catch (err) {
+					const msg = err instanceof Error ? err.message : String(err);
+					return formatToolError(
+						"E_LUA_RUNTIME",
+						msg,
+						"Check the error details and try a different approach.",
+					);
+				}
 			},
 		},
 	];

@@ -1,7 +1,6 @@
-import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MemoryStorage } from "../../src/storage/memory-storage";
 import { migrateFromChromeStorage } from "../../src/storage/migrate";
-
 
 describe("migrateFromChromeStorage", () => {
 	let storage: MemoryStorage;
@@ -66,7 +65,9 @@ describe("migrateFromChromeStorage", () => {
 		await migrateFromChromeStorage(storage);
 
 		expect(await storage.get("settings", "apiKey")).toBe("sk-key");
-		expect(await storage.get("settings", "baseUrl")).toBe("https://api.example.com");
+		expect(await storage.get("settings", "baseUrl")).toBe(
+			"https://api.example.com",
+		);
 		expect(await storage.get("settings", "model")).toBe("claude-sonnet-4-6");
 	});
 

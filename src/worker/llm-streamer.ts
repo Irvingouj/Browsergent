@@ -1,4 +1,8 @@
-import type { LlmChunk, LlmContext, LlmResult } from "@pi-oxide/pi-host-web/raw";
+import type {
+	LlmChunk,
+	LlmContext,
+	LlmResult,
+} from "@pi-oxide/pi-host-web/raw";
 
 /**
  * Replaces the old SDK's LlmStream type.

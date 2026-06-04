@@ -51,7 +51,9 @@ export function createSettingsSlice(
 			set({ settings: next });
 		},
 		settingsSaveFailed(error) {
-			set((state) => ({ settings: { ...state.settings, error, loaded: true } }));
+			set((state) => ({
+				settings: { ...state.settings, error, loaded: true },
+			}));
 		},
 	};
 }

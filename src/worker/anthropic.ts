@@ -14,9 +14,8 @@ import type {
 	StopReason,
 	ToolDefinition,
 } from "@pi-oxide/pi-host-web/raw";
-
-import type { LlmStream } from "./llm-streamer";
 import { streamLog } from "../utils/stream-logger";
+import type { LlmStream } from "./llm-streamer";
 
 // ---------------------------------------------------------------------------
 // Anthropic wire-format helpers (file-local, never exported)
@@ -117,11 +116,11 @@ const BROWSERGENT_JS_GUIDANCE = [
 	"## Common patterns",
 	"Current page:",
 	"```js",
-	'const tabId = await page.active_tab();',
+	"const tabId = await page.active_tab();",
 	'console.log("Tab:", tabId);',
 	'console.log("URL:", await page.url());',
 	'console.log("Title:", await page.title());',
-	'console.log(await page.snapshot());',
+	"console.log(await page.snapshot());",
 	"```",
 	"",
 	"Navigate:",
@@ -131,7 +130,7 @@ const BROWSERGENT_JS_GUIDANCE = [
 	"",
 	"Inspect and interact (structured):",
 	"```js",
-	'const data = await page.snapshot_data();',
+	"const data = await page.snapshot_data();",
 	"// choose a real ref_id from data, then:",
 	'// await page.fill("e3", "search text");',
 	'// await page.click("e4");',
@@ -317,10 +316,7 @@ function toStopReason(raw: string | null): StopReason {
 export class AnthropicProvider {
 	constructor(private config: AnthropicConfig) {}
 
-	async call(
-		context: LlmContext,
-		signal?: AbortSignal,
-	): Promise<LlmStream> {
+	async call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream> {
 		const baseUrl = this.config.baseUrl ?? "https://api.anthropic.com";
 		const isFireworks = baseUrl.includes("fireworks.ai");
 
@@ -507,7 +503,10 @@ export class AnthropicProvider {
 
 							case "content_block_delta": {
 								if (parsed.delta.type === "text_delta") {
-									streamLog("anthropic.sse_delta", { len: parsed.delta.text.length, text: parsed.delta.text.slice(0, 30) });
+									streamLog("anthropic.sse_delta", {
+										len: parsed.delta.text.length,
+										text: parsed.delta.text.slice(0, 30),
+									});
 									textBlocks.push({
 										type: "text",
 										text: parsed.delta.text,

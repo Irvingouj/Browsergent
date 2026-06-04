@@ -1,0 +1,186 @@
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { createAgentTools } from "../../src/worker/agent-tools";
+import {
+	isToolErrorEnvelope,
+	parseToolErrorEnvelope,
+} from "../../src/worker/tool-error-result";
+
+const mockGenerateApiDocs = vi.hoisted(() => vi.fn());
+vi.mock("@pi-oxide/extension-js", () => ({
+	generateApiDocs: mockGenerateApiDocs,
+}));
+
+function getRunJsHandler(tools: ReturnType<typeof createAgentTools>) {
+	const handler = tools.getHandler("run_js");
+	if (!handler) throw new Error("run_js handler not found");
+	return handler;
+}
+
+function getGetDocHandler(tools: ReturnType<typeof createAgentTools>) {
+	const handler = tools.getHandler("get_doc");
+	if (!handler) throw new Error("get_doc handler not found");
+	return handler;
+}
+
+function expectErrorEnvelope(text: string) {
+	const envelope = parseToolErrorEnvelope(text);
+	if (!envelope) throw new Error("expected error envelope");
+	return envelope;
+}
+
+describe("run_js tool error handling", () => {
+	test("returns error envelope on Lua timeout", async () => {
+		const runLua = vi
+			.fn()
+			.mockRejectedValue(new Error("Lua relay timed out after 30000ms"));
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "while(true){}" });
+		expect(typeof result).toBe("string");
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_TIMEOUT");
+	});
+
+	test("returns error envelope on Lua runtime error", async () => {
+		const runLua = vi
+			.fn()
+			.mockRejectedValue(
+				new Error("[runtime error] line 5: undefined variable"),
+			);
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "bad code" });
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_RUNTIME");
+	});
+
+	test("returns error envelope on Lua compile error", async () => {
+		const runLua = vi
+			.fn()
+			.mockRejectedValue(new Error("[compile error] line 1: syntax error"));
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "bad code" });
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_COMPILE");
+	});
+
+	test("returns normal result on success", async () => {
+		const runLua = vi.fn().mockResolvedValue({
+			status: "ok",
+			result: "42",
+			stdout: [],
+			stderr: [],
+		});
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "1+1" });
+		expect(typeof result).toBe("string");
+		expect(isToolErrorEnvelope(result as string)).toBe(false);
+	});
+
+	test("returns validation message for empty code without calling runLua", async () => {
+		const runLua = vi.fn();
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "" });
+		expect(result).toBe("run_js requires a non-empty 'code' string");
+		expect(runLua).not.toHaveBeenCalled();
+	});
+
+	test("does not throw on Lua errors — always returns a string", async () => {
+		const runLua = vi.fn().mockRejectedValue(new Error("catastrophic failure"));
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "code" });
+		expect(typeof result).toBe("string");
+	});
+});
+
+describe("run_js tool resolved-error path (status: err)", () => {
+	test("compile error returns E_LUA_COMPILE envelope", async () => {
+		const runLua = vi.fn().mockResolvedValue({
+			status: "err",
+			error: { kind: "compile", message: "syntax error", line: 1 },
+			output: [],
+			stdout: [],
+			stderr: [],
+		});
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "bad" });
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_COMPILE");
+	});
+
+	test("fuel_exhausted error returns E_LUA_TIMEOUT envelope", async () => {
+		const runLua = vi.fn().mockResolvedValue({
+			status: "err",
+			error: { kind: "fuel_exhausted", message: "execution limit", line: null },
+			output: [],
+			stdout: [],
+			stderr: [],
+		});
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "while(true){}" });
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_TIMEOUT");
+	});
+
+	test("runtime error returns E_LUA_RUNTIME envelope", async () => {
+		const runLua = vi.fn().mockResolvedValue({
+			status: "err",
+			error: { kind: "runtime", message: "undefined variable", line: 5 },
+			output: [],
+			stdout: [],
+			stderr: [],
+		});
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "bad" });
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_RUNTIME");
+	});
+
+	test("internal error returns E_LUA_RUNTIME envelope", async () => {
+		const runLua = vi.fn().mockResolvedValue({
+			status: "err",
+			error: { kind: "internal", message: "internal failure" },
+			output: [],
+			stdout: [],
+			stderr: [],
+		});
+		const tools = createAgentTools(runLua);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "bad" });
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_RUNTIME");
+	});
+});
+
+describe("get_doc tool error handling", () => {
+	test("returns error envelope when generateApiDocs throws", async () => {
+		mockGenerateApiDocs.mockImplementation(() => {
+			throw new Error("docs generation failed");
+		});
+		const tools = createAgentTools(vi.fn());
+		const handler = getGetDocHandler(tools);
+		const result = await handler({});
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_LUA_RUNTIME");
+		expect(envelope.message).toContain("docs generation failed");
+	});
+
+	afterEach(() => {
+		mockGenerateApiDocs.mockReset();
+	});
+});

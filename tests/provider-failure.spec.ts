@@ -1,20 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { launchExtension, startMockAnthropicServer } from "./helpers";
 
-test("agent shows error when API returns 401", async () => {
-	const mock = startMockAnthropicServer({
-		responses: [
-			{
-				chunks: [
-					`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
-				],
-				delays: [0],
-				stopReason: "end_turn",
-			},
-		],
-	});
+test("agent shows error on 503 and UI remains usable", async () => {
+	const mock = startMockAnthropicServer({ responses: [] });
 
-	// Override the mock server to return 401 on the first request
+	// Override to return 503
 	mock.server.removeAllListeners("request");
 	mock.server.on("request", (req, res) => {
 		if (req.method === "OPTIONS") {
@@ -28,13 +18,13 @@ test("agent shows error when API returns 401", async () => {
 			return;
 		}
 		if (req.url === "/v1/messages" && req.method === "POST") {
-			res.writeHead(401, {
+			res.writeHead(503, {
 				"Content-Type": "application/json",
 				"Access-Control-Allow-Origin": "*",
 			});
 			res.end(
 				JSON.stringify({
-					error: { type: "authentication_error", message: "Invalid API key" },
+					error: { type: "overloaded_error", message: "Service overloaded" },
 				}),
 			);
 		} else {
@@ -45,25 +35,30 @@ test("agent shows error when API returns 401", async () => {
 
 	const { sidePanel, close } = await launchExtension();
 
+	// Configure settings to point at mock server
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("bad-key");
+	await sidePanel.locator('input[type="password"]').fill("test-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
 	await sidePanel.locator("text=Save").click();
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
 
-	// Close session panel so it doesn't block the Run button
+	// Close session panel
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
+	// Start a run
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
-		.fill("test error");
+		.fill("test 503");
 	await sidePanel.locator("text=Run").click();
 
-	// Status should show error
+	// Should show error status (hard stop)
 	await expect(sidePanel.locator("text=Status: error")).toBeVisible({
 		timeout: 10000,
 	});
+
+	// UI should remain usable — Run button visible
+	await expect(sidePanel.locator("text=Run")).toBeVisible();
 
 	await close();
 	mock.server.close();

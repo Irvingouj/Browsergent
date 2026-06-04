@@ -1,8 +1,14 @@
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { SessionController } from "../../src/controllers/session-controller";
 import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
 
 import "fake-indexeddb/auto";
+
+function requireActiveId(ctrl: SessionController): string {
+	const id = ctrl.getActiveSessionId();
+	if (id === null) throw new Error("no active session");
+	return id;
+}
 
 describe("SessionController with IndexedDB (backward compat)", () => {
 	let storage: IndexedDBStorage;
@@ -15,7 +21,7 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 	});
 
 	afterEach(async () => {
-		if (storage && storage["db"]) {
+		if (storage?.db) {
 			await storage.clear();
 			await storage.close();
 		}
@@ -31,7 +37,13 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
 		];
 		const trace = [
-			{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 },
+			{
+				id: "t1",
+				step: 1,
+				status: "done" as const,
+				toolName: "run_js",
+				timestamp: 1,
+			},
 		];
 		await controller.save(messages, trace);
 		const result = await controller.load();
@@ -41,8 +53,18 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 	});
 
 	test("clear() removes data", async () => {
-		const messages = [{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 }];
-		const trace = [{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 }];
+		const messages = [
+			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
+		];
+		const trace = [
+			{
+				id: "t1",
+				step: 1,
+				status: "done" as const,
+				toolName: "run_js",
+				timestamp: 1,
+			},
+		];
 		await controller.save(messages, trace);
 
 		await controller.clear();
@@ -51,7 +73,10 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 	});
 
 	test("load() rejects malformed session", async () => {
-		await storage.set("sessions", "current", { messages: "not-array", trace: [] });
+		await storage.set("sessions", "current", {
+			messages: "not-array",
+			trace: [],
+		});
 		const result = await controller.load();
 		expect(result).toBeNull();
 	});
@@ -69,7 +94,7 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 	});
 
 	afterEach(async () => {
-		if (storage && storage["db"]) {
+		if (storage?.db) {
 			await storage.clear();
 			await storage.close();
 		}
@@ -86,7 +111,13 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
 		];
 		const trace = [
-			{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 },
+			{
+				id: "t1",
+				step: 1,
+				status: "done" as const,
+				toolName: "run_js",
+				timestamp: 1,
+			},
 		];
 		await controller.save(messages, trace);
 		const result = await controller.load();
@@ -117,17 +148,17 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 	});
 
 	test("switchSession() changes active session", async () => {
-		const id1 = controller.getActiveSessionId();
+		const id1 = requireActiveId(controller);
 		await controller.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
 			[],
 		);
-		const id2 = await controller.createSession();
+		const _id2 = await controller.createSession();
 		await controller.save(
 			[{ id: "2", kind: "user" as const, text: "b", timestamp: 2 }],
 			[],
 		);
-		const switched = await controller.switchSession(id1!);
+		const switched = await controller.switchSession(id1);
 		expect(controller.getActiveSessionId()).toBe(id1);
 		expect(switched?.messages).toEqual([
 			{ id: "1", kind: "user", text: "a", timestamp: 1 },
@@ -135,7 +166,7 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 	});
 
 	test("deleteSession() removes session", async () => {
-		const id1 = controller.getActiveSessionId();
+		const id1 = requireActiveId(controller);
 		await controller.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
 			[],
@@ -145,18 +176,18 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 			[{ id: "2", kind: "user" as const, text: "b", timestamp: 2 }],
 			[],
 		);
-		await controller.deleteSession(id1!);
+		await controller.deleteSession(id1);
 		expect(controller.getActiveSessionId()).toBe(id2);
-		expect(await controller.switchSession(id1!)).toBeNull();
+		expect(await controller.switchSession(id1)).toBeNull();
 	});
 
 	test("deleteSession() creates new session when last is deleted", async () => {
-		const id = controller.getActiveSessionId();
+		const id = requireActiveId(controller);
 		await controller.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
 			[],
 		);
-		await controller.deleteSession(id!);
+		await controller.deleteSession(id);
 		const newActive = controller.getActiveSessionId();
 		expect(newActive).not.toBeNull();
 		expect(newActive).not.toBe(id);
@@ -177,10 +208,9 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 	});
 
 	test("updateTitle() updates title", async () => {
-		const id = controller.getActiveSessionId();
-		await controller.updateTitle(id!, "My Title");
+		const id = requireActiveId(controller);
+		await controller.updateTitle(id, "My Title");
 		const list = await controller.listSessions();
 		expect(list[0].title).toBe("My Title");
 	});
-
 });

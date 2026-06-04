@@ -1,9 +1,9 @@
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
-import { browsergentStore } from "../state/store";
 import type { SessionController } from "../controllers/session-controller";
 import type { SessionListItem } from "../state/slices/session-slice";
+import { browsergentStore } from "../state/store";
 
 interface SessionPanelProps {
 	sessionController: SessionController;
@@ -216,15 +216,11 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 									style={{
 										padding: "10px 12px",
 										borderBottom: "1px solid #f0f0f0",
-										cursor: canSwitch
-											? "pointer"
-											: "not-allowed",
+										cursor: canSwitch ? "pointer" : "not-allowed",
 										borderLeft: isActive
 											? "3px solid #4a90d9"
 											: "3px solid transparent",
-										background: isActive
-											? "#f8fbff"
-											: "#fff",
+										background: isActive ? "#f8fbff" : "#fff",
 										opacity: canSwitch ? 1 : 0.5,
 										position: "relative",
 									}}
@@ -246,11 +242,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 												type="text"
 												value={editValue}
 												onInput={(e) =>
-													setEditValue(
-														(
-															e.target as HTMLInputElement
-														).value,
-													)
+													setEditValue((e.target as HTMLInputElement).value)
 												}
 												onBlur={handleEditSave}
 												onKeyDown={handleEditKeyDown}
@@ -269,10 +261,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 										) : (
 											<span
 												onClick={(e) =>
-													handleTitleClick(
-															e as unknown as MouseEvent,
-															session,
-														)
+													handleTitleClick(e as unknown as MouseEvent, session)
 												}
 												style={{
 													fontSize: "13px",
@@ -282,9 +271,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 													overflow: "hidden",
 													textOverflow: "ellipsis",
 													whiteSpace: "nowrap",
-													cursor: canSwitch
-														? "text"
-														: "not-allowed",
+													cursor: canSwitch ? "text" : "not-allowed",
 												}}
 											>
 												{session.title || "Untitled"}
@@ -306,10 +293,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 												color: "#d94a4a",
 												cursor: "pointer",
 												fontSize: "14px",
-												opacity:
-													hoveredId === session.id
-														? 1
-														: 0,
+												opacity: hoveredId === session.id ? 1 : 0,
 												transition: "opacity 0.15s",
 											}}
 										>

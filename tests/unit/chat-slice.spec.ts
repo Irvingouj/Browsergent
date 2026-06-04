@@ -1,10 +1,17 @@
 import { describe, expect, test } from "vitest";
 import { createStore } from "zustand/vanilla";
+import {
+	createChatSlice,
+	getMessages,
+} from "../../src/state/slices/chat-slice";
 import type { BrowsergentStore } from "../../src/state/store";
-import { createChatSlice, getMessages } from "../../src/state/slices/chat-slice";
 import type { ChatMessage } from "../../src/types/messages";
 
-function makeMessage(kind: ChatMessage["kind"], id: string, text: string): ChatMessage {
+function makeMessage(
+	kind: ChatMessage["kind"],
+	id: string,
+	text: string,
+): ChatMessage {
 	return { kind, id, text, timestamp: Date.now() };
 }
 
@@ -21,7 +28,7 @@ describe("chat-slice (normalized)", () => {
 		store.getState().appendUserMessage(msg);
 		const state = store.getState();
 		expect(state.chat.messageIds).toEqual(["u1"]);
-		expect(state.chat.messagesById["u1"]).toEqual(msg);
+		expect(state.chat.messagesById.u1).toEqual(msg);
 	});
 
 	test("appendAssistantMessage adds to both structures", () => {
@@ -30,7 +37,7 @@ describe("chat-slice (normalized)", () => {
 		store.getState().appendAssistantMessage(msg);
 		const state = store.getState();
 		expect(state.chat.messageIds).toEqual(["a1"]);
-		expect(state.chat.messagesById["a1"]).toEqual(msg);
+		expect(state.chat.messagesById.a1).toEqual(msg);
 	});
 
 	test("finalizeAssistantMessage updates text for existing message", () => {
@@ -39,7 +46,7 @@ describe("chat-slice (normalized)", () => {
 		store.getState().finalizeAssistantMessage("a1", "final text");
 		const state = store.getState();
 		expect(state.chat.messageIds).toEqual(["a1"]);
-		expect(state.chat.messagesById["a1"].text).toBe("final text");
+		expect(state.chat.messagesById.a1.text).toBe("final text");
 	});
 
 	test("finalizeAssistantMessage creates entry for unknown messageId", () => {
@@ -47,7 +54,7 @@ describe("chat-slice (normalized)", () => {
 		store.getState().finalizeAssistantMessage("unknown", "fallback");
 		const state = store.getState();
 		expect(state.chat.messageIds).toContain("unknown");
-		expect(state.chat.messagesById["unknown"].text).toBe("fallback");
+		expect(state.chat.messagesById.unknown.text).toBe("fallback");
 	});
 
 	test("clearChat resets both structures", () => {
@@ -68,16 +75,18 @@ describe("chat-slice (normalized)", () => {
 		store.getState().hydrateChat(msgs);
 		const state = store.getState();
 		expect(state.chat.messageIds).toEqual(["u1", "a1"]);
-		expect(state.chat.messagesById["u1"].text).toBe("hello");
-		expect(state.chat.messagesById["a1"].text).toBe("hi");
+		expect(state.chat.messagesById.u1.text).toBe("hello");
+		expect(state.chat.messagesById.a1.text).toBe("hi");
 	});
 
 	test("getMessages returns messages in messageIds order", () => {
 		const store = createTestStore();
-		store.getState().hydrateChat([
-			makeMessage("user", "u1", "first"),
-			makeMessage("assistant", "a1", "second"),
-		]);
+		store
+			.getState()
+			.hydrateChat([
+				makeMessage("user", "u1", "first"),
+				makeMessage("assistant", "a1", "second"),
+			]);
 		const messages = getMessages(store.getState());
 		expect(messages.map((m) => m.id)).toEqual(["u1", "a1"]);
 	});
@@ -88,6 +97,6 @@ describe("chat-slice (normalized)", () => {
 		store.getState().appendSystemMessage(msg);
 		const state = store.getState();
 		expect(state.chat.messageIds).toEqual(["s1"]);
-		expect(state.chat.messagesById["s1"]).toEqual(msg);
+		expect(state.chat.messagesById.s1).toEqual(msg);
 	});
 });

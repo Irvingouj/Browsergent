@@ -43,12 +43,12 @@ export function createStreamingMarkdownRenderer() {
 		const tokens = marked.lexer(safe, { async: false });
 
 		let html = "";
-		for (let i = 0; i < tokens.length; i++) {
-			const token = tokens[i]!;
+		let i = 0;
+		for (const token of tokens) {
 			const key = token.raw.slice(0, 64);
 
-			if (i < completedBlocks.length && completedBlocks[i]!.key === key) {
-				html += completedBlocks[i]!.html;
+			if (i < completedBlocks.length && completedBlocks[i]?.key === key) {
+				html += completedBlocks[i]?.html;
 			} else {
 				const blockHtml = postProcessHtml(
 					marked.parse(token.raw, { async: false }) as string,
@@ -64,12 +64,10 @@ export function createStreamingMarkdownRenderer() {
 
 				html += blockHtml;
 			}
+			i++;
 		}
 
-		completedBlocks = completedBlocks.slice(
-			0,
-			Math.max(0, tokens.length - 1),
-		);
+		completedBlocks = completedBlocks.slice(0, Math.max(0, tokens.length - 1));
 		lastLength = text.length;
 		return html;
 	};

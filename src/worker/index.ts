@@ -17,9 +17,9 @@ import type {
 	WorkerSettings,
 	WorkerToPanel,
 } from "../types/messages";
+import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 import { AgentLoop } from "./agent-loop";
 import type { AnthropicConfig } from "./anthropic";
-import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 
 enableStreamDebug();
 
@@ -129,65 +129,63 @@ function handleAgentStart(
 	};
 
 	agentLoop
-		.run(
-			sessionId,
-			task,
-			config,
-			{
-				onStatus(status, reason) {
-					postIfCurrentRun(runId, {
-						type: "agentStatus",
-						runId,
-						status,
-						reason,
-					});
-				},
-				onMessage(kind, text, id) {
-					postIfCurrentRun(runId, {
-						type: "agentMessage",
-						runId,
-						message: {
-							kind,
-							id: id ?? crypto.randomUUID(),
-							text,
-							timestamp: Date.now(),
-						},
-					});
-				},
-				onTextDelta(messageId, text) {
-					streamLog("worker.post_delta", { msgId: messageId.slice(0, 8), len: text.length });
-					postIfCurrentRun(runId, {
-						type: "agentTextDelta",
-						runId,
-						messageId,
-						text,
-					});
-				},
-				onMessageEnd(messageId) {
-						postIfCurrentRun(runId, {
-								type: "agentMessageEnd",
-								runId,
-								messageId,
-						});
-				},
-				onTrace(entry: AgentTraceEntry) {
-					postIfCurrentRun(runId, { type: "agentTrace", runId, entry });
-				},
-				onError(code, message) {
-					postIfCurrentRun(runId, {
-						type: "agentError",
-						runId,
-						error: {
-							code: code as import("../types/messages").BrowsergentError["code"],
-							message,
-						},
-					});
-				},
-				runLua(code) {
-					return relayLuaExecution(code);
-				},
+		.run(sessionId, task, config, {
+			onStatus(status, reason) {
+				postIfCurrentRun(runId, {
+					type: "agentStatus",
+					runId,
+					status,
+					reason,
+				});
 			},
-		)
+			onMessage(kind, text, id) {
+				postIfCurrentRun(runId, {
+					type: "agentMessage",
+					runId,
+					message: {
+						kind,
+						id: id ?? crypto.randomUUID(),
+						text,
+						timestamp: Date.now(),
+					},
+				});
+			},
+			onTextDelta(messageId, text) {
+				streamLog("worker.post_delta", {
+					msgId: messageId.slice(0, 8),
+					len: text.length,
+				});
+				postIfCurrentRun(runId, {
+					type: "agentTextDelta",
+					runId,
+					messageId,
+					text,
+				});
+			},
+			onMessageEnd(messageId) {
+				postIfCurrentRun(runId, {
+					type: "agentMessageEnd",
+					runId,
+					messageId,
+				});
+			},
+			onTrace(entry: AgentTraceEntry) {
+				postIfCurrentRun(runId, { type: "agentTrace", runId, entry });
+			},
+			onError(code, message) {
+				postIfCurrentRun(runId, {
+					type: "agentError",
+					runId,
+					error: {
+						code: code as import("../types/messages").BrowsergentError["code"],
+						message,
+					},
+				});
+			},
+			runLua(code) {
+				return relayLuaExecution(code);
+			},
+		})
 		.catch((err) => {
 			if (runId === currentRunId) {
 				post({
@@ -228,9 +226,10 @@ function handleAgentReset(): void {
 async function handleLuaRun(id: string, code: string): Promise<void> {
 	try {
 		const result = await relayLuaExecution(code);
-		const output = result.status === "err"
-			? formatError(result.error)
-			: result.stdout.join("\n");
+		const output =
+			result.status === "err"
+				? formatError(result.error)
+				: result.stdout.join("\n");
 		post({ type: "luaOutput", id, output });
 	} catch (err) {
 		post({
@@ -247,12 +246,7 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 	const msg = event.data;
 	switch (msg.type) {
 		case "agentStart":
-			handleAgentStart(
-				msg.sessionId,
-				msg.task,
-				msg.settings,
-				msg.runId,
-			);
+			handleAgentStart(msg.sessionId, msg.task, msg.settings, msg.runId);
 			break;
 		case "agentStop":
 			handleAgentStop(msg.runId);

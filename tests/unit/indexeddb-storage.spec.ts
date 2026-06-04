@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
 
 // fake-indexeddb polyfills the global indexedDB object
@@ -13,7 +13,7 @@ describe("IndexedDBStorage", () => {
 	});
 
 	afterEach(async () => {
-		if (storage && storage["db"]) {
+		if (storage?.db) {
 			await storage.clear();
 			await storage.close();
 		}
@@ -88,9 +88,7 @@ describe("IndexedDBStorage", () => {
 
 	test("throws when not initialized", async () => {
 		const fresh = new IndexedDBStorage();
-		await expect(fresh.get("settings", "x")).rejects.toThrow(
-			"not initialized",
-		);
+		await expect(fresh.get("settings", "x")).rejects.toThrow("not initialized");
 	});
 
 	test("init recovers after close", async () => {

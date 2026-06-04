@@ -37,7 +37,7 @@ export class SessionController {
 
 	async init(): Promise<void> {
 		const meta = await this.storage.get<SessionMeta>(SESSION_STORE, META_KEY);
-		if (meta && meta.activeSessionId) {
+		if (meta?.activeSessionId) {
 			this.meta = meta;
 			return;
 		}
@@ -83,11 +83,7 @@ export class SessionController {
 				timestamp: Date.now(),
 				messageCount: 0,
 			};
-			await this.storage.set(
-				SESSION_STORE,
-				`${SESSION_PREFIX}${newId}`,
-				empty,
-			);
+			await this.storage.set(SESSION_STORE, `${SESSION_PREFIX}${newId}`, empty);
 		}
 	}
 
@@ -134,8 +130,13 @@ export class SessionController {
 		}
 	}
 
-	private async loadForId(id: string): Promise<{ messages: ChatMessage[]; trace: AgentTraceEntry[] } | null> {
-		const raw = await this.storage.get<SessionData>(SESSION_STORE, `${SESSION_PREFIX}${id}`);
+	private async loadForId(
+		id: string,
+	): Promise<{ messages: ChatMessage[]; trace: AgentTraceEntry[] } | null> {
+		const raw = await this.storage.get<SessionData>(
+			SESSION_STORE,
+			`${SESSION_PREFIX}${id}`,
+		);
 		if (!raw || typeof raw !== "object") return null;
 		if (!Array.isArray(raw.messages) || !Array.isArray(raw.trace)) return null;
 		return {
@@ -161,10 +162,7 @@ export class SessionController {
 		}
 	}
 
-	async save(
-		messages: ChatMessage[],
-		trace: AgentTraceEntry[],
-	): Promise<void> {
+	async save(messages: ChatMessage[], trace: AgentTraceEntry[]): Promise<void> {
 		try {
 			const activeId = this.meta?.activeSessionId;
 			const snapshot: SessionData = {
@@ -213,11 +211,7 @@ export class SessionController {
 			timestamp: Date.now(),
 			messageCount: 0,
 		};
-		await this.storage.set(
-			SESSION_STORE,
-			`${SESSION_PREFIX}${newId}`,
-			empty,
-		);
+		await this.storage.set(SESSION_STORE, `${SESSION_PREFIX}${newId}`, empty);
 		this.meta = { activeSessionId: newId };
 		await this.storage.set(SESSION_STORE, META_KEY, this.meta);
 		return newId;
@@ -234,15 +228,12 @@ export class SessionController {
 	}
 
 	async deleteSession(id: string): Promise<void> {
-		await this.storage.remove(
-			SESSION_STORE,
-			`${SESSION_PREFIX}${id}`,
-		);
+		await this.storage.remove(SESSION_STORE, `${SESSION_PREFIX}${id}`);
 
 		if (this.meta?.activeSessionId === id) {
 			const remaining = await this.listSessions();
 			if (remaining.length > 0) {
-				this.meta = { activeSessionId: remaining[0]!.id };
+				this.meta = { activeSessionId: remaining[0]?.id };
 			} else {
 				const newId = crypto.randomUUID();
 				this.meta = { activeSessionId: newId };
@@ -265,15 +256,10 @@ export class SessionController {
 
 	async listSessions(): Promise<SessionListItem[]> {
 		const keys = await this.storage.getAllKeys(SESSION_STORE);
-		const sessionKeys = keys.filter(
-			(k) => k.startsWith(SESSION_PREFIX),
-		);
+		const sessionKeys = keys.filter((k) => k.startsWith(SESSION_PREFIX));
 		const sessions: SessionData[] = [];
 		for (const key of sessionKeys) {
-			const data = await this.storage.get<SessionData>(
-				SESSION_STORE,
-				key,
-			);
+			const data = await this.storage.get<SessionData>(SESSION_STORE, key);
 			if (data && typeof data === "object" && data.id) {
 				sessions.push(data);
 			}
@@ -284,20 +270,14 @@ export class SessionController {
 		if (sessions.length > SESSION_CAP) {
 			const toDelete = sessions.slice(SESSION_CAP);
 			for (const s of toDelete) {
-				await this.storage.remove(
-					SESSION_STORE,
-					`${SESSION_PREFIX}${s.id}`,
-				);
+				await this.storage.remove(SESSION_STORE, `${SESSION_PREFIX}${s.id}`);
 			}
 			sessions.length = SESSION_CAP;
 		}
 
 		return sessions.map((s) => ({
 			id: s.id,
-			title:
-				s.customTitle ||
-				s.title ||
-				`Session ${s.id.slice(0, 8)}`,
+			title: s.customTitle || s.title || `Session ${s.id.slice(0, 8)}`,
 			timestamp: s.timestamp,
 			messageCount: s.messageCount,
 		}));
@@ -318,11 +298,7 @@ export class SessionController {
 		} else {
 			data.title = title;
 		}
-		await this.storage.set(
-			SESSION_STORE,
-			`${SESSION_PREFIX}${id}`,
-			data,
-		);
+		await this.storage.set(SESSION_STORE, `${SESSION_PREFIX}${id}`, data);
 	}
 }
 

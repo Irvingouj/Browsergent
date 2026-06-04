@@ -41,14 +41,22 @@ test("chat messages accumulate across multiple runs", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	// First run
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("first task");
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("first task");
 	await sidePanel.locator("text=Run").click();
-	await expect(sidePanel.locator("text=First response")).toBeVisible({ timeout: 10000 });
+	await expect(sidePanel.locator("text=First response")).toBeVisible({
+		timeout: 10000,
+	});
 
 	// Second run
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("second task");
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("second task");
 	await sidePanel.locator("text=Run").click();
-	await expect(sidePanel.locator("text=Second response")).toBeVisible({ timeout: 10000 });
+	await expect(sidePanel.locator("text=Second response")).toBeVisible({
+		timeout: 10000,
+	});
 
 	// Both user messages should be visible
 	await expect(sidePanel.locator("text=first task")).toBeVisible();

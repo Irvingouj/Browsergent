@@ -9,7 +9,11 @@
  * Multiple ExtensionSession instances would race on the same abort signal.
  */
 
-import type { JsRunResult, ExtensionSession as ExtensionSessionType } from "@pi-oxide/extension-js";
+import type {
+	ExtensionSession as ExtensionSessionType,
+	JsRunResult,
+} from "@pi-oxide/extension-js";
+import { browsergentStore } from "../state/store";
 
 const JS_TIMEOUT_MS = 30_000;
 
@@ -180,6 +184,9 @@ export class ExtensionLuaClient {
 
 	/** Tear down the current session and create a fresh one. */
 	private async rebuildSession(): Promise<void> {
+		const store = browsergentStore.getState();
+		store.luaRestarting("rebuild");
+
 		if (this.session && this.runnerPromise) {
 			try {
 				await this.session.stopWith(this.runnerPromise);
@@ -194,8 +201,29 @@ export class ExtensionLuaClient {
 
 		try {
 			await this.init();
+			const session = this.session as ExtensionSessionType | null;
+			if (session) {
+				await Promise.race([
+					session.runCellAsync("1+1"),
+					new Promise<never>((_, reject) =>
+						setTimeout(
+							() => reject(new Error("Runtime health check timed out")),
+							5_000,
+						),
+					),
+				]);
+			}
+			store.luaReady();
 		} catch {
-			// Re-init failed — next call will get "not initialized" error
+			this.session = null;
+			this.runnerPromise = null;
+			this.initialized = false;
+			this.initPromise = null;
+			store.luaFailed({
+				code: "E_LUA_RUNTIME",
+				message: "Runtime rebuild failed",
+				source: "lua",
+			});
 		}
 	}
 }

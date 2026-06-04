@@ -1,6 +1,12 @@
-import { describe, expect, test, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SessionController } from "../../src/controllers/session-controller";
 import { MemoryStorage } from "../../src/storage/memory-storage";
+
+function requireActiveId(ctrl: SessionController): string {
+	const id = ctrl.getActiveSessionId();
+	if (id === null) throw new Error("no active session");
+	return id;
+}
 
 describe("SessionController.load", () => {
 	let storage: MemoryStorage;
@@ -105,9 +111,7 @@ describe("SessionController multi-session", () => {
 
 	test("init() migrates old sessions/current data", async () => {
 		const oldData = {
-			messages: [
-				{ kind: "user", id: "1", text: "hello", timestamp: 1 },
-			],
+			messages: [{ kind: "user", id: "1", text: "hello", timestamp: 1 }],
 			trace: [
 				{
 					id: "t1",
@@ -155,7 +159,7 @@ describe("SessionController multi-session", () => {
 
 	test("createSession() creates a new session and switches active", async () => {
 		await ctrl.init();
-		const firstId = ctrl.getActiveSessionId();
+		const firstId = requireActiveId(ctrl);
 		const messages = [
 			{ id: "1", kind: "user" as const, text: "first", timestamp: 1 },
 		];
@@ -177,24 +181,24 @@ describe("SessionController multi-session", () => {
 		expect(await ctrl.load()).toEqual({ messages: [], trace: [] });
 
 		// old session data should still be accessible
-		const switched = await ctrl.switchSession(firstId!);
+		const switched = await ctrl.switchSession(firstId);
 		expect(switched?.messages).toEqual(messages);
 	});
 
 	test("switchSession() changes active session", async () => {
 		await ctrl.init();
-		const id1 = ctrl.getActiveSessionId();
+		const id1 = requireActiveId(ctrl);
 		await ctrl.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
 			[],
 		);
-		const id2 = await ctrl.createSession();
+		const _id2 = await ctrl.createSession();
 		await ctrl.save(
 			[{ id: "2", kind: "user" as const, text: "b", timestamp: 2 }],
 			[],
 		);
 
-		const switched = await ctrl.switchSession(id1!);
+		const switched = await ctrl.switchSession(id1);
 		expect(ctrl.getActiveSessionId()).toBe(id1);
 		expect(switched?.messages).toEqual([
 			{ id: "1", kind: "user", text: "a", timestamp: 1 },
@@ -226,7 +230,7 @@ describe("SessionController multi-session", () => {
 				const id = await ctrl.createSession();
 				ids.push(id);
 			} else {
-				ids.push(ctrl.getActiveSessionId()!);
+				ids.push(requireActiveId(ctrl));
 			}
 			await ctrl.save(
 				[{ id: `${i}`, kind: "user" as const, text: `msg${i}`, timestamp: i }],
@@ -244,7 +248,7 @@ describe("SessionController multi-session", () => {
 
 	test("deleteSession() removes session", async () => {
 		await ctrl.init();
-		const id1 = ctrl.getActiveSessionId();
+		const id1 = requireActiveId(ctrl);
 		await ctrl.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
 			[],
@@ -255,19 +259,19 @@ describe("SessionController multi-session", () => {
 			[],
 		);
 
-		await ctrl.deleteSession(id1!);
+		await ctrl.deleteSession(id1);
 		expect(ctrl.getActiveSessionId()).toBe(id2);
-		expect(await ctrl.switchSession(id1!)).toBeNull();
+		expect(await ctrl.switchSession(id1)).toBeNull();
 	});
 
 	test("deleteSession() creates new session when last is deleted", async () => {
 		await ctrl.init();
-		const id = ctrl.getActiveSessionId();
+		const id = requireActiveId(ctrl);
 		await ctrl.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
 			[],
 		);
-		await ctrl.deleteSession(id!);
+		await ctrl.deleteSession(id);
 		const newActive = ctrl.getActiveSessionId();
 		expect(newActive).not.toBeNull();
 		expect(newActive).not.toBe(id);
@@ -276,17 +280,17 @@ describe("SessionController multi-session", () => {
 
 	test("updateTitle() updates title", async () => {
 		await ctrl.init();
-		const id = ctrl.getActiveSessionId();
-		await ctrl.updateTitle(id!, "My Title");
+		const id = requireActiveId(ctrl);
+		await ctrl.updateTitle(id, "My Title");
 		const list = await ctrl.listSessions();
 		expect(list[0].title).toBe("My Title");
 	});
 
 	test("updateTitle() with isCustom sets customTitle", async () => {
 		await ctrl.init();
-		const id = ctrl.getActiveSessionId();
-		await ctrl.updateTitle(id!, "Custom", true);
-		await ctrl.updateTitle(id!, "Ignored", false);
+		const id = requireActiveId(ctrl);
+		await ctrl.updateTitle(id, "Custom", true);
+		await ctrl.updateTitle(id, "Ignored", false);
 		const list = await ctrl.listSessions();
 		expect(list[0].title).toBe("Custom");
 	});

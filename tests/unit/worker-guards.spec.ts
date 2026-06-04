@@ -44,27 +44,51 @@ describe("isStaleRunId", () => {
 
 describe("isAgentMessageEnd", () => {
 	test("accepts valid agentMessageEnd", () => {
-		expect(isAgentMessageEnd({ type: "agentMessageEnd", runId: "r1", messageId: "m1" })).toBe(true);
+		expect(
+			isAgentMessageEnd({
+				type: "agentMessageEnd",
+				runId: "r1",
+				messageId: "m1",
+			}),
+		).toBe(true);
 	});
 
 	test("rejects wrong type", () => {
-		expect(isAgentMessageEnd({ type: "agentMessage", runId: "r1", messageId: "m1" })).toBe(false);
+		expect(
+			isAgentMessageEnd({ type: "agentMessage", runId: "r1", messageId: "m1" }),
+		).toBe(false);
 	});
 
 	test("rejects missing runId", () => {
-		expect(isAgentMessageEnd({ type: "agentMessageEnd", messageId: "m1" })).toBe(false);
+		expect(
+			isAgentMessageEnd({ type: "agentMessageEnd", messageId: "m1" }),
+		).toBe(false);
 	});
 
 	test("rejects missing messageId", () => {
-		expect(isAgentMessageEnd({ type: "agentMessageEnd", runId: "r1" })).toBe(false);
+		expect(isAgentMessageEnd({ type: "agentMessageEnd", runId: "r1" })).toBe(
+			false,
+		);
 	});
 
 	test("rejects non-string runId", () => {
-		expect(isAgentMessageEnd({ type: "agentMessageEnd", runId: 123, messageId: "m1" })).toBe(false);
+		expect(
+			isAgentMessageEnd({
+				type: "agentMessageEnd",
+				runId: 123,
+				messageId: "m1",
+			}),
+		).toBe(false);
 	});
 
 	test("rejects non-string messageId", () => {
-		expect(isAgentMessageEnd({ type: "agentMessageEnd", runId: "r1", messageId: 123 })).toBe(false);
+		expect(
+			isAgentMessageEnd({
+				type: "agentMessageEnd",
+				runId: "r1",
+				messageId: 123,
+			}),
+		).toBe(false);
 	});
 
 	test("rejects non-object input", () => {

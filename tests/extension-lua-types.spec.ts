@@ -107,9 +107,7 @@ describe("formatCellResult", () => {
 			error,
 			execution_count: 6,
 		};
-		expect(formatCellResult(cell)).toBe(
-			"[runtime error] something went wrong",
-		);
+		expect(formatCellResult(cell)).toBe("[runtime error] something went wrong");
 	});
 
 	test("formats fuel_exhausted error", () => {

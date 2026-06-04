@@ -1,7 +1,7 @@
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { SettingsController } from "../../src/controllers/settings-controller";
-import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
 import { browsergentStore } from "../../src/state/store";
+import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
 
 import "fake-indexeddb/auto";
 
@@ -64,7 +64,9 @@ describe("SettingsController with IndexedDB", () => {
 		});
 
 		expect(await storage.get("settings", "apiKey")).toBe("sk-new-key");
-		expect(await storage.get("settings", "baseUrl")).toBe("https://new.example.com");
+		expect(await storage.get("settings", "baseUrl")).toBe(
+			"https://new.example.com",
+		);
 		expect(await storage.get("settings", "model")).toBe("claude-new");
 
 		const state = browsergentStore.getState().settings;

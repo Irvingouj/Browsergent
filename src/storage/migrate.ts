@@ -32,7 +32,7 @@ export async function migrateFromChromeStorage(
 		}
 
 		await backend.set("settings", "__migrated", true);
-	} catch (err) {
+	} catch (_err) {
 		// If chrome.storage.local is unavailable (e.g. test environment), mark migrated
 		// to avoid retrying. Real extension environments always have chrome.storage.local.
 		await backend.set("settings", "__migrated", true);

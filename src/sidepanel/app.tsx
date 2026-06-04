@@ -1,28 +1,30 @@
-import { useStore } from "zustand/react";
-import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { useSignalEffect } from "@preact/signals";
+import type { FunctionalComponent } from "preact";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks";
+import { useStore } from "zustand/react";
 import { exportConversation } from "../controllers/export-controller";
 import { LuaController } from "../controllers/lua-controller";
 import { SessionController } from "../controllers/session-controller";
-import { SessionPanel } from "./session-panel";
 import { SettingsController } from "../controllers/settings-controller";
 import { WorkerBridge } from "../controllers/worker-bridge";
+import { type BrowsergentStore, browsergentStore } from "../state/store";
+import { getStreamingSignal } from "../state/streaming-signals";
 import { IndexedDBStorage } from "../storage/indexeddb-storage";
 import { MemoryStorage } from "../storage/memory-storage";
 import { migrateFromChromeStorage } from "../storage/migrate";
-import {
-	type BrowsergentStore,
-	browsergentStore,
-} from "../state/store";
-import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 import type { StorageBackend } from "../storage/storage-backend";
-import { getStreamingSignal } from "../state/streaming-signals";
+import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 import {
-	renderMarkdown,
 	createStreamingMarkdownRenderer,
+	renderMarkdown,
 } from "../utils/markdown-stream";
-import { streamLog } from "../utils/stream-logger";
+import { SessionPanel } from "./session-panel";
 
 const App: FunctionalComponent = () => {
 	const messageIds = useStore(
@@ -34,7 +36,10 @@ const App: FunctionalComponent = () => {
 		(s: BrowsergentStore) => s.chat.messagesById,
 	);
 	const messages = useMemo(
-		() => messageIds.map((id) => messagesById[id]).filter((m): m is ChatMessage => !!m),
+		() =>
+			messageIds
+				.map((id) => messagesById[id])
+				.filter((m): m is ChatMessage => !!m),
 		[messageIds, messagesById],
 	);
 	const trace = useStore(
@@ -73,11 +78,11 @@ const App: FunctionalComponent = () => {
 		browsergentStore,
 		(s: BrowsergentStore) => s.session.sessionPanelOpen,
 	);
-	const sessions = useStore(
+	const _sessions = useStore(
 		browsergentStore,
 		(s: BrowsergentStore) => s.session.sessions,
 	);
-	const activeSessionId = useStore(
+	const _activeSessionId = useStore(
 		browsergentStore,
 		(s: BrowsergentStore) => s.session.activeSessionId,
 	);
@@ -97,9 +102,15 @@ const App: FunctionalComponent = () => {
 			try {
 				const storage = new IndexedDBStorage();
 				await storage.init();
-				if (cancelled) { storage.close(); return; }
+				if (cancelled) {
+					storage.close();
+					return;
+				}
 				await migrateFromChromeStorage(storage);
-				if (cancelled) { storage.close(); return; }
+				if (cancelled) {
+					storage.close();
+					return;
+				}
 				storageRef = storage;
 			} catch (err) {
 				console.warn("Storage init failed, using memory fallback:", err);
@@ -147,13 +158,13 @@ const App: FunctionalComponent = () => {
 				});
 			const sessionList = await sessionCtrl.listSessions();
 			browsergentStore.getState().sessionListLoaded(sessionList);
-			browsergentStore.getState().activeSessionChanged(sessionCtrl.getActiveSessionId() || "");
+			browsergentStore
+				.getState()
+				.activeSessionChanged(sessionCtrl.getActiveSessionId() || "");
 
-			settingsCtrl
-				.load()
-				.catch((err: unknown) => {
-					console.warn("Settings load failed:", err);
-				});
+			settingsCtrl.load().catch((err: unknown) => {
+				console.warn("Settings load failed:", err);
+			});
 
 			setInitialized(true);
 		}
@@ -196,11 +207,7 @@ const App: FunctionalComponent = () => {
 		const activeSession = browsergentStore
 			.getState()
 			.session.sessions.find((s) => s.id === activeId);
-		if (
-			activeSession &&
-			activeSession.title &&
-			!activeSession.title.startsWith("Session ")
-		) {
+		if (activeSession?.title && !activeSession.title.startsWith("Session ")) {
 			titleGeneratedForSession.current.add(activeId);
 			return;
 		}
@@ -217,7 +224,12 @@ const App: FunctionalComponent = () => {
 			const isLocalhost = (() => {
 				try {
 					const u = new URL(url);
-					return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "0.0.0.0" || u.hostname === "::1";
+					return (
+						u.hostname === "localhost" ||
+						u.hostname === "127.0.0.1" ||
+						u.hostname === "0.0.0.0" ||
+						u.hostname === "::1"
+					);
 				} catch {
 					return false;
 				}
@@ -370,13 +382,10 @@ const App: FunctionalComponent = () => {
 		[reloadSessionList],
 	);
 
-	const handleUpdateTitle = useCallback(
-		async (id: string, title: string) => {
-			await sessionControllerRef.current?.updateTitle(id, title, true);
-			browsergentStore.getState().sessionTitleUpdated(id, title);
-		},
-		[],
-	);
+	const handleUpdateTitle = useCallback(async (id: string, title: string) => {
+		await sessionControllerRef.current?.updateTitle(id, title, true);
+		browsergentStore.getState().sessionTitleUpdated(id, title);
+	}, []);
 
 	const isRunning =
 		status === "loading" ||
@@ -439,6 +448,7 @@ const App: FunctionalComponent = () => {
 						fill="none"
 						xmlns="http://www.w3.org/2000/svg"
 					>
+						<title>More options</title>
 						<circle cx="8" cy="4" r="1.5" fill="currentColor" />
 						<circle cx="8" cy="8" r="1.5" fill="currentColor" />
 						<circle cx="8" cy="12" r="1.5" fill="currentColor" />
@@ -556,7 +566,12 @@ const App: FunctionalComponent = () => {
 			{/* Main content */}
 			<div
 				ref={chatScrollRef}
-				style={{ flex: 1, overflow: "auto", padding: "8px 12px", position: "relative" }}
+				style={{
+					flex: 1,
+					overflow: "auto",
+					padding: "8px 12px",
+					position: "relative",
+				}}
 			>
 				{messages.length > 0 && !isRunning && (
 					<button
@@ -708,7 +723,12 @@ function ChatPanel({
 				item.type === "message" ? (
 					<MessageBubble key={item.id} messageId={item.id} />
 				) : (
-					<TraceEntryCompact key={item.id} entry={trace.find((t) => t.id === item.id)!} />
+					(() => {
+						const entry = trace.find((t) => t.id === item.id);
+						return entry ? (
+							<TraceEntryCompact key={item.id} entry={entry} />
+						) : null;
+					})()
 				),
 			)}
 		</div>
@@ -718,7 +738,10 @@ function ChatPanel({
 function MessageBubble({ messageId }: { messageId: string }) {
 	const message = useStore(
 		browsergentStore,
-		useCallback((s: BrowsergentStore) => s.chat.messagesById[messageId], [messageId]),
+		useCallback(
+			(s: BrowsergentStore) => s.chat.messagesById[messageId],
+			[messageId],
+		),
 	);
 	const [, forceUpdate] = useState(0);
 
@@ -733,9 +756,11 @@ function MessageBubble({ messageId }: { messageId: string }) {
 	if (!message) return null;
 
 	const isStreaming = !!streamingSig;
-	const text = isStreaming ? streamingSig!.value : message.text;
+	const text = isStreaming ? streamingSig?.value : message.text;
 
-	const rendererRef = useRef<ReturnType<typeof createStreamingMarkdownRenderer> | null>(null);
+	const rendererRef = useRef<ReturnType<
+		typeof createStreamingMarkdownRenderer
+	> | null>(null);
 	if (isStreaming && !rendererRef.current) {
 		rendererRef.current = createStreamingMarkdownRenderer();
 	}
@@ -743,9 +768,10 @@ function MessageBubble({ messageId }: { messageId: string }) {
 		rendererRef.current = null;
 	}
 
-	const html = isStreaming && rendererRef.current
-		? rendererRef.current(text)
-		: renderMarkdown(text);
+	const html =
+		isStreaming && rendererRef.current
+			? rendererRef.current(text)
+			: renderMarkdown(text);
 
 	return (
 		<div

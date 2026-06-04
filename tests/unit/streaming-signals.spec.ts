@@ -16,26 +16,26 @@ describe("streaming-signals", () => {
 		initStreamingSignal("test-1");
 		const sig = getStreamingSignal("test-1");
 		expect(sig).toBeDefined();
-		expect(sig!.value).toBe("");
+		expect(sig?.value).toBe("");
 	});
 
 	test("initStreamingSignal is idempotent", () => {
 		initStreamingSignal("test-2");
 		appendStreamingDelta("test-2", "hello");
 		initStreamingSignal("test-2");
-		expect(getStreamingSignal("test-2")!.value).toBe("hello");
+		expect(getStreamingSignal("test-2")?.value).toBe("hello");
 	});
 
 	test("appendStreamingDelta auto-creates signal if missing", () => {
 		appendStreamingDelta("test-3", "world");
-		expect(getStreamingSignal("test-3")!.value).toBe("world");
+		expect(getStreamingSignal("test-3")?.value).toBe("world");
 	});
 
 	test("appendStreamingDelta concatenates to existing signal", () => {
 		appendStreamingDelta("test-4", "hello");
 		appendStreamingDelta("test-4", " ");
 		appendStreamingDelta("test-4", "world");
-		expect(getStreamingSignal("test-4")!.value).toBe("hello world");
+		expect(getStreamingSignal("test-4")?.value).toBe("hello world");
 	});
 
 	test("getStreamingSignal returns undefined for unknown id", () => {
@@ -61,8 +61,8 @@ describe("finalizeAllStreamingSignals", () => {
 		appendStreamingDelta("b2", "beta");
 		const results = finalizeAllStreamingSignals();
 		expect(results).toHaveLength(2);
-		expect(results.find((r) => r.messageId === "a1")!.text).toBe("alpha");
-		expect(results.find((r) => r.messageId === "b2")!.text).toBe("beta");
+		expect(results.find((r) => r.messageId === "a1")?.text).toBe("alpha");
+		expect(results.find((r) => r.messageId === "b2")?.text).toBe("beta");
 		expect(getStreamingSignal("a1")).toBeUndefined();
 		expect(getStreamingSignal("b2")).toBeUndefined();
 	});

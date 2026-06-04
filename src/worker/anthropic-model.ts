@@ -1,56 +1,16 @@
-import {
-	defineModel,
-} from "@pi-oxide/pi-host-web";
 import type {
 	AgentModel,
 	ModelEvent,
 	ModelRequest,
 	ModelResponse,
 } from "@pi-oxide/pi-host-web";
+import { defineModel } from "@pi-oxide/pi-host-web";
+import type { Content } from "@pi-oxide/pi-host-web/raw";
+import { streamLog } from "../utils/stream-logger";
 import type { AnthropicConfig } from "./anthropic";
 import { AnthropicProvider } from "./anthropic";
 import type { LlmStream } from "./llm-streamer";
-import { streamLog } from "../utils/stream-logger";
-
-import type {
-	AgentMessage,
-	Content,
-	ToolDefinition,
-} from "@pi-oxide/pi-host-web/raw";
-
-function sdkMessageToWasmContent(block: import("@pi-oxide/pi-host-web").AgentContentBlock): Content {
-	switch (block.type) {
-		case "text":
-			return { type: "text", text: block.text };
-		case "tool_call":
-			return { type: "tool_call", id: block.id, name: block.name, arguments: block.arguments };
-		case "image":
-			return { type: "image", media_type: block.mimeType, data: block.data };
-		default:
-			return { type: "text", text: "" };
-	}
-}
-
-function sdkToWasmMessages(messages: import("@pi-oxide/pi-host-web").AgentMessage[]): AgentMessage[] {
-	return messages.map((msg): AgentMessage => {
-		const content = msg.content.map(sdkMessageToWasmContent);
-		const timestamp = msg.timestamp ?? Date.now();
-		if (msg.role === "tool_result") {
-			return { role: "tool_result", tool_call_id: msg.tool_call_id ?? "", tool_name: "", content, is_error: false, timestamp };
-		}
-		return { role: msg.role, content, timestamp } as AgentMessage;
-	});
-}
-
-function sdkToolToWasmTool(tools: import("@pi-oxide/pi-host-web").AgentToolDefinition[]): ToolDefinition[] {
-	return tools.map((t) => ({
-		name: t.name,
-		label: t.name,
-		description: t.description,
-		parameters: t.inputSchema as Record<string, unknown>,
-		execution_mode: "sequential" as const,
-	}));
-}
+import { sdkToolToWasmTool, sdkToWasmMessages } from "./sdk-message-conversion";
 
 export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 	const provider = new AnthropicProvider(config);
@@ -96,7 +56,10 @@ export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 							payload: {
 								id: chunk.tool_call_id,
 								name: "",
-								arguments: typeof chunk.delta === "string" ? chunk.delta : JSON.stringify(chunk.delta),
+								arguments:
+									typeof chunk.delta === "string"
+										? chunk.delta
+										: JSON.stringify(chunk.delta),
 							},
 						};
 						break;
@@ -121,7 +84,8 @@ export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 		},
 		summarize: async (messages, signal) => {
 			const context = {
-				system_prompt: "Summarize the following conversation context concisely. Preserve key facts, decisions, and action items.",
+				system_prompt:
+					"Summarize the following conversation context concisely. Preserve key facts, decisions, and action items.",
 				messages: sdkToWasmMessages(messages),
 				tools: [],
 			};
@@ -135,21 +99,24 @@ export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 	});
 }
 
-async function drainStreamToResponse(stream: LlmStream): Promise<ModelResponse> {
-	let text = "";
+async function drainStreamToResponse(
+	stream: LlmStream,
+): Promise<ModelResponse> {
+	let _text = "";
 	const toolCalls: import("@pi-oxide/pi-host-web").AgentContentBlock[] = [];
 
 	for await (const chunk of stream.chunks) {
 		switch (chunk.kind) {
 			case "text_delta":
-				text += chunk.text;
+				_text += chunk.text;
 				break;
 			case "tool_call_delta":
 				toolCalls.push({
 					type: "tool_call",
 					id: chunk.tool_call_id,
 					name: "",
-					arguments: typeof chunk.delta === "string" ? chunk.delta : chunk.delta,
+					arguments:
+						typeof chunk.delta === "string" ? chunk.delta : chunk.delta,
 				});
 				break;
 		}
@@ -178,16 +145,26 @@ function wasmToSdkResponse(msg: {
 				content.push({ type: "text", text: block.text });
 				break;
 			case "tool_call":
-				content.push({ type: "tool_call", id: block.id, name: block.name, arguments: block.arguments });
+				content.push({
+					type: "tool_call",
+					id: block.id,
+					name: block.name,
+					arguments: block.arguments,
+				});
 				break;
 		}
 	}
 
 	return {
 		content,
-		stopReason: msg.stop_reason === "tool_use" ? "tool_call" :
-			msg.stop_reason === "max_tokens" ? "length" :
-			msg.stop_reason === "error" ? "error" : "end",
+		stopReason:
+			msg.stop_reason === "tool_use"
+				? "tool_call"
+				: msg.stop_reason === "max_tokens"
+					? "length"
+					: msg.stop_reason === "error"
+						? "error"
+						: "end",
 		model: msg.model,
 	};
 }

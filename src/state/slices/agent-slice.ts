@@ -63,7 +63,12 @@ export function createAgentSlice(
 		},
 		agentFailed(error) {
 			set((state) => ({
-				agent: { ...state.agent, status: "error", lastError: error },
+				agent: {
+					...state.agent,
+					status: "error",
+					lastError: error,
+					activeRunId: undefined,
+				},
 			}));
 		},
 		agentReset() {

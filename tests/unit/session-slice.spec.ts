@@ -20,8 +20,12 @@ describe("session slice", () => {
 
 		browsergentStore.getState().sessionListLoaded(sessions);
 		expect(browsergentStore.getState().session.sessions).toHaveLength(2);
-		expect(browsergentStore.getState().session.sessions[0]).toEqual(sessions[0]);
-		expect(browsergentStore.getState().session.sessions[1]).toEqual(sessions[1]);
+		expect(browsergentStore.getState().session.sessions[0]).toEqual(
+			sessions[0],
+		);
+		expect(browsergentStore.getState().session.sessions[1]).toEqual(
+			sessions[1],
+		);
 	});
 
 	test("activeSessionChanged updates active session id", () => {
@@ -70,9 +74,11 @@ describe("session slice", () => {
 	});
 
 	test("sessionCreated adds a new placeholder session and sets it as active", () => {
-		browsergentStore.getState().sessionListLoaded([
-			{ id: "s1", title: "Existing", timestamp: 1000, messageCount: 1 },
-		]);
+		browsergentStore
+			.getState()
+			.sessionListLoaded([
+				{ id: "s1", title: "Existing", timestamp: 1000, messageCount: 1 },
+			]);
 
 		browsergentStore.getState().sessionCreated("s2");
 		const state = browsergentStore.getState().session;

@@ -1,6 +1,4 @@
-import type {
-	BrowsergentErrorCode,
-} from "../errors/browsergent-error";
+import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import type {
 	AgentStatus,
 	AgentTraceEntry,
@@ -64,9 +62,11 @@ function isAgentTraceEntry(entry: unknown): entry is AgentTraceEntry {
 	return true;
 }
 
-export function isBrowsergentError(
-	err: unknown,
-): err is { code: BrowsergentErrorCode; message: string; details?: Record<string, unknown> } {
+export function isBrowsergentError(err: unknown): err is {
+	code: BrowsergentErrorCode;
+	message: string;
+	details?: Record<string, unknown>;
+} {
 	if (!isObject(err)) return false;
 	if (!isString(err.code)) return false;
 	if (!isString(err.message)) return false;

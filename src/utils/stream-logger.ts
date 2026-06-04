@@ -3,9 +3,19 @@ const WORKER_FLAG = "__stream_debug__";
 
 function isEnabled(): boolean {
 	try {
-		if (typeof globalThis !== "undefined" && (globalThis as Record<string, unknown>)[WORKER_FLAG] === true) return true;
-		if (typeof localStorage !== "undefined" && localStorage.getItem(ENABLED_KEY) === "1") return true;
-	} catch { /* ignore */ }
+		if (
+			typeof globalThis !== "undefined" &&
+			(globalThis as Record<string, unknown>)[WORKER_FLAG] === true
+		)
+			return true;
+		if (
+			typeof localStorage !== "undefined" &&
+			localStorage.getItem(ENABLED_KEY) === "1"
+		)
+			return true;
+	} catch {
+		/* ignore */
+	}
 	return false;
 }
 
@@ -20,6 +30,15 @@ export function streamLog(point: string, data?: Record<string, unknown>): void {
 }
 
 export function enableStreamDebug(): void {
-	try { (globalThis as Record<string, unknown>)[WORKER_FLAG] = true; } catch { /* ignore */ }
-	try { if (typeof localStorage !== "undefined") localStorage.setItem(ENABLED_KEY, "1"); } catch { /* ignore */ }
+	try {
+		(globalThis as Record<string, unknown>)[WORKER_FLAG] = true;
+	} catch {
+		/* ignore */
+	}
+	try {
+		if (typeof localStorage !== "undefined")
+			localStorage.setItem(ENABLED_KEY, "1");
+	} catch {
+		/* ignore */
+	}
 }

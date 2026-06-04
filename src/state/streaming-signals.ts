@@ -1,5 +1,5 @@
-import { signal } from "@preact/signals-core";
 import type { Signal } from "@preact/signals-core";
+import { signal } from "@preact/signals-core";
 
 const streamingSignals = new Map<string, Signal<string>>();
 
@@ -9,10 +9,7 @@ export function getStreamingSignal(
 	return streamingSignals.get(messageId);
 }
 
-export function appendStreamingDelta(
-	messageId: string,
-	delta: string,
-): void {
+export function appendStreamingDelta(messageId: string, delta: string): void {
 	let sig = streamingSignals.get(messageId);
 	if (!sig) {
 		sig = signal("");
@@ -35,7 +32,10 @@ export function initStreamingSignal(messageId: string): void {
 	}
 }
 
-export function finalizeAllStreamingSignals(): Array<{ messageId: string; text: string }> {
+export function finalizeAllStreamingSignals(): Array<{
+	messageId: string;
+	text: string;
+}> {
 	const results: Array<{ messageId: string; text: string }> = [];
 	for (const [messageId, sig] of streamingSignals) {
 		results.push({ messageId, text: sig.value });

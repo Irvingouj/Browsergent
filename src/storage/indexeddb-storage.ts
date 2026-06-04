@@ -44,7 +44,9 @@ export class IndexedDBStorage implements StorageBackend {
 			};
 
 			request.onerror = () => {
-				reject(new Error(`Failed to open IndexedDB: ${request.error?.message}`));
+				reject(
+					new Error(`Failed to open IndexedDB: ${request.error?.message}`),
+				);
 			};
 
 			request.onblocked = () => {
@@ -57,7 +59,7 @@ export class IndexedDBStorage implements StorageBackend {
 		if (!this.db) throw new Error("IndexedDB not initialized");
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db!.transaction(store, "readonly");
+			const tx = this.db?.transaction(store, "readonly");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.get(key);
 
@@ -77,7 +79,7 @@ export class IndexedDBStorage implements StorageBackend {
 		if (!this.db) throw new Error("IndexedDB not initialized");
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db!.transaction(store, "readwrite");
+			const tx = this.db?.transaction(store, "readwrite");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.put(value, key);
 
@@ -95,7 +97,7 @@ export class IndexedDBStorage implements StorageBackend {
 		if (!this.db) throw new Error("IndexedDB not initialized");
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db!.transaction(store, "readwrite");
+			const tx = this.db?.transaction(store, "readwrite");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.delete(key);
 
@@ -113,7 +115,7 @@ export class IndexedDBStorage implements StorageBackend {
 		if (!this.db) throw new Error("IndexedDB not initialized");
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db!.transaction(store, "readonly");
+			const tx = this.db?.transaction(store, "readonly");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.getAll();
 
@@ -133,7 +135,7 @@ export class IndexedDBStorage implements StorageBackend {
 		if (!this.db) throw new Error("IndexedDB not initialized");
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db!.transaction(store, "readonly");
+			const tx = this.db?.transaction(store, "readonly");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.getAllKeys();
 
@@ -153,14 +155,15 @@ export class IndexedDBStorage implements StorageBackend {
 		if (!this.db) throw new Error("IndexedDB not initialized");
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db!.transaction(
-				Array.from(this.db!.objectStoreNames),
-				"readwrite",
-			);
-			tx.oncomplete = () => resolve();
-			tx.onerror = () => reject(new Error(`Failed to clear: ${tx.error?.message}`));
+			const db = this.db;
+			if (!db) throw new Error("IndexedDB not initialized");
 
-			for (const storeName of this.db!.objectStoreNames) {
+			const tx = db.transaction(Array.from(db.objectStoreNames), "readwrite");
+			tx.oncomplete = () => resolve();
+			tx.onerror = () =>
+				reject(new Error(`Failed to clear: ${tx.error?.message}`));
+
+			for (const storeName of db.objectStoreNames) {
 				tx.objectStore(storeName).clear();
 			}
 		});

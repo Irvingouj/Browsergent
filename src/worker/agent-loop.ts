@@ -1,16 +1,31 @@
-import { Agent, indexedDbStore } from "@pi-oxide/pi-host-web";
 import type { AgentRunResult } from "@pi-oxide/pi-host-web";
+import { Agent, indexedDbStore } from "@pi-oxide/pi-host-web";
 import type { LuaRunResult } from "../types/lua-utils";
 import type { AgentStatus, AgentTraceEntry } from "../types/messages";
+import { streamLog } from "../utils/stream-logger";
+import { createAgentTools } from "./agent-tools";
 import type { AnthropicConfig } from "./anthropic";
 import { SYSTEM_PROMPT } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
-import { createAgentTools } from "./agent-tools";
-import { streamLog } from "../utils/stream-logger";
+import { isToolErrorEnvelope, renderToolOutput } from "./tool-error-result";
+
+export function computeToolEndTraceStatus(
+	sdkStatus: string,
+	_error: { message: string } | undefined,
+	output: unknown,
+): "error" | "done" {
+	if (sdkStatus === "failed") return "error";
+	if (typeof output === "string" && isToolErrorEnvelope(output)) return "error";
+	return "done";
+}
 
 export interface AgentLoopCallbacks {
 	onStatus: (status: AgentStatus, reason?: string) => void;
-	onMessage: (kind: "user" | "assistant" | "system", text: string, id?: string) => void;
+	onMessage: (
+		kind: "user" | "assistant" | "system",
+		text: string,
+		id?: string,
+	) => void;
 	onTextDelta?: (messageId: string, text: string) => void;
 	onMessageEnd?: (messageId: string) => void;
 	onTrace: (entry: AgentTraceEntry) => void;
@@ -35,7 +50,6 @@ export class AgentLoop {
 	private aborted = false;
 	private stepCount = 0;
 	private assistantMessageId: string | null = null;
-	private assistantText = "";
 
 	async run(
 		sessionId: string,
@@ -75,7 +89,10 @@ export class AgentLoop {
 			}
 			this.assistantText += delta;
 			callbacks.onTextDelta?.(this.assistantMessageId, delta);
-			streamLog("agentloop.text_delta", { msgId: this.assistantMessageId?.slice(0, 8), len: delta.length });
+			streamLog("agentloop.text_delta", {
+				msgId: this.assistantMessageId?.slice(0, 8),
+				len: delta.length,
+			});
 		});
 
 		this.agent.on("status", (s: { state: string; message?: string }) => {
@@ -83,52 +100,82 @@ export class AgentLoop {
 			callbacks.onStatus(mapped, s.message);
 		});
 
-		this.agent.on("toolStart", (t: { id: string; name: string; input: unknown }) => {
-			this.stepCount++;
-			callbacks.onStatus("executing_tool");
-			callbacks.onTrace({
-				id: t.id,
-				step: this.stepCount,
-				status: "running",
-				toolName: t.name,
-				toolInput: JSON.stringify(t.input).slice(0, 2000),
-				timestamp: Date.now(),
-			});
-		});
+		this.agent.on(
+			"toolStart",
+			(t: { id: string; name: string; input: unknown }) => {
+				this.stepCount++;
+				callbacks.onStatus("executing_tool");
+				callbacks.onTrace({
+					id: t.id,
+					step: this.stepCount,
+					status: "running",
+					toolName: t.name,
+					toolInput: JSON.stringify(t.input).slice(0, 2000),
+					timestamp: Date.now(),
+				});
+			},
+		);
 
-		this.agent.on("toolEnd", (t: { id: string; name: string; status: string; output?: unknown; error?: { message: string } }) => {
-			const resultText = t.error
-				? t.error.message
-				: typeof t.output === "string"
-					? t.output.slice(0, 8000)
-					: JSON.stringify(t.output).slice(0, 8000);
-			callbacks.onTrace({
-				id: t.id,
-				step: this.stepCount,
-				status: t.status === "failed" ? "error" : "done",
-				toolName: t.name,
-				result: resultText,
-				timestamp: Date.now(),
-			});
-			callbacks.onStatus("running");
-		});
+		this.agent.on(
+			"toolEnd",
+			(t: {
+				id: string;
+				name: string;
+				status: string;
+				output?: unknown;
+				error?: { message: string };
+			}) => {
+				const rawOutput = t.error
+					? t.error.message
+					: typeof t.output === "string"
+						? t.output
+						: JSON.stringify(t.output);
+				const resultText = (
+					typeof t.output === "string" && !t.error
+						? renderToolOutput(rawOutput)
+						: rawOutput
+				).slice(0, 8000);
+				const traceStatus = computeToolEndTraceStatus(
+					t.status,
+					t.error,
+					t.output,
+				);
+				callbacks.onTrace({
+					id: t.id,
+					step: this.stepCount,
+					status: traceStatus,
+					toolName: t.name,
+					result: resultText,
+					timestamp: Date.now(),
+				});
+				callbacks.onStatus("running");
+			},
+		);
 
-		this.agent.on("messageEnd", (msg: { role: string; content: Array<{ type: string; text?: string }> }) => {
-			if (msg.role === "assistant") {
-				const text = msg.content
-					.filter((c): c is { type: "text"; text: string } => c.type === "text")
-					.map((c) => c.text)
-					.join("");
-				if (text && !this.assistantMessageId) {
-					callbacks.onMessage("assistant", text);
+		this.agent.on(
+			"messageEnd",
+			(msg: {
+				role: string;
+				content: Array<{ type: string; text?: string }>;
+			}) => {
+				if (msg.role === "assistant") {
+					const text = msg.content
+						.filter(
+							(c): c is { type: "text"; text: string } => c.type === "text",
+						)
+						.map((c) => c.text)
+						.join("");
+					if (text && !this.assistantMessageId) {
+						callbacks.onMessage("assistant", text);
+					}
+					if (this.assistantMessageId) {
+						callbacks.onMessageEnd?.(this.assistantMessageId);
+					}
+					this.assistantMessageId = null;
+					this.assistantText = "";
 				}
-				if (this.assistantMessageId) {
-					callbacks.onMessageEnd?.(this.assistantMessageId);
-				}
-				this.assistantMessageId = null;
-				this.assistantText = "";
-			}
-		});
+			},
+		);
 
 		this.agent.on("error", (err: { code: string; message: string }) => {
 			callbacks.onError(err.code, err.message);

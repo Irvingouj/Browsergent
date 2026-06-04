@@ -20,10 +20,7 @@ type LuaRunRequestHandler = (msg: {
 	code: string;
 }) => void;
 
-export function isStaleRunId(
-	runId: string,
-	activeRunId?: string,
-): boolean {
+export function isStaleRunId(runId: string, activeRunId?: string): boolean {
 	if (runId === "unknown") return false;
 	if (activeRunId === undefined) return true;
 	return runId !== activeRunId;
@@ -49,12 +46,13 @@ export class WorkerBridge {
 		};
 
 		w.onerror = (err) => {
-			browsergentStore.getState().appendSystemMessage({
-				kind: "system",
-				id: crypto.randomUUID(),
-				text: `Worker error: ${err.message}`,
-				timestamp: Date.now(),
+			const store = browsergentStore.getState();
+			store.agentFailed({
+				code: "E_WORKER_CRASH",
+				message: `Worker error: ${err.message}`,
+				source: "worker",
 			});
+			this.finalizeActiveSignals();
 			this.stop();
 		};
 
@@ -63,19 +61,28 @@ export class WorkerBridge {
 
 	stop(): void {
 		if (!this.worker) return;
+		this.worker.onmessage = null;
+		this.worker.onerror = null;
 		this.worker.terminate();
 		this.worker = null;
 	}
 
+	restart(): void {
+		this.stop();
+		this.start();
+	}
+
 	post(message: PanelToWorker): void {
+		if (!this.worker) this.start();
 		this.worker?.postMessage(message);
 	}
 
 	private handleMessage(raw: unknown): void {
 		if (!isWorkerToPanel(raw)) {
-			const text = typeof raw === "object" && raw !== null
-				? `Received invalid message from worker: type=${(raw as Record<string, unknown>).type ?? "undefined"} ${JSON.stringify(raw).slice(0, 200)}`
-				: `Received invalid message from worker: ${String(raw).slice(0, 200)}`;
+			const text =
+				typeof raw === "object" && raw !== null
+					? `Received invalid message from worker: type=${(raw as Record<string, unknown>).type ?? "undefined"} ${JSON.stringify(raw).slice(0, 200)}`
+					: `Received invalid message from worker: ${String(raw).slice(0, 200)}`;
 			browsergentStore.getState().appendSystemMessage({
 				kind: "system",
 				id: crypto.randomUUID(),
@@ -86,19 +93,32 @@ export class WorkerBridge {
 		}
 
 		switch (raw.type) {
-			case "workerReady":
-				browsergentStore.getState().agentReset();
+			case "workerReady": {
+				if (browsergentStore.getState().agent.status !== "loading") {
+					browsergentStore.getState().agentReset();
+				}
 				break;
+			}
 			case "agentStatus": {
-				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				if (
+					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
+				)
+					return;
 				browsergentStore.getState().agentStatusChanged(raw.status, raw.reason);
-				if (raw.status === "stopped" || raw.status === "error" || raw.status === "done") {
+				if (
+					raw.status === "stopped" ||
+					raw.status === "error" ||
+					raw.status === "done"
+				) {
 					this.finalizeActiveSignals();
 				}
 				break;
 			}
 			case "agentMessage": {
-				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				if (
+					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
+				)
+					return;
 				const { message } = raw;
 				if (message.kind === "user") {
 					browsergentStore.getState().appendUserMessage(message);
@@ -111,22 +131,34 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentTextDelta": {
-				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				if (
+					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
+				)
+					return;
 				appendStreamingDelta(raw.messageId, raw.text);
 				break;
 			}
 			case "agentMessageEnd": {
-				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				if (
+					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
+				)
+					return;
 				this.finalizeMessageSignal(raw.messageId);
 				break;
 			}
 			case "agentTrace": {
-				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				if (
+					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
+				)
+					return;
 				browsergentStore.getState().traceUpdated(raw.entry);
 				break;
 			}
 			case "agentError": {
-				if (isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)) return;
+				if (
+					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
+				)
+					return;
 				const error = raw.error;
 				browsergentStore.getState().agentFailed({
 					code:

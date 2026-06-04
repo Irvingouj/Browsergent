@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 import { launchExtension, startMockAnthropicServer } from "./helpers";
 
 // Helpers ------------------------------------------------------------------
 
-async function configureFakeSettings(sidePanel: any) {
+async function configureFakeSettings(sidePanel: Locator) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
@@ -14,7 +14,7 @@ async function configureFakeSettings(sidePanel: any) {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 }
 
-async function configureMockSettings(sidePanel: any, mockUrl: string) {
+async function configureMockSettings(sidePanel: Locator, mockUrl: string) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
@@ -23,7 +23,10 @@ async function configureMockSettings(sidePanel: any, mockUrl: string) {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 }
 
-async function addMessageWithoutMock(sidePanel: any, text: string = "test task") {
+async function addMessageWithoutMock(
+	sidePanel: Locator,
+	text: string = "test task",
+) {
 	await sidePanel.locator('input[placeholder="Type a task..."]').fill(text);
 	await sidePanel.getByRole("button", { name: "Run" }).click();
 	await expect(
@@ -33,10 +36,12 @@ async function addMessageWithoutMock(sidePanel: any, text: string = "test task")
 }
 
 function makeQuickChunk() {
-	return `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-quick", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n` +
+	return (
+		`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-quick", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n` +
 		`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n` +
 		`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Done" } })}\n\n` +
-		`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`;
+		`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`
+	);
 }
 
 function makeSlowChunk() {
@@ -44,20 +49,22 @@ function makeSlowChunk() {
 }
 
 // Locator helpers for session items
-function sessionTitleLocator(sidePanel: any) {
+function sessionTitleLocator(sidePanel: Locator) {
 	return sidePanel.locator("span", { hasText: "Session" }).first();
 }
 
-function sessionItemLocator(sidePanel: any) {
+function sessionItemLocator(sidePanel: Locator) {
 	return sessionTitleLocator(sidePanel).locator("xpath=../..");
 }
 
-function floatingNewButton(sidePanel: any) {
+function floatingNewButton(sidePanel: Locator) {
 	return sidePanel.locator("button", { hasText: /^New$/ });
 }
 
-function assistantMessageLocator(sidePanel: any, text: string) {
-	return sidePanel.locator('[data-testid="chat-message-assistant"]').locator("text=" + text);
+function assistantMessageLocator(sidePanel: Locator, text: string) {
+	return sidePanel
+		.locator('[data-testid="chat-message-assistant"]')
+		.locator(`text=${text}`);
 }
 
 // Tests --------------------------------------------------------------------
@@ -136,7 +143,9 @@ test("Switch session", async () => {
 	await addMessageWithoutMock(sidePanel, "Message B");
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	// Session B is active (newest). Session A is inactive.
-	const sessionItems = sidePanel.locator("span", { hasText: "Session" }).locator("xpath=../..");
+	const sessionItems = sidePanel
+		.locator("span", { hasText: "Session" })
+		.locator("xpath=../..");
 	await expect(sessionItems).toHaveCount(2);
 	await sessionItems.nth(1).click();
 	await expect(sidePanel.locator("text=Message A")).toBeVisible();
@@ -207,11 +216,17 @@ test("Agent running blocks switch", async () => {
 	});
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("quick task");
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("quick task");
 	await sidePanel.getByRole("button", { name: "Run" }).click();
-	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({ timeout: 5000 });
+	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
+		timeout: 5000,
+	});
 	await expect(floatingNewButton(sidePanel)).toBeVisible({ timeout: 5000 });
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("slow task");
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run" }).click();
 	await sidePanel.waitForTimeout(500);
 	await sidePanel.getByRole("button", { name: "More options" }).click();
@@ -239,11 +254,17 @@ test("Floating New button hidden when running", async () => {
 	});
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("quick task");
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("quick task");
 	await sidePanel.getByRole("button", { name: "Run" }).click();
-	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({ timeout: 5000 });
+	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
+		timeout: 5000,
+	});
 	await expect(floatingNewButton(sidePanel)).toBeVisible({ timeout: 5000 });
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("slow task");
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run" }).click();
 	await expect(floatingNewButton(sidePanel)).toBeHidden();
 	await close();
@@ -260,7 +281,8 @@ test("Session persists after reload", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await close();
 
-	const { sidePanel: sidePanel2, close: close2 } = await launchExtension(tmpDir);
+	const { sidePanel: sidePanel2, close: close2 } =
+		await launchExtension(tmpDir);
 	await sidePanel2.getByRole("button", { name: "More options" }).click();
 	await expect(sessionTitleLocator(sidePanel2)).toBeVisible();
 	await close2();

@@ -1,5 +1,5 @@
-import type { StorageBackend } from "../storage/storage-backend";
 import { browsergentStore } from "../state/store";
+import type { StorageBackend } from "../storage/storage-backend";
 
 export interface SettingsValues {
 	anthropicApiKey: string;
