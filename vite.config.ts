@@ -6,15 +6,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
 	base: "./",
 	resolve: {
-		alias: [
-			{
-				find: "@pi-oxide/extension-js",
-				replacement: path.resolve(
-					__dirname,
-					"node_modules/@pi-oxide/extension-js/index.ts",
-				),
-			},
-		],
+		alias: [],
 	},
 	plugins: [
 		preact(),
@@ -24,7 +16,7 @@ export default defineConfig({
 				const outDir = options.dir ?? "dist";
 				const src = path.resolve(
 					__dirname,
-					"node_modules/@pi-oxide/extension-js/dist/content-script.js",
+					"node_modules/@pi-oxide/extension-js/content-script.js",
 				);
 				const dest = path.resolve(outDir, "content-script.js");
 				try {

@@ -1,45 +1,45 @@
 /**
- * Unit tests for src/types/lua-utils.ts utilities.
+ * Unit tests for src/types/js-utils.ts utilities.
  */
 
 import { describe, expect, test } from "vitest";
-import type { LuaRunResult } from "../src/types/lua-utils";
-import { formatCellResult, formatError } from "../src/types/lua-utils";
+import type { JsRunResult } from "../src/types/js-utils";
+import { formatJsRunResult, formatError } from "../src/types/js-utils";
 
-type WasmCellError = Extract<LuaRunResult, { status: "err" }>["error"];
+type WasmCellError = Extract<JsRunResult, { status: "err" }>["error"];
 
-describe("formatCellResult", () => {
+describe("formatJsRunResult", () => {
 	test("formats stdout-only result", () => {
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "ok",
 			stdout: ["hello", "world"],
 			stderr: [],
 			result: null,
 			execution_count: 1,
 		};
-		expect(formatCellResult(cell)).toBe("hello\nworld");
+		expect(formatJsRunResult(cell)).toBe("hello\nworld");
 	});
 
 	test("formats result value", () => {
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "ok",
 			stdout: [],
 			stderr: [],
 			result: "42",
 			execution_count: 2,
 		};
-		expect(formatCellResult(cell)).toBe("42");
+		expect(formatJsRunResult(cell)).toBe("42");
 	});
 
 	test("combines stdout and result", () => {
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "ok",
 			stdout: ["running..."],
 			stderr: [],
 			result: "done",
 			execution_count: 3,
 		};
-		expect(formatCellResult(cell)).toBe("running...\ndone");
+		expect(formatJsRunResult(cell)).toBe("running...\ndone");
 	});
 
 	test("formats compile error with line number", () => {
@@ -48,14 +48,14 @@ describe("formatCellResult", () => {
 			message: "unexpected symbol",
 			line: 5,
 		};
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
 			error,
 			execution_count: 4,
 		};
-		expect(formatCellResult(cell)).toBe(
+		expect(formatJsRunResult(cell)).toBe(
 			"[compile error] line 5: unexpected symbol",
 		);
 	});
@@ -66,14 +66,14 @@ describe("formatCellResult", () => {
 			message: "syntax error",
 			line: null,
 		};
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
 			error,
 			execution_count: 5,
 		};
-		expect(formatCellResult(cell)).toBe("[compile error] syntax error");
+		expect(formatJsRunResult(cell)).toBe("[compile error] syntax error");
 	});
 
 	test("formats runtime error with line number", () => {
@@ -82,14 +82,14 @@ describe("formatCellResult", () => {
 			message: "attempt to call nil value",
 			line: 12,
 		};
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
 			error,
 			execution_count: 6,
 		};
-		expect(formatCellResult(cell)).toBe(
+		expect(formatJsRunResult(cell)).toBe(
 			"[runtime error] line 12: attempt to call nil value",
 		);
 	});
@@ -100,26 +100,26 @@ describe("formatCellResult", () => {
 			message: "something went wrong",
 			line: null,
 		};
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
 			error,
 			execution_count: 6,
 		};
-		expect(formatCellResult(cell)).toBe("[runtime error] something went wrong");
+		expect(formatJsRunResult(cell)).toBe("[runtime error] something went wrong");
 	});
 
 	test("formats fuel_exhausted error", () => {
 		const error: WasmCellError = { kind: "fuel_exhausted" };
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
 			error,
 			execution_count: 8,
 		};
-		expect(formatCellResult(cell)).toBe(
+		expect(formatJsRunResult(cell)).toBe(
 			"[execution limit reached] possible infinite loop — try a different approach",
 		);
 	});
@@ -129,14 +129,14 @@ describe("formatCellResult", () => {
 			kind: "internal",
 			message: "WASM trap",
 		};
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
 			error,
 			execution_count: 9,
 		};
-		expect(formatCellResult(cell)).toBe("[internal error] WASM trap");
+		expect(formatJsRunResult(cell)).toBe("[internal error] WASM trap");
 	});
 
 	test("includes stderr in error output", () => {
@@ -145,14 +145,14 @@ describe("formatCellResult", () => {
 			message: "something went wrong",
 			line: null,
 		};
-		const cell: LuaRunResult = {
+		const cell: JsRunResult = {
 			status: "err",
 			stdout: [],
 			stderr: ["debug trace line 1", "debug trace line 2"],
 			error,
 			execution_count: 10,
 		};
-		expect(formatCellResult(cell)).toBe(
+		expect(formatJsRunResult(cell)).toBe(
 			"[runtime error] something went wrong\ndebug trace line 1\ndebug trace line 2",
 		);
 	});

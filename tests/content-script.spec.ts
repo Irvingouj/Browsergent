@@ -42,7 +42,7 @@ const TEST_FORM_HTML = `
 </html>
 `;
 
-async function injectExtensionLuaContentScript(
+async function injectExtensionJsContentScript(
 	page: import("@playwright/test").Page,
 ): Promise<void> {
 	const scriptContent = await fs.readFile(
@@ -58,11 +58,11 @@ async function injectExtensionLuaContentScript(
 test("extension-js content script initializes on page", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, TEST_FORM_HTML);
-	await injectExtensionLuaContentScript(testPage);
+	await injectExtensionJsContentScript(testPage);
 
 	const initialized = await testPage.evaluate(() => {
 		return (window as unknown as Record<string, boolean>)
-			.__luaNotebookContentScriptInjected;
+			.__jsNotebookContentScriptInjected;
 	});
 	expect(initialized).toBe(true);
 
@@ -72,7 +72,7 @@ test("extension-js content script initializes on page", async () => {
 test("extension-js content script assigns data-ref-id attributes", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, TEST_FORM_HTML);
-	await injectExtensionLuaContentScript(testPage);
+	await injectExtensionJsContentScript(testPage);
 
 	// The content script's inlineSnapshot assigns data-ref-id to interactive elements
 	// Trigger snapshot by dispatching a message or calling the function directly

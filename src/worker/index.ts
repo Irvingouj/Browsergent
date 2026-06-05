@@ -9,8 +9,8 @@
 
 /// <reference lib="webworker" />
 
-import type { LuaRunResult } from "../types/lua-utils";
-import { formatError } from "../types/lua-utils";
+import type { JsRunResult } from "../types/js-utils";
+import { formatError } from "../types/js-utils";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
@@ -32,58 +32,58 @@ function post(message: WorkerToPanel): void {
 	self.postMessage(message);
 }
 
-// --- Lua relay ---
+// --- JS relay ---
 
-let luaRelayCounter = 0;
-const LUA_RELAY_TIMEOUT_MS = 30_000;
-const pendingLuaRelays = new Map<
+let jsRelayCounter = 0;
+const JS_RELAY_TIMEOUT_MS = 30_000;
+const pendingJsRelays = new Map<
 	string,
 	{
-		resolve: (result: LuaRunResult) => void;
+		resolve: (result: JsRunResult) => void;
 		reject: (error: Error) => void;
 		timeoutId: ReturnType<typeof setTimeout>;
 	}
 >();
 
-function rejectAllPendingLuaRelays(reason: string): void {
-	for (const [id, entry] of pendingLuaRelays) {
+function rejectAllPendingJsRelays(reason: string): void {
+	for (const [id, entry] of pendingJsRelays) {
 		clearTimeout(entry.timeoutId);
 		entry.reject(new Error(reason));
-		pendingLuaRelays.delete(id);
+		pendingJsRelays.delete(id);
 	}
 }
 
-/** Send Lua code to the side panel for execution via ExtensionSession. */
-function relayLuaExecution(code: string): Promise<LuaRunResult> {
-	const relayId = `lua-${++luaRelayCounter}`;
+/** Send JS code to the side panel for execution via ExtensionSession. */
+function relayJsExecution(code: string): Promise<JsRunResult> {
+	const relayId = `js-${++jsRelayCounter}`;
 
-	const promise = new Promise<LuaRunResult>((resolve, reject) => {
+	const promise = new Promise<JsRunResult>((resolve, reject) => {
 		const timeoutId = setTimeout(() => {
-			pendingLuaRelays.delete(relayId);
-			reject(new Error(`Lua relay timed out after ${LUA_RELAY_TIMEOUT_MS}ms`));
-		}, LUA_RELAY_TIMEOUT_MS);
+			pendingJsRelays.delete(relayId);
+			reject(new Error(`JS relay timed out after ${JS_RELAY_TIMEOUT_MS}ms`));
+		}, JS_RELAY_TIMEOUT_MS);
 
-		pendingLuaRelays.set(relayId, { resolve, reject, timeoutId });
+		pendingJsRelays.set(relayId, { resolve, reject, timeoutId });
 	});
 
-	post({ type: "luaRunRequest", id: relayId, code });
+	post({ type: "jsRunRequest", id: relayId, code });
 	return promise;
 }
 
-function handleLuaRelayResult(id: string, result: LuaRunResult): void {
-	const entry = pendingLuaRelays.get(id);
+function handleJsRelayResult(id: string, result: JsRunResult): void {
+	const entry = pendingJsRelays.get(id);
 	if (entry) {
 		clearTimeout(entry.timeoutId);
-		pendingLuaRelays.delete(id);
+		pendingJsRelays.delete(id);
 		entry.resolve(result);
 	}
 }
 
-function handleLuaRelayError(id: string, error: string): void {
-	const entry = pendingLuaRelays.get(id);
+function handleJsRelayError(id: string, error: string): void {
+	const entry = pendingJsRelays.get(id);
 	if (entry) {
 		clearTimeout(entry.timeoutId);
-		pendingLuaRelays.delete(id);
+		pendingJsRelays.delete(id);
 		entry.reject(new Error(error));
 	}
 }
@@ -182,8 +182,8 @@ function handleAgentStart(
 					},
 				});
 			},
-			runLua(code) {
-				return relayLuaExecution(code);
+			runJs(code) {
+				return relayJsExecution(code);
 			},
 		})
 		.catch((err) => {
@@ -211,29 +211,29 @@ function handleAgentStop(runId?: string): void {
 		status: "stopped",
 		reason: "Stopped by user",
 	});
-	rejectAllPendingLuaRelays("Agent stopped");
+	rejectAllPendingJsRelays("Agent stopped");
 }
 
 function handleAgentReset(): void {
 	agentLoop?.reset();
-	rejectAllPendingLuaRelays("Agent reset");
+	rejectAllPendingJsRelays("Agent reset");
 	agentLoop = null;
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
 
-// --- Standalone Lua tab handling ---
+// --- Standalone JS tab handling ---
 
-async function handleLuaRun(id: string, code: string): Promise<void> {
+async function handleJsRun(id: string, code: string): Promise<void> {
 	try {
-		const result = await relayLuaExecution(code);
+		const result = await relayJsExecution(code);
 		const output =
 			result.status === "err"
 				? formatError(result.error)
 				: result.stdout.join("\n");
-		post({ type: "luaOutput", id, output });
+		post({ type: "jsOutput", id, output });
 	} catch (err) {
 		post({
-			type: "luaError",
+			type: "jsError",
 			id,
 			error: err instanceof Error ? err.message : String(err),
 		});
@@ -254,20 +254,20 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 		case "agentReset":
 			handleAgentReset();
 			break;
-		case "luaRun":
-			void handleLuaRun(msg.id, msg.code);
+		case "jsRun":
+			void handleJsRun(msg.id, msg.code);
 			break;
-		case "luaStop":
-			rejectAllPendingLuaRelays("Lua stopped");
+		case "jsStop":
+			rejectAllPendingJsRelays("JS stopped");
 			break;
-		case "luaReset":
-			rejectAllPendingLuaRelays("Lua reset");
+		case "jsReset":
+			rejectAllPendingJsRelays("JS reset");
 			break;
-		case "luaRunResult":
-			handleLuaRelayResult(msg.id, msg.result);
+		case "jsRunResult":
+			handleJsRelayResult(msg.id, msg.result);
 			break;
-		case "luaRunError":
-			handleLuaRelayError(msg.id, msg.error);
+		case "jsRunError":
+			handleJsRelayError(msg.id, msg.error);
 			break;
 	}
 };

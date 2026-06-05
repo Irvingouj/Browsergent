@@ -21,7 +21,7 @@ describe("sdkToWasmMessages", () => {
 
 	test("sets is_error=true and replaces content when tool result is error envelope", () => {
 		const envelope = formatToolError(
-			"E_LUA_TIMEOUT",
+			"E_JS_TIMEOUT",
 			"JS execution timed out",
 			"Retry the same code",
 		);
@@ -40,7 +40,7 @@ describe("sdkToWasmMessages", () => {
 			(c: { type: string }) => c.type === "text",
 		);
 		expect((textContent as { type: "text"; text: string }).text).toBe(
-			"[E_LUA_TIMEOUT] JS execution timed out\nRecovery: Retry the same code",
+			"[E_JS_TIMEOUT] JS execution timed out\nRecovery: Retry the same code",
 		);
 	});
 

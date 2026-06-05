@@ -1,6 +1,6 @@
 import type { AgentRunResult } from "@pi-oxide/pi-host-web";
 import { Agent, indexedDbStore } from "@pi-oxide/pi-host-web";
-import type { LuaRunResult } from "../types/lua-utils";
+import type { JsRunResult } from "../types/js-utils";
 import type { AgentStatus, AgentTraceEntry } from "../types/messages";
 import { streamLog } from "../utils/stream-logger";
 import { createAgentTools } from "./agent-tools";
@@ -30,7 +30,7 @@ export interface AgentLoopCallbacks {
 	onMessageEnd?: (messageId: string) => void;
 	onTrace: (entry: AgentTraceEntry) => void;
 	onError: (code: string, message: string) => void;
-	runLua: (code: string) => Promise<LuaRunResult>;
+	runJs: (code: string) => Promise<JsRunResult>;
 }
 
 const STATUS_MAP: Record<string, AgentStatus> = {
@@ -65,7 +65,7 @@ export class AgentLoop {
 		callbacks.onStatus("loading");
 
 		const model = createAnthropicModel(config);
-		const tools = createAgentTools(callbacks.runLua);
+		const tools = createAgentTools(callbacks.runJs);
 
 		this.agent = new Agent({
 			sessionId,

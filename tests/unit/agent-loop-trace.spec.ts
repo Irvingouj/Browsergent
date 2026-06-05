@@ -4,7 +4,7 @@ import { computeToolEndTraceStatus } from "../../src/worker/agent-loop";
 describe("computeToolEndTraceStatus", () => {
 	test("returns 'error' for error envelope output", () => {
 		const envelope =
-			'{"_is_error":true,"code":"E_LUA_TIMEOUT","message":"timeout","hint":"retry"}';
+			'{"_is_error":true,"code":"E_JS_TIMEOUT","message":"timeout","hint":"retry"}';
 		expect(computeToolEndTraceStatus("completed", undefined, envelope)).toBe(
 			"error",
 		);

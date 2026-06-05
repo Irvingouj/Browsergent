@@ -73,7 +73,7 @@ test("extension-js content script injects without error", async () => {
 	// The content script sets a flag to prevent double-injection
 	const injected = await testPage.evaluate(() => {
 		return (window as unknown as Record<string, boolean>)
-			.__luaNotebookContentScriptInjected;
+			.__jsNotebookContentScriptInjected;
 	});
 	expect(injected).toBe(true);
 

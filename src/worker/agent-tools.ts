@@ -1,6 +1,6 @@
 import type { AgentToolDefinition, AgentTools } from "@pi-oxide/pi-host-web";
-import type { LuaRunResult } from "../types/lua-utils";
-import { formatCellResult } from "../types/lua-utils";
+import type { JsRunResult } from "../types/js-utils";
+import { formatJsRunResult } from "../types/js-utils";
 import { formatToolError } from "./tool-error-result";
 
 interface ExtensionJsApiEntry {
@@ -134,19 +134,19 @@ function classifyError(source: { kind?: string; message?: string }): {
 	hint: string;
 } {
 	if (source.kind === "compile" || source.message?.includes("compile error"))
-		return { code: "E_LUA_COMPILE", hint: "Fix the syntax error and retry." };
+		return { code: "E_JS_COMPILE", hint: "Fix the syntax error and retry." };
 	if (source.kind === "fuel_exhausted" || source.message?.includes("timed out"))
 		return {
-			code: "E_LUA_TIMEOUT",
+			code: "E_JS_TIMEOUT",
 			hint: "The runtime has been rebuilt. Retry the same code.",
 		};
 	if (source.message?.includes("runtime error"))
 		return {
-			code: "E_LUA_RUNTIME",
+			code: "E_JS_RUNTIME",
 			hint: "Check the error, fix the code, and retry.",
 		};
 	return {
-		code: "E_LUA_RUNTIME",
+		code: "E_JS_RUNTIME",
 		hint: "Check the error details and try a different approach.",
 	};
 }
@@ -195,7 +195,7 @@ const data = await page.snapshot_data();
 \`\`\``;
 
 export function createAgentTools(
-	runLua: (code: string) => Promise<LuaRunResult>,
+	runJs: (code: string) => Promise<JsRunResult>,
 ): AgentTools {
 	const definitions: AgentToolDefinition[] = [
 		{
@@ -215,14 +215,14 @@ export function createAgentTools(
 					return "run_js requires a non-empty 'code' string";
 				}
 				try {
-					const result = await runLua(code);
+					const result = await runJs(code);
 					if (result.status === "err") {
 						const { code: errCode, hint } = classifyError({
 							kind: result.error.kind,
 						});
-						return formatToolError(errCode, formatCellResult(result), hint);
+						return formatToolError(errCode, formatJsRunResult(result), hint);
 					}
-					return truncateToolResult(formatCellResult(result), 50000);
+					return truncateToolResult(formatJsRunResult(result), 50000);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
 					const { code: errCode, hint } = classifyError({ message: msg });
@@ -261,7 +261,7 @@ export function createAgentTools(
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
 					return formatToolError(
-						"E_LUA_RUNTIME",
+						"E_JS_RUNTIME",
 						msg,
 						"Check the error details and try a different approach.",
 					);

@@ -1,7 +1,7 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import {
-	isLuaError,
-	isLuaOutput,
+	isJsError,
+	isJsOutput,
 	isWorkerToPanel,
 } from "../protocol/worker-guards";
 import { browsergentStore } from "../state/store";
@@ -14,8 +14,8 @@ import {
 } from "../state/streaming-signals";
 import type { PanelToWorker } from "../types/messages";
 
-type LuaRunRequestHandler = (msg: {
-	type: "luaRunRequest";
+type JsRunRequestHandler = (msg: {
+	type: "jsRunRequest";
 	id: string;
 	code: string;
 }) => void;
@@ -28,12 +28,12 @@ export function isStaleRunId(runId: string, activeRunId?: string): boolean {
 
 export class WorkerBridge {
 	private worker: Worker | null = null;
-	private onLuaRunRequest: LuaRunRequestHandler | null = null;
+	private onJsRunRequest: JsRunRequestHandler | null = null;
 
 	constructor(options?: {
-		onLuaRunRequest?: LuaRunRequestHandler;
+		onJsRunRequest?: JsRunRequestHandler;
 	}) {
-		this.onLuaRunRequest = options?.onLuaRunRequest ?? null;
+		this.onJsRunRequest = options?.onJsRunRequest ?? null;
 	}
 
 	start(): void {
@@ -177,25 +177,25 @@ export class WorkerBridge {
 				});
 				break;
 			}
-			case "luaOutput": {
-				if (isLuaOutput(raw)) {
-					browsergentStore.getState().luaOutputAppended(raw.output);
+			case "jsOutput": {
+				if (isJsOutput(raw)) {
+					browsergentStore.getState().jsOutputAppended(raw.output);
 				}
 				break;
 			}
-			case "luaError": {
-				if (isLuaError(raw)) {
-					browsergentStore.getState().luaFailed({
-						code: "E_LUA_RUNTIME",
+			case "jsError": {
+				if (isJsError(raw)) {
+					browsergentStore.getState().jsFailed({
+						code: "E_JS_RUNTIME",
 						message: raw.error,
-						source: "lua",
+						source: "js",
 					});
 				}
 				break;
 			}
-			case "luaRunRequest":
-				if (this.onLuaRunRequest) {
-					this.onLuaRunRequest(raw);
+			case "jsRunRequest":
+				if (this.onJsRunRequest) {
+					this.onJsRunRequest(raw);
 				}
 				break;
 		}

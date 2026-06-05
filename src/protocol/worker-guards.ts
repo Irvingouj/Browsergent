@@ -153,31 +153,31 @@ export function isAgentError(msg: unknown): msg is {
 	return true;
 }
 
-export function isLuaOutput(
+export function isJsOutput(
 	msg: unknown,
-): msg is { type: "luaOutput"; id: string; output: string } {
+): msg is { type: "jsOutput"; id: string; output: string } {
 	if (!isObject(msg)) return false;
-	if (msg.type !== "luaOutput") return false;
+	if (msg.type !== "jsOutput") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.output)) return false;
 	return true;
 }
 
-export function isLuaError(
+export function isJsError(
 	msg: unknown,
-): msg is { type: "luaError"; id: string; error: string } {
+): msg is { type: "jsError"; id: string; error: string } {
 	if (!isObject(msg)) return false;
-	if (msg.type !== "luaError") return false;
+	if (msg.type !== "jsError") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.error)) return false;
 	return true;
 }
 
-export function isLuaRunRequest(
+export function isJsRunRequest(
 	msg: unknown,
-): msg is { type: "luaRunRequest"; id: string; code: string } {
+): msg is { type: "jsRunRequest"; id: string; code: string } {
 	if (!isObject(msg)) return false;
-	if (msg.type !== "luaRunRequest") return false;
+	if (msg.type !== "jsRunRequest") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.code)) return false;
 	return true;
@@ -192,8 +192,8 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isAgentTrace(msg) ||
 		isAgentMessageEnd(msg) ||
 		isAgentError(msg) ||
-		isLuaOutput(msg) ||
-		isLuaError(msg) ||
-		isLuaRunRequest(msg)
+		isJsOutput(msg) ||
+		isJsError(msg) ||
+		isJsRunRequest(msg)
 	);
 }

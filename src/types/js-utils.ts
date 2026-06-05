@@ -1,11 +1,10 @@
 import type { JsRunResult } from "@pi-oxide/extension-js";
 
-// Alias for backward compatibility with the rest of the codebase
-export type LuaRunResult = JsRunResult;
+export type { JsRunResult };
 
-type WasmCellError = Extract<LuaRunResult, { status: "err" }>["error"];
+type WasmCellError = Extract<JsRunResult, { status: "err" }>["error"];
 
-export function formatCellResult(cell: LuaRunResult): string {
+export function formatJsRunResult(cell: JsRunResult): string {
 	if (cell.status === "err") {
 		const errorPrefix = formatError(cell.error);
 		const stderr = cell.stderr.join("\n");

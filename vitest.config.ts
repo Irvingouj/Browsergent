@@ -10,7 +10,7 @@ export default defineConfig({
 	},
 	test: {
 		include: [
-			"tests/extension-lua-types.spec.ts",
+			"tests/extension-js-types.spec.ts",
 			"tests/real-provider-smoke.spec.ts",
 			"tests/unit/**/*.spec.ts",
 		],

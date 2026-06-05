@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla";
 import { type AgentSlice, createAgentSlice } from "./slices/agent-slice";
 import { type ChatSlice, createChatSlice } from "./slices/chat-slice";
-import { createLuaSlice, type LuaSlice } from "./slices/lua-slice";
+import { createJsSlice, type JsSlice } from "./slices/js-slice";
 import { createSessionSlice, type SessionSlice } from "./slices/session-slice";
 import {
 	createSettingsSlice,
@@ -15,7 +15,7 @@ export interface BrowsergentStore
 		ChatSlice,
 		AgentSlice,
 		TraceSlice,
-		LuaSlice,
+		JsSlice,
 		UiSlice,
 		SessionSlice {}
 
@@ -24,7 +24,7 @@ export const browsergentStore = createStore<BrowsergentStore>((set, get) => ({
 	...createChatSlice(set, get),
 	...createAgentSlice(set, get),
 	...createTraceSlice(set, get),
-	...createLuaSlice(set, get),
+	...createJsSlice(set, get),
 	...createUiSlice(set, get),
 	...createSessionSlice(set, get),
 }));

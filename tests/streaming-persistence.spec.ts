@@ -257,7 +257,7 @@ test("text before run_js tool call continues after run_js tool result", async ()
 	mock.server.close();
 });
 
-test("get_doc tool returns Lua API docs and continues the agent turn", async () => {
+test("get_doc tool returns JS API docs and continues the agent turn", async () => {
 	const mock = startMockAnthropicServer({
 		responses: [
 			{
@@ -295,7 +295,7 @@ test("get_doc tool returns Lua API docs and continues the agent turn", async () 
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
-		.fill("check lua docs");
+		.fill("check js docs");
 	await sidePanel.getByRole("button", { name: "Run" }).click();
 
 	await expect(sidePanel.locator("text=Docs loaded.")).toBeVisible({

@@ -1,62 +1,62 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { browsergentStore } from "../../src/state/store";
 
-describe("lua rebuild state transitions", () => {
+describe("js rebuild state transitions", () => {
 	beforeEach(() => {
 		const store = browsergentStore.getState();
 		store.agentReset();
-		store.luaDisposed();
+		store.jsDisposed();
 	});
 
 	afterEach(() => {
 		browsergentStore.getState().agentReset();
-		browsergentStore.getState().luaDisposed();
+		browsergentStore.getState().jsDisposed();
 	});
 
 	test("rebuild sequence: initializing -> restarting -> ready", () => {
 		const store = browsergentStore.getState();
-		store.luaInitializing();
-		expect(browsergentStore.getState().lua.status).toBe("initializing");
+		store.jsInitializing();
+		expect(browsergentStore.getState().js.status).toBe("initializing");
 
-		store.luaRestarting("timeout");
-		expect(browsergentStore.getState().lua.status).toBe("restarting");
+		store.jsRestarting("timeout");
+		expect(browsergentStore.getState().js.status).toBe("restarting");
 
-		store.luaReady();
-		expect(browsergentStore.getState().lua.status).toBe("ready");
-		expect(browsergentStore.getState().lua.lastError).toBeUndefined();
+		store.jsReady();
+		expect(browsergentStore.getState().js.status).toBe("ready");
+		expect(browsergentStore.getState().js.lastError).toBeUndefined();
 	});
 
 	test("rebuild failure: restarting -> error", () => {
 		const store = browsergentStore.getState();
-		store.luaInitializing();
-		store.luaRestarting("crash");
-		store.luaFailed({ code: "E_LUA_RUNTIME", message: "Rebuild failed" });
-		expect(browsergentStore.getState().lua.status).toBe("error");
-		expect(browsergentStore.getState().lua.lastError?.code).toBe(
-			"E_LUA_RUNTIME",
+		store.jsInitializing();
+		store.jsRestarting("crash");
+		store.jsFailed({ code: "E_JS_RUNTIME", message: "Rebuild failed" });
+		expect(browsergentStore.getState().js.status).toBe("error");
+		expect(browsergentStore.getState().js.lastError?.code).toBe(
+			"E_JS_RUNTIME",
 		);
 	});
 
 	test("recovery after rebuild failure: error -> initializing -> ready", () => {
 		const store = browsergentStore.getState();
-		store.luaInitializing();
-		store.luaRestarting("crash");
-		store.luaFailed({ code: "E_LUA_RUNTIME", message: "Rebuild failed" });
+		store.jsInitializing();
+		store.jsRestarting("crash");
+		store.jsFailed({ code: "E_JS_RUNTIME", message: "Rebuild failed" });
 
 		// Second attempt succeeds
-		store.luaInitializing();
-		store.luaReady();
-		expect(browsergentStore.getState().lua.status).toBe("ready");
-		expect(browsergentStore.getState().lua.lastError).toBeUndefined();
+		store.jsInitializing();
+		store.jsReady();
+		expect(browsergentStore.getState().js.status).toBe("ready");
+		expect(browsergentStore.getState().js.lastError).toBeUndefined();
 	});
 
-	test("luaRunning -> luaReady round-trip", () => {
+	test("jsRunning -> jsReady round-trip", () => {
 		const store = browsergentStore.getState();
-		store.luaInitializing();
-		store.luaReady();
-		store.luaRunning();
-		expect(browsergentStore.getState().lua.status).toBe("running");
-		store.luaReady();
-		expect(browsergentStore.getState().lua.status).toBe("ready");
+		store.jsInitializing();
+		store.jsReady();
+		store.jsRunning();
+		expect(browsergentStore.getState().js.status).toBe("running");
+		store.jsReady();
+		expect(browsergentStore.getState().js.status).toBe("ready");
 	});
 });

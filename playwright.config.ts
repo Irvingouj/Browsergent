@@ -8,7 +8,7 @@ export default defineConfig({
 		headless: true,
 	},
 	testIgnore: [
-		"**/extension-lua-types.spec.ts",
+		"**/extension-js-types.spec.ts",
 		"**/real-provider-smoke.spec.ts",
 		"**/unit/**/*.spec.ts",
 	],

@@ -17,40 +17,39 @@ import { browsergentStore } from "../state/store";
 
 const JS_TIMEOUT_MS = 30_000;
 
-// Keep LuaRunResult as a local alias to minimize changes across the codebase
-export type LuaRunResult = JsRunResult;
+export type { JsRunResult };
 
-interface LuaRelayRequest {
-	type: "luaRunRequest";
+interface JsRelayRequest {
+	type: "jsRunRequest";
 	id: string;
 	code: string;
 }
 
-interface LuaRelayResult {
-	type: "luaRunResult";
+interface JsRelayResult {
+	type: "jsRunResult";
 	id: string;
-	result: LuaRunResult;
+	result: JsRunResult;
 }
 
-interface LuaRelayError {
-	type: "luaRunError";
+interface JsRelayError {
+	type: "jsRunError";
 	id: string;
 	error: string;
 }
 
-type LuaRelayResponse = LuaRelayResult | LuaRelayError;
+type JsRelayResponse = JsRelayResult | JsRelayError;
 
-function isLuaRelayResponse(msg: unknown): msg is LuaRelayResponse {
+function isJsRelayResponse(msg: unknown): msg is JsRelayResponse {
 	if (typeof msg !== "object" || msg === null) return false;
 	const obj = msg as Record<string, unknown>;
 	return (
-		(obj.type === "luaRunResult" || obj.type === "luaRunError") &&
+		(obj.type === "jsRunResult" || obj.type === "jsRunError") &&
 		typeof obj.id === "string"
 	);
 }
 
-export class ExtensionLuaClient {
-	private static instance: ExtensionLuaClient | null = null;
+export class ExtensionJsClient {
+	private static instance: ExtensionJsClient | null = null;
 	private session: ExtensionSessionType | null = null;
 	private runnerPromise: Promise<void> | null = null;
 	private queue: Promise<unknown> = Promise.resolve();
@@ -59,11 +58,11 @@ export class ExtensionLuaClient {
 
 	private constructor() {}
 
-	static getInstance(): ExtensionLuaClient {
-		if (!ExtensionLuaClient.instance) {
-			ExtensionLuaClient.instance = new ExtensionLuaClient();
+	static getInstance(): ExtensionJsClient {
+		if (!ExtensionJsClient.instance) {
+			ExtensionJsClient.instance = new ExtensionJsClient();
 		}
-		return ExtensionLuaClient.instance;
+		return ExtensionJsClient.instance;
 	}
 
 	async init(): Promise<void> {
@@ -79,10 +78,10 @@ export class ExtensionLuaClient {
 		await this.initPromise;
 	}
 
-	async runLua(code: string): Promise<LuaRunResult> {
+	async runJs(code: string): Promise<JsRunResult> {
 		await this.ensureReady();
 
-		return new Promise<LuaRunResult>((resolve, reject) => {
+		return new Promise<JsRunResult>((resolve, reject) => {
 			// Chain onto queue and catch to prevent rejection from breaking future calls
 			this.queue = this.queue
 				.then(async () => {
@@ -105,16 +104,16 @@ export class ExtensionLuaClient {
 	}
 
 	/** Handle a relay request from the worker. */
-	handleRelayRequest(request: LuaRelayRequest): void {
+	handleRelayRequest(request: JsRelayRequest): void {
 		const { id, code } = request;
 
-		this.runLua(code)
+		this.runJs(code)
 			.then((result) => {
-				this.dispatchRelayResponse({ type: "luaRunResult", id, result });
+				this.dispatchRelayResponse({ type: "jsRunResult", id, result });
 			})
 			.catch((err: Error) => {
 				this.dispatchRelayResponse({
-					type: "luaRunError",
+					type: "jsRunError",
 					id,
 					error: err.message,
 				});
@@ -122,14 +121,14 @@ export class ExtensionLuaClient {
 	}
 
 	/** Dispatch a relay response to the worker via postMessage. */
-	private dispatchRelayResponse(msg: LuaRelayResponse): void {
-		const handler = ExtensionLuaClient.relayCallback;
+	private dispatchRelayResponse(msg: JsRelayResponse): void {
+		const handler = ExtensionJsClient.relayCallback;
 		if (handler) {
 			handler(msg);
 		}
 	}
 
-	static relayCallback: ((msg: LuaRelayResponse) => void) | null = null;
+	static relayCallback: ((msg: JsRelayResponse) => void) | null = null;
 
 	async dispose(): Promise<void> {
 		if (!this.session || !this.runnerPromise) return;
@@ -151,11 +150,11 @@ export class ExtensionLuaClient {
 			await this.initPromise;
 		}
 		if (!this.initialized || !this.session) {
-			throw new Error("ExtensionLuaClient not initialized. Call init() first.");
+			throw new Error("ExtensionJsClient not initialized. Call init() first.");
 		}
 	}
 
-	private async executeWithTimeout(code: string): Promise<LuaRunResult> {
+	private async executeWithTimeout(code: string): Promise<JsRunResult> {
 		if (!this.session) {
 			throw new Error("ExtensionSession not available");
 		}
@@ -185,7 +184,7 @@ export class ExtensionLuaClient {
 	/** Tear down the current session and create a fresh one. */
 	private async rebuildSession(): Promise<void> {
 		const store = browsergentStore.getState();
-		store.luaRestarting("rebuild");
+		store.jsRestarting("rebuild");
 
 		if (this.session && this.runnerPromise) {
 			try {
@@ -213,31 +212,31 @@ export class ExtensionLuaClient {
 					),
 				]);
 			}
-			store.luaReady();
+			store.jsReady();
 		} catch {
 			this.session = null;
 			this.runnerPromise = null;
 			this.initialized = false;
 			this.initPromise = null;
-			store.luaFailed({
-				code: "E_LUA_RUNTIME",
+			store.jsFailed({
+				code: "E_JS_RUNTIME",
 				message: "Runtime rebuild failed",
-				source: "lua",
+				source: "js",
 			});
 		}
 	}
 }
 
 /** Type guard for worker relay message handling. */
-export function isLuaRelayRequest(msg: unknown): msg is LuaRelayRequest {
+export function isJsRelayRequest(msg: unknown): msg is JsRelayRequest {
 	if (typeof msg !== "object" || msg === null) return false;
 	const obj = msg as Record<string, unknown>;
 	return (
-		obj.type === "luaRunRequest" &&
+		obj.type === "jsRunRequest" &&
 		typeof obj.id === "string" &&
 		typeof obj.code === "string"
 	);
 }
 
-export type { LuaRelayError, LuaRelayRequest, LuaRelayResult };
-export { isLuaRelayResponse };
+export type { JsRelayError, JsRelayRequest, JsRelayResult };
+export { isJsRelayResponse };

@@ -6,13 +6,13 @@ describe("tool-error-result", () => {
 			"../../src/worker/tool-error-result"
 		);
 		const result = formatToolError(
-			"E_LUA_TIMEOUT",
+			"E_JS_TIMEOUT",
 			"JS execution timed out after 30000ms",
 			"Retry the same code",
 		);
 		const parsed = JSON.parse(result);
 		expect(parsed._is_error).toBe(true);
-		expect(parsed.code).toBe("E_LUA_TIMEOUT");
+		expect(parsed.code).toBe("E_JS_TIMEOUT");
 		expect(parsed.message).toBe("JS execution timed out after 30000ms");
 		expect(parsed.hint).toBe("Retry the same code");
 	});
@@ -22,14 +22,14 @@ describe("tool-error-result", () => {
 			"../../src/worker/tool-error-result"
 		);
 		const envelope = formatToolError(
-			"E_LUA_RUNTIME",
+			"E_JS_RUNTIME",
 			"runtime error",
 			"Fix and retry",
 		);
 		const parsed = parseToolErrorEnvelope(envelope);
 		expect(parsed).toEqual({
 			_is_error: true,
-			code: "E_LUA_RUNTIME",
+			code: "E_JS_RUNTIME",
 			message: "runtime error",
 			hint: "Fix and retry",
 		});
@@ -51,7 +51,7 @@ describe("tool-error-result", () => {
 		const { formatToolError, isToolErrorEnvelope } = await import(
 			"../../src/worker/tool-error-result"
 		);
-		const envelope = formatToolError("E_LUA_RUNTIME", "err", "hint");
+		const envelope = formatToolError("E_JS_RUNTIME", "err", "hint");
 		expect(isToolErrorEnvelope(envelope)).toBe(true);
 		expect(isToolErrorEnvelope("normal text")).toBe(false);
 		expect(isToolErrorEnvelope("")).toBe(false);
@@ -61,9 +61,9 @@ describe("tool-error-result", () => {
 		const { formatToolError, renderToolOutput } = await import(
 			"../../src/worker/tool-error-result"
 		);
-		const envelope = formatToolError("E_LUA_TIMEOUT", "timeout error", "retry");
+		const envelope = formatToolError("E_JS_TIMEOUT", "timeout error", "retry");
 		const text = renderToolOutput(envelope);
-		expect(text).toBe("[E_LUA_TIMEOUT] timeout error\nRecovery: retry");
+		expect(text).toBe("[E_JS_TIMEOUT] timeout error\nRecovery: retry");
 	});
 
 	test("renderToolOutput passes through non-envelope text unchanged", async () => {

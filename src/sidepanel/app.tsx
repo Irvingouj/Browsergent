@@ -9,7 +9,7 @@ import {
 } from "preact/hooks";
 import { useStore } from "zustand/react";
 import { exportConversation } from "../controllers/export-controller";
-import { LuaController } from "../controllers/lua-controller";
+import { JsController } from "../controllers/js-controller";
 import { SessionController } from "../controllers/session-controller";
 import { SettingsController } from "../controllers/settings-controller";
 import { WorkerBridge } from "../controllers/worker-bridge";
@@ -88,7 +88,7 @@ const App: FunctionalComponent = () => {
 	);
 	const [initialized, setInitialized] = useState(false);
 	const bridgeRef = useRef<WorkerBridge | null>(null);
-	const luaControllerRef = useRef<LuaController | null>(null);
+	const jsControllerRef = useRef<JsController | null>(null);
 	const settingsControllerRef = useRef<SettingsController | null>(null);
 	const sessionControllerRef = useRef<SessionController | null>(null);
 	const titleGeneratedForSession = useRef<Set<string>>(new Set());
@@ -123,14 +123,14 @@ const App: FunctionalComponent = () => {
 			const storage = storageRef;
 
 			const bridge = new WorkerBridge({
-				onLuaRunRequest: (msg) => {
-					luaControllerRef.current?.handleRelayRequest(msg);
+				onJsRunRequest: (msg) => {
+					jsControllerRef.current?.handleRelayRequest(msg);
 				},
 			});
 			bridgeRef.current = bridge;
 
-			const lua = new LuaController(bridge);
-			luaControllerRef.current = lua;
+			const js = new JsController(bridge);
+			jsControllerRef.current = js;
 
 			const settingsCtrl = new SettingsController(storage);
 			settingsControllerRef.current = settingsCtrl;
@@ -139,8 +139,8 @@ const App: FunctionalComponent = () => {
 			sessionControllerRef.current = sessionCtrl;
 			await sessionCtrl.init();
 
-			lua.init().catch((err: unknown) => {
-				console.warn("Lua init failed:", err);
+			js.init().catch((err: unknown) => {
+				console.warn("JS init failed:", err);
 			});
 			bridge.start();
 			sessionCtrl
@@ -174,10 +174,10 @@ const App: FunctionalComponent = () => {
 		return () => {
 			cancelled = true;
 			bridgeRef.current?.stop();
-			const lua = luaControllerRef.current;
-			if (lua) {
-				lua.dispose().catch((err: unknown) => {
-					console.warn("Lua dispose failed:", err);
+			const js = jsControllerRef.current;
+			if (js) {
+				js.dispose().catch((err: unknown) => {
+					console.warn("JS dispose failed:", err);
 				});
 			}
 			sessionControllerRef.current?.cancelPendingSave();

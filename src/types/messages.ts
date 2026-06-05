@@ -1,7 +1,7 @@
 /** Panel <-> Worker message types. */
 
 import type { BrowsergentError } from "../errors/browsergent-error";
-import type { LuaRunResult } from "./lua-utils";
+import type { JsRunResult } from "./js-utils";
 
 export type { BrowsergentError };
 
@@ -17,11 +17,11 @@ export type PanelToWorker =
 	  }
 	| { type: "agentStop"; runId?: string }
 	| { type: "agentReset" }
-	| { type: "luaRun"; id: string; code: string }
-	| { type: "luaStop" }
-	| { type: "luaReset" }
-	| { type: "luaRunResult"; id: string; result: LuaRunResult }
-	| { type: "luaRunError"; id: string; error: string };
+	| { type: "jsRun"; id: string; code: string }
+	| { type: "jsStop" }
+	| { type: "jsReset" }
+	| { type: "jsRunResult"; id: string; result: JsRunResult }
+	| { type: "jsRunError"; id: string; error: string };
 
 export interface WorkerSettings {
 	anthropicApiKey?: string;
@@ -39,9 +39,9 @@ export type WorkerToPanel =
 	| { type: "agentTrace"; runId: string; entry: AgentTraceEntry }
 	| { type: "agentMessageEnd"; runId: string; messageId: string }
 	| { type: "agentError"; runId: string; error: BrowsergentError }
-	| { type: "luaOutput"; id: string; output: string }
-	| { type: "luaError"; id: string; error: string }
-	| { type: "luaRunRequest"; id: string; code: string };
+	| { type: "jsOutput"; id: string; output: string }
+	| { type: "jsError"; id: string; error: string }
+	| { type: "jsRunRequest"; id: string; code: string };
 
 // --- Agent Status ---
 
