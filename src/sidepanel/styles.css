@@ -185,35 +185,44 @@ body,
 	margin-left: 2px;
 }
 
-/* ── Markdown content rendered via dangerouslySetInnerHTML ── */
-.message-bubble p {
-	margin: 0 0 4px 0;
-	color: var(--color-text-primary);
-}
-.message-bubble p:last-child {
-	margin-bottom: 0;
-}
-.message-bubble a {
-	color: var(--color-accent-cyan);
-	text-decoration: none;
-	border-bottom: 1px solid transparent;
-	transition: border-color 0.2s;
-}
-.message-bubble a:hover {
-	border-bottom-color: var(--color-accent-cyan);
-}
-.message-bubble pre {
+/* ── Code blocks with language labels ── */
+.message-bubble .code-block {
 	background: var(--color-bg-base);
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	border-radius: 6px;
+	overflow: hidden;
+	margin: 4px 0;
+}
+.message-bubble .code-block__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 4px 8px;
+	background: rgba(255, 255, 255, 0.03);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.message-bubble .code-block__lang {
+	font-size: 9px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.6px;
+	color: var(--color-text-muted);
+	font-family: var(--font-mono);
+}
+.message-bubble .code-block code {
+	display: block;
 	padding: 8px;
 	overflow: auto;
 	font-family: var(--font-mono);
 	font-size: 11px;
 	line-height: 1.5;
-	margin: 4px 0;
+	background: transparent;
+	border: none;
+	color: var(--color-text-primary);
 }
-.message-bubble code {
+
+/* ── Inline code ── */
+.message-bubble .inline-code {
 	background: var(--color-bg-base);
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	border-radius: 4px;
@@ -222,20 +231,130 @@ body,
 	font-size: 11px;
 	color: var(--color-accent-cyan);
 }
-.message-bubble ul,
-.message-bubble ol {
+
+/* ── Syntax highlighting tokens ── */
+.token-keyword {
+	color: var(--color-accent-amber);
+}
+.token-string {
+	color: var(--color-accent-green);
+}
+.token-comment {
+	color: var(--color-text-muted);
+	font-style: italic;
+}
+.token-number {
+	color: var(--color-accent-purple);
+}
+.token-function {
+	color: var(--color-accent-cyan);
+}
+.token-function-def {
+	color: var(--color-accent-cyan);
+	font-weight: 600;
+}
+.token-builtin {
+	color: var(--color-accent-purple);
+	font-style: italic;
+}
+.token-identifier-def {
+	color: var(--color-text-primary);
+	font-weight: 600;
+}
+
+/* ── Blockquotes ── */
+.message-bubble .msg-blockquote {
+	margin: 4px 0;
+	padding: 6px 10px;
+	border-left: 2px solid var(--color-accent-cyan);
+	background: var(--color-bg-surface);
+	border-radius: 0 4px 4px 0;
+	color: var(--color-text-secondary);
+	font-size: 12px;
+}
+
+/* ── Tables ── */
+.message-bubble .msg-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 4px 0;
+	font-size: 11px;
+}
+.message-bubble .msg-table th {
+	background: var(--color-bg-surface);
+	color: var(--color-text-primary);
+	font-weight: 600;
+	padding: 4px 8px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	text-align: left;
+}
+.message-bubble .msg-table td {
+	padding: 4px 8px;
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	color: var(--color-text-secondary);
+}
+.message-bubble .msg-table tr:nth-child(even) {
+	background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── Checklists ── */
+.message-bubble .msg-checkbox {
+	accent-color: var(--color-accent-cyan);
+	width: 12px;
+	height: 12px;
+	margin-right: 4px;
+	vertical-align: middle;
+}
+
+/* ── Lists ── */
+.message-bubble .msg-list {
 	margin: 4px 0;
 	padding-left: 16px;
 	color: var(--color-text-secondary);
 }
-.message-bubble li {
+.message-bubble .msg-list-item {
 	margin-bottom: 2px;
 }
-.message-bubble h1,
-.message-bubble h2,
-.message-bubble h3 {
-	font-size: 13px;
+
+/* ── Paragraphs ── */
+.message-bubble .msg-paragraph {
+	margin: 0 0 4px 0;
+	color: var(--color-text-primary);
+}
+
+/* ── Links ── */
+.message-bubble .msg-link {
+	color: var(--color-accent-cyan);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+	transition: border-color 0.2s;
+}
+.message-bubble .msg-link:hover {
+	border-bottom-color: var(--color-accent-cyan);
+}
+
+/* ── Headings ── */
+.message-bubble .msg-heading {
 	font-weight: 700;
 	margin: 8px 0 4px;
 	color: var(--color-text-primary);
+}
+.message-bubble .msg-heading--1 {
+	font-size: 15px;
+}
+.message-bubble .msg-heading--2 {
+	font-size: 14px;
+}
+.message-bubble .msg-heading--3 {
+	font-size: 13px;
+}
+.message-bubble .msg-heading--4 {
+	font-size: 12px;
+}
+.message-bubble .msg-heading--5 {
+	font-size: 11px;
+}
+.message-bubble .msg-heading--6 {
+	font-size: 11px;
+	color: var(--color-text-muted);
 }

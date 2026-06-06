@@ -1,29 +1,77 @@
 import { marked } from "marked";
+import { formatLangLabel, highlightCode } from "./syntax-highlight";
 
-function postProcessHtml(html: string): string {
-	return html
-		.replace(
-			/<pre>/g,
-			'<pre style="background:#0a0d12;padding:10px;border-radius:6px;overflow:auto;font-size:11px;line-height:1.5;margin:6px 0;border:1px solid rgba(255,255,255,0.06);font-family:JetBrains Mono,monospace;">',
-		)
-		.replace(
-			/<code>/g,
-			'<code style="background:#0a0d12;padding:1px 5px;border-radius:4px;font-size:11px;color:#22d3ee;font-family:JetBrains Mono,monospace;border:1px solid rgba(255,255,255,0.06);">',
-		)
-		.replace(
-			/<ul>/g,
-			'<ul style="margin:6px 0;padding-left:18px;color:#94a3b8;">',
-		)
-		.replace(
-			/<ol>/g,
-			'<ol style="margin:6px 0;padding-left:18px;color:#94a3b8;">',
-		)
-		.replace(
-			/<a /g,
-			'<a style="color:#22d3ee;text-decoration:none;border-bottom:1px solid transparent;transition:border-color 0.2s;" ',
-		)
-		.replace(/<p>/g, '<p style="margin:0 0 6px 0;color:#e2e8f0;">');
+function escapeHtml(text: string): string {
+	return text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
 }
+
+const renderer = new marked.Renderer();
+
+renderer.code = ({ text, lang }): string => {
+	const language = lang || "";
+	const highlighted = language
+		? highlightCode(text, language)
+		: escapeHtml(text);
+	const label = language ? formatLangLabel(language) : "";
+	return `<pre class="${language ? `language-${language} ` : ""}code-block"><div class="code-block__header">${label ? `<span class="code-block__lang">${label}</span>` : ""}</div><code class="${language ? `language-${language}` : ""}">${highlighted}</code></pre>`;
+};
+
+renderer.codespan = ({ text }): string => {
+	return `<code class="inline-code">${escapeHtml(text)}</code>`;
+};
+
+renderer.blockquote = ({ tokens }): string => {
+	const html = marked.parser(tokens as never);
+	return `<blockquote class="msg-blockquote">${html}</blockquote>`;
+};
+
+renderer.table = ({ header, rows }): string => {
+	const buildRow = (cells: unknown, cellTag: string) => {
+		const html = (cells as Array<{ text: string; tokens: never[] }>)
+			.map(
+				(c) =>
+					`<${cellTag} class="msg-table-cell">${marked.parser(c.tokens)}</${cellTag}>`,
+			)
+			.join("");
+		return `<tr class="msg-table-row">${html}</tr>`;
+	};
+	return `<table class="msg-table"><thead>${buildRow(header, "th")}</thead><tbody>${rows.map((r) => buildRow(r, "td")).join("")}</tbody></table>`;
+};
+
+renderer.list = ({ items, ordered }): string => {
+	const tag = ordered ? "ol" : "ul";
+	const html = items
+		.map((item) => {
+			const itemHtml = marked.parser(item.tokens as never);
+			const checked =
+				item.task && item.checked !== undefined
+					? `<input type="checkbox" ${item.checked ? 'checked=""' : ""} disabled="" class="msg-checkbox" /> `
+					: "";
+			return `<li class="msg-list-item">${checked}${itemHtml}</li>`;
+		})
+		.join("");
+	return `<${tag} class="msg-list">${html}</${tag}>`;
+};
+
+renderer.paragraph = ({ tokens }): string => {
+	const html = marked.parser(tokens as never);
+	return `<p class="msg-paragraph">${html}</p>`;
+};
+
+renderer.heading = ({ tokens, depth }): string => {
+	const html = marked.parser(tokens as never);
+	return `<h${depth} class="msg-heading msg-heading--${depth}">${html}</h${depth}>`;
+};
+
+renderer.link = ({ href, tokens }): string => {
+	const html = marked.parser(tokens as never);
+	return `<a href="${href}" class="msg-link" target="_blank" rel="noopener noreferrer">${html}</a>`;
+};
+
+marked.use({ renderer });
 
 export function renderMarkdown(text: string): string {
 	const safe = text
@@ -31,7 +79,7 @@ export function renderMarkdown(text: string): string {
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;");
 	const html = marked.parse(safe, { async: false }) as string;
-	return postProcessHtml(html);
+	return html;
 }
 
 export function createStreamingMarkdownRenderer() {
@@ -59,9 +107,9 @@ export function createStreamingMarkdownRenderer() {
 			if (i < completedBlocks.length && completedBlocks[i]?.key === key) {
 				html += completedBlocks[i]?.html;
 			} else {
-				const blockHtml = postProcessHtml(
-					marked.parse(token.raw, { async: false }) as string,
-				);
+				const blockHtml = marked.parse(token.raw, {
+					async: false,
+				}) as string;
 
 				if (i < tokens.length - 1) {
 					if (i < completedBlocks.length) {
