@@ -50,6 +50,8 @@ export class AgentLoop {
 	private aborted = false;
 	private stepCount = 0;
 	private assistantMessageId: string | null = null;
+	private assistantText = "";
+	private hadOutput = false;
 
 	async run(
 		sessionId: string,
@@ -61,6 +63,7 @@ export class AgentLoop {
 		this.stepCount = 0;
 		this.assistantMessageId = null;
 		this.assistantText = "";
+		this.hadOutput = false;
 
 		callbacks.onStatus("loading");
 
@@ -87,6 +90,7 @@ export class AgentLoop {
 				this.assistantText = "";
 				callbacks.onMessage("assistant", "", this.assistantMessageId);
 			}
+			this.hadOutput = true;
 			this.assistantText += delta;
 			callbacks.onTextDelta?.(this.assistantMessageId, delta);
 			streamLog("agentloop.text_delta", {
@@ -104,6 +108,7 @@ export class AgentLoop {
 			"toolStart",
 			(t: { id: string; name: string; input: unknown }) => {
 				this.stepCount++;
+				this.hadOutput = true;
 				callbacks.onStatus("executing_tool");
 				callbacks.onTrace({
 					id: t.id,
@@ -193,6 +198,11 @@ export class AgentLoop {
 				const errMsg = result.error?.message ?? "Agent run failed";
 				callbacks.onError("agent_error", errMsg);
 				callbacks.onStatus("error", errMsg);
+			} else if (result.status === "completed" && !this.hadOutput) {
+				// Workaround for pi-host-web 0.7.0 bug: Agent.run() returns
+				// "completed" with empty content when the LLM stream fails.
+				callbacks.onError("agent_error", "LLM request failed — no response received");
+				callbacks.onStatus("error", "LLM request failed — no response received");
 			} else {
 				callbacks.onStatus("done");
 			}

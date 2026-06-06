@@ -14,17 +14,24 @@ export default defineConfig({
 			name: "copy-extension-js-assets",
 			writeBundle(options) {
 				const outDir = options.dir ?? "dist";
-				const src = path.resolve(
-					__dirname,
-					"node_modules/@pi-oxide/extension-js/content-script.js",
-				);
-				const dest = path.resolve(outDir, "content-script.js");
-				try {
-					copyFileSync(src, dest);
-				} catch {
-					console.warn(
-						"extension-js content-script.js not found, skipping copy",
-					);
+				const files = [
+					{
+						src: "node_modules/@pi-oxide/extension-js/content-script.js",
+						dest: "content-script.js",
+					},
+					{
+						src: "node_modules/@pi-oxide/extension-js/extension_js.js",
+						dest: "extension_js.js",
+					},
+				];
+				for (const { src: srcRel, dest: destRel } of files) {
+					const src = path.resolve(__dirname, srcRel);
+					const dest = path.resolve(outDir, destRel);
+					try {
+						copyFileSync(src, dest);
+					} catch {
+						console.warn(`${srcRel} not found, skipping copy`);
+					}
 				}
 			},
 		},
@@ -35,7 +42,7 @@ export default defineConfig({
 		rollupOptions: {
 			input: {
 				sidepanel: path.resolve(__dirname, "sidepanel.html"),
-				worker: path.resolve(__dirname, "src/worker/index.ts"),
+				"agent-worker": path.resolve(__dirname, "src/worker/index.ts"),
 				background: path.resolve(__dirname, "src/background/index.ts"),
 			},
 			output: {

@@ -346,7 +346,21 @@ export class AnthropicProvider {
 
 		if (!resp.ok) {
 			const errorText = await resp.text();
-			throw new Error(`Anthropic API error ${resp.status}: ${errorText}`);
+			const errorMessage = `Anthropic API error ${resp.status}: ${errorText}`;
+
+			async function* errorChunks(): AsyncGenerator<LlmChunk> {
+				yield { kind: "error" as const, message: errorMessage };
+			}
+
+			return {
+				chunks: errorChunks(),
+				result: Promise.resolve({
+					Err: {
+						error: { code: "api_error", message: errorMessage },
+						aborted: false,
+					},
+				}),
+			};
 		}
 
 		return this.createStream(resp, signal);

@@ -37,7 +37,7 @@ export class WorkerBridge {
 	}
 
 	start(): void {
-		const w = new Worker(chrome.runtime.getURL("worker.js"), {
+		const w = new Worker(chrome.runtime.getURL("agent-worker.js"), {
 			type: "module",
 		});
 

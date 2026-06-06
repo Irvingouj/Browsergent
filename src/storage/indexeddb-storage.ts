@@ -57,9 +57,10 @@ export class IndexedDBStorage implements StorageBackend {
 
 	async get<T>(store: string, key: string): Promise<T | null> {
 		if (!this.db) throw new Error("IndexedDB not initialized");
+		const db = this.db;
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db?.transaction(store, "readonly");
+			const tx = db.transaction(store, "readonly");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.get(key);
 
@@ -77,9 +78,10 @@ export class IndexedDBStorage implements StorageBackend {
 
 	async set<T>(store: string, key: string, value: T): Promise<void> {
 		if (!this.db) throw new Error("IndexedDB not initialized");
+		const db = this.db;
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db?.transaction(store, "readwrite");
+			const tx = db.transaction(store, "readwrite");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.put(value, key);
 
@@ -95,9 +97,10 @@ export class IndexedDBStorage implements StorageBackend {
 
 	async remove(store: string, key: string): Promise<void> {
 		if (!this.db) throw new Error("IndexedDB not initialized");
+		const db = this.db;
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db?.transaction(store, "readwrite");
+			const tx = db.transaction(store, "readwrite");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.delete(key);
 
@@ -113,9 +116,10 @@ export class IndexedDBStorage implements StorageBackend {
 
 	async getAll<T>(store: string): Promise<T[]> {
 		if (!this.db) throw new Error("IndexedDB not initialized");
+		const db = this.db;
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db?.transaction(store, "readonly");
+			const tx = db.transaction(store, "readonly");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.getAll();
 
@@ -133,9 +137,10 @@ export class IndexedDBStorage implements StorageBackend {
 
 	async getAllKeys(store: string): Promise<string[]> {
 		if (!this.db) throw new Error("IndexedDB not initialized");
+		const db = this.db;
 
 		return new Promise((resolve, reject) => {
-			const tx = this.db?.transaction(store, "readonly");
+			const tx = db.transaction(store, "readonly");
 			const objectStore = tx.objectStore(store);
 			const request = objectStore.getAllKeys();
 

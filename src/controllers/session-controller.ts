@@ -233,7 +233,7 @@ export class SessionController {
 		if (this.meta?.activeSessionId === id) {
 			const remaining = await this.listSessions();
 			if (remaining.length > 0) {
-				this.meta = { activeSessionId: remaining[0]?.id };
+				this.meta = { activeSessionId: remaining[0]?.id ?? crypto.randomUUID() };
 			} else {
 				const newId = crypto.randomUUID();
 				this.meta = { activeSessionId: newId };
