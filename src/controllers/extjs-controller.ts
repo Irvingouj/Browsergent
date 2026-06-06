@@ -3,7 +3,7 @@ import { ExtensionJsClient } from "../sidepanel/extension-js-client";
 import { browsergentStore } from "../state/store";
 import type { WorkerBridge } from "./worker-bridge";
 
-export class JsController {
+export class ExtjsController {
 	private client: ExtensionJsClient;
 
 	constructor(private bridge: WorkerBridge) {
@@ -11,22 +11,22 @@ export class JsController {
 	}
 
 	async init(): Promise<void> {
-		browsergentStore.getState().jsInitializing();
+		browsergentStore.getState().extjsInitializing();
 
 		try {
 			await this.client.init();
-			browsergentStore.getState().jsReady();
+			browsergentStore.getState().extjsReady();
 			ExtensionJsClient.relayCallback = (msg) => {
 				this.bridge.post(msg);
 			};
 		} catch (err: unknown) {
-			browsergentStore.getState().jsFailed(normalizeJsError(err));
+			browsergentStore.getState().extjsFailed(normalizeJsError(err));
 			throw err;
 		}
 	}
 
 	handleRelayRequest(msg: {
-		type: "jsRunRequest";
+		type: "extjsRunRequest";
 		id: string;
 		code: string;
 	}): void {
@@ -34,13 +34,13 @@ export class JsController {
 	}
 
 	async dispose(): Promise<void> {
-		browsergentStore.getState().jsDisposed();
+		browsergentStore.getState().extjsDisposed();
 		ExtensionJsClient.relayCallback = null;
 
 		try {
 			await this.client.dispose();
 		} catch (err: unknown) {
-			console.warn("JS dispose failed:", err);
+			console.warn("Extjs dispose failed:", err);
 		}
 	}
 }

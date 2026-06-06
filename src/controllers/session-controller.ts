@@ -1,3 +1,5 @@
+import { isAgentTraceEntry, isChatMessage } from "../protocol/worker-guards";
+import type { SessionListItem } from "../state/slices/session-slice";
 import type { StorageBackend } from "../storage/storage-backend";
 import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 
@@ -13,13 +15,6 @@ interface SessionData {
 
 interface SessionMeta {
 	activeSessionId: string;
-}
-
-export interface SessionListItem {
-	id: string;
-	title: string;
-	timestamp: number;
-	messageCount: number;
 }
 
 const SESSION_STORE = "sessions";
@@ -53,10 +48,10 @@ export class SessionController {
 			const migrated: SessionData = {
 				id: newId,
 				messages: Array.isArray(oldSession.messages)
-					? (oldSession.messages as ChatMessage[])
+					? oldSession.messages.filter(isChatMessage)
 					: [],
 				trace: Array.isArray(oldSession.trace)
-					? (oldSession.trace as AgentTraceEntry[])
+					? oldSession.trace.filter(isAgentTraceEntry)
 					: [],
 				timestamp: oldSession.timestamp || Date.now(),
 				messageCount: Array.isArray(oldSession.messages)
@@ -97,33 +92,8 @@ export class SessionController {
 	} | null> {
 		try {
 			const activeId = this.meta?.activeSessionId;
-			if (activeId) {
-				const raw = await this.storage.get<SessionData>(
-					SESSION_STORE,
-					`${SESSION_PREFIX}${activeId}`,
-				);
-				if (!raw || typeof raw !== "object") return null;
-				if (!Array.isArray(raw.messages) || !Array.isArray(raw.trace)) {
-					return null;
-				}
-				return {
-					messages: raw.messages as ChatMessage[],
-					trace: raw.trace as AgentTraceEntry[],
-				};
-			}
-
-			const raw = await this.storage.get<SessionSnapshot>(
-				SESSION_STORE,
-				OLD_SESSION_KEY,
-			);
-			if (!raw || typeof raw !== "object") return null;
-			if (!Array.isArray(raw.messages) || !Array.isArray(raw.trace)) {
-				return null;
-			}
-			return {
-				messages: raw.messages as ChatMessage[],
-				trace: raw.trace as AgentTraceEntry[],
-			};
+			if (!activeId) return null;
+			return await this.loadForId(activeId);
 		} catch (err) {
 			console.warn("Session load failed:", err);
 			return null;
@@ -140,8 +110,8 @@ export class SessionController {
 		if (!raw || typeof raw !== "object") return null;
 		if (!Array.isArray(raw.messages) || !Array.isArray(raw.trace)) return null;
 		return {
-			messages: raw.messages as ChatMessage[],
-			trace: raw.trace as AgentTraceEntry[],
+			messages: raw.messages.filter(isChatMessage),
+			trace: raw.trace.filter(isAgentTraceEntry),
 		};
 	}
 
@@ -233,7 +203,9 @@ export class SessionController {
 		if (this.meta?.activeSessionId === id) {
 			const remaining = await this.listSessions();
 			if (remaining.length > 0) {
-				this.meta = { activeSessionId: remaining[0]?.id ?? crypto.randomUUID() };
+				this.meta = {
+					activeSessionId: remaining[0]?.id ?? crypto.randomUUID(),
+				};
 			} else {
 				const newId = crypto.randomUUID();
 				this.meta = { activeSessionId: newId };
@@ -300,10 +272,4 @@ export class SessionController {
 		}
 		await this.storage.set(SESSION_STORE, `${SESSION_PREFIX}${id}`, data);
 	}
-}
-
-interface SessionSnapshot {
-	messages: ChatMessage[];
-	trace: AgentTraceEntry[];
-	timestamp: number;
 }

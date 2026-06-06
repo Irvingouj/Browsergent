@@ -12,14 +12,6 @@ export interface AgentState {
 	lastError?: BrowsergentError;
 }
 
-export interface AgentActions {
-	agentRunRequested(runId: string): void;
-	agentStatusChanged(status: AgentRunStatus, reason?: string): void;
-	agentStopped(reason?: string): void;
-	agentFailed(error: BrowsergentError): void;
-	agentReset(): void;
-}
-
 export interface AgentSlice {
 	agent: AgentState;
 	agentRunRequested(runId: string): void;
@@ -31,7 +23,6 @@ export interface AgentSlice {
 
 export function createAgentSlice(
 	set: StoreApi<BrowsergentStore>["setState"],
-	_get: StoreApi<BrowsergentStore>["getState"],
 ): AgentSlice {
 	return {
 		agent: { status: "idle" },

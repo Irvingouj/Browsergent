@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import { createStore } from "zustand/vanilla";
 import {
 	createChatSlice,
-	getMessages,
 } from "../../src/state/slices/chat-slice";
 import type { BrowsergentStore } from "../../src/state/store";
 import type { ChatMessage } from "../../src/types/messages";
@@ -77,18 +76,6 @@ describe("chat-slice (normalized)", () => {
 		expect(state.chat.messageIds).toEqual(["u1", "a1"]);
 		expect(state.chat.messagesById.u1.text).toBe("hello");
 		expect(state.chat.messagesById.a1.text).toBe("hi");
-	});
-
-	test("getMessages returns messages in messageIds order", () => {
-		const store = createTestStore();
-		store
-			.getState()
-			.hydrateChat([
-				makeMessage("user", "u1", "first"),
-				makeMessage("assistant", "a1", "second"),
-			]);
-		const messages = getMessages(store.getState());
-		expect(messages.map((m) => m.id)).toEqual(["u1", "a1"]);
 	});
 
 	test("appendSystemMessage works like other appends", () => {

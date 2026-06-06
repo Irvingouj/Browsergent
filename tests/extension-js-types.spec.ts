@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, test } from "vitest";
-import type { JsRunResult } from "../src/types/js-utils";
-import { formatJsRunResult, formatError } from "../src/types/js-utils";
+import type { JsRunResult } from "../src/types/extjs-utils";
+import { formatJsRunResult, formatError } from "../src/types/extjs-utils";
 
 type WasmCellError = Extract<JsRunResult, { status: "err" }>["error"];
 

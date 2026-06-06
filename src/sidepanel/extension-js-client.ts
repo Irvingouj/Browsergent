@@ -15,35 +15,35 @@ import type {
 } from "@pi-oxide/extension-js";
 import { browsergentStore } from "../state/store";
 
-const JS_TIMEOUT_MS = 30_000;
+const EXTJS_TIMEOUT_MS = 30_000;
 
 export type { JsRunResult };
 
-interface JsRelayRequest {
-	type: "jsRunRequest";
+interface ExtjsRelayRequest {
+	type: "extjsRunRequest";
 	id: string;
 	code: string;
 }
 
-interface JsRelayResult {
-	type: "jsRunResult";
+interface ExtjsRelayResult {
+	type: "extjsRunResult";
 	id: string;
 	result: JsRunResult;
 }
 
-interface JsRelayError {
-	type: "jsRunError";
+interface ExtjsRelayError {
+	type: "extjsRunError";
 	id: string;
 	error: string;
 }
 
-type JsRelayResponse = JsRelayResult | JsRelayError;
+type ExtjsRelayResponse = ExtjsRelayResult | ExtjsRelayError;
 
-function isJsRelayResponse(msg: unknown): msg is JsRelayResponse {
+function isExtjsRelayResponse(msg: unknown): msg is ExtjsRelayResponse {
 	if (typeof msg !== "object" || msg === null) return false;
 	const obj = msg as Record<string, unknown>;
 	return (
-		(obj.type === "jsRunResult" || obj.type === "jsRunError") &&
+		(obj.type === "extjsRunResult" || obj.type === "extjsRunError") &&
 		typeof obj.id === "string"
 	);
 }
@@ -104,16 +104,16 @@ export class ExtensionJsClient {
 	}
 
 	/** Handle a relay request from the worker. */
-	handleRelayRequest(request: JsRelayRequest): void {
+	handleRelayRequest(request: ExtjsRelayRequest): void {
 		const { id, code } = request;
 
 		this.runJs(code)
 			.then((result) => {
-				this.dispatchRelayResponse({ type: "jsRunResult", id, result });
+				this.dispatchRelayResponse({ type: "extjsRunResult", id, result });
 			})
 			.catch((err: Error) => {
 				this.dispatchRelayResponse({
-					type: "jsRunError",
+					type: "extjsRunError",
 					id,
 					error: err.message,
 				});
@@ -121,14 +121,14 @@ export class ExtensionJsClient {
 	}
 
 	/** Dispatch a relay response to the worker via postMessage. */
-	private dispatchRelayResponse(msg: JsRelayResponse): void {
+	private dispatchRelayResponse(msg: ExtjsRelayResponse): void {
 		const handler = ExtensionJsClient.relayCallback;
 		if (handler) {
 			handler(msg);
 		}
 	}
 
-	static relayCallback: ((msg: JsRelayResponse) => void) | null = null;
+	static relayCallback: ((msg: ExtjsRelayResponse) => void) | null = null;
 
 	async dispose(): Promise<void> {
 		if (!this.session || !this.runnerPromise) return;
@@ -166,9 +166,9 @@ export class ExtensionJsClient {
 					setTimeout(
 						() =>
 							reject(
-								new Error(`JS execution timed out after ${JS_TIMEOUT_MS}ms`),
+								new Error(`JS execution timed out after ${EXTJS_TIMEOUT_MS}ms`),
 							),
-						JS_TIMEOUT_MS,
+						EXTJS_TIMEOUT_MS,
 					);
 				}),
 			]);
@@ -184,7 +184,7 @@ export class ExtensionJsClient {
 	/** Tear down the current session and create a fresh one. */
 	private async rebuildSession(): Promise<void> {
 		const store = browsergentStore.getState();
-		store.jsRestarting("rebuild");
+		store.extjsRestarting("rebuild");
 
 		if (this.session && this.runnerPromise) {
 			try {
@@ -212,13 +212,13 @@ export class ExtensionJsClient {
 					),
 				]);
 			}
-			store.jsReady();
+			store.extjsReady();
 		} catch {
 			this.session = null;
 			this.runnerPromise = null;
 			this.initialized = false;
 			this.initPromise = null;
-			store.jsFailed({
+			store.extjsFailed({
 				code: "E_JS_RUNTIME",
 				message: "Runtime rebuild failed",
 				source: "js",
@@ -228,15 +228,15 @@ export class ExtensionJsClient {
 }
 
 /** Type guard for worker relay message handling. */
-export function isJsRelayRequest(msg: unknown): msg is JsRelayRequest {
+export function isExtjsRelayRequest(msg: unknown): msg is ExtjsRelayRequest {
 	if (typeof msg !== "object" || msg === null) return false;
 	const obj = msg as Record<string, unknown>;
 	return (
-		obj.type === "jsRunRequest" &&
+		obj.type === "extjsRunRequest" &&
 		typeof obj.id === "string" &&
 		typeof obj.code === "string"
 	);
 }
 
-export type { JsRelayError, JsRelayRequest, JsRelayResult };
-export { isJsRelayResponse };
+export type { ExtjsRelayError, ExtjsRelayRequest, ExtjsRelayResult };
+export { isExtjsRelayResponse };

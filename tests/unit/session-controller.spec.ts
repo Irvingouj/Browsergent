@@ -44,23 +44,22 @@ describe("SessionController.load", () => {
 		expect(result).toBeNull();
 	});
 
-	test("returns snapshot for valid data", async () => {
-		const data = {
-			messages: [{ kind: "user", id: "1", text: "hi", timestamp: 0 }],
-			trace: [],
-			timestamp: Date.now(),
-		};
-		await storage.set("sessions", "current", data);
+	test("returns snapshot for valid data after init", async () => {
 		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const messages = [{ kind: "user", id: "1", text: "hi", timestamp: 0 }];
+		const trace: never[] = [];
+		await ctrl.save(messages, trace);
 		const result = await ctrl.load();
 		expect(result).not.toBeNull();
-		expect(result?.messages).toEqual(data.messages);
-		expect(result?.trace).toEqual(data.trace);
+		expect(result?.messages).toEqual(messages);
+		expect(result?.trace).toEqual(trace);
 	});
 
 	test("scheduleSave debounces correctly", async () => {
 		vi.useFakeTimers();
 		const ctrl = new SessionController(storage);
+		await ctrl.init();
 		ctrl.hydrated = true;
 
 		const messages = [
@@ -80,10 +79,10 @@ describe("SessionController.load", () => {
 		ctrl.scheduleSave(messages, trace);
 		ctrl.scheduleSave(messages, trace);
 
-		expect(await ctrl.load()).toBeNull();
+		expect(await ctrl.load()).toEqual({ messages: [], trace: [] });
 
 		await vi.advanceTimersByTimeAsync(500);
-		expect(await ctrl.load()).not.toBeNull();
+		expect(await ctrl.load()).toEqual({ messages, trace });
 
 		vi.useRealTimers();
 	});

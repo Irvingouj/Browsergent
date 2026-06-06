@@ -12,17 +12,6 @@ export interface SessionState {
 	sessions: SessionListItem[];
 	activeSessionId: string | null;
 	sessionPanelOpen: boolean;
-	isLoadingSessions: boolean;
-}
-
-export interface SessionActions {
-	sessionPanelOpenChanged(open: boolean): void;
-	sessionListLoaded(sessions: SessionListItem[]): void;
-	activeSessionChanged(id: string): void;
-	sessionTitleUpdated(id: string, title: string): void;
-	sessionDeleted(id: string): void;
-	sessionCreated(id: string): void;
-	setSessionsLoading(loading: boolean): void;
 }
 
 export interface SessionSlice {
@@ -33,19 +22,16 @@ export interface SessionSlice {
 	sessionTitleUpdated(id: string, title: string): void;
 	sessionDeleted(id: string): void;
 	sessionCreated(id: string): void;
-	setSessionsLoading(loading: boolean): void;
 }
 
 export function createSessionSlice(
 	set: StoreApi<BrowsergentStore>["setState"],
-	_get: StoreApi<BrowsergentStore>["getState"],
 ): SessionSlice {
 	return {
 		session: {
 			sessions: [],
 			activeSessionId: null,
 			sessionPanelOpen: false,
-			isLoadingSessions: false,
 		},
 		sessionPanelOpenChanged(open) {
 			set((state) => ({
@@ -98,11 +84,6 @@ export function createSessionSlice(
 					},
 				};
 			});
-		},
-		setSessionsLoading(loading) {
-			set((state) => ({
-				session: { ...state.session, isLoadingSessions: loading },
-			}));
 		},
 	};
 }

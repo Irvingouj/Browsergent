@@ -26,7 +26,6 @@
 		"@playwright/test": "^1.52.0",
 		"@preact/preset-vite": "^2.10.5",
 		"@types/chrome": "^0.0.315",
-		"@types/marked": "^5.0.2",
 		"fake-indexeddb": "^6.2.5",
 		"preact-render-to-string": "^6.5.0",
 		"typescript": "^5.7.0",

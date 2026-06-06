@@ -1,40 +1,34 @@
-import { useSignalEffect } from "@preact/signals";
 import type { FunctionalComponent } from "preact";
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
 import { exportConversation } from "../controllers/export-controller";
-import { JsController } from "../controllers/js-controller";
-import { SessionController } from "../controllers/session-controller";
-import { SettingsController } from "../controllers/settings-controller";
-import { WorkerBridge } from "../controllers/worker-bridge";
-import { type BrowsergentStore, browsergentStore } from "../state/store";
-import { getStreamingSignal } from "../state/streaming-signals";
-import { IndexedDBStorage } from "../storage/indexeddb-storage";
-import { MemoryStorage } from "../storage/memory-storage";
-import { migrateFromChromeStorage } from "../storage/migrate";
-import type { StorageBackend } from "../storage/storage-backend";
-import type { AgentTraceEntry, ChatMessage } from "../types/messages";
 import {
-	createStreamingMarkdownRenderer,
-	renderMarkdown,
-} from "../utils/markdown-stream";
+	selectActiveSessionId,
+	selectAgentStatus,
+	selectAgentStatusReason,
+	selectApiKey,
+	selectBaseUrl,
+	selectMessageIds,
+	selectMessagesById,
+	selectModel,
+	selectSessionPanelOpen,
+	selectSessions,
+	selectSettingsOpen,
+	selectTaskDraft,
+	selectTraceEntries,
+} from "../state/selectors";
+import { browsergentStore } from "../state/store";
+import type { ChatMessage } from "../types/messages";
+import { ChatPanel } from "./components/ChatPanel";
+import { InputBar } from "./components/InputBar";
+import { SettingsForm } from "./components/SettingsForm";
+import { useAppInit } from "./components/use-app-init";
+import { useTitleGeneration } from "./components/use-title-generation";
 import { SessionPanel } from "./session-panel";
 
 const App: FunctionalComponent = () => {
-	const messageIds = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.chat.messageIds,
-	);
-	const messagesById = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.chat.messagesById,
-	);
+	const messageIds = useStore(browsergentStore, selectMessageIds);
+	const messagesById = useStore(browsergentStore, selectMessagesById);
 	const messages = useMemo(
 		() =>
 			messageIds
@@ -42,240 +36,37 @@ const App: FunctionalComponent = () => {
 				.filter((m): m is ChatMessage => !!m),
 		[messageIds, messagesById],
 	);
-	const trace = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.trace.entries,
-	);
-	const status = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.agent.status,
-	);
-	const statusReason = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.agent.statusReason,
-	);
-	const taskInput = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.ui.taskDraft,
-	);
-	const apiKey = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.settings.anthropicApiKey,
-	);
-	const baseUrl = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.settings.baseUrl,
-	);
-	const model = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.settings.model,
-	);
-	const showSettings = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.ui.settingsOpen,
-	);
-	const sessionPanelOpen = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.session.sessionPanelOpen,
-	);
-	const _sessions = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.session.sessions,
-	);
-	const _activeSessionId = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.session.activeSessionId,
-	);
-	const [initialized, setInitialized] = useState(false);
-	const bridgeRef = useRef<WorkerBridge | null>(null);
-	const jsControllerRef = useRef<JsController | null>(null);
-	const settingsControllerRef = useRef<SettingsController | null>(null);
-	const sessionControllerRef = useRef<SessionController | null>(null);
-	const titleGeneratedForSession = useRef<Set<string>>(new Set());
+	const trace = useStore(browsergentStore, selectTraceEntries);
+	const status = useStore(browsergentStore, selectAgentStatus);
+	const statusReason = useStore(browsergentStore, selectAgentStatusReason);
+	const taskInput = useStore(browsergentStore, selectTaskDraft);
+	const apiKey = useStore(browsergentStore, selectApiKey);
+	const baseUrl = useStore(browsergentStore, selectBaseUrl);
+	const model = useStore(browsergentStore, selectModel);
+	const showSettings = useStore(browsergentStore, selectSettingsOpen);
+	const sessionPanelOpen = useStore(browsergentStore, selectSessionPanelOpen);
+	const _sessions = useStore(browsergentStore, selectSessions);
+	const _activeSessionId = useStore(browsergentStore, selectActiveSessionId);
+
+	const {
+		initialized,
+		bridgeRef,
+		extjsControllerRef: _extjsControllerRef,
+		settingsControllerRef,
+		sessionControllerRef,
+	} = useAppInit();
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
-
-	useEffect(() => {
-		let cancelled = false;
-		let storageRef: StorageBackend | null = null;
-
-		async function init() {
-			try {
-				const storage = new IndexedDBStorage();
-				await storage.init();
-				if (cancelled) {
-					storage.close();
-					return;
-				}
-				await migrateFromChromeStorage(storage);
-				if (cancelled) {
-					storage.close();
-					return;
-				}
-				storageRef = storage;
-			} catch (err) {
-				console.warn("Storage init failed, using memory fallback:", err);
-				storageRef = new MemoryStorage();
-				if (cancelled) return;
-			}
-
-			if (cancelled) return;
-
-			const storage = storageRef;
-
-			const bridge = new WorkerBridge({
-				onJsRunRequest: (msg) => {
-					jsControllerRef.current?.handleRelayRequest(msg);
-				},
-			});
-			bridgeRef.current = bridge;
-
-			const js = new JsController(bridge);
-			jsControllerRef.current = js;
-
-			const settingsCtrl = new SettingsController(storage);
-			settingsControllerRef.current = settingsCtrl;
-
-			const sessionCtrl = new SessionController(storage);
-			sessionControllerRef.current = sessionCtrl;
-			await sessionCtrl.init();
-
-			js.init().catch((err: unknown) => {
-				console.warn("JS init failed:", err);
-			});
-			bridge.start();
-			sessionCtrl
-				.load()
-				.then((session) => {
-					if (session) {
-						browsergentStore.getState().hydrateChat(session.messages);
-						browsergentStore.getState().hydrateTrace(session.trace);
-					}
-					sessionCtrl.hydrated = true;
-				})
-				.catch((err: unknown) => {
-					console.warn("Session load failed:", err);
-					sessionCtrl.hydrated = true;
-				});
-			const sessionList = await sessionCtrl.listSessions();
-			browsergentStore.getState().sessionListLoaded(sessionList);
-			browsergentStore
-				.getState()
-				.activeSessionChanged(sessionCtrl.getActiveSessionId() || "");
-
-			settingsCtrl.load().catch((err: unknown) => {
-				console.warn("Settings load failed:", err);
-			});
-
-			setInitialized(true);
-		}
-
-		void init();
-
-		return () => {
-			cancelled = true;
-			bridgeRef.current?.stop();
-			const js = jsControllerRef.current;
-			if (js) {
-				js.dispose().catch((err: unknown) => {
-					console.warn("JS dispose failed:", err);
-				});
-			}
-			sessionControllerRef.current?.cancelPendingSave();
-			void storageRef?.close();
-		};
-	}, []);
+	useTitleGeneration(sessionControllerRef, messages);
 
 	useEffect(() => {
 		sessionControllerRef.current?.scheduleSave(messages, trace);
-	}, [messages, trace]);
+	}, [messages, trace, sessionControllerRef]);
 
-	// Auto-scroll chat to bottom whenever messages or trace update
 	useEffect(() => {
 		const el = chatScrollRef.current;
 		if (!el) return;
 		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages, trace]);
-
-	// Auto-generate title when agent finishes
-	useEffect(() => {
-		if (status !== "done" && status !== "stopped") return;
-		const activeId = sessionControllerRef.current?.getActiveSessionId();
-		if (!activeId) return;
-		if (messages.length < 2) return;
-		if (titleGeneratedForSession.current.has(activeId)) return;
-
-		const activeSession = browsergentStore
-			.getState()
-			.session.sessions.find((s) => s.id === activeId);
-		if (activeSession?.title && !activeSession.title.startsWith("Session ")) {
-			titleGeneratedForSession.current.add(activeId);
-			return;
-		}
-
-		const targetSessionId = activeId;
-
-		async function generateTitle() {
-			const prompt = `Summarize this conversation in 5 words or less.\n\n${messages.map((m) => `${m.kind}: ${m.text}`).join("\n")}`;
-			const key = apiKey;
-			const url = baseUrl || "https://api.anthropic.com";
-			const modelName = model || "claude-sonnet-4-20250514";
-
-			// Skip title generation in test environments (localhost/mock URLs)
-			const isLocalhost = (() => {
-				try {
-					const u = new URL(url);
-					return (
-						u.hostname === "localhost" ||
-						u.hostname === "127.0.0.1" ||
-						u.hostname === "0.0.0.0" ||
-						u.hostname === "::1"
-					);
-				} catch {
-					return false;
-				}
-			})();
-			if (isLocalhost) {
-				titleGeneratedForSession.current.add(targetSessionId);
-				return;
-			}
-
-			try {
-				const response = await fetch(`${url}/v1/messages`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"x-api-key": key,
-					},
-					body: JSON.stringify({
-						model: modelName,
-						max_tokens: 20,
-						messages: [{ role: "user", content: prompt }],
-					}),
-				});
-
-				if (!response.ok) return;
-
-				const data = (await response.json()) as {
-					content?: Array<{ text?: string }>;
-				};
-				const title = data.content?.[0]?.text?.trim();
-				if (!title) return;
-
-				await sessionControllerRef.current?.updateTitle(
-					targetSessionId,
-					title,
-					false,
-				);
-				browsergentStore.getState().sessionTitleUpdated(targetSessionId, title);
-			} catch {
-				// Silently ignore failures
-			} finally {
-				titleGeneratedForSession.current.add(targetSessionId);
-			}
-		}
-
-		void generateTitle();
-	}, [status, apiKey, baseUrl, model, messages]);
 
 	const handleRun = useCallback(() => {
 		const task = taskInput.trim();
@@ -299,12 +90,12 @@ const App: FunctionalComponent = () => {
 			task,
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
 		});
-	}, [taskInput, apiKey, baseUrl, model]);
+	}, [taskInput, apiKey, baseUrl, model, sessionControllerRef, bridgeRef]);
 
 	const handleStop = useCallback(() => {
 		const runId = browsergentStore.getState().agent.activeRunId;
 		bridgeRef.current?.post({ type: "agentStop", runId });
-	}, []);
+	}, [bridgeRef]);
 
 	const handleSaveApiKey = useCallback(() => {
 		settingsControllerRef.current
@@ -315,7 +106,7 @@ const App: FunctionalComponent = () => {
 			.catch((err: unknown) => {
 				console.warn("Settings save failed:", err);
 			});
-	}, [apiKey, baseUrl, model]);
+	}, [apiKey, baseUrl, model, settingsControllerRef]);
 
 	const handleExportConversation = useCallback(() => {
 		exportConversation({
@@ -330,7 +121,7 @@ const App: FunctionalComponent = () => {
 		if (list) {
 			browsergentStore.getState().sessionListLoaded(list);
 		}
-	}, []);
+	}, [sessionControllerRef]);
 
 	const handleSwitchSession = useCallback(
 		async (id: string) => {
@@ -346,7 +137,7 @@ const App: FunctionalComponent = () => {
 			browsergentStore.getState().setSettingsOpen(false);
 			await reloadSessionList();
 		},
-		[reloadSessionList],
+		[reloadSessionList, sessionControllerRef],
 	);
 
 	const handleCreateSession = useCallback(async () => {
@@ -359,7 +150,7 @@ const App: FunctionalComponent = () => {
 		browsergentStore.getState().sessionCreated(newId);
 		browsergentStore.getState().sessionPanelOpenChanged(false);
 		await reloadSessionList();
-	}, [reloadSessionList]);
+	}, [reloadSessionList, sessionControllerRef]);
 
 	const handleDeleteSession = useCallback(
 		async (id: string) => {
@@ -379,13 +170,16 @@ const App: FunctionalComponent = () => {
 			}
 			await reloadSessionList();
 		},
-		[reloadSessionList],
+		[reloadSessionList, sessionControllerRef],
 	);
 
-	const handleUpdateTitle = useCallback(async (id: string, title: string) => {
-		await sessionControllerRef.current?.updateTitle(id, title, true);
-		browsergentStore.getState().sessionTitleUpdated(id, title);
-	}, []);
+	const handleUpdateTitle = useCallback(
+		async (id: string, title: string) => {
+			await sessionControllerRef.current?.updateTitle(id, title, true);
+			browsergentStore.getState().sessionTitleUpdated(id, title);
+		},
+		[sessionControllerRef],
+	);
 
 	const isRunning =
 		status === "loading" ||
@@ -458,109 +252,10 @@ const App: FunctionalComponent = () => {
 
 			{/* Settings */}
 			{showSettings && (
-				<div
-					style={{
-						padding: "8px 12px",
-						borderBottom: "1px solid #e0e0e0",
-						background: "#f8f8f8",
-						position: "relative",
-						zIndex: 102,
-					}}
-				>
-					<div style={{ display: "grid", gap: "8px" }}>
-						<label>
-							<span style={{ display: "block", marginBottom: "4px" }}>
-								Anthropic API Key:
-							</span>
-							<input
-								type="password"
-								value={apiKey}
-								onInput={(e) => {
-									const val = (e.target as HTMLInputElement).value;
-									browsergentStore.getState().settingsDraftChanged({
-										anthropicApiKey: val,
-									});
-								}}
-								style={{
-									width: "100%",
-									padding: "4px 8px",
-									border: "1px solid #ccc",
-									borderRadius: "4px",
-								}}
-							/>
-						</label>
-						<label>
-							<span style={{ display: "block", marginBottom: "4px" }}>
-								Base URL:
-							</span>
-							<input
-								type="text"
-								value={baseUrl}
-								onInput={(e) => {
-									const val = (e.target as HTMLInputElement).value;
-									browsergentStore.getState().settingsDraftChanged({
-										baseUrl: val,
-									});
-								}}
-								style={{
-									width: "100%",
-									padding: "4px 8px",
-									border: "1px solid #ccc",
-									borderRadius: "4px",
-								}}
-							/>
-						</label>
-						<label>
-							<span style={{ display: "block", marginBottom: "4px" }}>
-								Model:
-							</span>
-							<input
-								type="text"
-								value={model}
-								onInput={(e) => {
-									const val = (e.target as HTMLInputElement).value;
-									browsergentStore.getState().settingsDraftChanged({
-										model: val,
-									});
-								}}
-								style={{
-									width: "100%",
-									padding: "4px 8px",
-									border: "1px solid #ccc",
-									borderRadius: "4px",
-								}}
-							/>
-						</label>
-						<button
-							type="button"
-							onClick={handleSaveApiKey}
-							style={{
-								padding: "4px 12px",
-								background: "#4a90d9",
-								color: "white",
-								border: "none",
-								borderRadius: "4px",
-								cursor: "pointer",
-							}}
-						>
-							Save
-						</button>
-						<button
-							type="button"
-							onClick={handleExportConversation}
-							style={{
-								padding: "4px 12px",
-								background: "#666",
-								color: "white",
-								border: "none",
-								borderRadius: "4px",
-								cursor: "pointer",
-							}}
-						>
-							Export conversation
-						</button>
-					</div>
-				</div>
+				<SettingsForm
+					onSave={handleSaveApiKey}
+					onExport={handleExportConversation}
+				/>
 			)}
 
 			{/* Main content */}
@@ -593,7 +288,7 @@ const App: FunctionalComponent = () => {
 						New
 					</button>
 				)}
-				<ChatPanel messageIds={messageIds} trace={trace} />
+				<ChatPanel />
 			</div>
 
 			{/* Status bar */}
@@ -610,66 +305,7 @@ const App: FunctionalComponent = () => {
 			</div>
 
 			{/* Input */}
-			<div
-				style={{
-					padding: "8px 12px",
-					borderTop: "1px solid #e0e0e0",
-					display: "flex",
-					gap: "8px",
-				}}
-			>
-				<input
-					type="text"
-					value={taskInput}
-					onInput={(e) =>
-						browsergentStore
-							.getState()
-							.setTaskDraft((e.target as HTMLInputElement).value)
-					}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" && !isRunning) handleRun();
-					}}
-					placeholder="Type a task..."
-					disabled={isRunning}
-					style={{
-						flex: 1,
-						padding: "6px 8px",
-						border: "1px solid #ccc",
-						borderRadius: "4px",
-					}}
-				/>
-				{isRunning ? (
-					<button
-						type="button"
-						onClick={handleStop}
-						style={{
-							padding: "6px 16px",
-							background: "#d94a4a",
-							color: "white",
-							border: "none",
-							borderRadius: "4px",
-							cursor: "pointer",
-						}}
-					>
-						Stop
-					</button>
-				) : (
-					<button
-						type="button"
-						onClick={handleRun}
-						style={{
-							padding: "6px 16px",
-							background: "#4a90d9",
-							color: "white",
-							border: "none",
-							borderRadius: "4px",
-							cursor: "pointer",
-						}}
-					>
-						Run
-					</button>
-				)}
-			</div>
+			<InputBar isRunning={isRunning} onRun={handleRun} onStop={handleStop} />
 
 			{sessionPanelOpen && sessionControllerRef.current && (
 				<SessionPanel
@@ -687,222 +323,5 @@ const App: FunctionalComponent = () => {
 		</div>
 	);
 };
-
-function ChatPanel({
-	messageIds,
-	trace,
-}: {
-	messageIds: string[];
-	trace: AgentTraceEntry[];
-}) {
-	const messagesById = useStore(
-		browsergentStore,
-		(s: BrowsergentStore) => s.chat.messagesById,
-	);
-
-	const timeline = useMemo(() => {
-		const items = [
-			...messageIds.map((id) => ({
-				type: "message" as const,
-				id,
-				ts: messagesById[id]?.timestamp ?? 0,
-			})),
-			...trace.map((t) => ({
-				type: "trace" as const,
-				id: t.id,
-				ts: t.timestamp,
-			})),
-		];
-		items.sort((a, b) => a.ts - b.ts);
-		return items;
-	}, [messageIds, messagesById, trace]);
-
-	return (
-		<div>
-			{timeline.map((item) =>
-				item.type === "message" ? (
-					<MessageBubble key={item.id} messageId={item.id} />
-				) : (
-					(() => {
-						const entry = trace.find((t) => t.id === item.id);
-						return entry ? (
-							<TraceEntryCompact key={item.id} entry={entry} />
-						) : null;
-					})()
-				),
-			)}
-		</div>
-	);
-}
-
-function MessageBubble({ messageId }: { messageId: string }) {
-	const message = useStore(
-		browsergentStore,
-		useCallback(
-			(s: BrowsergentStore) => s.chat.messagesById[messageId],
-			[messageId],
-		),
-	);
-	const [, forceUpdate] = useState(0);
-
-	const streamingSig = getStreamingSignal(messageId);
-	useSignalEffect(() => {
-		if (streamingSig) {
-			void streamingSig.value;
-			forceUpdate((n) => n + 1);
-		}
-	});
-
-	if (!message) return null;
-
-	const isStreaming = !!streamingSig;
-	const text = isStreaming ? streamingSig?.value : message.text;
-
-	const rendererRef = useRef<ReturnType<
-		typeof createStreamingMarkdownRenderer
-	> | null>(null);
-	if (isStreaming && !rendererRef.current) {
-		rendererRef.current = createStreamingMarkdownRenderer();
-	}
-	if (!isStreaming && rendererRef.current) {
-		rendererRef.current = null;
-	}
-
-	const html =
-		isStreaming && rendererRef.current
-			? rendererRef.current(text)
-			: renderMarkdown(text);
-
-	return (
-		<div
-			data-testid={`chat-message-${message.kind}`}
-			style={{
-				marginBottom: "8px",
-				padding: "8px 10px",
-				borderRadius: "4px",
-				background:
-					message.kind === "user"
-						? "#e3f2fd"
-						: message.kind === "system"
-							? "#fff3e0"
-							: "#f5f5f5",
-				lineHeight: "1.5",
-			}}
-		>
-			<div
-				style={{
-					fontSize: "11px",
-					color: "#666",
-					marginBottom: "4px",
-					textTransform: "capitalize",
-				}}
-			>
-				{message.kind}
-			</div>
-			<div dangerouslySetInnerHTML={{ __html: html }} />
-		</div>
-	);
-}
-
-function TraceEntryCompact({ entry }: { entry: AgentTraceEntry }) {
-	const [expanded, setExpanded] = useState(false);
-	const icon =
-		entry.status === "done" ? "✓" : entry.status === "error" ? "✗" : "…";
-	const color =
-		entry.status === "done"
-			? "#22c55e"
-			: entry.status === "error"
-				? "#ef4444"
-				: "#f59e0b";
-
-	return (
-		<div
-			style={{
-				fontSize: "12px",
-				borderRadius: "4px",
-				border: "1px solid #e0e0e0",
-				background: "#fafafa",
-				overflow: "hidden",
-			}}
-		>
-			<button
-				type="button"
-				onClick={() => setExpanded(!expanded)}
-				style={{
-					padding: "6px 10px",
-					display: "flex",
-					alignItems: "center",
-					gap: "6px",
-					cursor: "pointer",
-					fontFamily: "monospace",
-					width: "100%",
-					border: "none",
-					background: "transparent",
-					textAlign: "left",
-				}}
-			>
-				<span style={{ color }}>{icon}</span>
-				<span style={{ color: "#666" }}>#{entry.step}</span>
-				<span style={{ fontWeight: "bold" }}>{entry.toolName}</span>
-				{!expanded && entry.toolInput && (
-					<span
-						style={{
-							color: "#999",
-							overflow: "hidden",
-							textOverflow: "ellipsis",
-							whiteSpace: "nowrap",
-							flex: 1,
-						}}
-					>
-						{entry.toolInput.slice(0, 60)}
-					</span>
-				)}
-			</button>
-			{expanded && (
-				<div
-					style={{
-						padding: "8px 10px",
-						borderTop: "1px solid #e0e0e0",
-						fontFamily: "monospace",
-						fontSize: "11px",
-					}}
-				>
-					{entry.toolInput && (
-						<div style={{ marginBottom: "6px" }}>
-							<div style={{ color: "#666", marginBottom: "2px" }}>Input:</div>
-							<div
-								style={{
-									whiteSpace: "pre-wrap",
-									color: "#333",
-									background: "#f0f0f0",
-									padding: "4px 6px",
-									borderRadius: "3px",
-								}}
-							>
-								{entry.toolInput}
-							</div>
-						</div>
-					)}
-					{entry.result && (
-						<div>
-							<div style={{ color: "#666", marginBottom: "2px" }}>Result:</div>
-							<div
-								style={{
-									whiteSpace: "pre-wrap",
-									color: "#333",
-									background: "#f0f0f0",
-									padding: "4px 6px",
-									borderRadius: "3px",
-								}}
-							>
-								{entry.result}
-							</div>
-						</div>
-					)}
-				</div>
-			)}
-		</div>
-	);
-}
 
 export default App;

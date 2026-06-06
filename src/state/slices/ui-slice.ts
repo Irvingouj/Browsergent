@@ -6,11 +6,6 @@ export interface UiState {
 	taskDraft: string;
 }
 
-export interface UiActions {
-	setSettingsOpen(open: boolean): void;
-	setTaskDraft(text: string): void;
-}
-
 export interface UiSlice {
 	ui: UiState;
 	setSettingsOpen(open: boolean): void;
@@ -19,7 +14,6 @@ export interface UiSlice {
 
 export function createUiSlice(
 	set: StoreApi<BrowsergentStore>["setState"],
-	_get: StoreApi<BrowsergentStore>["getState"],
 ): UiSlice {
 	return {
 		ui: { settingsOpen: false, taskDraft: "" },

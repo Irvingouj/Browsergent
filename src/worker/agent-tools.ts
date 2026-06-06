@@ -1,6 +1,8 @@
 import type { AgentToolDefinition, AgentTools } from "@pi-oxide/pi-host-web";
-import type { JsRunResult } from "../types/js-utils";
-import { formatJsRunResult } from "../types/js-utils";
+import { z } from "zod";
+import type { JsRunResult } from "../types/extjs-utils";
+import { formatJsRunResult } from "../types/extjs-utils";
+import { JS_TOOL_PROMPT } from "./js-tool-prompt";
 import { formatToolError } from "./tool-error-result";
 
 interface ExtensionJsApiEntry {
@@ -151,48 +153,7 @@ function classifyError(source: { kind?: string; message?: string }): {
 	};
 }
 
-const RUN_JS_DESCRIPTION = `Execute JavaScript code to control the browser via the extension-js runtime.
-ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. Do not guess function names, argument shapes, or return types.
-
-## Browsergent-specific rules
-- The target web page is controlled through page.* APIs.
-- Use \`await page.snapshot()\` to get a human-readable page summary for observation.
-- Use \`await page.snapshot_data()\` only when you need structured element nodes with ref_ids.
-- Use \`await page.url()\` and \`await page.title()\` for page metadata.
-- Use \`await page.goto(url)\` to navigate/open a URL when the user asks to go somewhere.
-- Ref_ids from snapshot_data are snapshot-scoped. Never guess them, and refresh the snapshot_data before acting if the page changed.
-- You can combine multiple page.* calls in one async function block when the sequence is clear.
-- Use \`console.log(...)\` or \`web.log(...)\` to return concise observations to the trace.
-- Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
-- Do not use \`page.evaluate\`, \`chrome.scripting.executeScript\`, or \`tab.evaluate\`; Browsergent forbids arbitrary JS execution outside the sandboxed runtime.
-
-## Common patterns
-Current page:
-\`\`\`js
-const tabId = await page.active_tab();
-console.log("Tab:", tabId);
-console.log("URL:", await page.url());
-console.log("Title:", await page.title());
-console.log(await page.snapshot());
-\`\`\`
-
-Navigate:
-\`\`\`js
-await page.goto("https://www.linkedin.com");
-\`\`\`
-
-Inspect and interact (structured):
-\`\`\`js
-const data = await page.snapshot_data();
-// choose a real ref_id from data, then:
-// await page.fill("e3", "search text");
-// await page.click("e4");
-// await page.type(ref_id, text);
-// await page.press(key);
-// await page.select(ref_id, value);
-// await page.check(ref_id);
-// await page.scroll(direction, amount);
-\`\`\``;
+const RUN_JS_DESCRIPTION = JS_TOOL_PROMPT;
 
 export function createAgentTools(
 	runJs: (code: string) => Promise<JsRunResult>,
@@ -209,9 +170,12 @@ export function createAgentTools(
 				required: ["code"],
 			},
 			run: async (input: unknown) => {
-				const args = input as Record<string, unknown>;
-				const code = args.code;
-				if (typeof code !== "string" || !code.trim()) {
+				const parsed = z.object({ code: z.string() }).safeParse(input);
+				if (!parsed.success) {
+					return "run_js requires a non-empty 'code' string";
+				}
+				const code = parsed.data.code;
+				if (!code.trim()) {
 					return "run_js requires a non-empty 'code' string";
 				}
 				try {
@@ -250,11 +214,14 @@ export function createAgentTools(
 				},
 			},
 			run: async (input: unknown) => {
-				const args = input as Record<string, unknown>;
-				const format =
-					typeof args.format === "string" ? args.format : "markdown";
-				const namespace =
-					typeof args.namespace === "string" ? args.namespace : undefined;
+				const parsed = z
+					.object({
+						format: z.string().optional(),
+						namespace: z.string().optional(),
+					})
+					.safeParse(input);
+				const format = parsed.data?.format ?? "markdown";
+				const namespace = parsed.data?.namespace;
 				try {
 					const docs = await getExtensionJsDocs(format, namespace);
 					return truncateToolResult(docs, 50000);

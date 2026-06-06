@@ -1,6 +1,6 @@
 import type { AgentRunResult } from "@pi-oxide/pi-host-web";
 import { Agent, indexedDbStore } from "@pi-oxide/pi-host-web";
-import type { JsRunResult } from "../types/js-utils";
+import type { JsRunResult } from "../types/extjs-utils";
 import type { AgentStatus, AgentTraceEntry } from "../types/messages";
 import { streamLog } from "../utils/stream-logger";
 import { createAgentTools } from "./agent-tools";
@@ -8,6 +8,13 @@ import type { AnthropicConfig } from "./anthropic";
 import { SYSTEM_PROMPT } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
 import { isToolErrorEnvelope, renderToolOutput } from "./tool-error-result";
+
+function isTextContentBlock(c: {
+	type: string;
+	text?: string;
+}): c is { type: "text"; text: string } {
+	return c.type === "text" && typeof c.text === "string";
+}
 
 export function computeToolEndTraceStatus(
 	sdkStatus: string,
@@ -50,7 +57,6 @@ export class AgentLoop {
 	private aborted = false;
 	private stepCount = 0;
 	private assistantMessageId: string | null = null;
-	private assistantText = "";
 	private hadOutput = false;
 
 	async run(
@@ -62,7 +68,6 @@ export class AgentLoop {
 		this.aborted = false;
 		this.stepCount = 0;
 		this.assistantMessageId = null;
-		this.assistantText = "";
 		this.hadOutput = false;
 
 		callbacks.onStatus("loading");
@@ -87,11 +92,9 @@ export class AgentLoop {
 		this.agent.on("text", (delta: string) => {
 			if (!this.assistantMessageId) {
 				this.assistantMessageId = crypto.randomUUID();
-				this.assistantText = "";
 				callbacks.onMessage("assistant", "", this.assistantMessageId);
 			}
 			this.hadOutput = true;
-			this.assistantText += delta;
 			callbacks.onTextDelta?.(this.assistantMessageId, delta);
 			streamLog("agentloop.text_delta", {
 				msgId: this.assistantMessageId?.slice(0, 8),
@@ -165,9 +168,7 @@ export class AgentLoop {
 			}) => {
 				if (msg.role === "assistant") {
 					const text = msg.content
-						.filter(
-							(c): c is { type: "text"; text: string } => c.type === "text",
-						)
+						.filter(isTextContentBlock)
 						.map((c) => c.text)
 						.join("");
 					if (text && !this.assistantMessageId) {
@@ -177,7 +178,6 @@ export class AgentLoop {
 						callbacks.onMessageEnd?.(this.assistantMessageId);
 					}
 					this.assistantMessageId = null;
-					this.assistantText = "";
 				}
 			},
 		);
@@ -201,8 +201,14 @@ export class AgentLoop {
 			} else if (result.status === "completed" && !this.hadOutput) {
 				// Workaround for pi-host-web 0.7.0 bug: Agent.run() returns
 				// "completed" with empty content when the LLM stream fails.
-				callbacks.onError("agent_error", "LLM request failed — no response received");
-				callbacks.onStatus("error", "LLM request failed — no response received");
+				callbacks.onError(
+					"agent_error",
+					"LLM request failed — no response received",
+				);
+				callbacks.onStatus(
+					"error",
+					"LLM request failed — no response received",
+				);
 			} else {
 				callbacks.onStatus("done");
 			}

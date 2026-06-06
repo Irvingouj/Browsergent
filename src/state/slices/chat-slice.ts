@@ -7,21 +7,6 @@ export interface ChatState {
 	messagesById: Record<string, ChatMessage>;
 }
 
-export interface ChatActions {
-	appendUserMessage(message: ChatMessage): void;
-	appendAssistantMessage(message: ChatMessage): void;
-	appendSystemMessage(message: ChatMessage): void;
-	finalizeAssistantMessage(messageId: string, finalText: string): void;
-	clearChat(): void;
-	hydrateChat(messages: ChatMessage[]): void;
-}
-
-export function getMessages(state: { chat: ChatState }): ChatMessage[] {
-	return state.chat.messageIds
-		.map((id) => state.chat.messagesById[id])
-		.filter((m): m is ChatMessage => !!m);
-}
-
 export interface ChatSlice {
 	chat: ChatState;
 	appendUserMessage(message: ChatMessage): void;
@@ -34,7 +19,6 @@ export interface ChatSlice {
 
 export function createChatSlice(
 	set: StoreApi<BrowsergentStore>["setState"],
-	_get: StoreApi<BrowsergentStore>["getState"],
 ): ChatSlice {
 	return {
 		chat: { messageIds: [], messagesById: {} },

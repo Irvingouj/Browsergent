@@ -1,7 +1,7 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import {
-	isJsError,
-	isJsOutput,
+	isExtjsError,
+	isExtjsOutput,
 	isWorkerToPanel,
 } from "../protocol/worker-guards";
 import { browsergentStore } from "../state/store";
@@ -14,8 +14,8 @@ import {
 } from "../state/streaming-signals";
 import type { PanelToWorker } from "../types/messages";
 
-type JsRunRequestHandler = (msg: {
-	type: "jsRunRequest";
+type ExtjsRunRequestHandler = (msg: {
+	type: "extjsRunRequest";
 	id: string;
 	code: string;
 }) => void;
@@ -28,12 +28,12 @@ export function isStaleRunId(runId: string, activeRunId?: string): boolean {
 
 export class WorkerBridge {
 	private worker: Worker | null = null;
-	private onJsRunRequest: JsRunRequestHandler | null = null;
+	private onExtjsRunRequest: ExtjsRunRequestHandler | null = null;
 
 	constructor(options?: {
-		onJsRunRequest?: JsRunRequestHandler;
+		onExtjsRunRequest?: ExtjsRunRequestHandler;
 	}) {
-		this.onJsRunRequest = options?.onJsRunRequest ?? null;
+		this.onExtjsRunRequest = options?.onExtjsRunRequest ?? null;
 	}
 
 	start(): void {
@@ -177,15 +177,15 @@ export class WorkerBridge {
 				});
 				break;
 			}
-			case "jsOutput": {
-				if (isJsOutput(raw)) {
-					browsergentStore.getState().jsOutputAppended(raw.output);
+			case "extjsOutput": {
+				if (isExtjsOutput(raw)) {
+					browsergentStore.getState().extjsOutputAppended(raw.output);
 				}
 				break;
 			}
-			case "jsError": {
-				if (isJsError(raw)) {
-					browsergentStore.getState().jsFailed({
+			case "extjsError": {
+				if (isExtjsError(raw)) {
+					browsergentStore.getState().extjsFailed({
 						code: "E_JS_RUNTIME",
 						message: raw.error,
 						source: "js",
@@ -193,9 +193,9 @@ export class WorkerBridge {
 				}
 				break;
 			}
-			case "jsRunRequest":
-				if (this.onJsRunRequest) {
-					this.onJsRunRequest(raw);
+			case "extjsRunRequest":
+				if (this.onExtjsRunRequest) {
+					this.onExtjsRunRequest(raw);
 				}
 				break;
 		}

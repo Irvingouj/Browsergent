@@ -18,6 +18,7 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 		storage = new IndexedDBStorage();
 		await storage.init();
 		controller = new SessionController(storage);
+		await controller.init();
 	});
 
 	afterEach(async () => {
@@ -27,9 +28,9 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 		}
 	});
 
-	test("load() returns null when empty", async () => {
+	test("load() returns empty session after init", async () => {
 		const result = await controller.load();
-		expect(result).toBeNull();
+		expect(result).toEqual({ messages: [], trace: [] });
 	});
 
 	test("save() / load() roundtrip", async () => {
@@ -73,7 +74,8 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 	});
 
 	test("load() rejects malformed session", async () => {
-		await storage.set("sessions", "current", {
+		const activeId = controller.getActiveSessionId();
+		await storage.set("sessions", `session_${activeId}`, {
 			messages: "not-array",
 			trace: [],
 		});

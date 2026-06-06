@@ -33,7 +33,7 @@ function isOptionalString(value: unknown): value is string | undefined {
 	return value === undefined || typeof value === "string";
 }
 
-function isChatMessage(msg: unknown): msg is ChatMessage {
+export function isChatMessage(msg: unknown): msg is ChatMessage {
 	if (!isObject(msg)) return false;
 	if (!isString(msg.kind)) return false;
 	if (msg.kind !== "user" && msg.kind !== "assistant" && msg.kind !== "system")
@@ -44,7 +44,7 @@ function isChatMessage(msg: unknown): msg is ChatMessage {
 	return true;
 }
 
-function isAgentTraceEntry(entry: unknown): entry is AgentTraceEntry {
+export function isAgentTraceEntry(entry: unknown): entry is AgentTraceEntry {
 	if (!isObject(entry)) return false;
 	if (!isString(entry.id)) return false;
 	if (!isNumber(entry.step)) return false;
@@ -153,31 +153,31 @@ export function isAgentError(msg: unknown): msg is {
 	return true;
 }
 
-export function isJsOutput(
+export function isExtjsOutput(
 	msg: unknown,
-): msg is { type: "jsOutput"; id: string; output: string } {
+): msg is { type: "extjsOutput"; id: string; output: string } {
 	if (!isObject(msg)) return false;
-	if (msg.type !== "jsOutput") return false;
+	if (msg.type !== "extjsOutput") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.output)) return false;
 	return true;
 }
 
-export function isJsError(
+export function isExtjsError(
 	msg: unknown,
-): msg is { type: "jsError"; id: string; error: string } {
+): msg is { type: "extjsError"; id: string; error: string } {
 	if (!isObject(msg)) return false;
-	if (msg.type !== "jsError") return false;
+	if (msg.type !== "extjsError") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.error)) return false;
 	return true;
 }
 
-export function isJsRunRequest(
+export function isExtjsRunRequest(
 	msg: unknown,
-): msg is { type: "jsRunRequest"; id: string; code: string } {
+): msg is { type: "extjsRunRequest"; id: string; code: string } {
 	if (!isObject(msg)) return false;
-	if (msg.type !== "jsRunRequest") return false;
+	if (msg.type !== "extjsRunRequest") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.code)) return false;
 	return true;
@@ -192,8 +192,8 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isAgentTrace(msg) ||
 		isAgentMessageEnd(msg) ||
 		isAgentError(msg) ||
-		isJsOutput(msg) ||
-		isJsError(msg) ||
-		isJsRunRequest(msg)
+		isExtjsOutput(msg) ||
+		isExtjsError(msg) ||
+		isExtjsRunRequest(msg)
 	);
 }

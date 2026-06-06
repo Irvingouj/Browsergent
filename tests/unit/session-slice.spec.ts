@@ -89,13 +89,4 @@ describe("session slice", () => {
 		expect(state.activeSessionId).toBe("s2");
 	});
 
-	test("setSessionsLoading toggles loading state", () => {
-		expect(browsergentStore.getState().session.isLoadingSessions).toBe(false);
-
-		browsergentStore.getState().setSessionsLoading(true);
-		expect(browsergentStore.getState().session.isLoadingSessions).toBe(true);
-
-		browsergentStore.getState().setSessionsLoading(false);
-		expect(browsergentStore.getState().session.isLoadingSessions).toBe(false);
-	});
 });

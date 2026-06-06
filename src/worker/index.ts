@@ -9,8 +9,9 @@
 
 /// <reference lib="webworker" />
 
-import type { JsRunResult } from "../types/js-utils";
-import { formatError } from "../types/js-utils";
+import type { BrowsergentErrorCode } from "../errors/browsergent-error";
+import type { JsRunResult } from "../types/extjs-utils";
+import { formatError } from "../types/extjs-utils";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
@@ -23,6 +24,27 @@ import type { AnthropicConfig } from "./anthropic";
 
 enableStreamDebug();
 
+const VALID_ERROR_CODES = new Set<string>([
+	"E_NO_API_KEY",
+	"E_BAD_SETTINGS",
+	"E_WORKER_CRASH",
+	"E_LLM_REQUEST",
+	"E_JS_COMPILE",
+	"E_JS_RUNTIME",
+	"E_JS_TIMEOUT",
+	"E_JS_RELAY",
+	"E_CHROME_PERMISSION",
+	"E_CONTENT_SCRIPT",
+	"E_PROTOCOL",
+	"E_AGENT_RUN",
+	"E_UNKNOWN",
+	"agent_error",
+]);
+
+function isBrowsergentErrorCode(value: string): value is BrowsergentErrorCode {
+	return VALID_ERROR_CODES.has(value);
+}
+
 declare const self: DedicatedWorkerGlobalScope;
 
 let agentLoop: AgentLoop | null = null;
@@ -32,11 +54,11 @@ function post(message: WorkerToPanel): void {
 	self.postMessage(message);
 }
 
-// --- JS relay ---
+// --- Extension-js relay ---
 
-let jsRelayCounter = 0;
-const JS_RELAY_TIMEOUT_MS = 30_000;
-const pendingJsRelays = new Map<
+let extjsRelayCounter = 0;
+const EXTJS_RELAY_TIMEOUT_MS = 30_000;
+const pendingExtjsRelays = new Map<
 	string,
 	{
 		resolve: (result: JsRunResult) => void;
@@ -45,45 +67,47 @@ const pendingJsRelays = new Map<
 	}
 >();
 
-function rejectAllPendingJsRelays(reason: string): void {
-	for (const [id, entry] of pendingJsRelays) {
+function rejectAllPendingExtjsRelays(reason: string): void {
+	for (const [id, entry] of pendingExtjsRelays) {
 		clearTimeout(entry.timeoutId);
 		entry.reject(new Error(reason));
-		pendingJsRelays.delete(id);
+		pendingExtjsRelays.delete(id);
 	}
 }
 
 /** Send JS code to the side panel for execution via ExtensionSession. */
-function relayJsExecution(code: string): Promise<JsRunResult> {
-	const relayId = `js-${++jsRelayCounter}`;
+function relayExtjsExecution(code: string): Promise<JsRunResult> {
+	const relayId = `extjs-${++extjsRelayCounter}`;
 
 	const promise = new Promise<JsRunResult>((resolve, reject) => {
 		const timeoutId = setTimeout(() => {
-			pendingJsRelays.delete(relayId);
-			reject(new Error(`JS relay timed out after ${JS_RELAY_TIMEOUT_MS}ms`));
-		}, JS_RELAY_TIMEOUT_MS);
+			pendingExtjsRelays.delete(relayId);
+			reject(
+				new Error(`Extjs relay timed out after ${EXTJS_RELAY_TIMEOUT_MS}ms`),
+			);
+		}, EXTJS_RELAY_TIMEOUT_MS);
 
-		pendingJsRelays.set(relayId, { resolve, reject, timeoutId });
+		pendingExtjsRelays.set(relayId, { resolve, reject, timeoutId });
 	});
 
-	post({ type: "jsRunRequest", id: relayId, code });
+	post({ type: "extjsRunRequest", id: relayId, code });
 	return promise;
 }
 
-function handleJsRelayResult(id: string, result: JsRunResult): void {
-	const entry = pendingJsRelays.get(id);
+function handleExtjsRelayResult(id: string, result: JsRunResult): void {
+	const entry = pendingExtjsRelays.get(id);
 	if (entry) {
 		clearTimeout(entry.timeoutId);
-		pendingJsRelays.delete(id);
+		pendingExtjsRelays.delete(id);
 		entry.resolve(result);
 	}
 }
 
-function handleJsRelayError(id: string, error: string): void {
-	const entry = pendingJsRelays.get(id);
+function handleExtjsRelayError(id: string, error: string): void {
+	const entry = pendingExtjsRelays.get(id);
 	if (entry) {
 		clearTimeout(entry.timeoutId);
-		pendingJsRelays.delete(id);
+		pendingExtjsRelays.delete(id);
 		entry.reject(new Error(error));
 	}
 }
@@ -177,13 +201,13 @@ function handleAgentStart(
 					type: "agentError",
 					runId,
 					error: {
-						code: code as import("../types/messages").BrowsergentError["code"],
+						code: isBrowsergentErrorCode(code) ? code : "E_UNKNOWN",
 						message,
 					},
 				});
 			},
 			runJs(code) {
-				return relayJsExecution(code);
+				return relayExtjsExecution(code);
 			},
 		})
 		.catch((err) => {
@@ -211,29 +235,29 @@ function handleAgentStop(runId?: string): void {
 		status: "stopped",
 		reason: "Stopped by user",
 	});
-	rejectAllPendingJsRelays("Agent stopped");
+	rejectAllPendingExtjsRelays("Agent stopped");
 }
 
 function handleAgentReset(): void {
 	agentLoop?.reset();
-	rejectAllPendingJsRelays("Agent reset");
+	rejectAllPendingExtjsRelays("Agent reset");
 	agentLoop = null;
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
 
-// --- Standalone JS tab handling ---
+// --- Standalone extension-js tab handling ---
 
-async function handleJsRun(id: string, code: string): Promise<void> {
+async function handleExtjsRun(id: string, code: string): Promise<void> {
 	try {
-		const result = await relayJsExecution(code);
+		const result = await relayExtjsExecution(code);
 		const output =
 			result.status === "err"
 				? formatError(result.error)
 				: result.stdout.join("\n");
-		post({ type: "jsOutput", id, output });
+		post({ type: "extjsOutput", id, output });
 	} catch (err) {
 		post({
-			type: "jsError",
+			type: "extjsError",
 			id,
 			error: err instanceof Error ? err.message : String(err),
 		});
@@ -254,20 +278,20 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 		case "agentReset":
 			handleAgentReset();
 			break;
-		case "jsRun":
-			void handleJsRun(msg.id, msg.code);
+		case "extjsRun":
+			void handleExtjsRun(msg.id, msg.code);
 			break;
-		case "jsStop":
-			rejectAllPendingJsRelays("JS stopped");
+		case "extjsStop":
+			rejectAllPendingExtjsRelays("Extjs stopped");
 			break;
-		case "jsReset":
-			rejectAllPendingJsRelays("JS reset");
+		case "extjsReset":
+			rejectAllPendingExtjsRelays("Extjs reset");
 			break;
-		case "jsRunResult":
-			handleJsRelayResult(msg.id, msg.result);
+		case "extjsRunResult":
+			handleExtjsRelayResult(msg.id, msg.result);
 			break;
-		case "jsRunError":
-			handleJsRelayError(msg.id, msg.error);
+		case "extjsRunError":
+			handleExtjsRelayError(msg.id, msg.error);
 			break;
 	}
 };

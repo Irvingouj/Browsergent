@@ -10,14 +10,6 @@ export interface SettingsState {
 	error?: BrowsergentError;
 }
 
-export interface SettingsActions {
-	settingsLoaded(next: SettingsState): void;
-	settingsDraftChanged(patch: Partial<SettingsState>): void;
-	settingsSaveStarted(): void;
-	settingsSaved(next: SettingsState): void;
-	settingsSaveFailed(error: BrowsergentError): void;
-}
-
 export interface SettingsSlice {
 	settings: SettingsState;
 	settingsLoaded(next: SettingsState): void;
@@ -29,7 +21,6 @@ export interface SettingsSlice {
 
 export function createSettingsSlice(
 	set: StoreApi<BrowsergentStore>["setState"],
-	_get: StoreApi<BrowsergentStore>["getState"],
 ): SettingsSlice {
 	return {
 		settings: {
