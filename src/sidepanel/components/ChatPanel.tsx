@@ -33,7 +33,7 @@ export const ChatPanel: FunctionalComponent = () => {
 	}, [messageIds, messagesById, trace]);
 
 	return (
-		<div>
+		<div class="flex flex-col gap-sm">
 			{timeline.map((item) =>
 				item.type === "message" ? (
 					<MessageBubble key={item.id} messageId={item.id} />

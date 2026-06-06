@@ -21,19 +21,11 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 	const model = useStore(browsergentStore, selectModel);
 
 	return (
-		<div
-			style={{
-				padding: "8px 12px",
-				borderBottom: "1px solid #e0e0e0",
-				background: "#f8f8f8",
-				position: "relative",
-				zIndex: 102,
-			}}
-		>
-			<div style={{ display: "grid", gap: "8px" }}>
+		<div class="relative z-10 p-md bg-bg-surface border-b border-white/[0.06] animate-panel-in">
+			<div class="grid gap-md">
 				<label>
-					<span style={{ display: "block", marginBottom: "4px" }}>
-						Anthropic API Key:
+					<span class="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-xs">
+						Anthropic API Key
 					</span>
 					<input
 						type="password"
@@ -44,17 +36,12 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 								anthropicApiKey: val,
 							});
 						}}
-						style={{
-							width: "100%",
-							padding: "4px 8px",
-							border: "1px solid #ccc",
-							borderRadius: "4px",
-						}}
+						class="w-full bg-bg-base border border-white/10 rounded-sm px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent-cyan focus:ring-[2px] focus:ring-accent-cyan-dim placeholder:text-text-dim"
 					/>
 				</label>
 				<label>
-					<span style={{ display: "block", marginBottom: "4px" }}>
-						Base URL:
+					<span class="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-xs">
+						Base URL
 					</span>
 					<input
 						type="text"
@@ -65,16 +52,13 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 								baseUrl: val,
 							});
 						}}
-						style={{
-							width: "100%",
-							padding: "4px 8px",
-							border: "1px solid #ccc",
-							borderRadius: "4px",
-						}}
+						class="w-full bg-bg-base border border-white/10 rounded-sm px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent-cyan focus:ring-[2px] focus:ring-accent-cyan-dim placeholder:text-text-dim"
 					/>
 				</label>
 				<label>
-					<span style={{ display: "block", marginBottom: "4px" }}>Model:</span>
+					<span class="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-xs">
+						Model
+					</span>
 					<input
 						type="text"
 						value={model}
@@ -84,42 +68,25 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 								model: val,
 							});
 						}}
-						style={{
-							width: "100%",
-							padding: "4px 8px",
-							border: "1px solid #ccc",
-							borderRadius: "4px",
-						}}
+						class="w-full bg-bg-base border border-white/10 rounded-sm px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent-cyan focus:ring-[2px] focus:ring-accent-cyan-dim placeholder:text-text-dim"
 					/>
 				</label>
-				<button
-					type="button"
-					onClick={onSave}
-					style={{
-						padding: "4px 12px",
-						background: "#4a90d9",
-						color: "white",
-						border: "none",
-						borderRadius: "4px",
-						cursor: "pointer",
-					}}
-				>
-					Save
-				</button>
-				<button
-					type="button"
-					onClick={onExport}
-					style={{
-						padding: "4px 12px",
-						background: "#666",
-						color: "white",
-						border: "none",
-						borderRadius: "4px",
-						cursor: "pointer",
-					}}
-				>
-					Export conversation
-				</button>
+				<div class="flex gap-sm mt-sm">
+					<button
+						type="button"
+						onClick={onSave}
+						class="px-sm py-xs rounded-sm font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-accent-cyan text-bg-base hover:bg-[#67e8f9] hover:shadow-[0_0_20px] hover:shadow-accent-cyan/15"
+					>
+						Save
+					</button>
+					<button
+						type="button"
+						onClick={onExport}
+						class="px-sm py-xs rounded-sm font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-bg-elevated text-text-secondary border border-white/10 hover:border-white/15 hover:text-text-primary"
+					>
+						Export conversation
+					</button>
+				</div>
 			</div>
 		</div>
 	);

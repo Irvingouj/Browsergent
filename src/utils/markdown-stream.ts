@@ -4,16 +4,25 @@ function postProcessHtml(html: string): string {
 	return html
 		.replace(
 			/<pre>/g,
-			'<pre style="background:#f0f0f0;padding:8px;border-radius:4px;overflow:auto;font-size:12px;line-height:1.4;margin:4px 0;">',
+			'<pre style="background:#0a0d12;padding:10px;border-radius:6px;overflow:auto;font-size:11px;line-height:1.5;margin:6px 0;border:1px solid rgba(255,255,255,0.06);font-family:JetBrains Mono,monospace;">',
 		)
 		.replace(
 			/<code>/g,
-			'<code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:12px;">',
+			'<code style="background:#0a0d12;padding:1px 5px;border-radius:4px;font-size:11px;color:#22d3ee;font-family:JetBrains Mono,monospace;border:1px solid rgba(255,255,255,0.06);">',
 		)
-		.replace(/<ul>/g, '<ul style="margin:4px 0;padding-left:16px;">')
-		.replace(/<ol>/g, '<ol style="margin:4px 0;padding-left:16px;">')
-		.replace(/<a /g, '<a style="color:#4a90d9;text-decoration:underline;" ')
-		.replace(/<p>/g, '<p style="margin:0 0 4px 0;">');
+		.replace(
+			/<ul>/g,
+			'<ul style="margin:6px 0;padding-left:18px;color:#94a3b8;">',
+		)
+		.replace(
+			/<ol>/g,
+			'<ol style="margin:6px 0;padding-left:18px;color:#94a3b8;">',
+		)
+		.replace(
+			/<a /g,
+			'<a style="color:#22d3ee;text-decoration:none;border-bottom:1px solid transparent;transition:border-color 0.2s;" ',
+		)
+		.replace(/<p>/g, '<p style="margin:0 0 6px 0;color:#e2e8f0;">');
 }
 
 export function renderMarkdown(text: string): string {

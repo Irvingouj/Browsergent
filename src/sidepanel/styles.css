@@ -1,0 +1,241 @@
+@import "tailwindcss";
+
+@theme {
+	/* ── Colors ── */
+	--color-bg-base: #0a0d12;
+	--color-bg-surface: #0f141c;
+	--color-bg-elevated: #151d28;
+	--color-bg-hover: #1a2533;
+	--color-bg-active: #1e2d3d;
+
+	--color-text-primary: #e2e8f0;
+	--color-text-secondary: #94a3b8;
+	--color-text-muted: #64748b;
+	--color-text-dim: #475569;
+
+	--color-accent-cyan: #22d3ee;
+	--color-accent-cyan-dim: rgba(34, 211, 238, 0.1);
+	--color-accent-amber: #f59e0b;
+	--color-accent-amber-dim: rgba(245, 158, 11, 0.1);
+	--color-accent-green: #34d399;
+	--color-accent-red: #f87171;
+	--color-accent-purple: #a78bfa;
+
+	/* ── Typography ── */
+	--font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+	--font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
+
+	/* ── Spacing ── */
+	--spacing-xs: 4px;
+	--spacing-sm: 8px;
+	--spacing-md: 12px;
+	--spacing-lg: 16px;
+	--spacing-xl: 24px;
+
+	/* ── Border radius ── */
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--radius-full: 9999px;
+
+	/* ── Animations ── */
+	--animate-message-in: message-in 0.3s ease-out both;
+	--animate-panel-in: panel-in 0.2s ease-out both;
+	--animate-fade-in: fade-in 0.2s ease-out;
+	--animate-slide-in-right: slide-in-right 0.25s ease-out;
+	--animate-pulse-glow: pulse-glow 1.5s ease-in-out infinite;
+	--animate-blink: blink 1s step-end infinite;
+
+	@keyframes message-in {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+	@keyframes panel-in {
+		from {
+			opacity: 0;
+			transform: translateY(-4px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+	@keyframes fade-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+	@keyframes slide-in-right {
+		from {
+			transform: translateX(100%);
+		}
+		to {
+			transform: translateX(0);
+		}
+	}
+	@keyframes pulse-glow {
+		0%,
+		100% {
+			opacity: 1;
+			box-shadow: 0 0 4px currentColor;
+		}
+		50% {
+			opacity: 0.6;
+			box-shadow: 0 0 8px currentColor;
+		}
+	}
+	@keyframes blink {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0;
+		}
+	}
+}
+
+/* ── Base & Scrollbar ── */
+html,
+body,
+#root {
+	width: 100%;
+	height: 100vh;
+	overflow: hidden;
+	background: var(--color-bg-base);
+	color: var(--color-text-primary);
+	font-family: var(--font-sans);
+	font-size: 13px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+	width: 5px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.1);
+	border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Background texture ── */
+.bg-app::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image:
+		radial-gradient(
+			ellipse at 20% 80%,
+			rgba(34, 211, 238, 0.03) 0%,
+			transparent 50%
+		),
+		radial-gradient(
+			ellipse at 80% 20%,
+			rgba(245, 158, 11, 0.03) 0%,
+			transparent 50%
+		);
+	pointer-events: none;
+	z-index: 0;
+}
+
+/* ── Message bubble pseudo-labels ── */
+.msg-label::before {
+	display: block;
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.8px;
+	margin-bottom: 4px;
+	opacity: 0.7;
+}
+.msg-label--user::before {
+	content: "You";
+	color: var(--color-accent-amber);
+}
+.msg-label--assistant::before {
+	content: "Agent";
+	color: var(--color-accent-cyan);
+}
+.msg-label--system::before {
+	content: "System";
+	color: var(--color-accent-purple);
+}
+
+/* ── Streaming cursor ── */
+.streaming-cursor::after {
+	content: "▋";
+	color: var(--color-accent-cyan);
+	animation: blink 1s step-end infinite;
+	margin-left: 2px;
+}
+
+/* ── Markdown content rendered via dangerouslySetInnerHTML ── */
+.message-bubble p {
+	margin: 0 0 4px 0;
+	color: var(--color-text-primary);
+}
+.message-bubble p:last-child {
+	margin-bottom: 0;
+}
+.message-bubble a {
+	color: var(--color-accent-cyan);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+	transition: border-color 0.2s;
+}
+.message-bubble a:hover {
+	border-bottom-color: var(--color-accent-cyan);
+}
+.message-bubble pre {
+	background: var(--color-bg-base);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 6px;
+	padding: 8px;
+	overflow: auto;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.5;
+	margin: 4px 0;
+}
+.message-bubble code {
+	background: var(--color-bg-base);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 4px;
+	padding: 1px 4px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--color-accent-cyan);
+}
+.message-bubble ul,
+.message-bubble ol {
+	margin: 4px 0;
+	padding-left: 16px;
+	color: var(--color-text-secondary);
+}
+.message-bubble li {
+	margin-bottom: 2px;
+}
+.message-bubble h1,
+.message-bubble h2,
+.message-bubble h3 {
+	font-size: 13px;
+	font-weight: 700;
+	margin: 8px 0 4px;
+	color: var(--color-text-primary);
+}

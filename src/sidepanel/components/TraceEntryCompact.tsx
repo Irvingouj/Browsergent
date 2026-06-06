@@ -6,95 +6,59 @@ export const TraceEntryCompact: FunctionalComponent<{
 	entry: AgentTraceEntry;
 }> = ({ entry }) => {
 	const [expanded, setExpanded] = useState(false);
-	const icon =
-		entry.status === "done" ? "✓" : entry.status === "error" ? "✗" : "…";
-	const color =
+
+	const statusClass =
 		entry.status === "done"
-			? "#22c55e"
+			? "bg-accent-green/15 text-accent-green"
 			: entry.status === "error"
-				? "#ef4444"
-				: "#f59e0b";
+				? "bg-accent-red/15 text-accent-red"
+				: "bg-accent-amber/15 text-accent-amber animate-pulse-glow";
+	const statusIcon =
+		entry.status === "done" ? "✓" : entry.status === "error" ? "✗" : "…";
 
 	return (
-		<div
-			style={{
-				fontSize: "12px",
-				borderRadius: "4px",
-				border: "1px solid #e0e0e0",
-				background: "#fafafa",
-				overflow: "hidden",
-			}}
-		>
+		<div class="rounded-sm border border-white/[0.06] bg-bg-surface overflow-hidden animate-message-in font-mono text-[11px]">
 			<button
 				type="button"
 				onClick={() => setExpanded(!expanded)}
-				style={{
-					padding: "6px 10px",
-					display: "flex",
-					alignItems: "center",
-					gap: "6px",
-					cursor: "pointer",
-					fontFamily: "monospace",
-					width: "100%",
-					border: "none",
-					background: "transparent",
-					textAlign: "left",
-				}}
+				class="px-sm py-xs flex items-center gap-sm w-full text-left font-mono text-[11px] text-text-secondary bg-transparent border-none cursor-pointer hover:bg-bg-hover transition-colors"
 			>
-				<span style={{ color }}>{icon}</span>
-				<span style={{ color: "#666" }}>#{entry.step}</span>
-				<span style={{ fontWeight: "bold" }}>{entry.toolName}</span>
+				<span
+					class={[
+						"w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] flex-shrink-0",
+						statusClass,
+					].join(" ")}
+				>
+					{statusIcon}
+				</span>
+				<span class="text-text-dim text-[10px] min-w-[24px]">
+					#{entry.step}
+				</span>
+				<span class="font-semibold text-text-primary">{entry.toolName}</span>
 				{!expanded && entry.toolInput && (
-					<span
-						style={{
-							color: "#999",
-							overflow: "hidden",
-							textOverflow: "ellipsis",
-							whiteSpace: "nowrap",
-							flex: 1,
-						}}
-					>
+					<span class="text-text-dim truncate text-[10px] flex-1">
 						{entry.toolInput.slice(0, 60)}
 					</span>
 				)}
 			</button>
 			{expanded && (
-				<div
-					style={{
-						padding: "8px 10px",
-						borderTop: "1px solid #e0e0e0",
-						fontFamily: "monospace",
-						fontSize: "11px",
-					}}
-				>
+				<div class="px-sm py-sm border-t border-white/[0.06] bg-bg-base">
 					{entry.toolInput && (
-						<div style={{ marginBottom: "6px" }}>
-							<div style={{ color: "#666", marginBottom: "2px" }}>Input:</div>
-							<div
-								style={{
-									whiteSpace: "pre-wrap",
-									color: "#333",
-									background: "#f0f0f0",
-									padding: "4px 6px",
-									borderRadius: "3px",
-								}}
-							>
+						<div class="mb-sm">
+							<div class="text-[10px] uppercase tracking-wider text-text-dim mb-xs">
+								Input
+							</div>
+							<div class="bg-bg-surface border border-white/[0.06] rounded-sm px-sm py-xs text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
 								{entry.toolInput}
 							</div>
 						</div>
 					)}
 					{entry.result && (
 						<div>
-							<div style={{ color: "#666", marginBottom: "2px" }}>Result:</div>
-							<div
-								style={{
-									whiteSpace: "pre-wrap",
-									color: "#333",
-									background: "#f0f0f0",
-									padding: "4px 6px",
-									borderRadius: "3px",
-								}}
-							>
+							<div class="text-[10px] uppercase tracking-wider text-text-dim mb-xs">
+								Result
+							</div>
+							<div class="bg-bg-surface border border-white/[0.06] rounded-sm px-sm py-xs text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
 								{entry.result}
 							</div>
 						</div>

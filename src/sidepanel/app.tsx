@@ -191,48 +191,22 @@ const App: FunctionalComponent = () => {
 	return (
 		<div
 			data-initialized={initialized}
-			style={{
-				display: "flex",
-				flexDirection: "column",
-				height: "100vh",
-				fontFamily: "system-ui, sans-serif",
-				fontSize: "13px",
-			}}
+			class="flex flex-col h-screen bg-bg-base relative overflow-hidden"
 		>
 			{/* Header */}
-			<div
-				style={{
-					padding: "8px 12px",
-					borderBottom: "1px solid #e0e0e0",
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
-					position: "relative",
-					zIndex: 102,
-					background: "#fff",
-				}}
-			>
-				<div style={{ display: "flex", alignItems: "center" }}>
-					<span style={{ fontWeight: "bold", fontSize: "14px" }}>
-						Browsergent
-					</span>
+			<div class="relative z-10 flex items-center justify-between px-md py-sm bg-bg-surface/85 backdrop-blur-md border-b border-white/[0.06]">
+				<div class="flex items-center gap-sm text-sm font-bold tracking-wider text-text-primary">
+					<span class="w-2 h-2 rounded-full bg-accent-cyan text-accent-cyan shadow-[0_0_8px_#22d3ee] animate-pulse-glow" />
+					Browsergent
 				</div>
 				<button
 					type="button"
+					class="flex items-center justify-center w-7 h-7 rounded-sm bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-all cursor-pointer"
 					onClick={() =>
 						browsergentStore
 							.getState()
 							.sessionPanelOpenChanged(!sessionPanelOpen)
 					}
-					style={{
-						padding: "4px 8px",
-						border: "none",
-						background: "none",
-						cursor: "pointer",
-						borderRadius: "4px",
-						display: "flex",
-						alignItems: "center",
-					}}
 					title="More options"
 				>
 					<svg
@@ -261,29 +235,13 @@ const App: FunctionalComponent = () => {
 			{/* Main content */}
 			<div
 				ref={chatScrollRef}
-				style={{
-					flex: 1,
-					overflow: "auto",
-					padding: "8px 12px",
-					position: "relative",
-				}}
+				class="flex-1 overflow-auto p-md relative z-10 flex flex-col gap-md"
 			>
 				{messages.length > 0 && !isRunning && (
 					<button
 						type="button"
 						onClick={handleCreateSession}
-						style={{
-							position: "absolute",
-							top: "8px",
-							left: "12px",
-							padding: "4px 8px",
-							fontSize: "11px",
-							border: "1px solid #ccc",
-							borderRadius: "4px",
-							background: "white",
-							cursor: "pointer",
-							zIndex: 1,
-						}}
+						class="absolute top-md left-md z-10 px-sm py-xs text-[11px] font-semibold border border-white/10 rounded-sm bg-bg-elevated text-text-secondary hover:border-accent-cyan hover:text-accent-cyan hover:bg-accent-cyan-dim transition-all cursor-pointer backdrop-blur-sm"
 					>
 						New
 					</button>
@@ -292,16 +250,30 @@ const App: FunctionalComponent = () => {
 			</div>
 
 			{/* Status bar */}
-			<div
-				style={{
-					padding: "4px 12px",
-					borderTop: "1px solid #e0e0e0",
-					fontSize: "11px",
-					color: "#666",
-				}}
-			>
-				Status: {status}
-				{statusReason ? ` — ${statusReason}` : ""} | Tool calls: {stepCount}
+			<div class="relative z-10 px-md py-xs bg-bg-base border-t border-white/[0.06] flex items-center gap-sm font-mono text-[10px] text-text-dim tracking-wider uppercase">
+				<span
+					class={[
+						"w-1.5 h-1.5 rounded-full flex-shrink-0",
+						status === "idle" || status === "stopped"
+							? "bg-text-dim"
+							: status === "loading"
+								? "bg-accent-amber text-accent-amber animate-pulse-glow"
+								: status === "running"
+									? "bg-accent-cyan text-accent-cyan animate-pulse-glow"
+									: status === "waiting_for_model"
+										? "bg-accent-purple text-accent-purple animate-pulse-glow"
+										: status === "executing_tool"
+											? "bg-accent-amber text-accent-amber animate-pulse-glow"
+											: status === "done"
+												? "bg-accent-green"
+												: "bg-accent-red text-accent-red shadow-[0_0_6px_#f87171]",
+					].join(" ")}
+				/>
+				<span class="flex-1 truncate">
+					{status}
+					{statusReason ? ` — ${statusReason}` : ""}
+				</span>
+				<span class="flex-shrink-0 text-text-muted">{stepCount} steps</span>
 			</div>
 
 			{/* Input */}

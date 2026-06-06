@@ -1,8 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { createStore } from "zustand/vanilla";
-import {
-	createChatSlice,
-} from "../../src/state/slices/chat-slice";
+import { createChatSlice } from "../../src/state/slices/chat-slice";
 import type { BrowsergentStore } from "../../src/state/store";
 import type { ChatMessage } from "../../src/types/messages";
 

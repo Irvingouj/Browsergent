@@ -43,7 +43,6 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
-	const [hoveredId, setHoveredId] = useState<string | null>(null);
 
 	useEffect(() => {
 		sessionController.listSessions().then((list) => {
@@ -105,71 +104,23 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 
 	return (
 		<>
-			{/* Overlay mask */}
 			<div
+				class="fixed top-0 left-0 right-[280px] bottom-0 bg-black/50 backdrop-blur-sm z-[100] animate-fade-in"
 				onClick={closePanel}
-				style={{
-					position: "fixed",
-					top: "40px",
-					left: 0,
-					right: "280px",
-					bottom: 0,
-					background: "rgba(0,0,0,0.3)",
-					zIndex: 100,
-				}}
 			/>
-			{/* Panel */}
-			<div
-				style={{
-					position: "fixed",
-					top: "40px",
-					right: 0,
-					bottom: 0,
-					width: "280px",
-					background: "#fff",
-					borderLeft: "1px solid #e0e0e0",
-					zIndex: 101,
-					display: "flex",
-					flexDirection: "column",
-				}}
-			>
-				{/* Header */}
-				<div
-					style={{
-						padding: "12px",
-						borderBottom: "1px solid #e0e0e0",
-						display: "flex",
-						alignItems: "center",
-						gap: "8px",
-					}}
-				>
+			<div class="fixed top-0 right-0 bottom-0 w-[280px] bg-bg-surface border-l border-white/[0.06] z-[101] flex flex-col animate-slide-in-right shadow-[-8px_0_32px_rgba(0,0,0,0.4)]">
+				<div class="p-md border-b border-white/[0.06] flex items-center gap-sm">
 					<button
 						type="button"
 						onClick={onCreateSession}
-						style={{
-							flex: 1,
-							padding: "6px 12px",
-							background: "#4a90d9",
-							color: "white",
-							border: "none",
-							borderRadius: "4px",
-							cursor: "pointer",
-							fontSize: "13px",
-						}}
+						class="px-sm py-xs rounded-sm font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs flex-1 bg-accent-cyan text-bg-base hover:bg-[#67e8f9] hover:shadow-[0_0_20px_rgba(34,211,238,0.15)]"
 					>
 						New Session
 					</button>
 					<button
 						type="button"
 						onClick={onSettingsClick}
-						style={{
-							padding: "6px 12px",
-							background: "#f5f5f5",
-							border: "1px solid #ccc",
-							borderRadius: "4px",
-							cursor: "pointer",
-							fontSize: "13px",
-						}}
+						class="px-sm py-xs rounded-sm font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-bg-elevated text-text-secondary border border-white/10 hover:border-white/15 hover:text-text-primary"
 					>
 						Settings
 					</button>
@@ -177,31 +128,20 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 						type="button"
 						data-testid="close-session-panel"
 						onClick={closePanel}
-						style={{
-							padding: "4px 8px",
-							background: "none",
-							border: "none",
-							cursor: "pointer",
-							fontSize: "16px",
-							color: "#666",
-						}}
+						class="flex items-center justify-center w-7 h-7 rounded-sm bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-all cursor-pointer"
+						style={{ fontSize: "16px" }}
 					>
 						×
 					</button>
 				</div>
 
-				{/* Session list */}
-				<div style={{ flex: 1, overflow: "auto" }}>
+				<div class="flex-1 overflow-auto">
 					{visibleSessions.length === 0 ? (
-						<div
-							style={{
-								padding: "24px 12px",
-								textAlign: "center",
-								color: "#999",
-								fontSize: "13px",
-							}}
-						>
-							No conversations yet
+						<div class="flex flex-col items-center justify-center h-full gap-md text-text-muted text-center p-xl">
+							<div class="w-12 h-12 rounded-lg bg-bg-elevated border border-white/10 flex items-center justify-center text-xl text-accent-cyan">
+								💬
+							</div>
+							<div class="text-text-muted">No conversations yet</div>
 						</div>
 					) : (
 						visibleSessions.map((session) => {
@@ -211,32 +151,22 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 								<div
 									key={session.id}
 									onClick={() => handleItemClick(session.id)}
-									onMouseEnter={() => setHoveredId(session.id)}
-									onMouseLeave={() => setHoveredId(null)}
-									style={{
-										padding: "10px 12px",
-										borderBottom: "1px solid #f0f0f0",
-										cursor: canSwitch ? "pointer" : "not-allowed",
-										borderLeft: isActive
-											? "3px solid #4a90d9"
-											: "3px solid transparent",
-										background: isActive ? "#f8fbff" : "#fff",
-										opacity: canSwitch ? 1 : 0.5,
-										position: "relative",
-									}}
+									class={[
+										"group px-md py-sm border-b border-white/[0.06] cursor-pointer transition-all relative",
+										!canSwitch
+											? "opacity-40 cursor-not-allowed"
+											: "hover:bg-bg-hover",
+										isActive
+											? "bg-accent-cyan-dim border-l-2 border-l-accent-cyan"
+											: "",
+									].join(" ")}
 									title={
 										canSwitch
 											? undefined
 											: "Cannot switch while agent is running"
 									}
 								>
-									<div
-										style={{
-											display: "flex",
-											justifyContent: "space-between",
-											alignItems: "center",
-										}}
-									>
+									<div class="flex items-center">
 										{isEditing ? (
 											<input
 												type="text"
@@ -247,15 +177,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 												onBlur={handleEditSave}
 												onKeyDown={handleEditKeyDown}
 												onClick={(e) => e.stopPropagation()}
-												style={{
-													flex: 1,
-													fontSize: "13px",
-													fontWeight: "bold",
-													padding: "2px 4px",
-													border: "1px solid #4a90d9",
-													borderRadius: "3px",
-													outline: "none",
-												}}
+												class="w-full bg-bg-base border border-accent-cyan rounded-sm px-xs py-[2px] text-sm font-semibold text-text-primary outline-none font-sans"
 												autoFocus
 											/>
 										) : (
@@ -263,14 +185,8 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 												onClick={(e) =>
 													handleTitleClick(e as unknown as MouseEvent, session)
 												}
+												class="text-sm font-semibold text-text-primary truncate flex-1"
 												style={{
-													fontSize: "13px",
-													fontWeight: "bold",
-													color: "#333",
-													flex: 1,
-													overflow: "hidden",
-													textOverflow: "ellipsis",
-													whiteSpace: "nowrap",
 													cursor: canSwitch ? "text" : "not-allowed",
 												}}
 											>
@@ -285,28 +201,12 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 													session.id,
 												)
 											}
-											style={{
-												marginLeft: "8px",
-												padding: "2px 6px",
-												background: "none",
-												border: "none",
-												color: "#d94a4a",
-												cursor: "pointer",
-												fontSize: "14px",
-												opacity: hoveredId === session.id ? 1 : 0,
-												transition: "opacity 0.15s",
-											}}
+											class="absolute top-sm right-md p-[2px_6px] bg-transparent border-none text-text-dim cursor-pointer text-sm opacity-0 group-hover:opacity-100 hover:text-accent-red transition-opacity"
 										>
 											×
 										</button>
 									</div>
-									<div
-										style={{
-											fontSize: "11px",
-											color: "#999",
-											marginTop: "4px",
-										}}
-									>
+									<div class="text-[10px] text-text-dim mt-xs font-mono">
 										{session.messageCount} messages ·{" "}
 										{formatRelativeTime(session.timestamp)}
 									</div>

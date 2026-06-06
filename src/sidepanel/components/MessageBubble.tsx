@@ -49,32 +49,36 @@ export const MessageBubble: FunctionalComponent<{ messageId: string }> = ({
 			? rendererRef.current(text)
 			: renderMarkdown(text);
 
+	const baseClasses = [
+		"relative rounded-md p-sm px-md animate-message-in max-w-full message-bubble",
+		"[overflow-wrap:break-word]",
+	];
+
+	const kindClasses =
+		message.kind === "user"
+			? [
+					"self-end ml-6 bg-accent-amber-dim border border-accent-amber-dim",
+					"msg-label msg-label--user",
+				]
+			: message.kind === "assistant"
+				? [
+						"self-start mr-6 bg-bg-elevated border border-white/10",
+						"msg-label msg-label--assistant",
+					]
+				: [
+						"self-center text-xs bg-accent-purple/8 border border-accent-purple/20",
+						"msg-label msg-label--system",
+					];
+
 	return (
 		<div
 			data-testid={`chat-message-${message.kind}`}
-			style={{
-				marginBottom: "8px",
-				padding: "8px 10px",
-				borderRadius: "4px",
-				background:
-					message.kind === "user"
-						? "#e3f2fd"
-						: message.kind === "system"
-							? "#fff3e0"
-							: "#f5f5f5",
-				lineHeight: "1.5",
-			}}
+			class={[
+				...baseClasses,
+				...kindClasses,
+				isStreaming ? "streaming-cursor" : "",
+			].join(" ")}
 		>
-			<div
-				style={{
-					fontSize: "11px",
-					color: "#666",
-					marginBottom: "4px",
-					textTransform: "capitalize",
-				}}
-			>
-				{message.kind}
-			</div>
 			<div dangerouslySetInnerHTML={{ __html: html }} />
 		</div>
 	);

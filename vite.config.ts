@@ -1,6 +1,7 @@
 import { copyFileSync } from "node:fs";
 import path from "node:path";
 import preact from "@preact/preset-vite";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
@@ -10,6 +11,7 @@ export default defineConfig({
 	},
 	plugins: [
 		preact(),
+		tailwindcss(),
 		{
 			name: "copy-extension-js-assets",
 			writeBundle(options) {

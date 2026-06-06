@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "vitest";
 import type { JsRunResult } from "../src/types/extjs-utils";
-import { formatJsRunResult, formatError } from "../src/types/extjs-utils";
+import { formatError, formatJsRunResult } from "../src/types/extjs-utils";
 
 type WasmCellError = Extract<JsRunResult, { status: "err" }>["error"];
 
@@ -107,7 +107,9 @@ describe("formatJsRunResult", () => {
 			error,
 			execution_count: 6,
 		};
-		expect(formatJsRunResult(cell)).toBe("[runtime error] something went wrong");
+		expect(formatJsRunResult(cell)).toBe(
+			"[runtime error] something went wrong",
+		);
 	});
 
 	test("formats fuel_exhausted error", () => {

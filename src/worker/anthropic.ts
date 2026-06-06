@@ -6,16 +6,14 @@
  */
 
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";
-import {
-	AnthropicConfig,
-	BROWSER_TOOLS,
-	SYSTEM_PROMPT,
-} from "./anthropic-prompts";
+import type { AnthropicConfig } from "./anthropic-prompts";
+import { BROWSER_TOOLS, SYSTEM_PROMPT } from "./anthropic-prompts";
 import { createAnthropicStream } from "./anthropic-sse";
 import { toAnthropicMessages, toAnthropicTools } from "./anthropic-wire";
 import type { LlmStream } from "./llm-streamer";
 
-export { AnthropicConfig, BROWSER_TOOLS, SYSTEM_PROMPT };
+export type { AnthropicConfig } from "./anthropic-prompts";
+export { BROWSER_TOOLS, SYSTEM_PROMPT };
 
 export class AnthropicProvider {
 	constructor(private config: AnthropicConfig) {}

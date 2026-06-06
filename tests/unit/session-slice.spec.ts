@@ -88,5 +88,4 @@ describe("session slice", () => {
 		expect(state.sessions[0].messageCount).toBe(0);
 		expect(state.activeSessionId).toBe("s2");
 	});
-
 });

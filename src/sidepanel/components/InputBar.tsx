@@ -17,14 +17,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const taskInput = useStore(browsergentStore, selectTaskDraft);
 
 	return (
-		<div
-			style={{
-				padding: "8px 12px",
-				borderTop: "1px solid #e0e0e0",
-				display: "flex",
-				gap: "8px",
-			}}
-		>
+		<div class="relative z-10 px-md py-sm bg-bg-surface border-t border-white/[0.06] flex gap-sm items-end">
 			<input
 				type="text"
 				value={taskInput}
@@ -38,40 +31,22 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				}}
 				placeholder="Type a task..."
 				disabled={isRunning}
-				style={{
-					flex: 1,
-					padding: "6px 8px",
-					border: "1px solid #ccc",
-					borderRadius: "4px",
-				}}
+				class="flex-1 bg-bg-base border border-white/10 rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] focus:border-accent-cyan focus:ring-[3px] focus:ring-accent-cyan-dim placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"
 			/>
 			{isRunning ? (
 				<button
 					type="button"
 					onClick={onStop}
-					style={{
-						padding: "6px 16px",
-						background: "#d94a4a",
-						color: "white",
-						border: "none",
-						borderRadius: "4px",
-						cursor: "pointer",
-					}}
+					class="px-md py-sm rounded-md font-sans text-sm font-semibold cursor-pointer transition-all flex items-center gap-xs whitespace-nowrap min-h-[36px] bg-accent-red/15 text-accent-red border border-accent-red/30 hover:bg-accent-red/25 hover:shadow-[0_0_12px_rgba(248,113,113,0.2)]"
 				>
+					<span class="w-1.5 h-1.5 rounded-full bg-accent-red" />
 					Stop
 				</button>
 			) : (
 				<button
 					type="button"
 					onClick={onRun}
-					style={{
-						padding: "6px 16px",
-						background: "#4a90d9",
-						color: "white",
-						border: "none",
-						borderRadius: "4px",
-						cursor: "pointer",
-					}}
+					class="px-md py-sm rounded-md font-sans text-sm font-semibold cursor-pointer transition-all whitespace-nowrap min-h-[36px] bg-accent-cyan text-bg-base hover:bg-[#67e8f9] hover:shadow-[0_0_20px_rgba(34,211,238,0.15)] active:bg-[#06b6d4]"
 				>
 					Run
 				</button>
