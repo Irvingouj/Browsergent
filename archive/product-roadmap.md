@@ -1,3 +1,5 @@
+<!-- Historical document — kept for reference. See CONTEXT.md for current state. -->
+
 # Browsergent - Product Roadmap
 
 ## Product
@@ -200,7 +202,7 @@ selector-based actions
 
 ```text
 Agent-first UI with required Lua playbook surface.
-LLM → run_lua → Lua → page.* — the only execution path.
+LLM -> run_lua -> Lua -> page.* — the only execution path.
 LLM's only tool is run_lua. LLM does reasoning, Lua does acting.
 Typed browser commands only (shared by agent and Lua).
 ref_id instead of selectors.

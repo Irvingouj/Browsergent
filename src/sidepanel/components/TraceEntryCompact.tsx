@@ -20,6 +20,7 @@ export const TraceEntryCompact: FunctionalComponent<{
 		<div class="rounded-sm border border-white/[0.06] bg-bg-surface overflow-hidden animate-message-in font-mono text-[11px]">
 			<button
 				type="button"
+				data-testid="trace-entry"
 				onClick={() => setExpanded(!expanded)}
 				class="px-sm py-xs flex items-center gap-sm w-full text-left font-mono text-[11px] text-text-secondary bg-transparent border-none cursor-pointer hover:bg-bg-hover transition-colors"
 			>

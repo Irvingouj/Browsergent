@@ -14,7 +14,13 @@ export function formatJsRunResult(cell: JsRunResult): string {
 	const parts: string[] = [];
 	const stdout = cell.stdout.join("\n");
 	if (stdout) parts.push(stdout);
-	if (cell.result !== null) parts.push(cell.result);
+	if (cell.result !== null) {
+		parts.push(
+			typeof cell.result === "string"
+				? cell.result
+				: JSON.stringify(cell.result),
+		);
+	}
 	return parts.join("\n");
 }
 

@@ -10,6 +10,7 @@
 		"typecheck": "tsc --noEmit",
 		"test": "npx playwright test",
 		"test:unit": "vitest run",
+		"test:unit:coverage": "vitest run --coverage",
 		"test:all": "vitest run && npx playwright test"
 	},
 	"dependencies": {
@@ -27,6 +28,7 @@
 		"@preact/preset-vite": "^2.10.5",
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/chrome": "^0.0.315",
+		"@vitest/coverage-v8": "^4.1.8",
 		"fake-indexeddb": "^6.2.5",
 		"preact-render-to-string": "^6.5.0",
 		"tailwindcss": "^4.3.0",

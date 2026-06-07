@@ -1,3 +1,5 @@
+<!-- Historical document — kept for reference. See CONTEXT.md for current state. -->
+
 # Code Review Issues
 
 ## Issue 1: Lua runs in the UI thread

@@ -40,11 +40,9 @@ test("agent shows error on 503 and UI remains usable", async () => {
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("test-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await sidePanel.locator("text=Save").click();
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
-
-	// Close session panel
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	// Start a run
 	await sidePanel
@@ -53,7 +51,7 @@ test("agent shows error on 503 and UI remains usable", async () => {
 	await sidePanel.locator("text=Run").click();
 
 	// Should show error status (hard stop)
-	await expect(sidePanel.locator("text=Status: error")).toBeVisible({
+	await expect(sidePanel.getByText("error", { exact: true })).toBeVisible({
 		timeout: 10000,
 	});
 

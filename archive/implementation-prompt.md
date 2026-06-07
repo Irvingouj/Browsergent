@@ -1,3 +1,5 @@
+<!-- Historical document — kept for reference. See CONTEXT.md for current state. -->
+
 # Implementer Prompt
 
 Read `AGENTS.md` first and follow it strictly.
@@ -29,7 +31,7 @@ Add regression coverage:
 
 - Two prompts in one side-panel session keep prompt 1 and answer 1 visible after answer 2 appears.
 - Mocked streaming response emits delayed chunks, and partial assistant text appears before the final chunk.
-- The final streamed response is rendered as one assistant message.
+- The final streamed response is rendered one assistant message.
 - Prior visible transcript is included in the second provider request.
 
 ## Verify

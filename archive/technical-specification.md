@@ -1,3 +1,5 @@
+<!-- Historical document — kept for reference. See CONTEXT.md for current state. -->
+
 # Browsergent - Technical Specification
 
 ## Purpose
@@ -293,7 +295,7 @@ The LLM has ONE tool: `run_lua`. It generates Lua code to control the browser.
 ```json
 {
   "name": "run_lua",
-  "description": "Execute Lua code to control the browser. Available API:\n- page.snapshot() → returns page elements with ref_ids\n- page.click(ref_id) → click element\n- page.fill(ref_id, text) → fill input\n- page.clear(ref_id) → clear input\n- page.select(ref_id, value) → select option\n- page.press(key) → press key\n- page.scroll(direction, amount?) → scroll\n- page.extract(ref_id?) → extract text\n- page.goto(url) → navigate\n- page.back() / page.forward() / page.reload()",
+  "description": "Execute Lua code to control the browser. Available API:\n- page.snapshot() -> returns page elements with ref_ids\n- page.click(ref_id) -> click element\n- page.fill(ref_id, text) -> fill input\n- page.clear(ref_id) -> clear input\n- page.select(ref_id, value) -> select option\n- page.press(key) -> press key\n- page.scroll(direction, amount?) -> scroll\n- page.extract(ref_id?) -> extract text\n- page.goto(url) -> navigate\n- page.back() / page.forward() / page.reload()",
   "input_schema": {
     "type": "object",
     "properties": {
@@ -317,7 +319,7 @@ The LLM never calls page.* directly. It generates Lua code, and LuaRuntime execu
 6. ExecuteTools -> Worker extracts run_lua tool call.
 7. Worker passes Lua code to LuaRuntime.run().
 8. LuaRuntime executes: page.* calls yield BrowserCommands.
-9. Worker sends BrowserCommands to background → content script.
+9. Worker sends BrowserCommands to background -> content script.
 10. Results resume back to Lua.
 11. Lua execution completes, output returns as tool result.
 12. Worker calls pi-core on_tool_done with Lua output.
@@ -350,7 +352,7 @@ Surface HTTP/network errors as agentError.
 
 ## Lua Mode
 
-Lua is a required runtime and the **sole execution layer**. Both the agent (via `run_lua` tool) and direct user playbooks use the same Lua `page.*` API through the same BrowserCommand path. The product must support chat-driven agent use and manual Lua playbooks as first-class capabilities.
+Lua is a required runtime and the **sole execution layer**. Both the agent (via `run_lua` tool) and direct user playbooks use the same Lua `page.*` API through the same content-script BrowserCommand path. The product must support chat-driven agent use and manual Lua playbooks as first-class capabilities.
 
 The LLM never calls browser tools directly. It generates Lua code. Lua calls `page.*` APIs. Each `page.*` call yields a BrowserCommand. BrowserCommand goes through the content script. Results resume back to Lua. This is the only execution path.
 

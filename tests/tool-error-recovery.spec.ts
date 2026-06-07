@@ -39,11 +39,9 @@ test("agent continues after tool error and trace shows error status", async () =
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("test-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await sidePanel.locator("text=Save").click();
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
-
-	// Close session panel
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	// Start a run
 	await sidePanel
@@ -57,7 +55,7 @@ test("agent continues after tool error and trace shows error status", async () =
 	});
 
 	// Agent should complete (done status)
-	await expect(sidePanel.locator("text=Status: done")).toBeVisible({
+	await expect(sidePanel.locator("text=done")).toBeVisible({
 		timeout: 20000,
 	});
 

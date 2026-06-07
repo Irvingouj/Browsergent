@@ -1,3 +1,5 @@
+<!-- Historical document — kept for reference. See CONTEXT.md for current state. -->
+
 # Browsergent State Management Direction
 
 Browsergent is starting to lose track because state is split across too many places:
@@ -372,7 +374,7 @@ all pass, and the following user-visible behaviors work:
 
 - Side panel opens without Lua init race.
 - Lua playbook can read the active target page URL/title.
-- Agent can answer “what page are we at?” using `run_lua`.
+- Agent can answer "what page are we at?" using `run_lua`.
 - Assistant text streams incrementally.
 - Chat history remains visible across turns.
 - Tool call result causes the agent to continue to a final answer.

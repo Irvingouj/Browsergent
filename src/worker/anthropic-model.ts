@@ -103,7 +103,7 @@ async function drainStreamToResponse(
 	stream: LlmStream,
 ): Promise<ModelResponse> {
 	let _text = "";
-	const toolCalls: import("@pi-oxide/pi-host-web").AgentContentBlock[] = [];
+	const toolCalls: { type: "tool_call"; id: string; name: string; arguments: unknown }[] = [];
 
 	for await (const chunk of stream.chunks) {
 		switch (chunk.kind) {
@@ -130,7 +130,18 @@ async function drainStreamToResponse(
 		};
 	}
 
-	return wasmToSdkResponse(result.Ok);
+	// If the streaming path accumulated tool-call deltas that were not
+	// captured in the final result, merge them in.
+	const merged = result.Ok;
+	if (toolCalls.length > 0) {
+		const seenIds = new Set(merged.content.map((b) => (b.type === "tool_call" && "id" in b ? b.id : null)));
+		for (const tc of toolCalls) {
+			if (!seenIds.has(tc.id)) {
+				merged.content.push(tc as Content);
+			}
+		}
+	}
+	return wasmToSdkResponse(merged);
 }
 
 function wasmToSdkResponse(msg: {

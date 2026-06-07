@@ -33,6 +33,14 @@ export class ExtjsController {
 		this.client.handleRelayRequest(msg);
 	}
 
+	async stop(): Promise<void> {
+		try {
+			await this.client.stop();
+		} catch (err: unknown) {
+			console.warn("Extjs stop failed:", err);
+		}
+	}
+
 	async dispose(): Promise<void> {
 		browsergentStore.getState().extjsDisposed();
 		ExtensionJsClient.relayCallback = null;

@@ -6,31 +6,24 @@ Project and behavioral guidelines for agents working in this repository.
 
 Browsergent is **Claude Code for the browser** — an AI agent that lives in a Chrome side panel, sees web pages, and acts on them autonomously.
 
-Browsergent has **two required interfaces**:
+Browsergent has **two interfaces**:
 
 1. **Agent Chat** (primary): User types a task in plain English, agent reasons and executes.
-2. **Lua Playbooks** (required): User writes and runs Lua scripts that control the browser through typed commands.
+2. **JS Playbooks** (secondary): User writes and runs JavaScript scripts that control the browser through typed commands.
 
 Architecture:
 
-- **Brain**: pi-core (Rust sans-IO state machine), compiled to WASM, runs in a Web Worker
-- **Reasoning**: Anthropic Claude (LLM) — generates Lua code, does NOT call browser tools directly
-- **Acting**: Lua via piccolo WASM — the agent's ONLY tool is `run_lua`, which executes Lua code that calls `page.*` APIs
+- **Brain**: `@pi-oxide/pi-host-web` WASM (Rust sans-IO state machine), runs in a Web Worker
+- **Reasoning**: Anthropic Claude (LLM) — generates JS code, does NOT call browser tools directly
+- **Acting**: `run_js` via `@pi-oxide/extension-js` — the agent's ONLY tool is `run_js`, which executes JS code that calls `page.*` APIs
 - **Eyes and hands**: Content script with typed command protocol — snapshot, click, fill, scroll
-- **Lua**: Required runtime using piccolo WASM. Both the agent (via `run_lua`) and direct user playbooks use the same `page.*` API.
 - **Platform**: Chrome Manifest V3 extension
 
-Core principle: **LLM does reasoning, Lua does acting.** The LLM's only browser tool is `run_lua`. All page.* operations go through Lua.
+Core principle: **LLM does reasoning, JS does acting.** The LLM's only browser tool is `run_js`. All `page.*` operations go through the sandboxed `@pi-oxide/extension-js` runtime.
 
 ## Project Boundaries
 
 ### 1. Type safety protects every boundary.
-
-Rust side:
-- Parse information at the first Rust boundary.
-- Do not pass unstructured strings deeper than necessary.
-- Even when the wire format is a string, wrap parsed values in concrete domain structs.
-- Prefer typed APIs over ad hoc `serde_json::Value` plumbing inside core logic.
 
 TypeScript side:
 - **Never use `any`.** Not in function params, not in return types, not in casts.
@@ -55,38 +48,29 @@ function handleCommand(cmd: BrowserCommand): BrowserResult { ... }
 
 ### 2. Core is runtime-free.
 
-- The Rust agent core (piccolo-notebook-core, pi-core) must not assume any runtime.
-- No Tokio, browser, shell, filesystem, HTTP, or OS-specific assumptions in core crates.
+- The `@pi-oxide/pi-host-web` WASM agent core must not assume any runtime.
+- No Tokio, browser, shell, filesystem, HTTP, or OS-specific assumptions in the core package.
 - Core is built around traits and synchronous state transitions.
 - Runtime-specific behavior belongs in host crates, bindings, or TypeScript.
 
 ### 3. Rust owns decisions, TypeScript owns side effects.
 
-- Rust owns: typed agent core, Lua VM, context projection, command validation schemas, state machine transitions.
+- Rust owns: typed agent core, context projection, command validation schemas, state machine transitions.
 - TypeScript owns: Chrome extension APIs, DOM manipulation, message routing, UI rendering, LLM HTTP calls.
 - The boundary between them is always a typed message — never a raw string, never `any`, never an unstructured bag.
 
-### 4. Lua and Rust agent core never touch the browser directly.
+### 4. JS runtime and agent core never touch the browser directly.
 
-They emit typed commands. The TypeScript extension adapter owns all real browser side effects:
-- No direct access to `document`, `window`, `chrome.*`, `fetch`, `cookies`, `localStorage`.
+They emit typed commands. The `@pi-oxide/extension-js` runtime and TypeScript extension adapter own all real browser side effects:
+- No direct access to `document`, `window`, `chrome.*`, `fetch`, `cookies`, `localStorage` from the agent core or sandboxed JS runtime.
 - Access only through typed host functions that yield and resume through the command protocol.
 - Content scripts execute DOM actions, never arbitrary JS eval.
 
 ### 5. Make invalid states unrepresentable.
 
-- Use Rust enums to make impossible states impossible.
 - Use TypeScript discriminated unions with `kind` or `type` tags.
 - Prefer `Result<T, E>` over throwing; prefer `Option<T>` over null checks.
 - If a function can fail, the return type must say so.
-
-```rust
-// BAD — caller must remember to check
-fn execute(cmd: &BrowserCommand) -> BrowserResult { ... }
-
-// GOOD — caller cannot ignore the error case
-fn execute(cmd: &BrowserCommand) -> Result<BrowserOutput, BrowserError> { ... }
-```
 
 ```typescript
 // BAD — null hides in the type
@@ -98,11 +82,6 @@ function getSnapshot(): SnapshotResult { ... }
 ```
 
 ### 6. Errors must be useful.
-
-Rust:
-- Use `thiserror` for concrete error types.
-- Preserve actionable context in errors.
-- Avoid opaque string-only failures once data has crossed into Rust.
 
 TypeScript:
 - Error types carry a `code` field (machine-readable) and a `message` field (human-readable).
@@ -191,7 +170,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 These are the canonical types. Implement against these, not ad hoc shapes.
 
-### BrowserCommand (TypeScript ↔ Rust)
+### BrowserCommand (TypeScript)
 
 ```typescript
 type BrowserCommand =
@@ -203,6 +182,9 @@ type BrowserCommand =
   | { kind: "page.press"; key: Key }
   | { kind: "page.scroll"; direction: Direction; amount?: number }
   | { kind: "page.extract"; refId?: RefId }
+  | { kind: "page.url" }
+  | { kind: "page.title" }
+  | { kind: "page.wait"; ms: number }
   | { kind: "page.goto"; url: string }
   | { kind: "page.back" }
   | { kind: "page.forward" }
@@ -211,6 +193,11 @@ type BrowserCommand =
 type RefId = string;          // "e0", "e1", ... — branded type preferred
 type Direction = "up" | "down";
 type Key = "Enter" | "Tab" | "Escape" | "Backspace" | string;
+
+interface SnapshotOptions {
+  onlyVisible?: boolean;
+  maxElements?: number;
+}
 ```
 
 ### BrowserResult
@@ -218,7 +205,7 @@ type Key = "Enter" | "Tab" | "Escape" | "Backspace" | string;
 ```typescript
 type BrowserResult =
   | { ok: true; value: unknown }
-  | { ok: false; error: string; code: ErrorCode };
+  | { ok: false; error: string; code: ErrorCode; details?: Record<string, unknown> };
 
 type ErrorCode =
   | "E_STALE"
@@ -227,6 +214,8 @@ type ErrorCode =
   | "E_NOT_FILLABLE"
   | "E_NOT_SELECT"
   | "E_PERMISSION"
+  | "E_NAVIGATION"
+  | "E_UNSUPPORTED"
   | "E_UNKNOWN";
 ```
 
@@ -250,6 +239,7 @@ interface ElementSnapshot {
   value?: string;
   enabled: boolean;
   visible: boolean;
+  attributes?: Record<string, string>;
 }
 ```
 
@@ -258,24 +248,33 @@ interface ElementSnapshot {
 ```typescript
 // UI → Worker
 type PanelToWorker =
-  | { type: "agentStart"; task: string; maxSteps: number }
-  | { type: "agentStop" }
+  | { type: "agentStart"; runId: string; sessionId: string; task: string; settings: WorkerSettings }
+  | { type: "agentStop"; runId?: string }
   | { type: "agentReset" }
-  | { type: "luaRun"; id: string; code: string; stdin?: string }
-  | { type: "luaStop" }
-  | { type: "luaReset" }
-  | { type: "settingsUpdated"; settings: WorkerSettings };
+  | { type: "extjsRun"; id: string; code: string }
+  | { type: "extjsStop" }
+  | { type: "extjsReset" }
+  | { type: "extjsRunResult"; id: string; result: JsRunResult }
+  | { type: "extjsRunError"; id: string; error: string };
+
+interface WorkerSettings {
+  anthropicApiKey?: string;
+  baseUrl?: string;
+  model: string;
+}
 
 // Worker → UI
 type WorkerToPanel =
   | { type: "workerReady" }
-  | { type: "agentStatus"; status: AgentStatus; reason?: string }
-  | { type: "agentMessage"; message: ChatMessage }
-  | { type: "agentTextDelta"; messageId: string; text: string }
-  | { type: "agentTrace"; entry: ActionTraceEntry }
-  | { type: "agentError"; error: BrowsergentError }
-  | { type: "luaOutput"; id: string; data: RunResult }
-  | { type: "luaTrace"; entry: ActionTraceEntry };
+  | { type: "agentStatus"; runId: string; status: AgentStatus; reason?: string }
+  | { type: "agentMessage"; runId: string; message: ChatMessage }
+  | { type: "agentTextDelta"; runId: string; messageId: string; text: string }
+  | { type: "agentTrace"; runId: string; entry: AgentTraceEntry }
+  | { type: "agentMessageEnd"; runId: string; messageId: string }
+  | { type: "agentError"; runId: string; error: BrowsergentError }
+  | { type: "extjsOutput"; id: string; output: string }
+  | { type: "extjsError"; id: string; error: string }
+  | { type: "extjsRunRequest"; id: string; code: string };
 
 type AgentStatus = "idle" | "loading" | "running" | "waiting_for_model" | "executing_tool" | "done" | "stopped" | "error";
 ```
@@ -283,23 +282,26 @@ type AgentStatus = "idle" | "loading" | "running" | "waiting_for_model" | "execu
 ## Build and Test
 
 ```bash
-# Build WASM (piccolo notebook)
-wasm-pack build crates/piccolo-notebook-wasm --target web --out-dir web/pkg
+# Install dependencies
+npm install
 
-# Build WASM (pi-core agent)
-wasm-pack build crates/browsergent-agent --target web --out-dir web/pkg-agent
+# Build extension
+npm run build
 
 # Dev server
-cd web && npm run dev
+npm run dev
 
-# Extension build
-./scripts/build-extension.sh
+# Unit tests
+npm run test:unit
 
-# Run E2E tests
-cd web && npx playwright test
+# E2E tests
+npm run test
 
-# Run Rust tests
-cargo test --workspace
+# All tests
+npm run test:all
+
+# TypeScript check
+npm run typecheck
 
 # Load unpacked extension
 # chrome://extensions → Developer mode → Load unpacked → dist/
@@ -312,17 +314,19 @@ Side Panel (Chat UI)
   │ postMessage
   ▼
 Web Worker
-  ├─ pi-core Agent WASM (the brain — state machine, context projection)
+  ├─ @pi-oxide/pi-host-web WASM (the brain — state machine, context projection)
   ├─ Anthropic API call (LLM reasoning)
-  │     └─ LLM's only tool: run_lua → generates Lua code
+  │     └─ LLM's only tool: run_js → generates JS code
   │           │
   │           ▼
-  ├─ piccolo Lua WASM (required — execution runtime)
-  │     └─ page.* API → yield BrowserCommand
-  │
-  │ chrome.runtime.sendMessage
-  ▼
-Background Service Worker (router)
+  └─ relayExtjsExecution(code) → postMessage to side panel
+
+Side Panel Main Thread
+  └─ ExtensionJsClient (singleton adapter)
+        └─ @pi-oxide/extension-js ExtensionSession
+              └─ chrome.tabs.* / chrome.scripting.* / content script
+
+Background Service Worker
   │ chrome.tabs.sendMessage
   ▼
 Content Script (in active tab)
@@ -331,4 +335,4 @@ Content Script (in active tab)
   └─ result observation
 ```
 
-Core boundary: LLM reasons and generates Lua code. Lua executes page.* operations that yield typed BrowserCommands. TypeScript host executes them. The LLM never touches DOM or chrome APIs — it only writes Lua.
+Core boundary: LLM reasons and generates JS code. `@pi-oxide/extension-js` executes `page.*` operations that yield typed `BrowserCommand`s. The TypeScript host executes them. The LLM never touches DOM or Chrome APIs — it only writes JS.

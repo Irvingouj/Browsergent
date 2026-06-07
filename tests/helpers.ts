@@ -1,9 +1,16 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { type BrowserContext, chromium, type Page } from "@playwright/test";
+import {
+	type BrowserContext,
+	chromium,
+	type Page,
+	test,
+} from "@playwright/test";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionPath = path.resolve(__dirname, "../dist");
+
+const consoleErrors: string[] = [];
 
 export async function launchExtension(userDataDir?: string): Promise<{
 	context: BrowserContext;
@@ -27,8 +34,16 @@ export async function launchExtension(userDataDir?: string): Promise<{
 	const extensionId = serviceWorker.url().split("/")[2];
 
 	const sidePanel = await context.newPage();
+	sidePanel.on("console", (msg) => {
+		if (msg.type() === "error") {
+			consoleErrors.push(msg.text());
+		}
+	});
 	await sidePanel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
 	await sidePanel.waitForSelector('[data-initialized="true"]', {
+		timeout: 10000,
+	});
+	await sidePanel.waitForSelector('[data-worker-ready="true"]', {
 		timeout: 10000,
 	});
 
@@ -39,6 +54,15 @@ export async function launchExtension(userDataDir?: string): Promise<{
 		close: async () => await context.close(),
 	};
 }
+
+test.afterEach(({ page: _page }, testInfo) => {
+	if (testInfo.status !== "passed" && consoleErrors.length > 0) {
+		console.log(
+			`\n--- Console errors for "${testInfo.title}" ---\n${consoleErrors.join("\n")}\n`,
+		);
+	}
+	consoleErrors.length = 0;
+});
 
 export async function createTestPage(
 	context: BrowserContext,

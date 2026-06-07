@@ -1,3 +1,5 @@
+<!-- Historical document — kept for reference. See CONTEXT.md for current state. -->
+
 # Browsergent Lua / Pi Host Refactor Plan
 
 本文档记录 Browsergent 从旧 `piccolo-notebook-wasm` Lua 集成迁移到新 `@pi-oxide/extension-lua` + `@pi-oxide/pi-host-web` 架构的重构计划。
@@ -166,7 +168,7 @@ src/sidepanel/extension-lua-client.ts
 
 **必须是单例**：`extension-lua` 的 runner 使用模块级 `AbortController`（源码：`runner.ts` 顶层变量），多个 `ExtensionSession` 实例的 `stopWith` 会互相覆盖。每个 extension page 只应有一个活跃 session。
 
-**同时服务 agent 和 standalone Lua tab**：当前 Browsergent Worker 维护两个独立的 `LuaRuntime` —— 一个给 agent `run_lua` tool，一个给 UI 的 Lua 标签页。迁移后两者共享同一个 `ExtensionSession`，通过队列序列化访问：
+**同时服务 agent 和 standalone Lua tab**：当前 Browsergent Worker 维护两个 `LuaRuntime` —— 一个给 agent `run_lua` tool，一个给 UI 的 Lua 标签页。迁移后两者共享同一个 `ExtensionSession`，通过队列序列化访问：
 
 ```ts
 class ExtensionLuaClient {
@@ -356,7 +358,7 @@ page.snapshot is the side panel snapshot and is usually wrong for user browsing 
 
 如果当前 `tab.snapshot` 仍是简化 inline snapshot，而不是 `dom-semantic-tree`，prompt 需要承认这一点：它提供可交互元素和 `refId`，但语义质量弱于 `page.snapshot`。
 
-**关键防御**：`page.snapshot` 在 extension-lua 中使用 `dom-semantic-tree`，质量反而比 `tab.snapshot` 更高，但它快照的是 side panel 自己。LLM 如果误用 `page.snapshot`，会拿到高质量但完全无关的快照。Browsergent 的 `runLua` adapter 应做静态扫描：如果代码包含 `page.snapshot` 但不包含 `tab.snapshot`，返回错误提示使用 `tab.snapshot`。
+**关键防御**：`page.snapshot` 在 extension-lua 中使用 `dom-semantic-tree`，质量反而比 `tab.snapshot` 更高，但它快照的是 side panel 自己。如果 LLM 误用 `page.snapshot`，会拿到高质量但完全无关的快照。Browsergent 的 `runLua` adapter 应做静态扫描：如果代码包含 `page.snapshot` 但不包含 `tab.snapshot`，返回错误提示使用 `tab.snapshot`。
 
 ### Phase 7: clean pi-host-web wrapper
 
@@ -506,19 +508,19 @@ Expected: agent calls run_lua once, Lua uses tab.url/title or tab.snapshot, answ
 
 - Browsergent no longer imports `@pi-oxide/piccolo-notebook-wasm`.
 - Browsergent imports `@pi-oxide/extension-lua` only from side panel main-thread code, not from Browsergent Worker.
-- `src/worker/lua-runtime.ts` is deleted or unused.
-- AgentLoop depends on a thin `runLua(code)` callback relayed through side panel, not old Lua runtime internals.
-- No Browsergent code maps `page_snapshot` / `page_click` / `page_url` action strings.
-- Standalone Lua tab (UI Lua panel) routes through same `ExtensionSession` as agent.
+- `src/worker/lua-runtime.ts` 是删除或 unused。
+- AgentLoop 依赖一个薄 `runLua(code)` callback relayed through side panel，而不是旧 Lua runtime 内部细节。
+- No Browsergent code maps `page_snapshot` / `page_click` / `page_url` action strings。
+- Standalone Lua tab (UI Lua panel) 通过 same `ExtensionSession` 作为 agent 路由。
 - `ExtensionSession` is singleton — one per side panel, serialized access.
 - `content-script.js` from `extension-lua` is present in built extension output (non-blocking but recommended).
-- LLM prompt documents `tab.*` as the target-page API, warns about `page.snapshot` capturing side panel.
-- LLM prompt does not expose arbitrary JS evaluate; adapter does runtime static scan.
-- `runLua` adapter handles `CellResult` correctly: `stdout: string[]` (join), `error: WasmCellError` (check kind).
-- `manifest.json` includes `tabs` permission and `'wasm-unsafe-eval'` CSP directive.
-- `runLua` relay has timeout mechanism (30s), calls `stopWith` on timeout.
-- Existing pi-host-web integration remains typed and does not include fake traces.
-- Full typecheck, build, and Playwright suite pass.
+- LLM prompt 文档 `tab.*` 作为 target-page API，警告 `page.snapshot` captures side panel。
+- LLM prompt 不暴露 arbitrary JS evaluate；adapter 做 runtime static scan。
+- `runLua` adapter 正确处理 `CellResult`：`stdout: string[]` (join)，`error: WasmCellError` (check kind)。
+- `manifest.json` includes `tabs` permission and `'wasm-unsafe-eval'` CSP directive。
+- `runLua` relay 有 timeout mechanism (30s)，超时调用 `stopWith`。
+- Existing pi-host-web integration 保持 typed，不包 fake traces。
+- Full typecheck, build, and Playwright suite pass。
 
 ## 外部 Reviewer 意见 (pi-host-web SDK v2 maintainer)
 

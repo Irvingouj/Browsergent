@@ -4,6 +4,7 @@ import { useStore } from "zustand/react";
 import { exportConversation } from "../controllers/export-controller";
 import {
 	selectActiveSessionId,
+	selectActiveTab,
 	selectAgentStatus,
 	selectAgentStatusReason,
 	selectApiKey,
@@ -21,6 +22,7 @@ import { browsergentStore } from "../state/store";
 import type { ChatMessage } from "../types/messages";
 import { ChatPanel } from "./components/ChatPanel";
 import { InputBar } from "./components/InputBar";
+import { JsPlaybookPanel } from "./components/JsPlaybookPanel";
 import { SettingsForm } from "./components/SettingsForm";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
@@ -47,9 +49,11 @@ const App: FunctionalComponent = () => {
 	const sessionPanelOpen = useStore(browsergentStore, selectSessionPanelOpen);
 	const _sessions = useStore(browsergentStore, selectSessions);
 	const _activeSessionId = useStore(browsergentStore, selectActiveSessionId);
+	const activeTab = useStore(browsergentStore, selectActiveTab);
 
 	const {
 		initialized,
+		workerReady,
 		bridgeRef,
 		extjsControllerRef: _extjsControllerRef,
 		settingsControllerRef,
@@ -191,6 +195,7 @@ const App: FunctionalComponent = () => {
 	return (
 		<div
 			data-initialized={initialized}
+			data-worker-ready={workerReady}
 			class="flex flex-col h-screen bg-bg-base relative overflow-hidden"
 		>
 			{/* Header */}
@@ -199,29 +204,57 @@ const App: FunctionalComponent = () => {
 					<span class="w-2 h-2 rounded-full bg-accent-cyan text-accent-cyan shadow-[0_0_8px_#22d3ee] animate-pulse-glow" />
 					Browsergent
 				</div>
-				<button
-					type="button"
-					class="flex items-center justify-center w-7 h-7 rounded-sm bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-all cursor-pointer"
-					onClick={() =>
-						browsergentStore
-							.getState()
-							.sessionPanelOpenChanged(!sessionPanelOpen)
-					}
-					title="More options"
-				>
-					<svg
-						width="16"
-						height="16"
-						viewBox="0 0 16 16"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
+				<div class="flex items-center gap-sm">
+					<div class="flex items-center rounded-sm bg-bg-base border border-white/[0.06] overflow-hidden">
+						<button
+							type="button"
+							onClick={() => browsergentStore.getState().setActiveTab("chat")}
+							class={[
+								"px-sm py-xs text-xs font-semibold cursor-pointer transition-all",
+								activeTab === "chat"
+									? "bg-accent-cyan text-bg-base"
+									: "bg-transparent text-text-secondary hover:text-text-primary",
+							].join(" ")}
+						>
+							Chat
+						</button>
+						<button
+							type="button"
+							onClick={() => browsergentStore.getState().setActiveTab("js")}
+							class={[
+								"px-sm py-xs text-xs font-semibold cursor-pointer transition-all",
+								activeTab === "js"
+									? "bg-accent-cyan text-bg-base"
+									: "bg-transparent text-text-secondary hover:text-text-primary",
+							].join(" ")}
+						>
+							JS
+						</button>
+					</div>
+					<button
+						type="button"
+						class="flex items-center justify-center w-7 h-7 rounded-sm bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-all cursor-pointer"
+						onClick={() =>
+							browsergentStore
+								.getState()
+								.sessionPanelOpenChanged(!sessionPanelOpen)
+						}
+						title="More options"
 					>
-						<title>More options</title>
-						<circle cx="8" cy="4" r="1.5" fill="currentColor" />
-						<circle cx="8" cy="8" r="1.5" fill="currentColor" />
-						<circle cx="8" cy="12" r="1.5" fill="currentColor" />
-					</svg>
-				</button>
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none"
+							xmlns="http://www.w3.org/2000/svg"
+						>
+							<title>More options</title>
+							<circle cx="8" cy="4" r="1.5" fill="currentColor" />
+							<circle cx="8" cy="8" r="1.5" fill="currentColor" />
+							<circle cx="8" cy="12" r="1.5" fill="currentColor" />
+						</svg>
+					</button>
+				</div>
 			</div>
 
 			{/* Settings */}
@@ -237,7 +270,7 @@ const App: FunctionalComponent = () => {
 				ref={chatScrollRef}
 				class="flex-1 overflow-auto p-md relative z-10 flex flex-col gap-md"
 			>
-				{messages.length > 0 && !isRunning && (
+				{activeTab === "chat" && messages.length > 0 && !isRunning && (
 					<button
 						type="button"
 						onClick={handleCreateSession}
@@ -246,7 +279,7 @@ const App: FunctionalComponent = () => {
 						New
 					</button>
 				)}
-				<ChatPanel />
+				{activeTab === "chat" ? <ChatPanel /> : <JsPlaybookPanel />}
 			</div>
 
 			{/* Status bar */}
@@ -269,7 +302,7 @@ const App: FunctionalComponent = () => {
 												: "bg-accent-red text-accent-red shadow-[0_0_6px_#f87171]",
 					].join(" ")}
 				/>
-				<span class="flex-1 truncate">
+				<span class="flex-1 truncate" data-testid="agent-status">
 					{status}
 					{statusReason ? ` — ${statusReason}` : ""}
 				</span>
@@ -277,7 +310,9 @@ const App: FunctionalComponent = () => {
 			</div>
 
 			{/* Input */}
-			<InputBar isRunning={isRunning} onRun={handleRun} onStop={handleStop} />
+			{activeTab === "chat" && (
+				<InputBar isRunning={isRunning} onRun={handleRun} onStop={handleStop} />
+			)}
 
 			{sessionPanelOpen && sessionControllerRef.current && (
 				<SessionPanel

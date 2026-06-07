@@ -11,6 +11,7 @@ import type { StorageBackend } from "../../storage/storage-backend";
 
 export interface AppInitResult {
 	initialized: boolean;
+	workerReady: boolean;
 	bridgeRef: { current: WorkerBridge | null };
 	extjsControllerRef: { current: ExtjsController | null };
 	settingsControllerRef: { current: SettingsController | null };
@@ -19,6 +20,7 @@ export interface AppInitResult {
 
 export function useAppInit(): AppInitResult {
 	const [initialized, setInitialized] = useState(false);
+	const [workerReady, setWorkerReady] = useState(false);
 	const bridgeRef = useRef<WorkerBridge | null>(null);
 	const extjsControllerRef = useRef<ExtjsController | null>(null);
 	const settingsControllerRef = useRef<SettingsController | null>(null);
@@ -55,6 +57,12 @@ export function useAppInit(): AppInitResult {
 			const bridge = new WorkerBridge({
 				onExtjsRunRequest: (msg) => {
 					extjsControllerRef.current?.handleRelayRequest(msg);
+				},
+				onWorkerReady: () => setWorkerReady(true),
+				onAgentStopped: () => {
+					extjsControllerRef.current?.stop().catch((err: unknown) => {
+						console.warn("JS stop on agent stopped failed:", err);
+					});
 				},
 			});
 			bridgeRef.current = bridge;
@@ -117,6 +125,7 @@ export function useAppInit(): AppInitResult {
 
 	return {
 		initialized,
+		workerReady,
 		bridgeRef,
 		extjsControllerRef,
 		settingsControllerRef,

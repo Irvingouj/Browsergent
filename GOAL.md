@@ -4,24 +4,25 @@
 
 Browsergent is a Chrome side panel agent that uses the current web page for the customer.
 
-Browsergent has **two required interfaces**:
+Browsergent has **two interfaces**:
 
 ### 1. Agent Chat (primary)
 
 ```text
 Customer: "Fill the email field with test@example.com and submit."
-Browsergent: LLM generates Lua code -> Lua executes page.snapshot() -> page.fill() -> page.click() -> reports result
+Browsergent: LLM generates JS code -> run_js executes page.snapshot() -> page.fill() -> page.click() -> reports result
 ```
 
-The LLM's only tool is `run_lua`. It generates Lua code to interact with the browser. Lua is the execution layer.
+The LLM's only tool is `run_js`. It generates JavaScript code to interact with the browser. The sandboxed JS runtime is the execution layer.
 
-### 2. Lua Playbooks (required)
+### 2. JS Playbooks (secondary)
 
 ```text
 User writes:
-  local snap = page.snapshot()
-  page.fill("e2", "test@example.com")
-  page.click("e4")
+  const tabId = await page.active_tab();
+  console.log(await page.snapshot());
+  await page.fill("e2", "test@example.com");
+  await page.click("e4");
 Browsergent executes typed commands through the same content-script path.
 ```
 
@@ -31,7 +32,9 @@ Primary product promise:
 "Do this on the page for me."
 ```
 
-Browsergent is not a browser automation SDK, scraping framework, or Puppeteer wrapper. Chat is the primary interface. Lua playbooks are a required, first-class capability for power users and the agent runtime. The agent uses Lua as its execution layer — the LLM's only tool is `run_lua`.
+Browsergent is not a browser automation SDK, scraping framework, or Puppeteer wrapper. Chat is the primary interface. JS playbooks are a capability for power users and the agent runtime. The agent uses JS as its execution layer — the LLM's only tool is `run_js`.
+
+**Locked decision 2026-06-06: JS Playbooks (Option A). See `docs/adr/001-acting-runtime.md` for ADR.**
 
 ## Customer Expectations
 
@@ -45,7 +48,7 @@ stay responsive while running
 stop immediately when asked
 ask before risky or irreversible actions
 fail with a clear reason when blocked
-never require DOM, CSS, JS, Lua, or extension knowledge
+never require DOM, CSS, JS, or extension knowledge
 ```
 
 The first v1 customer win:
@@ -65,15 +68,19 @@ The first v1 customer win:
 
 ```text
 Side Panel UI
-  chat, lua playbook editor, trace, status, settings
+  chat, js playbook editor, trace, status, settings
 
 Web Worker
-  pi-core WASM agent
-  piccolo Lua WASM (required)
+  @pi-oxide/pi-host-web WASM agent
   Anthropic provider call
   agent loop and stop/max-step lifecycle
-  Lua runtime with page.* API
-  LLM's only tool: run_lua → Lua executes all page.* operations
+  JS execution relay to side panel
+  LLM's only tool: run_js -> JS executes all page.* operations
+
+Side Panel Main Thread
+  ExtensionJsClient (singleton)
+  @pi-oxide/extension-js ExtensionSession
+  chrome.tabs.* / chrome.scripting.* / content script
 
 Background Service Worker
   active tab lookup
@@ -83,23 +90,20 @@ Background Service Worker
 Content Script
   DOM snapshot
   ref_id map
-  typed page actions (shared by agent and Lua)
+  typed page actions (shared by agent and JS playbooks)
 ```
 
-Agent execution flow: LLM generates Lua code → LuaRuntime.run() → page.* calls yield BrowserCommands → content script executes → results resume back to Lua → Lua output returns to LLM.
+Agent execution flow: LLM generates JS code -> Worker relays to ExtensionJsClient -> page.* calls yield BrowserCommands -> content script executes -> results resume back to JS runtime -> output returns to LLM.
 
 ## Existing Assets
 
 | Asset | Location | Use |
 |-------|----------|-----|
-| pi-core | `../pi-oxide/pi-core` | Agent state machine |
-| pi-host-web | `../pi-oxide/pi-host-web` | WASM host/API pattern |
-| Anthropic adapter | `../pi-oxide/web/src/providers/anthropic.ts` | Provider conversion reference |
-| piccolo core | `../web-lua/crates/piccolo-notebook-core` | Lua runtime |
-| piccolo WASM | `../web-lua/crates/piccolo-notebook-wasm` | WASM wrapper |
-| extension tests | `../web-lua/web/tests` | Playwright extension reference |
+| pi-host-web | `@pi-oxide/pi-host-web` npm package | Agent state machine |
+| extension-js | `@pi-oxide/extension-js` npm package | Sandboxed JS runtime + content script |
+| Anthropic adapter | `src/worker/anthropic*.ts` | Provider conversion |
 
-Use these as references. Do not copy notebook UI or broad-permission extension behavior into Browsergent.
+No in-repo Rust crates. WASM and runtime are consumed as npm packages.
 
 ## v1 Scope
 
@@ -108,18 +112,17 @@ Build:
 ```text
 Chrome MV3 side panel extension
 Chat UI (primary)
-Lua playbook UI (required)
-pi-core WASM in Worker
-piccolo Lua WASM in Worker (required)
+JS playbook UI (secondary)
+@pi-oxide/pi-host-web WASM in Worker
 Anthropic Messages API integration
 activeTab + scripting permissions
 Dynamic content-script injection
-run_lua as LLM's only tool — LLM generates Lua code to control browser
-Lua page.* API: snapshot, click, fill, clear, select, press, scroll, extract, goto, back, forward, reload
-Action trace (shared by chat and Lua)
+run_js as LLM's only tool — LLM generates JS code to control browser
+page.* API: snapshot, click, fill, clear, select, press, scroll, extract, url, title, wait, goto, back, forward, reload
+Action trace (shared by chat and JS playbooks)
 Stop button
 Max steps, default 20
-Lua page.* API using same BrowserCommand path (shared by agent and user playbooks)
+JS execution via ExtensionJsClient using same BrowserCommand path (shared by agent and user playbooks)
 ```
 
 Do not build in v1:
@@ -141,7 +144,7 @@ payment/purchase/destructive submission without explicit confirmation
 
 ### M1 - Extension and WASM
 
-Done when the extension loads unpacked, side panel opens, Worker starts, pi-core WASM loads, piccolo Lua WASM loads, and `Agent.start_turn("hello")` returns `StreamLlm`.
+Done when the extension loads unpacked, side panel opens, Worker starts, `@pi-oxide/pi-host-web` WASM loads, and `Agent.start_turn("hello")` returns a stream.
 
 ### M2 - Chat and LLM
 
@@ -149,19 +152,19 @@ Done when the customer can type a task, the Worker calls Anthropic, assistant te
 
 ### M3 - Page Snapshot
 
-Done when `page_snapshot` returns URL, title, timestamp, and visible interactive elements with `ref_id`, and the agent can describe the current page.
+Done when `page.snapshot()` returns URL, title, timestamp, and visible interactive elements with `ref_id`, and the agent can describe the current page.
 
 ### M4 - Page Actions
 
-Done when `page_fill`, `page_click`, `page_select`, `page_scroll`, and `page_extract` work on real test pages and invalid refs return `E_STALE`.
+Done when `page.fill`, `page.click`, `page.select`, `page.scroll`, and `page.extract` work on real test pages and invalid refs return `E_STALE`.
 
 ### M5 - Full Agent Loop
 
-Done when the agent completes one real fill-and-submit task through `StreamLlm -> ExecuteTools -> on_tool_done -> StreamLlm -> Finished`, with trace and max-step enforcement.
+Done when the agent completes one real fill-and-submit task through the agent loop, with trace and max-step enforcement.
 
-### M5.5 - Lua Playbooks
+### M5.5 - JS Playbooks
 
-Done when the user can write and run a Lua playbook using `page.snapshot()`, `page.fill(ref, text)`, `page.click(ref)` that completes a real fill-and-submit task, with trace showing every command, using the same content-script BrowserCommand executor as the agent.
+Done when the user can write and run a JS playbook using `page.snapshot()`, `page.fill(ref, text)`, `page.click(ref)` that completes a real fill-and-submit task, with trace showing every command, using the same content-script BrowserCommand executor as the agent.
 
 ### M6 - v1 Hardening
 
@@ -171,35 +174,34 @@ Done when tests pass, API key storage works, errors are visible, no `any`/`Objec
 
 ```text
 1. Extension loads with no Chrome extension errors.
-2. Side panel opens to chat (primary) with Lua playbook tab.
-3. pi-core WASM initializes in Worker.
-4. piccolo Lua WASM initializes in Worker.
-5. Customer can enter a task and receive an LLM response.
-6. page_snapshot returns active-tab elements with ref_ids.
-7. page_fill changes a real input.
-8. page_click clicks a real element.
-9. Every browser action appears in trace (agent and Lua).
-10. Agent completes one fill-and-submit workflow.
-11. Lua playbook completes one fill-and-submit workflow.
-12. Stop interrupts a running workflow (agent and Lua).
-13. No arbitrary page JS eval.
-14. No broad host permissions.
+2. Side panel opens to chat (primary) with JS playbook tab.
+3. @pi-oxide/pi-host-web WASM initializes in Worker.
+4. Customer can enter a task and receive an LLM response.
+5. page.snapshot returns active-tab elements with ref_ids.
+6. page.fill changes a real input.
+7. page.click clicks a real element.
+8. Every browser action appears in trace (agent and JS).
+9. Agent completes one fill-and-submit workflow.
+10. JS playbook completes one fill-and-submit workflow.
+11. Stop interrupts a running workflow (agent and JS).
+12. No arbitrary page JS eval.
+13. No broad host permissions.
 ```
 
 ## Hard Rules
 
 ```text
 Chat first.
-Lua playbooks are required, first-class.
-LLM → run_lua → Lua → page.* → BrowserCommand → content script.
-LLM's only browser tool is run_lua. LLM does reasoning, Lua does acting.
+JS playbooks are a first-class capability.
+LLM -> run_js -> JS -> page.* -> BrowserCommand -> content script.
+LLM's only browser tool is run_js. LLM does reasoning, JS does acting.
 Typed commands only.
 ref_id only, no selectors.
 activeTab only for v1.
 Rust owns agent decisions.
 TypeScript owns side effects.
-Every action is visible (agent and Lua share the trace).
+Every action is visible (agent and JS share the trace).
 Every boundary is typed.
 No TypeScript any or Object.
-Lua never touches DOM/chrome directly.
+JS runtime never touches DOM/chrome directly.
 ```

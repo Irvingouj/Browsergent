@@ -15,12 +15,14 @@ test("settings save and load within a session", async () => {
 		.locator('input[type="text"]')
 		.nth(1)
 		.fill("claude-test-model");
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await sidePanel.locator("text=Save").click();
 
 	// Wait for settings to close
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
 
 	// Re-open settings and verify values are loaded
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await expect(sidePanel.locator('input[type="password"]')).toHaveValue(
 		"sk-test-key",

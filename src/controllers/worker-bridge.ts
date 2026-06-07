@@ -20,6 +20,9 @@ type ExtjsRunRequestHandler = (msg: {
 	code: string;
 }) => void;
 
+type WorkerReadyHandler = () => void;
+type AgentStoppedHandler = () => void;
+
 export function isStaleRunId(runId: string, activeRunId?: string): boolean {
 	if (runId === "unknown") return false;
 	if (activeRunId === undefined) return true;
@@ -29,11 +32,17 @@ export function isStaleRunId(runId: string, activeRunId?: string): boolean {
 export class WorkerBridge {
 	private worker: Worker | null = null;
 	private onExtjsRunRequest: ExtjsRunRequestHandler | null = null;
+	private onWorkerReady: WorkerReadyHandler | null = null;
+	private onAgentStopped: AgentStoppedHandler | null = null;
 
 	constructor(options?: {
 		onExtjsRunRequest?: ExtjsRunRequestHandler;
+		onWorkerReady?: WorkerReadyHandler;
+		onAgentStopped?: AgentStoppedHandler;
 	}) {
 		this.onExtjsRunRequest = options?.onExtjsRunRequest ?? null;
+		this.onWorkerReady = options?.onWorkerReady ?? null;
+		this.onAgentStopped = options?.onAgentStopped ?? null;
 	}
 
 	start(): void {
@@ -97,6 +106,7 @@ export class WorkerBridge {
 				if (browsergentStore.getState().agent.status !== "loading") {
 					browsergentStore.getState().agentReset();
 				}
+				this.onWorkerReady?.();
 				break;
 			}
 			case "agentStatus": {
@@ -111,6 +121,9 @@ export class WorkerBridge {
 					raw.status === "done"
 				) {
 					this.finalizeActiveSignals();
+				}
+				if (raw.status === "stopped") {
+					this.onAgentStopped?.();
 				}
 				break;
 			}

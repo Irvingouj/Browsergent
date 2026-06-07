@@ -130,6 +130,21 @@ export class ExtensionJsClient {
 
 	static relayCallback: ((msg: ExtjsRelayResponse) => void) | null = null;
 
+	async stop(): Promise<void> {
+		if (!this.session || !this.runnerPromise) return;
+		try {
+			await this.session.stopWith(this.runnerPromise);
+		} catch {
+			// Best-effort cleanup — the session may already be broken
+		}
+		this.session = null;
+		this.runnerPromise = null;
+		this.initialized = false;
+		this.initPromise = null;
+		this.queue = Promise.resolve();
+		await this.init();
+	}
+
 	async dispose(): Promise<void> {
 		if (!this.session || !this.runnerPromise) return;
 		await this.session.stopWith(this.runnerPromise);

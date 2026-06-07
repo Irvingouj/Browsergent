@@ -228,10 +228,16 @@ function handleAgentStop(runId?: string): void {
 	if (runId && runId !== currentRunId) {
 		return;
 	}
-	agentLoop?.stop();
+	try {
+		agentLoop?.stop();
+	} catch {
+		// ignore
+	}
+	const stoppedRunId = currentRunId ?? "unknown";
+	currentRunId = null; // prevent late agent callbacks from overwriting the stopped status
 	post({
 		type: "agentStatus",
-		runId: currentRunId ?? "unknown",
+		runId: stoppedRunId,
 		status: "stopped",
 		reason: "Stopped by user",
 	});

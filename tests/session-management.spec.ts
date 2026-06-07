@@ -10,8 +10,8 @@ async function configureFakeSettings(sidePanel: Locator) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.getByRole("button", { name: "Save" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 }
 
 async function configureMockSettings(sidePanel: Locator, mockUrl: string) {
@@ -19,8 +19,8 @@ async function configureMockSettings(sidePanel: Locator, mockUrl: string) {
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mockUrl);
-	await sidePanel.getByRole("button", { name: "Save" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 }
 
 async function addMessageWithoutMock(
@@ -187,7 +187,7 @@ test("Active session highlighted", async () => {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	const item = sessionItemLocator(sidePanel);
 	await expect(item).toBeVisible();
-	await expect(item).toHaveCSS("border-left-color", "rgb(74, 144, 217)");
+	await expect(item).toHaveCSS("border-left-color", "rgb(34, 211, 238)");
 	await close();
 });
 
@@ -232,7 +232,7 @@ test("Agent running blocks switch", async () => {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	const item = sessionItemLocator(sidePanel);
 	await expect(item).toBeVisible();
-	await expect(item).toHaveCSS("opacity", "0.5");
+	await expect(item).toHaveCSS("opacity", "0.4");
 	await close();
 	mock.server.close();
 });

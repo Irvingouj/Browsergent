@@ -233,7 +233,11 @@ export class AgentLoop {
 
 	stop(): void {
 		this.aborted = true;
-		this.agent?.stop();
+		try {
+			this.agent?.stop();
+		} catch {
+			// ignore — agent may already be finished
+		}
 	}
 
 	reset(): void {

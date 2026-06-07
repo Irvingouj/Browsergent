@@ -1,3 +1,5 @@
+<!-- Historical document — kept for reference. See CONTEXT.md for current state. -->
+
 # Refactoring Plan: Move Agent + Lua into the Web Worker
 
 ## Problem

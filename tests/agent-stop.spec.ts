@@ -24,7 +24,7 @@ test("stop button appears when agent would be running", async () => {
 test("status shows idle initially", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	await expect(sidePanel.locator("text=Status: idle")).toBeVisible();
+	await expect(sidePanel.locator("text=idle")).toBeVisible();
 
 	await close();
 });

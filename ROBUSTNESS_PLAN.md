@@ -36,7 +36,7 @@ type ToolExecutionResult =
   | { ok: false; code: string; message: string; retryable: boolean };
 ```
 
-4. Make `createAgentTools()` return a failed tool result when `runLua()` rejects, rather than throwing an unclassified error through the SDK.
+4. Make `createAgentTools()` return a failed tool result when `runJs()` rejects, rather than throwing an unclassified error through the SDK.
 5. Ensure trace entries show `status: "error"` with the same code/message the model receives.
 
 Files:
@@ -81,10 +81,10 @@ Implementation:
 
 Files:
 
-- `src/sidepanel/extension-lua-client.ts`
-- `src/controllers/lua-controller.ts`
+- `src/sidepanel/extension-js-client.ts`
+- `src/controllers/extjs-controller.ts`
 - `src/controllers/worker-bridge.ts`
-- `src/state/slices/lua-slice.ts`
+- `src/state/slices/extjs-slice.ts`
 
 Runtime health check:
 
@@ -136,7 +136,7 @@ Files:
 
 - `src/worker/index.ts`
 - `src/controllers/worker-bridge.ts`
-- `src/sidepanel/extension-lua-client.ts`
+- `src/sidepanel/extension-js-client.ts`
 - `src/types/messages.ts`
 - `src/protocol/worker-guards.ts`
 

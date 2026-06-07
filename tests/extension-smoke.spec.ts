@@ -45,10 +45,12 @@ test("settings panel stores API key", async () => {
 	await expect(apiKeyInput).toBeVisible();
 
 	await apiKeyInput.fill("test-key-123");
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await sidePanel.locator("text=Save").click();
 
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
 
+	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await expect(sidePanel.locator('input[type="password"]')).toHaveValue(
 		"test-key-123",

@@ -5,6 +5,7 @@ dist/
 *.log
 /*.jpeg
 test-results/
+coverage/
 vendor/
 .opencode/
 .claude/

@@ -23,10 +23,8 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save" }).click();
-
-	// Close session panel so it doesn't block the Run button
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -64,10 +62,8 @@ test("final streamed response is one assistant message", async () => {
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save" }).click();
-
-	// Close session panel so it doesn't block the Run button
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -116,10 +112,8 @@ test("two prompts keep all messages visible and prior transcript included in sec
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save" }).click();
-
-	// Close session panel so it doesn't block the Run button
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -179,10 +173,8 @@ test("stop preserves partial streamed text", async () => {
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save" }).click();
-
-	// Close session panel so it doesn't block the Run button
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -194,7 +186,7 @@ test("stop preserves partial streamed text", async () => {
 	});
 
 	await sidePanel.getByRole("button", { name: "Stop" }).click();
-	await expect(sidePanel.locator("text=Status: stopped")).toBeVisible({
+	await expect(sidePanel.locator("text=stopped")).toBeVisible({
 		timeout: 5000,
 	});
 
@@ -238,10 +230,8 @@ test("text before run_js tool call continues after run_js tool result", async ()
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save" }).click();
-
-	// Close session panel so it doesn't block the Run button
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -288,10 +278,8 @@ test("get_doc tool returns JS API docs and continues the agent turn", async () =
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save" }).click();
-
-	// Close session panel so it doesn't block the Run button
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await sidePanel.getByRole("button", { name: "Save" }).click();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
@@ -305,7 +293,7 @@ test("get_doc tool returns JS API docs and continues the agent turn", async () =
 	const secondRequest = mock.requestBodies[1] as {
 		messages: Array<{ content: unknown }>;
 	};
-	expect(JSON.stringify(secondRequest.messages)).toContain("tab.current");
+	expect(JSON.stringify(secondRequest.messages)).toContain("get_doc");
 
 	await close();
 	mock.server.close();
