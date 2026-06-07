@@ -17,7 +17,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const taskInput = useStore(browsergentStore, selectTaskDraft);
 
 	return (
-		<div class="relative z-10 px-md py-sm bg-bg-surface border-t border-white/[0.06] flex gap-sm items-end">
+		<div class="relative z-10 px-md py-sm bg-bg-surface border-t border-border flex gap-sm items-end">
 			<input
 				type="text"
 				value={taskInput}
@@ -31,22 +31,22 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				}}
 				placeholder="Type a task..."
 				disabled={isRunning}
-				class="flex-1 bg-bg-base border border-white/10 rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] focus:border-accent-cyan focus:ring-[3px] focus:ring-accent-cyan-dim placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"
+				class="flex-1 bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"
 			/>
 			{isRunning ? (
 				<button
 					type="button"
 					onClick={onStop}
-					class="px-md py-sm rounded-md font-sans text-sm font-semibold cursor-pointer transition-all flex items-center gap-xs whitespace-nowrap min-h-[36px] bg-accent-red/15 text-accent-red border border-accent-red/30 hover:bg-accent-red/25 hover:shadow-[0_0_12px_rgba(248,113,113,0.2)]"
+					class="px-md py-sm rounded-full font-sans text-sm font-semibold cursor-pointer transition-all flex items-center gap-xs whitespace-nowrap min-h-[36px] bg-danger-soft text-danger border border-danger hover:bg-danger-soft hover:"
 				>
-					<span class="w-1.5 h-1.5 rounded-full bg-accent-red" />
+					<span class="w-1.5 h-1.5 rounded-full bg-danger" />
 					Stop
 				</button>
 			) : (
 				<button
 					type="button"
 					onClick={onRun}
-					class="px-md py-sm rounded-md font-sans text-sm font-semibold cursor-pointer transition-all whitespace-nowrap min-h-[36px] bg-accent-cyan text-bg-base hover:bg-[#67e8f9] hover:shadow-[0_0_20px_rgba(34,211,238,0.15)] active:bg-[#06b6d4]"
+					class="px-md py-sm rounded-full font-sans text-sm font-semibold cursor-pointer transition-all whitespace-nowrap min-h-[36px] bg-text-primary text-bg-base hover:bg-text-secondary active:bg-text-muted"
 				>
 					Run
 				</button>

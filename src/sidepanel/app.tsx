@@ -199,20 +199,20 @@ const App: FunctionalComponent = () => {
 			class="flex flex-col h-screen bg-bg-base relative overflow-hidden"
 		>
 			{/* Header */}
-			<div class="relative z-10 flex items-center justify-between px-md py-sm bg-bg-surface/85 backdrop-blur-md border-b border-white/[0.06]">
-				<div class="flex items-center gap-sm text-sm font-bold tracking-wider text-text-primary">
-					<span class="w-2 h-2 rounded-full bg-accent-cyan text-accent-cyan shadow-[0_0_8px_#22d3ee] animate-pulse-glow" />
+			<div class="relative z-10 flex items-center justify-between px-md py-sm bg-bg-surface/85 backdrop-blur-[22px] border-b border-border">
+				<div class="flex items-center gap-sm text-sm font-semibold tracking-normal text-text-primary">
+					<span class="w-2 h-2 rounded-full bg-accent text-accent animate-pulse-glow" />
 					Browsergent
 				</div>
 				<div class="flex items-center gap-sm">
-					<div class="flex items-center rounded-sm bg-bg-base border border-white/[0.06] overflow-hidden">
+					<div class="flex items-center rounded-full bg-bg-muted border border-border overflow-hidden p-[2px]">
 						<button
 							type="button"
 							onClick={() => browsergentStore.getState().setActiveTab("chat")}
 							class={[
-								"px-sm py-xs text-xs font-semibold cursor-pointer transition-all",
+								"px-sm py-[3px] text-xs font-medium cursor-pointer transition-all rounded-full",
 								activeTab === "chat"
-									? "bg-accent-cyan text-bg-base"
+									? "bg-text-primary text-bg-base"
 									: "bg-transparent text-text-secondary hover:text-text-primary",
 							].join(" ")}
 						>
@@ -222,9 +222,9 @@ const App: FunctionalComponent = () => {
 							type="button"
 							onClick={() => browsergentStore.getState().setActiveTab("js")}
 							class={[
-								"px-sm py-xs text-xs font-semibold cursor-pointer transition-all",
+								"px-sm py-[3px] text-xs font-medium cursor-pointer transition-all rounded-full",
 								activeTab === "js"
-									? "bg-accent-cyan text-bg-base"
+									? "bg-text-primary text-bg-base"
 									: "bg-transparent text-text-secondary hover:text-text-primary",
 							].join(" ")}
 						>
@@ -233,7 +233,7 @@ const App: FunctionalComponent = () => {
 					</div>
 					<button
 						type="button"
-						class="flex items-center justify-center w-7 h-7 rounded-sm bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-all cursor-pointer"
+						class="flex items-center justify-center w-7 h-7 rounded-md bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-all cursor-pointer"
 						onClick={() =>
 							browsergentStore
 								.getState()
@@ -274,7 +274,7 @@ const App: FunctionalComponent = () => {
 					<button
 						type="button"
 						onClick={handleCreateSession}
-						class="absolute top-md left-md z-10 px-sm py-xs text-[11px] font-semibold border border-white/10 rounded-sm bg-bg-elevated text-text-secondary hover:border-accent-cyan hover:text-accent-cyan hover:bg-accent-cyan-dim transition-all cursor-pointer backdrop-blur-sm"
+						class="absolute top-md left-md z-10 px-sm py-xs text-[11px] font-semibold border border-border-strong rounded-md bg-bg-surface-solid text-text-secondary hover:border-accent hover:text-accent hover:bg-accent-soft transition-all cursor-pointer backdrop-blur-sm"
 					>
 						New
 					</button>
@@ -283,23 +283,23 @@ const App: FunctionalComponent = () => {
 			</div>
 
 			{/* Status bar */}
-			<div class="relative z-10 px-md py-xs bg-bg-base border-t border-white/[0.06] flex items-center gap-sm font-mono text-[10px] text-text-dim tracking-wider uppercase">
+			<div class="relative z-10 px-md py-xs bg-bg-base border-t border-border flex items-center gap-sm font-mono text-[10px] text-text-dim tracking-wider uppercase">
 				<span
 					class={[
 						"w-1.5 h-1.5 rounded-full flex-shrink-0",
 						status === "idle" || status === "stopped"
 							? "bg-text-dim"
 							: status === "loading"
-								? "bg-accent-amber text-accent-amber animate-pulse-glow"
+								? "bg-warning text-warning animate-pulse-glow"
 								: status === "running"
-									? "bg-accent-cyan text-accent-cyan animate-pulse-glow"
+									? "bg-accent text-accent animate-pulse-glow"
 									: status === "waiting_for_model"
-										? "bg-accent-purple text-accent-purple animate-pulse-glow"
+										? "bg-text-muted text-text-muted animate-pulse-glow"
 										: status === "executing_tool"
-											? "bg-accent-amber text-accent-amber animate-pulse-glow"
+											? "bg-warning text-warning animate-pulse-glow"
 											: status === "done"
-												? "bg-accent-green"
-												: "bg-accent-red text-accent-red shadow-[0_0_6px_#f87171]",
+												? "bg-success"
+												: "bg-danger text-danger ",
 					].join(" ")}
 				/>
 				<span class="flex-1 truncate" data-testid="agent-status">

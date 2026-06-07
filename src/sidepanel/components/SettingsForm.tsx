@@ -21,7 +21,7 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 	const model = useStore(browsergentStore, selectModel);
 
 	return (
-		<div class="relative z-10 p-md bg-bg-surface border-b border-white/[0.06] animate-panel-in">
+		<div class="relative z-10 p-md bg-bg-surface border-b border-border animate-panel-in">
 			<div class="grid gap-md">
 				<label>
 					<span class="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-xs">
@@ -36,7 +36,7 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 								anthropicApiKey: val,
 							});
 						}}
-						class="w-full bg-bg-base border border-white/10 rounded-sm px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent-cyan focus:ring-[2px] focus:ring-accent-cyan-dim placeholder:text-text-dim"
+						class="w-full bg-bg-base border border-border-strong rounded-md px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent focus:ring-[2px] focus:ring-accent-soft placeholder:text-text-dim"
 					/>
 				</label>
 				<label>
@@ -52,7 +52,7 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 								baseUrl: val,
 							});
 						}}
-						class="w-full bg-bg-base border border-white/10 rounded-sm px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent-cyan focus:ring-[2px] focus:ring-accent-cyan-dim placeholder:text-text-dim"
+						class="w-full bg-bg-base border border-border-strong rounded-md px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent focus:ring-[2px] focus:ring-accent-soft placeholder:text-text-dim"
 					/>
 				</label>
 				<label>
@@ -68,21 +68,21 @@ export const SettingsForm: FunctionalComponent<SettingsFormProps> = ({
 								model: val,
 							});
 						}}
-						class="w-full bg-bg-base border border-white/10 rounded-sm px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent-cyan focus:ring-[2px] focus:ring-accent-cyan-dim placeholder:text-text-dim"
+						class="w-full bg-bg-base border border-border-strong rounded-md px-sm py-xs text-text-primary font-mono text-xs outline-none transition-all focus:border-accent focus:ring-[2px] focus:ring-accent-soft placeholder:text-text-dim"
 					/>
 				</label>
 				<div class="flex gap-sm mt-sm">
 					<button
 						type="button"
 						onClick={onSave}
-						class="px-sm py-xs rounded-sm font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-accent-cyan text-bg-base hover:bg-[#67e8f9] hover:shadow-[0_0_20px] hover:shadow-accent-cyan/15"
+						class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-text-primary text-bg-base hover:bg-text-secondary"
 					>
 						Save
 					</button>
 					<button
 						type="button"
 						onClick={onExport}
-						class="px-sm py-xs rounded-sm font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-bg-elevated text-text-secondary border border-white/10 hover:border-white/15 hover:text-text-primary"
+						class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-bg-surface-solid text-text-secondary border border-border-strong hover:border-border-strong hover:text-text-primary"
 					>
 						Export conversation
 					</button>

@@ -187,7 +187,7 @@ test("Active session highlighted", async () => {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	const item = sessionItemLocator(sidePanel);
 	await expect(item).toBeVisible();
-	await expect(item).toHaveCSS("border-left-color", "rgb(34, 211, 238)");
+	await expect(item).toHaveCSS("border-left-color", "rgb(79, 127, 111)");
 	await close();
 });
 

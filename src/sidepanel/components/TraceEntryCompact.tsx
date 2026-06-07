@@ -9,15 +9,15 @@ export const TraceEntryCompact: FunctionalComponent<{
 
 	const statusClass =
 		entry.status === "done"
-			? "bg-accent-green/15 text-accent-green"
+			? "bg-success-soft text-success"
 			: entry.status === "error"
-				? "bg-accent-red/15 text-accent-red"
-				: "bg-accent-amber/15 text-accent-amber animate-pulse-glow";
+				? "bg-danger-soft text-danger"
+				: "bg-warning-soft text-warning animate-pulse-glow";
 	const statusIcon =
 		entry.status === "done" ? "✓" : entry.status === "error" ? "✗" : "…";
 
 	return (
-		<div class="rounded-sm border border-white/[0.06] bg-bg-surface overflow-hidden animate-message-in font-mono text-[11px]">
+		<div class="rounded-md border border-border bg-bg-surface overflow-hidden animate-message-in font-mono text-[11px]">
 			<button
 				type="button"
 				data-testid="trace-entry"
@@ -43,13 +43,13 @@ export const TraceEntryCompact: FunctionalComponent<{
 				)}
 			</button>
 			{expanded && (
-				<div class="px-sm py-sm border-t border-white/[0.06] bg-bg-base">
+				<div class="px-sm py-sm border-t border-border bg-bg-base">
 					{entry.toolInput && (
 						<div class="mb-sm">
 							<div class="text-[10px] uppercase tracking-wider text-text-dim mb-xs">
 								Input
 							</div>
-							<div class="bg-bg-surface border border-white/[0.06] rounded-sm px-sm py-xs text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
+							<div class="bg-bg-surface border border-border rounded-md px-sm py-xs text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
 								{entry.toolInput}
 							</div>
 						</div>
@@ -59,7 +59,7 @@ export const TraceEntryCompact: FunctionalComponent<{
 							<div class="text-[10px] uppercase tracking-wider text-text-dim mb-xs">
 								Result
 							</div>
-							<div class="bg-bg-surface border border-white/[0.06] rounded-sm px-sm py-xs text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
+							<div class="bg-bg-surface border border-border rounded-md px-sm py-xs text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
 								{entry.result}
 							</div>
 						</div>

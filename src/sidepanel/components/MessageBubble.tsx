@@ -57,16 +57,16 @@ export const MessageBubble: FunctionalComponent<{ messageId: string }> = ({
 	const kindClasses =
 		message.kind === "user"
 			? [
-					"self-end ml-6 bg-accent-amber-dim border border-accent-amber-dim",
+					"self-end ml-6 bg-bg-muted border border-border",
 					"msg-label msg-label--user",
 				]
 			: message.kind === "assistant"
 				? [
-						"self-start mr-6 bg-bg-elevated border border-white/10",
+						"self-start mr-6 bg-bg-surface-solid border border-border-strong",
 						"msg-label msg-label--assistant",
 					]
 				: [
-						"self-center text-xs bg-accent-purple/8 border border-accent-purple/20",
+						"self-center text-xs bg-bg-muted border border-border",
 						"msg-label msg-label--system",
 					];
 

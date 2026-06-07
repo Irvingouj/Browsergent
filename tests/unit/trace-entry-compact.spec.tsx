@@ -20,21 +20,21 @@ describe("TraceEntryCompact", () => {
 		const html = render(<TraceEntryCompact entry={makeEntry("done")} />);
 		expect(html).toContain("run_js");
 		expect(html).toContain("✓");
-		expect(html).toContain("bg-accent-green/15");
+		expect(html).toContain("bg-success-soft");
 	});
 
 	test("renders error status with red icon", () => {
 		const html = render(<TraceEntryCompact entry={makeEntry("error")} />);
 		expect(html).toContain("run_js");
 		expect(html).toContain("✗");
-		expect(html).toContain("bg-accent-red/15");
+		expect(html).toContain("bg-danger-soft");
 	});
 
 	test("renders running status with amber pulse icon", () => {
 		const html = render(<TraceEntryCompact entry={makeEntry("running")} />);
 		expect(html).toContain("run_js");
 		expect(html).toContain("…");
-		expect(html).toContain("bg-accent-amber/15");
+		expect(html).toContain("bg-warning-soft");
 		expect(html).toContain("animate-pulse-glow");
 	});
 
