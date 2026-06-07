@@ -34,6 +34,7 @@ export function createAnthropicStream(
 		number,
 		{ id: string; name: string; partialJson: string }
 	>();
+	const toolCallNames = new Map<string, string>();
 
 	const chunkQueue: LlmChunk[] = [];
 	let chunkResolve: ((value: IteratorResult<LlmChunk>) => void) | null = null;
@@ -151,6 +152,10 @@ export function createAnthropicStream(
 
 						case "content_block_start": {
 							if (parsed.content_block.type === "tool_use") {
+								toolCallNames.set(
+									parsed.content_block.id,
+									parsed.content_block.name,
+								);
 								activeToolBlocks.set(parsed.index, {
 									id: parsed.content_block.id,
 									name: parsed.content_block.name,
@@ -286,5 +291,6 @@ export function createAnthropicStream(
 	return {
 		chunks: asyncIterator,
 		result: resultPromise,
+		resolveToolName: (toolCallId: string) => toolCallNames.get(toolCallId),
 	};
 }

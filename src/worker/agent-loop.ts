@@ -199,8 +199,8 @@ export class AgentLoop {
 				callbacks.onError("agent_error", errMsg);
 				callbacks.onStatus("error", errMsg);
 			} else if (result.status === "completed" && !this.hadOutput) {
-				// Workaround for pi-host-web 0.7.0 bug: Agent.run() returns
-				// "completed" with empty content when the LLM stream fails.
+				// Guard against Agent.run() returning "completed" with no output
+				// when the LLM stream fails silently.
 				callbacks.onError(
 					"agent_error",
 					"LLM request failed — no response received",

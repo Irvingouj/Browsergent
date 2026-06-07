@@ -11,6 +11,7 @@ import type {
 export interface LlmStream {
 	chunks: AsyncGenerator<LlmChunk>;
 	result: Promise<LlmResult>;
+	resolveToolName?: (toolCallId: string) => string | undefined;
 }
 
 /**

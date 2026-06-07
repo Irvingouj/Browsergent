@@ -53,11 +53,10 @@ async function injectContentScript(
 	await page.addScriptTag({ content: `(function(){${plain}})()` });
 }
 
-// Skipped: WASM core (@pi-oxide/pi-host-web) multi-turn bug —
-// hostPrepareToolCalls never returns execute_tools on the second turn.
-// pi-oxide developer will fix this bug. Re-enable after fix lands.
-// See: user note — "let's take a step back, fix other work unit first".
+// Golden path: multi-turn agent (3x run_js). pi-host-web 0.8.0 fixes WASM stall;
+// remaining failure is E2E tab/ref setup — re-enable when form assertions pass.
 test.skip("golden path: agent fills form and submits", async () => {
+	test.setTimeout(90000);
 	const { url, server } = await startTestServer();
 	const mock = startMockAnthropicServer({
 		responses: [
@@ -124,27 +123,35 @@ test.skip("golden path: agent fills form and submits", async () => {
 	await sidePanel.getByRole("button", { name: "Save" }).click();
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
 
-	// Start agent
+	// Focus the form tab so extension-js targets it during agent tool execution.
+	await testPage.bringToFront();
+	await testPage.click("body");
+
+	// Start agent — keep form tab active; Playwright can click side panel without switching browser tab.
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("fill the form and submit");
 	await sidePanel.getByRole("button", { name: "Run" }).click();
 
-	// Assert trace shows actions
-	await expect(sidePanel.locator("text=run_js")).toHaveCount(3, { timeout: 15000 });
+	// Outcome assertions
+	await expect(testPage.locator("#email")).toHaveValue("test@example.com", {
+		timeout: 30000,
+	});
+	await expect(testPage.locator("#result")).toHaveText("Submitted: test@example.com", {
+		timeout: 30000,
+	});
 
-	// Assert form is filled
-	await expect(testPage.locator("#email")).toHaveValue("test@example.com");
-
-	// Assert form submitted
-	await expect(testPage.locator("#result")).toHaveText("Submitted: test@example.com");
+	// Assert trace shows all three tool calls
+	await expect(sidePanel.locator("text=run_js")).toHaveCount(3, { timeout: 30000 });
 
 	// Assert agent completion message
 	await expect(sidePanel.locator("text=Form submitted successfully.")).toBeVisible({
 		timeout: 10000,
 	});
 
-	await expect(sidePanel.locator("text=done")).toBeVisible({ timeout: 10000 });
+	await expect(sidePanel.locator("text=done")).toBeVisible({ timeout: 30000 });
+
+	expect(mock.requestBodies.length).toBeGreaterThanOrEqual(3);
 
 	server.close();
 	await close();

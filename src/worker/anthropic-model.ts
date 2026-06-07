@@ -55,7 +55,7 @@ export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 							type: "tool_call_delta",
 							payload: {
 								id: chunk.tool_call_id,
-								name: "",
+								name: stream.resolveToolName?.(chunk.tool_call_id) ?? "",
 								arguments:
 									typeof chunk.delta === "string"
 										? chunk.delta
@@ -114,7 +114,7 @@ async function drainStreamToResponse(
 				toolCalls.push({
 					type: "tool_call",
 					id: chunk.tool_call_id,
-					name: "",
+					name: stream.resolveToolName?.(chunk.tool_call_id) ?? "",
 					arguments:
 						typeof chunk.delta === "string" ? chunk.delta : chunk.delta,
 				});
