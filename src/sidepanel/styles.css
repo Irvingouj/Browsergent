@@ -30,8 +30,12 @@
 	--color-success-soft: rgba(79, 127, 111, 0.12);
 
 	/* ── Typography ── */
-	--font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-	--font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Code", "JetBrains Mono", monospace;
+	--font-sans:
+		ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+		sans-serif;
+	--font-mono:
+		ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Code",
+		"JetBrains Mono", monospace;
 
 	/* ── Spacing ── */
 	--spacing-xs: 4px;
@@ -50,6 +54,7 @@
 	--animate-message-in: message-in 0.25s ease-out both;
 	--animate-panel-in: panel-in 0.18s ease-out both;
 	--animate-fade-in: fade-in 0.18s ease-out;
+	--animate-modal-in: modal-in 0.2s ease-out both;
 	--animate-slide-in-right: slide-in-right 0.22s ease-out;
 	--animate-pulse-glow: pulse-glow 1.5s ease-in-out infinite;
 	--animate-blink: blink 1s step-end infinite;
@@ -80,6 +85,16 @@
 		}
 		to {
 			opacity: 1;
+		}
+	}
+	@keyframes modal-in {
+		from {
+			opacity: 0;
+			transform: scale(0.97);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
 		}
 	}
 	@keyframes slide-in-right {
@@ -175,12 +190,11 @@ body,
 	content: "";
 	position: absolute;
 	inset: 0;
-	background-image:
-		radial-gradient(
-			ellipse at 50% 0%,
-			rgba(79, 127, 111, 0.02) 0%,
-			transparent 60%
-		);
+	background-image: radial-gradient(
+		ellipse at 50% 0%,
+		rgba(79, 127, 111, 0.02) 0%,
+		transparent 60%
+	);
 	pointer-events: none;
 	z-index: 0;
 }

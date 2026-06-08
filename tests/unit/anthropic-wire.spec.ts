@@ -90,7 +90,12 @@ describe("toAnthropicMessages", () => {
 				role: "user" as const,
 				content: [
 					{ type: "text" as const, text: "hello" },
-					{ type: "tool_call" as const, id: "tc1", name: "run_js", arguments: {} },
+					{
+						type: "tool_call" as const,
+						id: "tc1",
+						name: "run_js",
+						arguments: {},
+					},
 				],
 				timestamp: 1,
 			},
@@ -116,7 +121,9 @@ describe("toAnthropicMessages", () => {
 			},
 		];
 		const result = toAnthropicMessages(messages);
-		expect(result).toEqual([{ role: "assistant", content: [{ type: "text", text: "hi there" }] }]);
+		expect(result).toEqual([
+			{ role: "assistant", content: [{ type: "text", text: "hi there" }] },
+		]);
 	});
 
 	test("converts tool_result to user tool_result block", () => {

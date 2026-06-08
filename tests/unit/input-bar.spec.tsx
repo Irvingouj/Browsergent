@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
 import { render } from "preact-render-to-string";
+import { describe, expect, test, vi } from "vitest";
 import { InputBar } from "../../src/sidepanel/components/InputBar";
 
 const mockState = {

@@ -1,7 +1,11 @@
 import type { AgentRunResult } from "@pi-oxide/pi-host-web";
 import { Agent, indexedDbStore } from "@pi-oxide/pi-host-web";
-import type { JsRunResult } from "../types/extjs-utils";
-import type { AgentStatus, AgentTraceEntry } from "../types/messages";
+import type { CellResult } from "../types/extjs-utils";
+import type {
+	AgentDiagnosticEvent,
+	AgentStatus,
+	AgentTraceEntry,
+} from "../types/messages";
 import { streamLog } from "../utils/stream-logger";
 import { createAgentTools } from "./agent-tools";
 import type { AnthropicConfig } from "./anthropic";
@@ -36,8 +40,10 @@ export interface AgentLoopCallbacks {
 	onTextDelta?: (messageId: string, text: string) => void;
 	onMessageEnd?: (messageId: string) => void;
 	onTrace: (entry: AgentTraceEntry) => void;
+	onDiagnostic: (event: AgentDiagnosticEvent) => void;
 	onError: (code: string, message: string) => void;
-	runJs: (code: string) => Promise<JsRunResult>;
+	runJs: (code: string) => Promise<CellResult>;
+	getDocs: (format: "json" | "markdown") => Promise<string>;
 }
 
 const STATUS_MAP: Record<string, AgentStatus> = {
@@ -72,8 +78,8 @@ export class AgentLoop {
 
 		callbacks.onStatus("loading");
 
-		const model = createAnthropicModel(config);
-		const tools = createAgentTools(callbacks.runJs);
+		const model = createAnthropicModel(config, callbacks.onDiagnostic);
+		const tools = createAgentTools(callbacks.runJs, callbacks.getDocs);
 
 		this.agent = new Agent({
 			sessionId,
@@ -103,6 +109,12 @@ export class AgentLoop {
 		});
 
 		this.agent.on("status", (s: { state: string; message?: string }) => {
+			callbacks.onDiagnostic({
+				kind: "agent_status",
+				timestamp: Date.now(),
+				state: s.state,
+				message: s.message,
+			});
 			const mapped = STATUS_MAP[s.state] ?? "running";
 			callbacks.onStatus(mapped, s.message);
 		});
@@ -191,6 +203,25 @@ export class AgentLoop {
 
 		try {
 			const result: AgentRunResult = await this.agent.run(task);
+			callbacks.onDiagnostic({
+				kind: "agent_run_result",
+				timestamp: Date.now(),
+				status: result.status,
+				text: result.text,
+				toolCalls: result.toolCalls.map((tool) => ({
+					id: tool.id,
+					name: tool.name,
+					input: tool.input,
+					output: tool.output,
+					status: tool.status,
+					error: tool.error
+						? { code: tool.error.code, message: tool.error.message }
+						: undefined,
+				})),
+				error: result.error
+					? { code: result.error.code, message: result.error.message }
+					: undefined,
+			});
 
 			if (result.status === "aborted" || this.aborted) {
 				callbacks.onStatus("stopped", "Stopped by user");

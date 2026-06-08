@@ -1,8 +1,10 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	type BrowserContext,
 	chromium,
+	expect,
 	type Page,
 	test,
 } from "@playwright/test";
@@ -71,6 +73,37 @@ export async function createTestPage(
 	const page = await context.newPage();
 	await page.setContent(html);
 	return page;
+}
+
+/** Inject extension-js content script into a page (manual injection path). */
+export async function injectContentScript(page: Page): Promise<void> {
+	const scriptContent = await fs.readFile(
+		path.resolve(__dirname, "../dist/content-script.js"),
+		"utf8",
+	);
+	const plain = scriptContent.replace(/\nexport\s+\{\};\s*$/, "");
+	await page.addScriptTag({ content: `(function(){${plain}})()` });
+}
+
+/** Keep the target web page as Chrome's active tab before extension-js page.* calls. */
+export async function focusTargetTab(page: Page): Promise<void> {
+	await page.bringToFront();
+	await page.click("body");
+}
+
+/** Configure mock Anthropic provider and close overlays that block the run button. */
+export async function configureMockProvider(
+	sidePanel: Page,
+	mockUrl: string,
+	apiKey = "test-key",
+): Promise<void> {
+	await sidePanel.getByRole("button", { name: "More options" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
+	await sidePanel.locator('input[type="password"]').fill(apiKey);
+	await sidePanel.locator('input[type="text"]').nth(0).fill(mockUrl);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 }
 
 import { createServer } from "node:http";

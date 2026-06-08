@@ -6,32 +6,86 @@ import type {
 } from "@pi-oxide/pi-host-web";
 import { defineModel } from "@pi-oxide/pi-host-web";
 import type { Content } from "@pi-oxide/pi-host-web/raw";
+import type {
+	AgentDiagnosticEvent,
+	DiagnosticMessage,
+} from "../types/messages";
 import { streamLog } from "../utils/stream-logger";
 import type { AnthropicConfig } from "./anthropic";
 import { AnthropicProvider } from "./anthropic";
 import type { LlmStream } from "./llm-streamer";
 import { sdkToolToWasmTool, sdkToWasmMessages } from "./sdk-message-conversion";
 
-export function createAnthropicModel(config: AnthropicConfig): AgentModel {
-	const provider = new AnthropicProvider(config);
+type DiagnosticSink = (event: AgentDiagnosticEvent) => void;
+
+function toolDeltaText(delta: Record<string, unknown>): string {
+	return delta.type === "string" && typeof delta.value === "string"
+		? delta.value
+		: JSON.stringify(delta);
+}
+
+function diagnosticMessages(
+	messages: ModelRequest["messages"],
+): DiagnosticMessage[] {
+	return messages.map((message) => ({
+		id: message.id,
+		role: message.role,
+		content: message.content,
+		timestamp: message.timestamp,
+		toolCallId: message.tool_call_id,
+	}));
+}
+
+function recordRequest(
+	request: ModelRequest,
+	onDiagnostic: DiagnosticSink,
+): void {
+	onDiagnostic({
+		kind: "model_request",
+		timestamp: Date.now(),
+		instructions: request.instructions,
+		messages: diagnosticMessages(request.messages),
+		tools: request.tools.map((tool) => ({
+			name: tool.name,
+			description: tool.description,
+			inputSchema: tool.inputSchema,
+		})),
+	});
+}
+
+export function createAnthropicModel(
+	config: AnthropicConfig,
+	onDiagnostic: DiagnosticSink = () => {},
+): AgentModel {
+	const provider = new AnthropicProvider(config, onDiagnostic);
 
 	return defineModel({
 		id: config.model,
 		contextWindow: 200_000,
 		maxTokens: 4096,
 		generate: async (request: ModelRequest): Promise<ModelResponse> => {
+			recordRequest(request, onDiagnostic);
 			const context = {
 				system_prompt: request.instructions,
 				messages: sdkToWasmMessages(request.messages),
 				tools: sdkToolToWasmTool(request.tools),
 			};
 			const stream = await provider.call(context, request.signal);
-			return drainStreamToResponse(stream);
+			const response = await drainStreamToResponse(stream);
+			onDiagnostic({
+				kind: "model_response",
+				timestamp: Date.now(),
+				providerStopReason: response.rawProviderStopReason,
+				sdkStopReason: response.response.stopReason,
+				content: response.response.content,
+			});
+			return response.response;
 		},
 		generateStream: async function* (
 			request: ModelRequest,
 			signal?: AbortSignal,
 		): AsyncGenerator<ModelEvent> {
+			recordRequest(request, onDiagnostic);
 			const context = {
 				system_prompt: request.instructions,
 				messages: sdkToWasmMessages(request.messages),
@@ -56,21 +110,33 @@ export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 							payload: {
 								id: chunk.tool_call_id,
 								name: stream.resolveToolName?.(chunk.tool_call_id) ?? "",
-								arguments:
-									typeof chunk.delta === "string"
-										? chunk.delta
-										: JSON.stringify(chunk.delta),
+								arguments: toolDeltaText(chunk.delta),
 							},
 						};
 						break;
 					case "done": {
 						const result = await stream.result;
 						if ("Ok" in result) {
-							yield { type: "done", payload: wasmToSdkResponse(result.Ok) };
+							const response = wasmToSdkResponse(result.Ok);
+							onDiagnostic({
+								kind: "model_response",
+								timestamp: Date.now(),
+								providerStopReason: result.Ok.stop_reason,
+								sdkStopReason: response.stopReason,
+								content: response.content,
+							});
+							yield { type: "done", payload: response };
 						}
 						return;
 					}
 					case "error":
+						onDiagnostic({
+							kind: "model_response",
+							timestamp: Date.now(),
+							providerStopReason: "stream_error",
+							sdkStopReason: "error",
+							content: [],
+						});
 						yield {
 							type: "done",
 							payload: {
@@ -101,9 +167,14 @@ export function createAnthropicModel(config: AnthropicConfig): AgentModel {
 
 async function drainStreamToResponse(
 	stream: LlmStream,
-): Promise<ModelResponse> {
+): Promise<{ response: ModelResponse; rawProviderStopReason: string }> {
 	let _text = "";
-	const toolCalls: { type: "tool_call"; id: string; name: string; arguments: unknown }[] = [];
+	const toolCalls: {
+		type: "tool_call";
+		id: string;
+		name: string;
+		arguments: unknown;
+	}[] = [];
 
 	for await (const chunk of stream.chunks) {
 		switch (chunk.kind) {
@@ -115,8 +186,7 @@ async function drainStreamToResponse(
 					type: "tool_call",
 					id: chunk.tool_call_id,
 					name: stream.resolveToolName?.(chunk.tool_call_id) ?? "",
-					arguments:
-						typeof chunk.delta === "string" ? chunk.delta : chunk.delta,
+					arguments: toolDeltaText(chunk.delta),
 				});
 				break;
 		}
@@ -125,8 +195,8 @@ async function drainStreamToResponse(
 	const result = await stream.result;
 	if ("Err" in result) {
 		return {
-			content: [],
-			stopReason: "error",
+			response: { content: [], stopReason: "error" },
+			rawProviderStopReason: result.Err.error.code,
 		};
 	}
 
@@ -134,14 +204,21 @@ async function drainStreamToResponse(
 	// captured in the final result, merge them in.
 	const merged = result.Ok;
 	if (toolCalls.length > 0) {
-		const seenIds = new Set(merged.content.map((b) => (b.type === "tool_call" && "id" in b ? b.id : null)));
+		const seenIds = new Set(
+			merged.content.map((b) =>
+				b.type === "tool_call" && "id" in b ? b.id : null,
+			),
+		);
 		for (const tc of toolCalls) {
 			if (!seenIds.has(tc.id)) {
 				merged.content.push(tc as Content);
 			}
 		}
 	}
-	return wasmToSdkResponse(merged);
+	return {
+		response: wasmToSdkResponse(merged),
+		rawProviderStopReason: merged.stop_reason,
+	};
 }
 
 function wasmToSdkResponse(msg: {

@@ -3,14 +3,14 @@
  */
 
 import { describe, expect, test } from "vitest";
-import type { JsRunResult } from "../src/types/extjs-utils";
+import type { CellResult } from "../src/types/extjs-utils";
 import { formatError, formatJsRunResult } from "../src/types/extjs-utils";
 
-type WasmCellError = Extract<JsRunResult, { status: "err" }>["error"];
+type WasmCellError = Extract<CellResult, { status: "err" }>["error"];
 
 describe("formatJsRunResult", () => {
 	test("formats stdout-only result", () => {
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "ok",
 			stdout: ["hello", "world"],
 			stderr: [],
@@ -21,7 +21,7 @@ describe("formatJsRunResult", () => {
 	});
 
 	test("formats result value", () => {
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "ok",
 			stdout: [],
 			stderr: [],
@@ -32,7 +32,7 @@ describe("formatJsRunResult", () => {
 	});
 
 	test("combines stdout and result", () => {
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "ok",
 			stdout: ["running..."],
 			stderr: [],
@@ -45,10 +45,11 @@ describe("formatJsRunResult", () => {
 	test("formats compile error with line number", () => {
 		const error: WasmCellError = {
 			kind: "compile",
+			name: null,
 			message: "unexpected symbol",
 			line: 5,
 		};
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -63,10 +64,11 @@ describe("formatJsRunResult", () => {
 	test("formats compile error without line number", () => {
 		const error: WasmCellError = {
 			kind: "compile",
+			name: null,
 			message: "syntax error",
 			line: null,
 		};
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -79,10 +81,13 @@ describe("formatJsRunResult", () => {
 	test("formats runtime error with line number", () => {
 		const error: WasmCellError = {
 			kind: "runtime",
+			name: null,
 			message: "attempt to call nil value",
 			line: 12,
+			action: null,
+			code: null,
 		};
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -97,10 +102,13 @@ describe("formatJsRunResult", () => {
 	test("formats runtime error without line number", () => {
 		const error: WasmCellError = {
 			kind: "runtime",
+			name: null,
 			message: "something went wrong",
 			line: null,
+			action: null,
+			code: null,
 		};
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -114,7 +122,7 @@ describe("formatJsRunResult", () => {
 
 	test("formats fuel_exhausted error", () => {
 		const error: WasmCellError = { kind: "fuel_exhausted" };
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -131,7 +139,7 @@ describe("formatJsRunResult", () => {
 			kind: "internal",
 			message: "WASM trap",
 		};
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "err",
 			stdout: [],
 			stderr: [],
@@ -144,10 +152,13 @@ describe("formatJsRunResult", () => {
 	test("includes stderr in error output", () => {
 		const error: WasmCellError = {
 			kind: "runtime",
+			name: null,
 			message: "something went wrong",
 			line: null,
+			action: null,
+			code: null,
 		};
-		const cell: JsRunResult = {
+		const cell: CellResult = {
 			status: "err",
 			stdout: [],
 			stderr: ["debug trace line 1", "debug trace line 2"],
@@ -164,19 +175,33 @@ describe("formatError", () => {
 	test("handles all WasmCellError variants", () => {
 		const cases: Array<{ error: WasmCellError; expected: string }> = [
 			{
-				error: { kind: "compile", message: "err", line: 1 },
+				error: { kind: "compile", name: null, message: "err", line: 1 },
 				expected: "[compile error] line 1: err",
 			},
 			{
-				error: { kind: "compile", message: "err", line: null },
+				error: { kind: "compile", name: null, message: "err", line: null },
 				expected: "[compile error] err",
 			},
 			{
-				error: { kind: "runtime", message: "oops", line: 3 },
+				error: {
+					kind: "runtime",
+					name: null,
+					message: "oops",
+					line: 3,
+					action: null,
+					code: null,
+				},
 				expected: "[runtime error] line 3: oops",
 			},
 			{
-				error: { kind: "runtime", message: "oops", line: null },
+				error: {
+					kind: "runtime",
+					name: null,
+					message: "oops",
+					line: null,
+					action: null,
+					code: null,
+				},
 				expected: "[runtime error] oops",
 			},
 			{

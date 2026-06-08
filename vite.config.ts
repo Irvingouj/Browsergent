@@ -25,6 +25,10 @@ export default defineConfig({
 						src: "node_modules/@pi-oxide/extension-js/extension_js.js",
 						dest: "extension_js.js",
 					},
+					{
+						src: "node_modules/@pi-oxide/extension-js/worker.js",
+						dest: "worker.js",
+					},
 				];
 				for (const { src: srcRel, dest: destRel } of files) {
 					const src = path.resolve(__dirname, srcRel);

@@ -5,7 +5,14 @@ describe("createUiSlice", () => {
 	function makeSet() {
 		const calls: unknown[] = [];
 		const set = (fn: (state: unknown) => unknown) => {
-			const state = { ui: { settingsOpen: false, taskDraft: "", activeTab: "chat", jsCodeDraft: "" } };
+			const state = {
+				ui: {
+					settingsOpen: false,
+					taskDraft: "",
+					activeTab: "chat",
+					jsCodeDraft: "",
+				},
+			};
 			const result = fn(state);
 			calls.push(result);
 			return result;

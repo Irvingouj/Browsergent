@@ -31,18 +31,18 @@ test("chat messages accumulate across multiple runs", async () => {
 
 	// Configure settings
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.locator("text=Save").click();
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	// First run
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("first task");
-	await sidePanel.locator("text=Run").click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=First response")).toBeVisible({
 		timeout: 10000,
 	});
@@ -51,7 +51,7 @@ test("chat messages accumulate across multiple runs", async () => {
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("second task");
-	await sidePanel.locator("text=Run").click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Second response")).toBeVisible({
 		timeout: 10000,
 	});

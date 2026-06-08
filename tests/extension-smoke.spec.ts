@@ -29,7 +29,7 @@ test("side panel has task input and run button", async () => {
 	const input = sidePanel.locator('input[placeholder="Type a task..."]');
 	await expect(input).toBeVisible();
 
-	const runButton = sidePanel.locator("text=Run");
+	const runButton = sidePanel.getByRole("button", { name: "Run task" });
 	await expect(runButton).toBeVisible();
 
 	await close();
@@ -39,19 +39,19 @@ test("settings panel stores API key", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 
 	const apiKeyInput = sidePanel.locator('input[type="password"]');
 	await expect(apiKeyInput).toBeVisible();
 
 	await apiKeyInput.fill("test-key-123");
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.locator("text=Save").click();
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
+	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await expect(sidePanel.locator('input[type="password"]')).toHaveValue(
 		"test-key-123",
 	);

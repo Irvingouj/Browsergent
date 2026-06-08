@@ -1,14 +1,9 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { createAgentTools } from "../../src/worker/agent-tools";
 import {
 	isToolErrorEnvelope,
 	parseToolErrorEnvelope,
 } from "../../src/worker/tool-error-result";
-
-const mockGenerateApiDocs = vi.hoisted(() => vi.fn());
-vi.mock("@pi-oxide/extension-js", () => ({
-	generateApiDocs: mockGenerateApiDocs,
-}));
 
 function getRunJsHandler(tools: ReturnType<typeof createAgentTools>) {
 	const handler = tools.getHandler("run_js");
@@ -28,12 +23,18 @@ function expectErrorEnvelope(text: string) {
 	return envelope;
 }
 
+const mockGetDocs = vi.fn();
+
+function makeTools(runJs = vi.fn()) {
+	return createAgentTools(runJs, mockGetDocs);
+}
+
 describe("run_js tool error handling", () => {
 	test("returns error envelope on JS timeout", async () => {
 		const runJs = vi
 			.fn()
 			.mockRejectedValue(new Error("JS relay timed out after 30000ms"));
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "while(true){}" });
 		expect(typeof result).toBe("string");
@@ -48,7 +49,7 @@ describe("run_js tool error handling", () => {
 			.mockRejectedValue(
 				new Error("[runtime error] line 5: undefined variable"),
 			);
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "bad code" });
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
@@ -60,7 +61,7 @@ describe("run_js tool error handling", () => {
 		const runJs = vi
 			.fn()
 			.mockRejectedValue(new Error("[compile error] line 1: syntax error"));
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "bad code" });
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
@@ -75,7 +76,7 @@ describe("run_js tool error handling", () => {
 			stdout: [],
 			stderr: [],
 		});
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "1+1" });
 		expect(typeof result).toBe("string");
@@ -84,7 +85,7 @@ describe("run_js tool error handling", () => {
 
 	test("returns validation message for empty code without calling runJs", async () => {
 		const runJs = vi.fn();
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "" });
 		expect(result).toBe("run_js requires a non-empty 'code' string");
@@ -93,7 +94,7 @@ describe("run_js tool error handling", () => {
 
 	test("does not throw on JS errors — always returns a string", async () => {
 		const runJs = vi.fn().mockRejectedValue(new Error("catastrophic failure"));
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "code" });
 		expect(typeof result).toBe("string");
@@ -105,11 +106,10 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: { kind: "compile", message: "syntax error", line: 1 },
-			output: [],
 			stdout: [],
 			stderr: [],
 		});
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "bad" });
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
@@ -121,11 +121,10 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: { kind: "fuel_exhausted", message: "execution limit", line: null },
-			output: [],
 			stdout: [],
 			stderr: [],
 		});
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "while(true){}" });
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
@@ -137,11 +136,10 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: { kind: "runtime", message: "undefined variable", line: 5 },
-			output: [],
 			stdout: [],
 			stderr: [],
 		});
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "bad" });
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
@@ -153,11 +151,10 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: { kind: "internal", message: "internal failure" },
-			output: [],
 			stdout: [],
 			stderr: [],
 		});
-		const tools = createAgentTools(runJs);
+		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "bad" });
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
@@ -166,21 +163,83 @@ describe("run_js tool resolved-error path (status: err)", () => {
 	});
 });
 
-describe("get_doc tool error handling", () => {
-	test("returns error envelope when generateApiDocs throws", async () => {
-		mockGenerateApiDocs.mockImplementation(() => {
-			throw new Error("docs generation failed");
-		});
-		const tools = createAgentTools(vi.fn());
+describe("get_doc tool", () => {
+	test("returns namespace index markdown with no args", async () => {
+		mockGetDocs.mockResolvedValue(
+			JSON.stringify([
+				{
+					namespace: "page",
+					name: "snapshot",
+					action: null,
+					description: "Take a snapshot",
+					params: [],
+					returns: { js_type: "string", description: "snapshot text" },
+				},
+			]),
+		);
+		const tools = makeTools();
+		const handler = getGetDocHandler(tools);
+		const result = await handler({});
+		expect(typeof result).toBe("string");
+		expect(result).toContain("page");
+		expect(result).toContain("snapshot");
+	});
+
+	test("returns filtered markdown for namespace", async () => {
+		mockGetDocs.mockResolvedValue(
+			JSON.stringify([
+				{
+					namespace: "page",
+					name: "snapshot",
+					action: null,
+					description: "Take a snapshot",
+					params: [],
+					returns: { js_type: "string", description: "snapshot text" },
+				},
+				{
+					namespace: "chrome",
+					name: "tabs",
+					action: null,
+					description: "List tabs",
+					params: [],
+					returns: { js_type: "array", description: "tabs" },
+				},
+			]),
+		);
+		const tools = makeTools();
+		const handler = getGetDocHandler(tools);
+		const result = await handler({ namespace: "page" });
+		expect(result).toContain("snapshot");
+		expect(result).not.toContain("chrome.tabs");
+	});
+
+	test("returns JSON when format is json", async () => {
+		mockGetDocs.mockResolvedValue(
+			JSON.stringify([
+				{
+					namespace: "page",
+					name: "snapshot",
+					action: null,
+					description: "Take a snapshot",
+					params: [],
+					returns: { js_type: "string", description: "snapshot text" },
+				},
+			]),
+		);
+		const tools = makeTools();
+		const handler = getGetDocHandler(tools);
+		const result = await handler({ format: "json" });
+		expect(() => JSON.parse(result as string)).not.toThrow();
+	});
+
+	test("returns error envelope when getDocs throws", async () => {
+		mockGetDocs.mockRejectedValue(new Error("docs generation failed"));
+		const tools = makeTools();
 		const handler = getGetDocHandler(tools);
 		const result = await handler({});
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
 		const envelope = expectErrorEnvelope(result as string);
 		expect(envelope.code).toBe("E_JS_RUNTIME");
 		expect(envelope.message).toContain("docs generation failed");
-	});
-
-	afterEach(() => {
-		mockGenerateApiDocs.mockReset();
 	});
 });

@@ -108,21 +108,46 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 				class="fixed top-0 left-0 right-[280px] bottom-0 bg-black/30 backdrop-blur-sm z-[100] animate-fade-in"
 				onClick={closePanel}
 			/>
-			<div class="fixed top-0 right-0 bottom-0 w-[280px] bg-bg-surface border-l border-border z-[101] flex flex-col animate-slide-in-right shadow-md">
-				<div class="p-md border-b border-border flex items-center gap-sm">
+			<div class="fixed top-0 right-0 bottom-0 w-[280px] bg-bg-surface-solid border-l border-border z-[101] flex flex-col animate-slide-in-right shadow-md">
+				<div class="p-md border-b border-border flex items-center gap-sm bg-bg-muted">
 					<button
 						type="button"
+						data-testid="new-session-button"
+						aria-label="New session"
 						onClick={onCreateSession}
-						class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs flex-1 bg-text-primary text-bg-base hover:bg-text-secondary"
+						class="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer transition-all bg-text-primary text-bg-base hover:bg-text-secondary"
 					>
-						New Session
+						<svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+							<path
+								d="M8 2.5v11M2.5 8h11"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
+						</svg>
 					</button>
 					<button
 						type="button"
-						onClick={onSettingsClick}
-						class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer transition-all flex items-center gap-xs bg-bg-surface-solid text-text-secondary border border-border-strong hover:border-border-strong hover:text-text-primary"
+						data-testid="settings-button"
+						aria-label="Open settings"
+						onClick={() => {
+							onSettingsClick();
+						}}
+						class="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer transition-all bg-bg-surface text-text-secondary border border-border hover:border-border-strong hover:text-text-primary"
 					>
-						Settings
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<circle cx="12" cy="12" r="3" />
+							<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+						</svg>
 					</button>
 					<button
 						type="button"
@@ -156,9 +181,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 										!canSwitch
 											? "opacity-40 cursor-not-allowed"
 											: "hover:bg-bg-hover",
-										isActive
-											? "bg-accent-soft border-l-2 border-l-accent"
-											: "",
+										isActive ? "bg-accent-soft border-l-2 border-l-accent" : "",
 									].join(" ")}
 									title={
 										canSwitch
@@ -195,6 +218,8 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 										)}
 										<button
 											type="button"
+											data-testid="delete-session-button"
+											aria-label="Delete session"
 											onClick={(e) =>
 												handleDeleteClick(
 													e as unknown as MouseEvent,

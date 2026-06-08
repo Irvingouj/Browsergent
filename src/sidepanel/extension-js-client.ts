@@ -10,14 +10,15 @@
  */
 
 import type {
+	CellResult,
 	ExtensionSession as ExtensionSessionType,
-	JsRunResult,
 } from "@pi-oxide/extension-js";
+import { setLogLevel } from "@pi-oxide/extension-js";
 import { browsergentStore } from "../state/store";
 
 const EXTJS_TIMEOUT_MS = 30_000;
 
-export type { JsRunResult };
+export type { CellResult };
 
 interface ExtjsRelayRequest {
 	type: "extjsRunRequest";
@@ -28,7 +29,7 @@ interface ExtjsRelayRequest {
 interface ExtjsRelayResult {
 	type: "extjsRunResult";
 	id: string;
-	result: JsRunResult;
+	result: CellResult;
 }
 
 interface ExtjsRelayError {
@@ -37,13 +38,32 @@ interface ExtjsRelayError {
 	error: string;
 }
 
-type ExtjsRelayResponse = ExtjsRelayResult | ExtjsRelayError;
+interface ExtjsDocsResult {
+	type: "extjsDocsResult";
+	id: string;
+	docs: string;
+}
+
+interface ExtjsDocsError {
+	type: "extjsDocsError";
+	id: string;
+	error: string;
+}
+
+type ExtjsRelayResponse =
+	| ExtjsRelayResult
+	| ExtjsRelayError
+	| ExtjsDocsResult
+	| ExtjsDocsError;
 
 function isExtjsRelayResponse(msg: unknown): msg is ExtjsRelayResponse {
 	if (typeof msg !== "object" || msg === null) return false;
 	const obj = msg as Record<string, unknown>;
 	return (
-		(obj.type === "extjsRunResult" || obj.type === "extjsRunError") &&
+		(obj.type === "extjsRunResult" ||
+			obj.type === "extjsRunError" ||
+			obj.type === "extjsDocsResult" ||
+			obj.type === "extjsDocsError") &&
 		typeof obj.id === "string"
 	);
 }
@@ -74,14 +94,15 @@ export class ExtensionJsClient {
 			this.session = session;
 			this.runnerPromise = runner;
 			this.initialized = true;
+			setLogLevel("error");
 		})();
 		await this.initPromise;
 	}
 
-	async runJs(code: string): Promise<JsRunResult> {
+	async runJs(code: string): Promise<CellResult> {
 		await this.ensureReady();
 
-		return new Promise<JsRunResult>((resolve, reject) => {
+		return new Promise<CellResult>((resolve, reject) => {
 			// Chain onto queue and catch to prevent rejection from breaking future calls
 			this.queue = this.queue
 				.then(async () => {
@@ -103,7 +124,30 @@ export class ExtensionJsClient {
 		});
 	}
 
-	/** Handle a relay request from the worker. */
+	async getApiDocs(format: "json" | "markdown"): Promise<string> {
+		await this.ensureReady();
+
+		return new Promise<string>((resolve, reject) => {
+			this.queue = this.queue
+				.then(async () => {
+					try {
+						const docs = await this.executeDocsWithTimeout(format);
+						resolve(docs);
+					} catch (err) {
+						reject(
+							err instanceof Error
+								? err
+								: new Error(
+										typeof err === "string" ? err : "Docs request failed",
+									),
+						);
+					}
+				})
+				.catch(() => {});
+		});
+	}
+
+	/** Handle a run relay request from the worker. */
 	handleRelayRequest(request: ExtjsRelayRequest): void {
 		const { id, code } = request;
 
@@ -114,6 +158,27 @@ export class ExtensionJsClient {
 			.catch((err: Error) => {
 				this.dispatchRelayResponse({
 					type: "extjsRunError",
+					id,
+					error: err.message,
+				});
+			});
+	}
+
+	/** Handle a docs relay request from the worker. */
+	handleDocsRelayRequest(request: {
+		type: "extjsDocsRequest";
+		id: string;
+		format: "json" | "markdown";
+	}): void {
+		const { id, format } = request;
+
+		this.getApiDocs(format)
+			.then((docs) => {
+				this.dispatchRelayResponse({ type: "extjsDocsResult", id, docs });
+			})
+			.catch((err: Error) => {
+				this.dispatchRelayResponse({
+					type: "extjsDocsError",
 					id,
 					error: err.message,
 				});
@@ -169,7 +234,7 @@ export class ExtensionJsClient {
 		}
 	}
 
-	private async executeWithTimeout(code: string): Promise<JsRunResult> {
+	private async executeWithTimeout(code: string): Promise<CellResult> {
 		if (!this.session) {
 			throw new Error("ExtensionSession not available");
 		}
@@ -194,6 +259,30 @@ export class ExtensionJsClient {
 			await this.rebuildSession();
 			throw err;
 		}
+	}
+
+	private async executeDocsWithTimeout(format: string): Promise<string> {
+		if (!this.session) {
+			throw new Error("ExtensionSession not available");
+		}
+
+		const result = await Promise.race([
+			this.session.apiDocs(format),
+			new Promise<never>((_resolve, reject) => {
+				setTimeout(
+					() =>
+						reject(
+							new Error(`Docs relay timed out after ${EXTJS_TIMEOUT_MS}ms`),
+						),
+					EXTJS_TIMEOUT_MS,
+				);
+			}),
+		]);
+
+		if (typeof result !== "string") {
+			return JSON.stringify(result);
+		}
+		return result;
 	}
 
 	/** Tear down the current session and create a fresh one. */

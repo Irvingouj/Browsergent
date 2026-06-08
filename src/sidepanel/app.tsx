@@ -1,7 +1,10 @@
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
-import { exportConversation } from "../controllers/export-controller";
+import {
+	buildExportSnapshot,
+	exportConversation,
+} from "../controllers/export-controller";
 import {
 	selectActiveSessionId,
 	selectActiveTab,
@@ -9,6 +12,7 @@ import {
 	selectAgentStatusReason,
 	selectApiKey,
 	selectBaseUrl,
+	selectDiagnosticEvents,
 	selectMessageIds,
 	selectMessagesById,
 	selectModel,
@@ -26,6 +30,23 @@ import { JsPlaybookPanel } from "./components/JsPlaybookPanel";
 import { SettingsForm } from "./components/SettingsForm";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
+
+function currentSessionSnapshot(): {
+	messages: ChatMessage[];
+	trace: ReturnType<typeof selectTraceEntries>;
+	diagnostics: ReturnType<typeof selectDiagnosticEvents>;
+} {
+	const state = browsergentStore.getState();
+	const messages = state.chat.messageIds
+		.map((id) => state.chat.messagesById[id])
+		.filter((message): message is ChatMessage => message !== undefined);
+	return {
+		messages,
+		trace: state.trace.entries,
+		diagnostics: state.diagnostics.events,
+	};
+}
+
 import { SessionPanel } from "./session-panel";
 
 const App: FunctionalComponent = () => {
@@ -39,6 +60,7 @@ const App: FunctionalComponent = () => {
 		[messageIds, messagesById],
 	);
 	const trace = useStore(browsergentStore, selectTraceEntries);
+	const diagnostics = useStore(browsergentStore, selectDiagnosticEvents);
 	const status = useStore(browsergentStore, selectAgentStatus);
 	const statusReason = useStore(browsergentStore, selectAgentStatusReason);
 	const taskInput = useStore(browsergentStore, selectTaskDraft);
@@ -63,8 +85,8 @@ const App: FunctionalComponent = () => {
 	useTitleGeneration(sessionControllerRef, messages);
 
 	useEffect(() => {
-		sessionControllerRef.current?.scheduleSave(messages, trace);
-	}, [messages, trace, sessionControllerRef]);
+		sessionControllerRef.current?.scheduleSave(messages, trace, diagnostics);
+	}, [messages, trace, diagnostics, sessionControllerRef]);
 
 	useEffect(() => {
 		const el = chatScrollRef.current;
@@ -113,12 +135,8 @@ const App: FunctionalComponent = () => {
 	}, [apiKey, baseUrl, model, settingsControllerRef]);
 
 	const handleExportConversation = useCallback(() => {
-		exportConversation({
-			exportedAt: new Date().toISOString(),
-			messages,
-			trace,
-		});
-	}, [messages, trace]);
+		exportConversation(buildExportSnapshot(messages, trace, diagnostics));
+	}, [messages, trace, diagnostics]);
 
 	const reloadSessionList = useCallback(async () => {
 		const list = await sessionControllerRef.current?.listSessions();
@@ -129,11 +147,17 @@ const App: FunctionalComponent = () => {
 
 	const handleSwitchSession = useCallback(
 		async (id: string) => {
-			sessionControllerRef.current?.cancelPendingSave();
+			const snapshot = currentSessionSnapshot();
+			await sessionControllerRef.current?.flushSave(
+				snapshot.messages,
+				snapshot.trace,
+				snapshot.diagnostics,
+			);
 			const data = await sessionControllerRef.current?.switchSession(id);
 			if (data) {
 				browsergentStore.getState().hydrateChat(data.messages);
 				browsergentStore.getState().hydrateTrace(data.trace);
+				browsergentStore.getState().hydrateDiagnostics(data.diagnostics);
 			}
 			browsergentStore.getState().activeSessionChanged(id);
 			browsergentStore.getState().agentReset();
@@ -145,11 +169,17 @@ const App: FunctionalComponent = () => {
 	);
 
 	const handleCreateSession = useCallback(async () => {
-		sessionControllerRef.current?.cancelPendingSave();
+		const snapshot = currentSessionSnapshot();
+		await sessionControllerRef.current?.flushSave(
+			snapshot.messages,
+			snapshot.trace,
+			snapshot.diagnostics,
+		);
 		const newId = await sessionControllerRef.current?.createSession();
 		if (!newId) return;
 		browsergentStore.getState().clearChat();
 		browsergentStore.getState().clearTrace();
+		browsergentStore.getState().clearDiagnostics();
 		browsergentStore.getState().agentReset();
 		browsergentStore.getState().sessionCreated(newId);
 		browsergentStore.getState().sessionPanelOpenChanged(false);
@@ -169,6 +199,7 @@ const App: FunctionalComponent = () => {
 				if (data) {
 					browsergentStore.getState().hydrateChat(data.messages);
 					browsergentStore.getState().hydrateTrace(data.trace);
+					browsergentStore.getState().hydrateDiagnostics(data.diagnostics);
 				}
 				browsergentStore.getState().activeSessionChanged(activeId);
 			}
@@ -257,11 +288,12 @@ const App: FunctionalComponent = () => {
 				</div>
 			</div>
 
-			{/* Settings */}
+			{/* Settings modal */}
 			{showSettings && (
 				<SettingsForm
 					onSave={handleSaveApiKey}
 					onExport={handleExportConversation}
+					onClose={() => browsergentStore.getState().setSettingsOpen(false)}
 				/>
 			)}
 
@@ -273,10 +305,19 @@ const App: FunctionalComponent = () => {
 				{activeTab === "chat" && messages.length > 0 && !isRunning && (
 					<button
 						type="button"
+						data-testid="floating-new-button"
+						aria-label="New session"
 						onClick={handleCreateSession}
-						class="absolute top-md left-md z-10 px-sm py-xs text-[11px] font-semibold border border-border-strong rounded-md bg-bg-surface-solid text-text-secondary hover:border-accent hover:text-accent hover:bg-accent-soft transition-all cursor-pointer backdrop-blur-sm"
+						class="absolute top-md left-md z-10 w-7 h-7 flex items-center justify-center border border-border-strong rounded-md bg-bg-surface-solid text-text-secondary hover:border-accent hover:text-accent hover:bg-accent-soft transition-all cursor-pointer backdrop-blur-sm"
 					>
-						New
+						<svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+							<path
+								d="M8 2.5v11M2.5 8h11"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
+						</svg>
 					</button>
 				)}
 				{activeTab === "chat" ? <ChatPanel /> : <JsPlaybookPanel />}

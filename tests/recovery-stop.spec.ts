@@ -3,11 +3,12 @@ import { launchExtension, startMockAnthropicServer } from "./helpers";
 
 async function configureMockSettings(sidePanel: any, mockUrl: string) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mockUrl);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 }
 
 function makeTextStream(text: string) {
@@ -41,19 +42,22 @@ test("stop during provider stream", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
 
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("slow task");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("slow task");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Wait for stream to start (message_start + content_block_start sent quickly)
 	await sidePanel.waitForTimeout(500);
 
 	// Click stop while the delta is delayed
-	await sidePanel.getByRole("button", { name: "Stop" }).click();
+	await sidePanel.getByRole("button", { name: "Stop agent" }).click();
 
 	// Assert status shows stopped
-	await expect(
-		sidePanel.locator('[data-testid="agent-status"]'),
-	).toHaveText(/stopped/, { timeout: 5000 });
+	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(
+		/stopped/,
+		{ timeout: 5000 },
+	);
 
 	await close();
 	mock.server.close();
@@ -77,8 +81,10 @@ test("stop during tool", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
 
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill("run tool");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel
+		.locator('input[placeholder="Type a task..."]')
+		.fill("run tool");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Wait for tool to start (trace entry shows running)
 	await expect(
@@ -86,12 +92,13 @@ test("stop during tool", async () => {
 	).toBeVisible({ timeout: 5000 });
 
 	// Click stop
-	await sidePanel.getByRole("button", { name: "Stop" }).click();
+	await sidePanel.getByRole("button", { name: "Stop agent" }).click();
 
 	// Assert status shows stopped
-	await expect(
-		sidePanel.locator('[data-testid="agent-status"]'),
-	).toHaveText(/stopped/, { timeout: 5000 });
+	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(
+		/stopped/,
+		{ timeout: 5000 },
+	);
 
 	await close();
 	mock.server.close();

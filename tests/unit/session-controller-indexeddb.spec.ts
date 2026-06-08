@@ -30,7 +30,7 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 
 	test("load() returns empty session after init", async () => {
 		const result = await controller.load();
-		expect(result).toEqual({ messages: [], trace: [] });
+		expect(result).toEqual({ messages: [], trace: [], diagnostics: [] });
 	});
 
 	test("save() / load() roundtrip", async () => {
@@ -105,7 +105,11 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 	test("init() creates a fresh session", async () => {
 		const activeId = controller.getActiveSessionId();
 		expect(activeId).not.toBeNull();
-		expect(await controller.load()).toEqual({ messages: [], trace: [] });
+		expect(await controller.load()).toEqual({
+			messages: [],
+			trace: [],
+			diagnostics: [],
+		});
 	});
 
 	test("save() / load() roundtrip", async () => {
@@ -146,7 +150,11 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 		const newId = await controller.createSession();
 		expect(newId).not.toBe(firstId);
 		expect(controller.getActiveSessionId()).toBe(newId);
-		expect(await controller.load()).toEqual({ messages: [], trace: [] });
+		expect(await controller.load()).toEqual({
+			messages: [],
+			trace: [],
+			diagnostics: [],
+		});
 	});
 
 	test("switchSession() changes active session", async () => {
@@ -193,7 +201,11 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 		const newActive = controller.getActiveSessionId();
 		expect(newActive).not.toBeNull();
 		expect(newActive).not.toBe(id);
-		expect(await controller.load()).toEqual({ messages: [], trace: [] });
+		expect(await controller.load()).toEqual({
+			messages: [],
+			trace: [],
+			diagnostics: [],
+		});
 	});
 
 	test("listSessions() returns sorted items", async () => {

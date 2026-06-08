@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { ExtjsController } from "../../src/controllers/extjs-controller";
 
 // Mock ExtensionJsClient — factory must be self-contained (hoisted)
@@ -40,12 +40,14 @@ async function getMocks() {
 	const extjsMod = await import("../../src/sidepanel/extension-js-client");
 	const storeMod = await import("../../src/state/store");
 	return {
-		mockInstance: (extjsMod as unknown as Record<string, unknown>).__mockInstance as {
+		mockInstance: (extjsMod as unknown as Record<string, unknown>)
+			.__mockInstance as {
 			init: ReturnType<typeof vi.fn>;
 			dispose: ReturnType<typeof vi.fn>;
 			handleRelayRequest: ReturnType<typeof vi.fn>;
 		},
-		mockStoreState: (storeMod as unknown as Record<string, unknown>).__mockStoreState as Record<string, ReturnType<typeof vi.fn>>,
+		mockStoreState: (storeMod as unknown as Record<string, unknown>)
+			.__mockStoreState as Record<string, ReturnType<typeof vi.fn>>,
 	};
 }
 
@@ -88,7 +90,11 @@ describe("ExtjsController", () => {
 		await ctrl.init();
 
 		const extjsMod = await getExtjsClientModule();
-		const callback = (extjsMod.ExtensionJsClient as unknown as { relayCallback: ((msg: unknown) => void) | null }).relayCallback;
+		const callback = (
+			extjsMod.ExtensionJsClient as unknown as {
+				relayCallback: ((msg: unknown) => void) | null;
+			}
+		).relayCallback;
 		expect(callback).not.toBeNull();
 		callback?.({ type: "extjsRunResult", id: "r1", result: {} });
 		expect(bridge.posted).toHaveLength(1);
@@ -101,7 +107,9 @@ describe("ExtjsController", () => {
 		const ctrl = new ExtjsController(bridge as any);
 		await expect(ctrl.init()).rejects.toThrow("init failed");
 		expect(mockStoreState.extjsFailed).toHaveBeenCalled();
-		expect(mockStoreState.extjsFailed.mock.calls[0][0].code).toBe("E_JS_RUNTIME");
+		expect(mockStoreState.extjsFailed.mock.calls[0][0].code).toBe(
+			"E_JS_RUNTIME",
+		);
 	});
 
 	test("handleRelayRequest delegates to client", async () => {
@@ -122,7 +130,10 @@ describe("ExtjsController", () => {
 		await ctrl.dispose();
 		expect(mockStoreState.extjsDisposed).toHaveBeenCalled();
 		const extjsMod = await getExtjsClientModule();
-		expect((extjsMod.ExtensionJsClient as unknown as { relayCallback: unknown }).relayCallback).toBeNull();
+		expect(
+			(extjsMod.ExtensionJsClient as unknown as { relayCallback: unknown })
+				.relayCallback,
+		).toBeNull();
 		expect(mockInstance.dispose).toHaveBeenCalled();
 	});
 
@@ -134,7 +145,10 @@ describe("ExtjsController", () => {
 		const ctrl = new ExtjsController(bridge as any);
 		await ctrl.init();
 		await ctrl.dispose();
-		expect(warnSpy).toHaveBeenCalledWith("Extjs dispose failed:", expect.any(Error));
+		expect(warnSpy).toHaveBeenCalledWith(
+			"Extjs dispose failed:",
+			expect.any(Error),
+		);
 		warnSpy.mockRestore();
 	});
 });

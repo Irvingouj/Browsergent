@@ -1,9 +1,27 @@
 import { describe, expect, test } from "vitest";
 import { isStaleRunId } from "../../src/controllers/worker-bridge";
 import {
+	isAgentDiagnosticEvent,
 	isAgentMessageEnd,
 	isBrowsergentError,
+	isExtjsDocsError,
+	isExtjsDocsRequest,
+	isExtjsDocsResult,
 } from "../../src/protocol/worker-guards";
+
+describe("isAgentDiagnosticEvent", () => {
+	test("accepts model response stop-reason diagnostics", () => {
+		expect(
+			isAgentDiagnosticEvent({
+				kind: "model_response",
+				timestamp: 1,
+				providerStopReason: "tool_use",
+				sdkStopReason: "tool_call",
+				content: [],
+			}),
+		).toBe(true);
+	});
+});
 
 describe("isBrowsergentError", () => {
 	test("accepts any string error code", () => {
@@ -95,5 +113,65 @@ describe("isAgentMessageEnd", () => {
 		expect(isAgentMessageEnd("string")).toBe(false);
 		expect(isAgentMessageEnd(null)).toBe(false);
 		expect(isAgentMessageEnd(undefined)).toBe(false);
+	});
+});
+
+describe("isExtjsDocsRequest", () => {
+	test("accepts valid json request", () => {
+		expect(
+			isExtjsDocsRequest({
+				type: "extjsDocsRequest",
+				id: "d1",
+				format: "json",
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid markdown request", () => {
+		expect(
+			isExtjsDocsRequest({
+				type: "extjsDocsRequest",
+				id: "d1",
+				format: "markdown",
+			}),
+		).toBe(true);
+	});
+
+	test("rejects invalid format", () => {
+		expect(
+			isExtjsDocsRequest({ type: "extjsDocsRequest", id: "d1", format: "xml" }),
+		).toBe(false);
+	});
+
+	test("rejects missing id", () => {
+		expect(
+			isExtjsDocsRequest({ type: "extjsDocsRequest", format: "json" }),
+		).toBe(false);
+	});
+});
+
+describe("isExtjsDocsResult", () => {
+	test("accepts valid result", () => {
+		expect(
+			isExtjsDocsResult({ type: "extjsDocsResult", id: "d1", docs: "{...}" }),
+		).toBe(true);
+	});
+
+	test("rejects missing docs", () => {
+		expect(isExtjsDocsResult({ type: "extjsDocsResult", id: "d1" })).toBe(
+			false,
+		);
+	});
+});
+
+describe("isExtjsDocsError", () => {
+	test("accepts valid error", () => {
+		expect(
+			isExtjsDocsError({ type: "extjsDocsError", id: "d1", error: "fail" }),
+		).toBe(true);
+	});
+
+	test("rejects missing error", () => {
+		expect(isExtjsDocsError({ type: "extjsDocsError", id: "d1" })).toBe(false);
 	});
 });

@@ -51,6 +51,8 @@ Key rules:
 4. Verify after action.
 5. Use docs instead of guessing.
 
+Cell isolation reminder: each run_js is an isolated async cell. Top-level let/const do not persist across calls. Use globalThis._bg for cross-call state.
+
 Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
 Do not use page.evaluate, chrome.scripting.executeScript, or tab.evaluate.`;
 

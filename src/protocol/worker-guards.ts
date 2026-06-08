@@ -1,5 +1,6 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import type {
+	AgentDiagnosticEvent,
 	AgentStatus,
 	AgentTraceEntry,
 	ChatMessage,
@@ -129,6 +130,59 @@ export function isAgentTrace(
 	return true;
 }
 
+export function isAgentDiagnosticEvent(
+	event: unknown,
+): event is AgentDiagnosticEvent {
+	if (!isObject(event) || !isString(event.kind) || !isNumber(event.timestamp))
+		return false;
+	switch (event.kind) {
+		case "provider_request":
+			return "body" in event;
+		case "provider_sse_event":
+			return isString(event.eventType) && isString(event.data);
+		case "provider_sse_remainder":
+			return isString(event.data);
+		case "model_request":
+			return (
+				isString(event.instructions) &&
+				Array.isArray(event.messages) &&
+				Array.isArray(event.tools)
+			);
+		case "model_response":
+			return (
+				isString(event.providerStopReason) &&
+				isString(event.sdkStopReason) &&
+				Array.isArray(event.content)
+			);
+		case "agent_status":
+			return (
+				isString(event.state) &&
+				(!("message" in event) || isOptionalString(event.message))
+			);
+		case "agent_run_result":
+			return (
+				isString(event.status) &&
+				isString(event.text) &&
+				Array.isArray(event.toolCalls)
+			);
+		default:
+			return false;
+	}
+}
+
+export function isAgentDiagnostic(msg: unknown): msg is {
+	type: "agentDiagnostic";
+	runId: string;
+	event: AgentDiagnosticEvent;
+} {
+	return (
+		isObject(msg) &&
+		msg.type === "agentDiagnostic" &&
+		isString(msg.runId) &&
+		isAgentDiagnosticEvent(msg.event)
+	);
+}
+
 export function isAgentMessageEnd(msg: unknown): msg is {
 	type: "agentMessageEnd";
 	runId: string;
@@ -183,6 +237,38 @@ export function isExtjsRunRequest(
 	return true;
 }
 
+export function isExtjsDocsRequest(msg: unknown): msg is {
+	type: "extjsDocsRequest";
+	id: string;
+	format: "json" | "markdown";
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "extjsDocsRequest") return false;
+	if (!isString(msg.id)) return false;
+	if (msg.format !== "json" && msg.format !== "markdown") return false;
+	return true;
+}
+
+export function isExtjsDocsResult(
+	msg: unknown,
+): msg is { type: "extjsDocsResult"; id: string; docs: string } {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "extjsDocsResult") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.docs)) return false;
+	return true;
+}
+
+export function isExtjsDocsError(
+	msg: unknown,
+): msg is { type: "extjsDocsError"; id: string; error: string } {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "extjsDocsError") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.error)) return false;
+	return true;
+}
+
 export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 	return (
 		isWorkerReady(msg) ||
@@ -190,10 +276,14 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isAgentMessage(msg) ||
 		isAgentTextDelta(msg) ||
 		isAgentTrace(msg) ||
+		isAgentDiagnostic(msg) ||
 		isAgentMessageEnd(msg) ||
 		isAgentError(msg) ||
 		isExtjsOutput(msg) ||
 		isExtjsError(msg) ||
-		isExtjsRunRequest(msg)
+		isExtjsRunRequest(msg) ||
+		isExtjsDocsRequest(msg) ||
+		isExtjsDocsResult(msg) ||
+		isExtjsDocsError(msg)
 	);
 }

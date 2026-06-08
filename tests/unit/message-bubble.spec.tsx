@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
 import { render } from "preact-render-to-string";
+import { describe, expect, test, vi } from "vitest";
 import { MessageBubble } from "../../src/sidepanel/components/MessageBubble";
 import type { ChatMessage } from "../../src/types/messages";
 

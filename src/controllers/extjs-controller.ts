@@ -33,6 +33,14 @@ export class ExtjsController {
 		this.client.handleRelayRequest(msg);
 	}
 
+	handleDocsRelayRequest(msg: {
+		type: "extjsDocsRequest";
+		id: string;
+		format: "json" | "markdown";
+	}): void {
+		this.client.handleDocsRelayRequest(msg);
+	}
+
 	async stop(): Promise<void> {
 		try {
 			await this.client.stop();

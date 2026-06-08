@@ -14,8 +14,8 @@
 		"test:all": "vitest run && npx playwright test"
 	},
 	"dependencies": {
-		"@pi-oxide/extension-js": "^0.2.4",
-		"@pi-oxide/pi-host-web": "^0.8.0",
+		"@pi-oxide/extension-js": "^0.4.1",
+		"@pi-oxide/pi-host-web": "^0.9.1",
 		"@preact/signals": "^1.3.0",
 		"marked": "^18.0.4",
 		"preact": "^10.25.0",

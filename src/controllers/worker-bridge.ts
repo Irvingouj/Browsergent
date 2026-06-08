@@ -20,6 +20,12 @@ type ExtjsRunRequestHandler = (msg: {
 	code: string;
 }) => void;
 
+type ExtjsDocsRequestHandler = (msg: {
+	type: "extjsDocsRequest";
+	id: string;
+	format: "json" | "markdown";
+}) => void;
+
 type WorkerReadyHandler = () => void;
 type AgentStoppedHandler = () => void;
 
@@ -32,15 +38,18 @@ export function isStaleRunId(runId: string, activeRunId?: string): boolean {
 export class WorkerBridge {
 	private worker: Worker | null = null;
 	private onExtjsRunRequest: ExtjsRunRequestHandler | null = null;
+	private onExtjsDocsRequest: ExtjsDocsRequestHandler | null = null;
 	private onWorkerReady: WorkerReadyHandler | null = null;
 	private onAgentStopped: AgentStoppedHandler | null = null;
 
 	constructor(options?: {
 		onExtjsRunRequest?: ExtjsRunRequestHandler;
+		onExtjsDocsRequest?: ExtjsDocsRequestHandler;
 		onWorkerReady?: WorkerReadyHandler;
 		onAgentStopped?: AgentStoppedHandler;
 	}) {
 		this.onExtjsRunRequest = options?.onExtjsRunRequest ?? null;
+		this.onExtjsDocsRequest = options?.onExtjsDocsRequest ?? null;
 		this.onWorkerReady = options?.onWorkerReady ?? null;
 		this.onAgentStopped = options?.onAgentStopped ?? null;
 	}
@@ -167,6 +176,14 @@ export class WorkerBridge {
 				browsergentStore.getState().traceUpdated(raw.entry);
 				break;
 			}
+			case "agentDiagnostic": {
+				if (
+					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
+				)
+					return;
+				browsergentStore.getState().diagnosticAdded(raw.event);
+				break;
+			}
 			case "agentError": {
 				if (
 					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
@@ -209,6 +226,11 @@ export class WorkerBridge {
 			case "extjsRunRequest":
 				if (this.onExtjsRunRequest) {
 					this.onExtjsRunRequest(raw);
+				}
+				break;
+			case "extjsDocsRequest":
+				if (this.onExtjsDocsRequest) {
+					this.onExtjsDocsRequest(raw);
 				}
 				break;
 		}

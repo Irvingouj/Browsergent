@@ -1,10 +1,10 @@
-import type { JsRunResult } from "@pi-oxide/extension-js";
+import type { CellResult } from "@pi-oxide/extension-js";
 
-export type { JsRunResult };
+export type { CellResult };
 
-type WasmCellError = Extract<JsRunResult, { status: "err" }>["error"];
+type WasmCellError = Extract<CellResult, { status: "err" }>["error"];
 
-export function formatJsRunResult(cell: JsRunResult): string {
+export function formatJsRunResult(cell: CellResult): string {
 	if (cell.status === "err") {
 		const errorPrefix = formatError(cell.error);
 		const stderr = cell.stderr.join("\n");

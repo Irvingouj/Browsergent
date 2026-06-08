@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
 import { render } from "preact-render-to-string";
+import { describe, expect, test, vi } from "vitest";
 import { SettingsForm } from "../../src/sidepanel/components/SettingsForm";
 
 const mockState = {
@@ -29,26 +29,20 @@ vi.mock("zustand/react", () => ({
 
 describe("SettingsForm", () => {
 	test("renders API key and model values", () => {
-		const html = render(
-			<SettingsForm onSave={() => {}} onExport={() => {}} />,
-		);
+		const html = render(<SettingsForm onSave={() => {}} onExport={() => {}} />);
 		expect(html).toContain("sk-test-key");
 		expect(html).toContain("https://api.example.com");
 		expect(html).toContain("claude-test");
 	});
 
 	test("has Save and Export buttons", () => {
-		const html = render(
-			<SettingsForm onSave={() => {}} onExport={() => {}} />,
-		);
+		const html = render(<SettingsForm onSave={() => {}} onExport={() => {}} />);
 		expect(html).toContain("Save");
 		expect(html).toContain("Export conversation");
 	});
 
 	test("renders three inputs", () => {
-		const html = render(
-			<SettingsForm onSave={() => {}} onExport={() => {}} />,
-		);
+		const html = render(<SettingsForm onSave={() => {}} onExport={() => {}} />);
 		const matches = html.match(/<input/g);
 		expect(matches).toHaveLength(3);
 	});

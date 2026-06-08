@@ -8,19 +8,21 @@ import { launchExtension, startMockAnthropicServer } from "./helpers";
 
 async function configureFakeSettings(sidePanel: Locator) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 }
 
 async function configureMockSettings(sidePanel: Locator, mockUrl: string) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mockUrl);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 }
 
 async function addMessageWithoutMock(
@@ -28,7 +30,7 @@ async function addMessageWithoutMock(
 	text: string = "test task",
 ) {
 	await sidePanel.locator('input[placeholder="Type a task..."]').fill(text);
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(
 		sidePanel.locator('[data-testid="chat-message-user"]'),
 	).toBeVisible({ timeout: 5000 });
@@ -58,7 +60,7 @@ function sessionItemLocator(sidePanel: Locator) {
 }
 
 function floatingNewButton(sidePanel: Locator) {
-	return sidePanel.locator("button", { hasText: /^New$/ });
+	return sidePanel.getByTestId("floating-new-button");
 }
 
 function assistantMessageLocator(sidePanel: Locator, text: string) {
@@ -72,8 +74,10 @@ function assistantMessageLocator(sidePanel: Locator, text: string) {
 test("Panel opens via More options", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await expect(sidePanel.locator("text=New Session")).toBeVisible();
-	await expect(sidePanel.locator("text=Settings")).toBeVisible();
+	await expect(sidePanel.getByTestId("new-session-button")).toBeVisible();
+	await expect(
+		sidePanel.getByRole("button", { name: "Open settings" }),
+	).toBeVisible();
 	await expect(sidePanel.locator("text=0 messages")).toBeVisible();
 	await close();
 });
@@ -81,10 +85,12 @@ test("Panel opens via More options", async () => {
 test("Panel closes via × button", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await expect(sidePanel.locator("text=New Session")).toBeVisible();
+	await expect(sidePanel.getByTestId("new-session-button")).toBeVisible();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.locator("text=New Session")).not.toBeVisible();
-	await expect(sidePanel.locator("text=Settings")).not.toBeVisible();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await expect(
+		sidePanel.getByRole("button", { name: "Open settings" }),
+	).not.toBeVisible();
 	await expect(sidePanel.locator("text=0 messages")).not.toBeVisible();
 	await close();
 });
@@ -92,10 +98,12 @@ test("Panel closes via × button", async () => {
 test("Panel closes via overlay", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await expect(sidePanel.locator("text=New Session")).toBeVisible();
+	await expect(sidePanel.getByTestId("new-session-button")).toBeVisible();
 	await sidePanel.mouse.click(10, 100);
-	await expect(sidePanel.locator("text=New Session")).not.toBeVisible();
-	await expect(sidePanel.locator("text=Settings")).not.toBeVisible();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await expect(
+		sidePanel.getByRole("button", { name: "Open settings" }),
+	).not.toBeVisible();
 	await expect(sidePanel.locator("text=0 messages")).not.toBeVisible();
 	await close();
 });
@@ -113,8 +121,8 @@ test("Create session from panel", async () => {
 	await addMessageWithoutMock(sidePanel);
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await expect(sessionTitleLocator(sidePanel)).toBeVisible();
-	await sidePanel.locator("text=New Session").click();
-	await expect(sidePanel.locator("text=New Session")).not.toBeVisible();
+	await sidePanel.getByTestId("new-session-button").click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 	await expect(
 		sidePanel.locator('[data-testid="chat-message-user"]'),
 	).toHaveCount(0);
@@ -138,9 +146,10 @@ test("Switch session", async () => {
 	await configureFakeSettings(sidePanel);
 	await addMessageWithoutMock(sidePanel, "Message A");
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.locator("text=New Session").click();
+	await sidePanel.getByTestId("new-session-button").click();
 	await sidePanel.waitForTimeout(500);
 	await addMessageWithoutMock(sidePanel, "Message B");
+	await sidePanel.waitForTimeout(2000);
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	// Session B is active (newest). Session A is inactive.
 	const sessionItems = sidePanel
@@ -194,7 +203,7 @@ test("Active session highlighted", async () => {
 test("Settings inside panel", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await expect(sidePanel.locator('input[type="password"]')).toBeVisible();
 	await close();
 });
@@ -219,7 +228,7 @@ test("Agent running blocks switch", async () => {
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("quick task");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
 		timeout: 5000,
 	});
@@ -227,7 +236,7 @@ test("Agent running blocks switch", async () => {
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("slow task");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await sidePanel.waitForTimeout(500);
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	const item = sessionItemLocator(sidePanel);
@@ -257,7 +266,7 @@ test("Floating New button hidden when running", async () => {
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("quick task");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
 		timeout: 5000,
 	});
@@ -265,7 +274,7 @@ test("Floating New button hidden when running", async () => {
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("slow task");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(floatingNewButton(sidePanel)).toBeHidden();
 	await close();
 	mock.server.close();
@@ -292,7 +301,7 @@ test("Session persists after reload", async () => {
 test("Empty session shown when active", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.locator("text=New Session").click();
+	await sidePanel.getByTestId("new-session-button").click();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await expect(sidePanel.locator("text=0 messages")).toBeVisible();
 	await close();

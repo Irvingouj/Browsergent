@@ -101,6 +101,15 @@ The content script supports the following `BrowserCommand` kinds (defined in `sr
 3. Run `npm run build` and test on a real page.
 4. Check the release notes for breaking changes in the `page.*` API or `ExtensionSession` shape.
 
+#### Upgrading to 0.4
+
+- `generateApiDocs()` is removed; docs are now fetched via `ExtensionSession.apiDocs(format)` on the main thread.
+- Every cell is wrapped in an async IIFE. Top-level `let`/`const` do **not** persist across `run_js` calls; use `globalThis._bg` for cross-call state.
+- `globalThis` persists within the same session until reset/rebuild.
+- Implicit return on the last expression line may add a `result` field to the tool output.
+- `runCellAsync` is serialized on the main thread (`runQueue`).
+- Default log level is `trace` — set to `error` after init to avoid console noise.
+
 ### Reporting Upstream Bugs
 
 Content-script or `page.*` behavior bugs should be reported to the `@pi-oxide/extension-js` repository (upstream), not fixed in this repo unless the fix is a Browsergent-specific adapter issue.

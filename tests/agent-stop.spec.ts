@@ -5,7 +5,9 @@ test("stop button appears when agent would be running", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	// Initially no stop button
-	await expect(sidePanel.locator("text=Stop")).not.toBeVisible();
+	await expect(
+		sidePanel.getByRole("button", { name: "Stop agent" }),
+	).not.toBeVisible();
 
 	// Type a task
 	await sidePanel
@@ -13,7 +15,7 @@ test("stop button appears when agent would be running", async () => {
 		.fill("test task");
 
 	// After clicking Run, we need an API key - it should show settings
-	await sidePanel.locator("text=Run").click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Should prompt for API key
 	await expect(sidePanel.locator("text=Anthropic API Key")).toBeVisible();

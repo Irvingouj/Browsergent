@@ -36,19 +36,26 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 			{isRunning ? (
 				<button
 					type="button"
+					data-testid="stop-button"
+					aria-label="Stop agent"
 					onClick={onStop}
-					class="px-md py-sm rounded-full font-sans text-sm font-semibold cursor-pointer transition-all flex items-center gap-xs whitespace-nowrap min-h-[36px] bg-danger-soft text-danger border border-danger hover:bg-danger-soft hover:"
+					class="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all bg-danger-soft text-danger border border-danger hover:bg-danger-soft"
 				>
-					<span class="w-1.5 h-1.5 rounded-full bg-danger" />
-					Stop
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+						<rect x="3" y="3" width="10" height="10" rx="1.5" />
+					</svg>
 				</button>
 			) : (
 				<button
 					type="button"
+					data-testid="run-button"
+					aria-label="Run task"
 					onClick={onRun}
-					class="px-md py-sm rounded-full font-sans text-sm font-semibold cursor-pointer transition-all whitespace-nowrap min-h-[36px] bg-text-primary text-bg-base hover:bg-text-secondary active:bg-text-muted"
+					class="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all bg-text-primary text-bg-base hover:bg-text-secondary active:bg-text-muted"
 				>
-					Run
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+						<path d="M4 2.5v11l9-5.5-9-5.5z" />
+					</svg>
 				</button>
 			)}
 		</div>

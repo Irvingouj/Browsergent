@@ -74,7 +74,9 @@ describe("BrowserCommand type coverage", () => {
 	test("isBrowserCommand rejects invalid shapes", () => {
 		expect(isBrowserCommand({ kind: "page.click" })).toBe(false);
 		expect(isBrowserCommand({ kind: "page.fill", refId: "e1" })).toBe(false);
-		expect(isBrowserCommand({ kind: "page.scroll", direction: "left" })).toBe(false);
+		expect(isBrowserCommand({ kind: "page.scroll", direction: "left" })).toBe(
+			false,
+		);
 		expect(isBrowserCommand({ kind: "page.wait", ms: "100" })).toBe(false);
 		expect(isBrowserCommand({ kind: "page.goto" })).toBe(false);
 		expect(isBrowserCommand({ kind: "page.unknown" })).toBe(false);

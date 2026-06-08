@@ -11,6 +11,7 @@ import type {
 	LlmResult,
 	StopReason,
 } from "@pi-oxide/pi-host-web/raw";
+import type { AgentDiagnosticEvent } from "../types/messages";
 import { streamLog } from "../utils/stream-logger";
 import { isStreamEvent } from "./anthropic-types";
 import { toStopReason } from "./anthropic-wire";
@@ -20,6 +21,7 @@ export function createAnthropicStream(
 	body: ReadableStream,
 	model: string,
 	signal?: AbortSignal,
+	onDiagnostic: (event: AgentDiagnosticEvent) => void = () => {},
 ): LlmStream {
 	const textBlocks: { type: "text"; text: string }[] = [];
 	const toolBlocks: {
@@ -114,6 +116,12 @@ export function createAnthropicStream(
 					}
 
 					if (!eventType || !data) continue;
+					onDiagnostic({
+						kind: "provider_sse_event",
+						timestamp: Date.now(),
+						eventType,
+						data,
+					});
 					if (data === "[DONE]") continue;
 
 					let parsed: unknown;
@@ -186,7 +194,10 @@ export function createAnthropicStream(
 									enqueue({
 										kind: "tool_call_delta",
 										tool_call_id: block.id,
-										delta: parsed.delta.partial_json,
+										delta: {
+											type: "string",
+											value: parsed.delta.partial_json,
+										},
 									});
 								}
 							}
@@ -199,6 +210,13 @@ export function createAnthropicStream(
 						}
 					}
 				}
+			}
+			if (buffer.length > 0) {
+				onDiagnostic({
+					kind: "provider_sse_remainder",
+					timestamp: Date.now(),
+					data: buffer,
+				});
 			}
 
 			for (const block of activeToolBlocks.values()) {

@@ -169,7 +169,9 @@ describe("AnthropicProvider", () => {
 
 		await provider.call({
 			system_prompt: "sys",
-			messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 }],
+			messages: [
+				{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+			],
 			tools: [],
 		});
 
@@ -198,7 +200,9 @@ describe("AnthropicProvider", () => {
 
 		await provider.call({
 			system_prompt: "sys",
-			messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 }],
+			messages: [
+				{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+			],
 			tools: [],
 		});
 
@@ -229,7 +233,11 @@ describe("AnthropicProvider", () => {
 		await provider.call({
 			system_prompt: "You are a test agent",
 			messages: [
-				{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: 1 },
+				{
+					role: "user",
+					content: [{ type: "text", text: "hello" }],
+					timestamp: 1,
+				},
 			],
 			tools: [
 				{
@@ -247,7 +255,13 @@ describe("AnthropicProvider", () => {
 			max_tokens: 4096,
 			system: "You are a test agent",
 			messages: [{ role: "user", content: "hello" }],
-			tools: [{ name: "run_js", description: "Run JS", input_schema: { type: "object" } }],
+			tools: [
+				{
+					name: "run_js",
+					description: "Run JS",
+					input_schema: { type: "object" },
+				},
+			],
 			stream: true,
 		});
 	});

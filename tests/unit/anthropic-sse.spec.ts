@@ -44,7 +44,10 @@ describe("createAnthropicStream", () => {
 			}),
 		]);
 
-		const { chunks, result } = createAnthropicStream(stream, "claude-3-haiku-20240307");
+		const { chunks, result } = createAnthropicStream(
+			stream,
+			"claude-3-haiku-20240307",
+		);
 		const emitted: unknown[] = [];
 		for await (const chunk of chunks) {
 			emitted.push(chunk);
@@ -71,7 +74,12 @@ describe("createAnthropicStream", () => {
 			sseEvent("content_block_start", {
 				type: "content_block_start",
 				index: 0,
-				content_block: { type: "tool_use", id: "tu1", name: "run_js", input: {} },
+				content_block: {
+					type: "tool_use",
+					id: "tu1",
+					name: "run_js",
+					input: {},
+				},
 			}),
 			sseEvent("content_block_delta", {
 				type: "content_block_delta",
@@ -85,7 +93,10 @@ describe("createAnthropicStream", () => {
 			}),
 		]);
 
-		const { chunks, result } = createAnthropicStream(stream, "claude-3-haiku-20240307");
+		const { chunks, result } = createAnthropicStream(
+			stream,
+			"claude-3-haiku-20240307",
+		);
 		const emitted: unknown[] = [];
 		for await (const chunk of chunks) {
 			emitted.push(chunk);
@@ -96,12 +107,12 @@ describe("createAnthropicStream", () => {
 		expect(emitted[1]).toMatchObject({
 			kind: "tool_call_delta",
 			tool_call_id: "tu1",
-			delta: '{"code":"1',
+			delta: { type: "string", value: '{"code":"1' },
 		});
 		expect(emitted[2]).toMatchObject({
 			kind: "tool_call_delta",
 			tool_call_id: "tu1",
-			delta: '+1"}',
+			delta: { type: "string", value: '+1"}' },
 		});
 		expect(emitted[3]).toMatchObject({ kind: "done" });
 
@@ -131,7 +142,10 @@ describe("createAnthropicStream", () => {
 			}),
 		]);
 
-		const { chunks, result } = createAnthropicStream(stream, "claude-3-haiku-20240307");
+		const { chunks, result } = createAnthropicStream(
+			stream,
+			"claude-3-haiku-20240307",
+		);
 		const emitted: unknown[] = [];
 		for await (const chunk of chunks) {
 			emitted.push(chunk);
@@ -185,7 +199,12 @@ describe("createAnthropicStream", () => {
 			sseEvent("content_block_start", {
 				type: "content_block_start",
 				index: 0,
-				content_block: { type: "tool_use", id: "tu1", name: "run_js", input: {} },
+				content_block: {
+					type: "tool_use",
+					id: "tu1",
+					name: "run_js",
+					input: {},
+				},
 			}),
 			sseEvent("content_block_delta", {
 				type: "content_block_delta",
@@ -194,7 +213,10 @@ describe("createAnthropicStream", () => {
 			}),
 		]);
 
-		const { chunks, result } = createAnthropicStream(stream, "claude-3-haiku-20240307");
+		const { chunks, result } = createAnthropicStream(
+			stream,
+			"claude-3-haiku-20240307",
+		);
 		for await (const _ of chunks) {
 			// consume
 		}

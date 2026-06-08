@@ -58,6 +58,9 @@ export function useAppInit(): AppInitResult {
 				onExtjsRunRequest: (msg) => {
 					extjsControllerRef.current?.handleRelayRequest(msg);
 				},
+				onExtjsDocsRequest: (msg) => {
+					extjsControllerRef.current?.handleDocsRelayRequest(msg);
+				},
 				onWorkerReady: () => setWorkerReady(true),
 				onAgentStopped: () => {
 					extjsControllerRef.current?.stop().catch((err: unknown) => {
@@ -87,6 +90,7 @@ export function useAppInit(): AppInitResult {
 					if (session) {
 						browsergentStore.getState().hydrateChat(session.messages);
 						browsergentStore.getState().hydrateTrace(session.trace);
+						browsergentStore.getState().hydrateDiagnostics(session.diagnostics);
 					}
 					sessionCtrl.hydrated = true;
 				})

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	ExtensionJsClient,
 	isExtjsRelayRequest,
@@ -8,21 +8,29 @@ import {
 // Mock @pi-oxide/extension-js — factory must be self-contained (hoisted)
 vi.mock("@pi-oxide/extension-js", () => {
 	const mockStopWith = vi.fn().mockResolvedValue(undefined);
-	const mockRunCellAsync = vi.fn().mockResolvedValue({ status: "ok", value: 42 });
+	const mockRunCellAsync = vi
+		.fn()
+		.mockResolvedValue({ status: "ok", value: 42 });
 	const mockSetFuelLimit = vi.fn();
+	const mockApiDocs = vi
+		.fn()
+		.mockResolvedValue('[{"namespace":"page","name":"snapshot"}]');
 	const mockSession = {
 		stopWith: mockStopWith,
 		runCellAsync: mockRunCellAsync,
 		setFuelLimit: mockSetFuelLimit,
+		apiDocs: mockApiDocs,
 	};
 	const mockRunnerPromise = Promise.resolve();
 	return {
 		ExtensionSession: {
 			init: vi.fn().mockResolvedValue([mockSession, mockRunnerPromise]),
 		},
+		setLogLevel: vi.fn(),
 		// Expose mocks so tests can access them
 		__mockStopWith: mockStopWith,
 		__mockRunCellAsync: mockRunCellAsync,
+		__mockApiDocs: mockApiDocs,
 	};
 });
 
@@ -48,9 +56,14 @@ async function getMocks() {
 	const extjsMod = await import("@pi-oxide/extension-js");
 	const storeMod = await import("../../src/state/store");
 	return {
-		mockRunCellAsync: (extjsMod as unknown as Record<string, unknown>).__mockRunCellAsync as ReturnType<typeof vi.fn>,
-		mockStopWith: (extjsMod as unknown as Record<string, unknown>).__mockStopWith as ReturnType<typeof vi.fn>,
-		mockStoreState: (storeMod as unknown as Record<string, unknown>).__mockStoreState as Record<string, ReturnType<typeof vi.fn>>,
+		mockRunCellAsync: (extjsMod as unknown as Record<string, unknown>)
+			.__mockRunCellAsync as ReturnType<typeof vi.fn>,
+		mockStopWith: (extjsMod as unknown as Record<string, unknown>)
+			.__mockStopWith as ReturnType<typeof vi.fn>,
+		mockApiDocs: (extjsMod as unknown as Record<string, unknown>)
+			.__mockApiDocs as ReturnType<typeof vi.fn>,
+		mockStoreState: (storeMod as unknown as Record<string, unknown>)
+			.__mockStoreState as Record<string, ReturnType<typeof vi.fn>>,
 	};
 }
 
@@ -61,9 +74,11 @@ describe("ExtensionJsClient", () => {
 		vi.useFakeTimers();
 		ExtensionJsClient["instance"] = null;
 		client = ExtensionJsClient.getInstance();
-		const { mockRunCellAsync, mockStopWith, mockStoreState } = await getMocks();
+		const { mockRunCellAsync, mockStopWith, mockApiDocs, mockStoreState } =
+			await getMocks();
 		mockRunCellAsync.mockResolvedValue({ status: "ok", value: 42 });
 		mockStopWith.mockResolvedValue(undefined);
+		mockApiDocs.mockResolvedValue('[{"namespace":"page","name":"snapshot"}]');
 		mockStoreState.extjsRunning.mockClear();
 		mockStoreState.extjsReady.mockClear();
 		mockStoreState.extjsRestarting.mockClear();
@@ -179,6 +194,70 @@ describe("ExtensionJsClient", () => {
 			error: "boom",
 		});
 	});
+
+	test("getApiDocs returns JSON string from session", async () => {
+		await client.init();
+		const { mockApiDocs } = await getMocks();
+		mockApiDocs.mockResolvedValue('[{"namespace":"page","name":"snapshot"}]');
+
+		const docs = await client.getApiDocs("json");
+		expect(mockApiDocs).toHaveBeenCalledWith("json");
+		expect(docs).toBe('[{"namespace":"page","name":"snapshot"}]');
+	});
+
+	test("getApiDocs stringifies non-string result", async () => {
+		await client.init();
+		const { mockApiDocs } = await getMocks();
+		mockApiDocs.mockResolvedValue([{ namespace: "page", name: "snapshot" }]);
+
+		const docs = await client.getApiDocs("json");
+		expect(docs).toBe('[{"namespace":"page","name":"snapshot"}]');
+	});
+
+	test("handleDocsRelayRequest dispatches docs result", async () => {
+		await client.init();
+		const { mockApiDocs } = await getMocks();
+		mockApiDocs.mockResolvedValue("# API Docs");
+
+		const responses: unknown[] = [];
+		ExtensionJsClient.relayCallback = (msg) => responses.push(msg);
+
+		client.handleDocsRelayRequest({
+			type: "extjsDocsRequest",
+			id: "docs-1",
+			format: "markdown",
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(responses).toHaveLength(1);
+		expect(responses[0]).toMatchObject({
+			type: "extjsDocsResult",
+			id: "docs-1",
+			docs: "# API Docs",
+		});
+	});
+
+	test("handleDocsRelayRequest dispatches error on failure", async () => {
+		await client.init();
+		const { mockApiDocs } = await getMocks();
+		mockApiDocs.mockRejectedValue(new Error("docs failed"));
+
+		const responses: unknown[] = [];
+		ExtensionJsClient.relayCallback = (msg) => responses.push(msg);
+
+		client.handleDocsRelayRequest({
+			type: "extjsDocsRequest",
+			id: "docs-2",
+			format: "json",
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(responses[0]).toMatchObject({
+			type: "extjsDocsError",
+			id: "docs-2",
+			error: "docs failed",
+		});
+	});
 });
 
 describe("isExtjsRelayRequest", () => {
@@ -193,11 +272,15 @@ describe("isExtjsRelayRequest", () => {
 	});
 
 	test("rejects missing code", () => {
-		expect(isExtjsRelayRequest({ type: "extjsRunRequest", id: "r1" })).toBe(false);
+		expect(isExtjsRelayRequest({ type: "extjsRunRequest", id: "r1" })).toBe(
+			false,
+		);
 	});
 
 	test("rejects wrong type", () => {
-		expect(isExtjsRelayRequest({ type: "other", id: "r1", code: "1+1" })).toBe(false);
+		expect(isExtjsRelayRequest({ type: "other", id: "r1", code: "1+1" })).toBe(
+			false,
+		);
 	});
 });
 

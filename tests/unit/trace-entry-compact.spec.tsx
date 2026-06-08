@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
 import { render } from "preact-render-to-string";
+import { describe, expect, test } from "vitest";
 import { TraceEntryCompact } from "../../src/sidepanel/components/TraceEntryCompact";
 import type { AgentTraceEntry } from "../../src/types/messages";
 

@@ -79,10 +79,41 @@ describe("SessionController.load", () => {
 		ctrl.scheduleSave(messages, trace);
 		ctrl.scheduleSave(messages, trace);
 
-		expect(await ctrl.load()).toEqual({ messages: [], trace: [] });
+		expect(await ctrl.load()).toEqual({
+			messages: [],
+			trace: [],
+			diagnostics: [],
+		});
 
 		await vi.advanceTimersByTimeAsync(500);
-		expect(await ctrl.load()).toEqual({ messages, trace });
+		expect(await ctrl.load()).toEqual({ messages, trace, diagnostics: [] });
+
+		vi.useRealTimers();
+	});
+
+	test("flushSave persists immediately without waiting for debounce", async () => {
+		vi.useFakeTimers();
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		ctrl.hydrated = true;
+
+		const messages = [
+			{ id: "1", kind: "user" as const, text: "saved", timestamp: 1 },
+		];
+		const trace = [
+			{
+				id: "t1",
+				step: 1,
+				status: "done" as const,
+				toolName: "run_js",
+				timestamp: 1,
+			},
+		];
+
+		ctrl.scheduleSave(messages, trace);
+		await ctrl.flushSave(messages, trace);
+
+		expect(await ctrl.load()).toEqual({ messages, trace, diagnostics: [] });
 
 		vi.useRealTimers();
 	});
@@ -105,7 +136,11 @@ describe("SessionController multi-session", () => {
 		expect(activeId).toMatch(
 			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
 		);
-		expect(await ctrl.load()).toEqual({ messages: [], trace: [] });
+		expect(await ctrl.load()).toEqual({
+			messages: [],
+			trace: [],
+			diagnostics: [],
+		});
 	});
 
 	test("init() migrates old sessions/current data", async () => {
@@ -177,7 +212,11 @@ describe("SessionController multi-session", () => {
 		expect(newId).not.toBeNull();
 		expect(newId).not.toBe(firstId);
 		expect(ctrl.getActiveSessionId()).toBe(newId);
-		expect(await ctrl.load()).toEqual({ messages: [], trace: [] });
+		expect(await ctrl.load()).toEqual({
+			messages: [],
+			trace: [],
+			diagnostics: [],
+		});
 
 		// old session data should still be accessible
 		const switched = await ctrl.switchSession(firstId);
@@ -274,7 +313,11 @@ describe("SessionController multi-session", () => {
 		const newActive = ctrl.getActiveSessionId();
 		expect(newActive).not.toBeNull();
 		expect(newActive).not.toBe(id);
-		expect(await ctrl.load()).toEqual({ messages: [], trace: [] });
+		expect(await ctrl.load()).toEqual({
+			messages: [],
+			trace: [],
+			diagnostics: [],
+		});
 	});
 
 	test("updateTitle() updates title", async () => {
@@ -302,5 +345,27 @@ describe("SessionController multi-session", () => {
 		);
 		await ctrl.clear();
 		expect(await ctrl.load()).toBeNull();
+	});
+});
+
+describe("SessionController diagnostics", () => {
+	test("persists full model context", async () => {
+		const storage = new MemoryStorage();
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const longText = "context".repeat(20_000);
+		const diagnostics = [
+			{
+				kind: "model_response" as const,
+				timestamp: 1,
+				providerStopReason: "end_turn",
+				sdkStopReason: "end" as const,
+				content: [{ type: "text" as const, text: longText }],
+			},
+		];
+
+		await ctrl.save([], [], diagnostics);
+
+		expect((await ctrl.load())?.diagnostics).toEqual(diagnostics);
 	});
 });

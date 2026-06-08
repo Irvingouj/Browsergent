@@ -8,10 +8,12 @@
  * These tests inject the content script and verify basic DOM operations.
  */
 
-import fs from "node:fs/promises";
-import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createTestPage, launchExtension } from "./helpers";
+import {
+	createTestPage,
+	injectContentScript,
+	launchExtension,
+} from "./helpers";
 
 const FORM_HTML = `
 <!DOCTYPE html>
@@ -49,20 +51,6 @@ const FORM_HTML = `
 </body>
 </html>
 `;
-
-/** Inject extension-js content script into a page. */
-async function injectContentScript(
-	page: import("@playwright/test").Page,
-): Promise<void> {
-	const scriptContent = await fs.readFile(
-		path.resolve("dist/content-script.js"),
-		"utf8",
-	);
-	// 0.3.0 ships content-script.js as an ES module (contains `export {};`).
-	// Remove the export so it runs as a plain script tag.
-	const plain = scriptContent.replace(/\nexport\s+\{\};\s*$/, "");
-	await page.addScriptTag({ content: `(function(){${plain}})()` });
-}
 
 test("extension-js content script injects without error", async () => {
 	const { context, close } = await launchExtension();

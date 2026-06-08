@@ -6,6 +6,7 @@
  */
 
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";
+import type { AgentDiagnosticEvent } from "../types/messages";
 import type { AnthropicConfig } from "./anthropic-prompts";
 import { BROWSER_TOOLS, SYSTEM_PROMPT } from "./anthropic-prompts";
 import { createAnthropicStream } from "./anthropic-sse";
@@ -23,11 +24,20 @@ function isRetryableError(err: unknown): boolean {
 }
 
 function isRetryableStatus(status: number): boolean {
-	return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+	return (
+		status === 429 ||
+		status === 500 ||
+		status === 502 ||
+		status === 503 ||
+		status === 504
+	);
 }
 
 export class AnthropicProvider {
-	constructor(private config: AnthropicConfig) {}
+	constructor(
+		private config: AnthropicConfig,
+		private onDiagnostic: (event: AgentDiagnosticEvent) => void = () => {},
+	) {}
 
 	async call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream> {
 		const baseUrl = this.config.baseUrl ?? "https://api.anthropic.com";
@@ -41,6 +51,12 @@ export class AnthropicProvider {
 			tools: toAnthropicTools(context.tools),
 			stream: true,
 		};
+		const url = `${baseUrl}/v1/messages`;
+		this.onDiagnostic({
+			kind: "provider_request",
+			timestamp: Date.now(),
+			body,
+		});
 
 		const maxRetries = 3;
 		let lastError = "";
@@ -67,7 +83,7 @@ export class AnthropicProvider {
 			}
 
 			try {
-				const resp = await fetch(`${baseUrl}/v1/messages`, {
+				const resp = await fetch(url, {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
@@ -106,7 +122,12 @@ export class AnthropicProvider {
 				if (!responseBody) {
 					throw new Error("Anthropic response has no body");
 				}
-				return createAnthropicStream(responseBody, this.config.model, signal);
+				return createAnthropicStream(
+					responseBody,
+					this.config.model,
+					signal,
+					this.onDiagnostic,
+				);
 			} catch (err) {
 				if (signal?.aborted) {
 					async function* abortedChunks(): AsyncGenerator<LlmChunk> {
@@ -142,13 +163,19 @@ export class AnthropicProvider {
 		}
 
 		async function* exhaustedChunks(): AsyncGenerator<LlmChunk> {
-			yield { kind: "error" as const, message: lastError || "Retries exhausted" };
+			yield {
+				kind: "error" as const,
+				message: lastError || "Retries exhausted",
+			};
 		}
 		return {
 			chunks: exhaustedChunks(),
 			result: Promise.resolve({
 				Err: {
-					error: { code: "api_error", message: lastError || "Retries exhausted" },
+					error: {
+						code: "api_error",
+						message: lastError || "Retries exhausted",
+					},
 					aborted: false,
 				},
 			}),

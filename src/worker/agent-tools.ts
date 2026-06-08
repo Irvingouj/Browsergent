@@ -1,6 +1,6 @@
 import type { AgentToolDefinition, AgentTools } from "@pi-oxide/pi-host-web";
 import { z } from "zod";
-import type { JsRunResult } from "../types/extjs-utils";
+import type { CellResult } from "../types/extjs-utils";
 import { formatJsRunResult } from "../types/extjs-utils";
 import { JS_TOOL_PROMPT } from "./js-tool-prompt";
 import { formatToolError } from "./tool-error-result";
@@ -93,16 +93,14 @@ function renderNamespaceIndex(entries: ExtensionJsApiEntry[]): string {
 }
 
 async function getExtensionJsDocs(
+	getDocs: (format: "json" | "markdown") => Promise<string>,
 	format: string,
 	namespace?: string,
 ): Promise<string> {
-	if (typeof self !== "undefined" && typeof window === "undefined") {
-		(globalThis as unknown as Record<string, unknown>).window = self;
-	}
-	const { generateApiDocs } = await import("@pi-oxide/extension-js");
 	const normalizedFormat = format === "json" ? "json" : "markdown";
 
-	const rawDocs = generateApiDocs("json");
+	// Always get JSON for filtering
+	const rawDocs = await getDocs("json");
 	const allEntries = JSON.parse(rawDocs).filter(isApiEntry);
 
 	const wanted = namespace?.trim();
@@ -156,7 +154,8 @@ function classifyError(source: { kind?: string; message?: string }): {
 const RUN_JS_DESCRIPTION = JS_TOOL_PROMPT;
 
 export function createAgentTools(
-	runJs: (code: string) => Promise<JsRunResult>,
+	runJs: (code: string) => Promise<CellResult>,
+	getDocs: (format: "json" | "markdown") => Promise<string>,
 ): AgentTools {
 	const definitions: AgentToolDefinition[] = [
 		{
@@ -223,7 +222,7 @@ export function createAgentTools(
 				const format = parsed.data?.format ?? "markdown";
 				const namespace = parsed.data?.namespace;
 				try {
-					const docs = await getExtensionJsDocs(format, namespace);
+					const docs = await getExtensionJsDocs(getDocs, format, namespace);
 					return truncateToolResult(docs, 50000);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);

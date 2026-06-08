@@ -12,7 +12,7 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 					`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: " world" } })}\n\n`,
 					`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
 				],
-				delays: [0, 0, 50, 500, 0],
+				delays: [0, 0, 50, 2000, 0],
 				stopReason: "end_turn",
 			},
 		],
@@ -20,16 +20,17 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("say hello");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Hello")).toBeVisible({ timeout: 5000 });
 	await expect(sidePanel.locator("text=Hello world")).toHaveCount(0);
@@ -59,16 +60,17 @@ test("final streamed response is one assistant message", async () => {
 
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("one message");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Single assistant message")).toBeVisible({
 		timeout: 5000,
@@ -109,16 +111,17 @@ test("two prompts keep all messages visible and prior transcript included in sec
 
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("task one");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=First response")).toBeVisible({
 		timeout: 5000,
 	});
@@ -126,7 +129,7 @@ test("two prompts keep all messages visible and prior transcript included in sec
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("task two");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Second response")).toBeVisible({
 		timeout: 5000,
 	});
@@ -170,22 +173,23 @@ test("stop preserves partial streamed text", async () => {
 
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("stop me");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Partial")).toBeVisible({
 		timeout: 5000,
 	});
 
-	await sidePanel.getByRole("button", { name: "Stop" }).click();
+	await sidePanel.getByRole("button", { name: "Stop agent" }).click();
 	await expect(sidePanel.locator("text=stopped")).toBeVisible({
 		timeout: 5000,
 	});
@@ -227,16 +231,17 @@ test("text before run_js tool call continues after run_js tool result", async ()
 
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("what page are we at");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Checked.")).toBeVisible({
 		timeout: 5000,
@@ -275,16 +280,17 @@ test("get_doc tool returns JS API docs and continues the agent turn", async () =
 
 	const { sidePanel, close } = await launchExtension();
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
 	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
+	await sidePanel.getByRole("button", { name: "Save settings" }).click();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await sidePanel.getByRole("button", { name: "Save" }).click();
+	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
 	await sidePanel
 		.locator('input[placeholder="Type a task..."]')
 		.fill("check js docs");
-	await sidePanel.getByRole("button", { name: "Run" }).click();
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Docs loaded.")).toBeVisible({
 		timeout: 10000,

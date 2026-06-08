@@ -21,7 +21,9 @@ describe("renderMarkdown", () => {
 	});
 
 	test("renders links with bold label", () => {
-		const html = renderMarkdown("See [**Indeed**](https://example.com) for more.");
+		const html = renderMarkdown(
+			"See [**Indeed**](https://example.com) for more.",
+		);
 		expect(html).toContain('<a href="https://example.com"');
 		expect(html).toContain("<strong>Indeed</strong>");
 	});

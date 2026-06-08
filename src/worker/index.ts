@@ -10,7 +10,7 @@
 /// <reference lib="webworker" />
 
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
-import type { JsRunResult } from "../types/extjs-utils";
+import type { CellResult } from "../types/extjs-utils";
 import { formatError } from "../types/extjs-utils";
 import type {
 	AgentTraceEntry,
@@ -61,7 +61,7 @@ const EXTJS_RELAY_TIMEOUT_MS = 30_000;
 const pendingExtjsRelays = new Map<
 	string,
 	{
-		resolve: (result: JsRunResult) => void;
+		resolve: (result: CellResult) => void;
 		reject: (error: Error) => void;
 		timeoutId: ReturnType<typeof setTimeout>;
 	}
@@ -75,11 +75,28 @@ function rejectAllPendingExtjsRelays(reason: string): void {
 	}
 }
 
+const pendingExtjsDocsRelays = new Map<
+	string,
+	{
+		resolve: (docs: string) => void;
+		reject: (error: Error) => void;
+		timeoutId: ReturnType<typeof setTimeout>;
+	}
+>();
+
+function rejectAllPendingExtjsDocsRelays(reason: string): void {
+	for (const [id, entry] of pendingExtjsDocsRelays) {
+		clearTimeout(entry.timeoutId);
+		entry.reject(new Error(reason));
+		pendingExtjsDocsRelays.delete(id);
+	}
+}
+
 /** Send JS code to the side panel for execution via ExtensionSession. */
-function relayExtjsExecution(code: string): Promise<JsRunResult> {
+function relayExtjsExecution(code: string): Promise<CellResult> {
 	const relayId = `extjs-${++extjsRelayCounter}`;
 
-	const promise = new Promise<JsRunResult>((resolve, reject) => {
+	const promise = new Promise<CellResult>((resolve, reject) => {
 		const timeoutId = setTimeout(() => {
 			pendingExtjsRelays.delete(relayId);
 			reject(
@@ -94,7 +111,28 @@ function relayExtjsExecution(code: string): Promise<JsRunResult> {
 	return promise;
 }
 
-function handleExtjsRelayResult(id: string, result: JsRunResult): void {
+/** Send docs request to the side panel via ExtensionSession.apiDocs(). */
+function relayExtjsDocs(format: "json" | "markdown"): Promise<string> {
+	const relayId = `extjs-docs-${++extjsRelayCounter}`;
+
+	const promise = new Promise<string>((resolve, reject) => {
+		const timeoutId = setTimeout(() => {
+			pendingExtjsDocsRelays.delete(relayId);
+			reject(
+				new Error(
+					`Extjs docs relay timed out after ${EXTJS_RELAY_TIMEOUT_MS}ms`,
+				),
+			);
+		}, EXTJS_RELAY_TIMEOUT_MS);
+
+		pendingExtjsDocsRelays.set(relayId, { resolve, reject, timeoutId });
+	});
+
+	post({ type: "extjsDocsRequest", id: relayId, format });
+	return promise;
+}
+
+function handleExtjsRelayResult(id: string, result: CellResult): void {
 	const entry = pendingExtjsRelays.get(id);
 	if (entry) {
 		clearTimeout(entry.timeoutId);
@@ -108,6 +146,24 @@ function handleExtjsRelayError(id: string, error: string): void {
 	if (entry) {
 		clearTimeout(entry.timeoutId);
 		pendingExtjsRelays.delete(id);
+		entry.reject(new Error(error));
+	}
+}
+
+function handleExtjsDocsRelayResult(id: string, docs: string): void {
+	const entry = pendingExtjsDocsRelays.get(id);
+	if (entry) {
+		clearTimeout(entry.timeoutId);
+		pendingExtjsDocsRelays.delete(id);
+		entry.resolve(docs);
+	}
+}
+
+function handleExtjsDocsRelayError(id: string, error: string): void {
+	const entry = pendingExtjsDocsRelays.get(id);
+	if (entry) {
+		clearTimeout(entry.timeoutId);
+		pendingExtjsDocsRelays.delete(id);
 		entry.reject(new Error(error));
 	}
 }
@@ -196,6 +252,9 @@ function handleAgentStart(
 			onTrace(entry: AgentTraceEntry) {
 				postIfCurrentRun(runId, { type: "agentTrace", runId, entry });
 			},
+			onDiagnostic(event) {
+				postIfCurrentRun(runId, { type: "agentDiagnostic", runId, event });
+			},
 			onError(code, message) {
 				postIfCurrentRun(runId, {
 					type: "agentError",
@@ -208,6 +267,9 @@ function handleAgentStart(
 			},
 			runJs(code) {
 				return relayExtjsExecution(code);
+			},
+			getDocs(format) {
+				return relayExtjsDocs(format);
 			},
 		})
 		.catch((err) => {
@@ -242,11 +304,13 @@ function handleAgentStop(runId?: string): void {
 		reason: "Stopped by user",
 	});
 	rejectAllPendingExtjsRelays("Agent stopped");
+	rejectAllPendingExtjsDocsRelays("Agent stopped");
 }
 
 function handleAgentReset(): void {
 	agentLoop?.reset();
 	rejectAllPendingExtjsRelays("Agent reset");
+	rejectAllPendingExtjsDocsRelays("Agent reset");
 	agentLoop = null;
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
@@ -289,15 +353,23 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 			break;
 		case "extjsStop":
 			rejectAllPendingExtjsRelays("Extjs stopped");
+			rejectAllPendingExtjsDocsRelays("Extjs stopped");
 			break;
 		case "extjsReset":
 			rejectAllPendingExtjsRelays("Extjs reset");
+			rejectAllPendingExtjsDocsRelays("Extjs reset");
 			break;
 		case "extjsRunResult":
 			handleExtjsRelayResult(msg.id, msg.result);
 			break;
 		case "extjsRunError":
 			handleExtjsRelayError(msg.id, msg.error);
+			break;
+		case "extjsDocsResult":
+			handleExtjsDocsRelayResult(msg.id, msg.docs);
+			break;
+		case "extjsDocsError":
+			handleExtjsDocsRelayError(msg.id, msg.error);
 			break;
 	}
 };

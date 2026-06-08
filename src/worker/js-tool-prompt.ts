@@ -18,6 +18,13 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
 - Do not use \`page.evaluate\`, \`chrome.scripting.executeScript\`, or \`tab.evaluate\`; Browsergent forbids arbitrary JS execution outside the sandboxed runtime.
 
+## Execution model
+- Each \`run_js\` call is an isolated async cell. Top-level \`let\`, \`const\`, and \`var\` do NOT persist across calls.
+- Prefer one block with multiple \`await\`s when the sequence is clear.
+- Cross-call state must use \`globalThis._bg\` (e.g., \`globalThis._bg.counter = 1\`).
+- Re-fetch or re-initialize any local bindings you need in each cell.
+- The last expression may appear in the tool result; use \`console.log\` for observations.
+
 ## Common patterns
 Current page:
 \`\`\`js
@@ -36,12 +43,13 @@ await page.goto("https://www.linkedin.com");
 Inspect and interact (structured):
 \`\`\`js
 const data = await page.snapshot_data();
-// choose a real ref_id from data, then:
-// await page.fill("e3", "search text");
-// await page.click("e4");
-// await page.type(ref_id, text);
-// await page.press(key);
-// await page.select(ref_id, value);
-// await page.check(ref_id);
-// await page.scroll(direction, amount);
+const input = data.nodes.find((n) => n.tag === "input");
+await page.fill({ refId: input.refId, value: "search text" });
+const button = data.nodes.find((n) => n.tag === "button");
+await page.click({ refId: button.refId });
+// await page.type({ refId: input.refId, text: "..." });
+// await page.press("Enter");
+// await page.select({ refId: input.refId, value: "option1" });
+// await page.check({ refId: input.refId, checked: true });
+// await page.scroll({ direction: "down", amount: 300 });
 \`\`\``;

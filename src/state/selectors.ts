@@ -3,6 +3,8 @@ import type { BrowsergentStore } from "./store";
 export const selectMessageIds = (s: BrowsergentStore) => s.chat.messageIds;
 export const selectMessagesById = (s: BrowsergentStore) => s.chat.messagesById;
 export const selectTraceEntries = (s: BrowsergentStore) => s.trace.entries;
+export const selectDiagnosticEvents = (s: BrowsergentStore) =>
+	s.diagnostics.events;
 export const selectAgentStatus = (s: BrowsergentStore) => s.agent.status;
 export const selectAgentStatusReason = (s: BrowsergentStore) =>
 	s.agent.statusReason;

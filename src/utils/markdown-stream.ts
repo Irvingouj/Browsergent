@@ -31,7 +31,10 @@ const renderer: Partial<Renderer> = {
 
 	table(this: RendererWithParser, { header, rows }): string {
 		const buildRow = (
-			cells: Array<{ text: string; tokens: Parameters<Parser["parseInline"]>[0] }>,
+			cells: Array<{
+				text: string;
+				tokens: Parameters<Parser["parseInline"]>[0];
+			}>,
 			cellTag: string,
 		) => {
 			const html = cells

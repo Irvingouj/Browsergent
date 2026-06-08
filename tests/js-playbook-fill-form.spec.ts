@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { expect, test } from "@playwright/test";
-import { launchExtension } from "./helpers";
+import { focusTargetTab, launchExtension } from "./helpers";
 
 const FORM_HTML = `
 <!DOCTYPE html>
@@ -29,41 +29,27 @@ function startTestServer(): Promise<{
 	});
 }
 
-/** Inject extension-js content script into a page. */
-async function injectContentScript(
-	page: import("@playwright/test").Page,
-): Promise<void> {
-	const fs = await import("node:fs/promises");
-	const path = await import("node:path");
-	const scriptContent = await fs.readFile(
-		path.resolve("dist/content-script.js"),
-		"utf8",
-	);
-	const plain = scriptContent.replace(/\nexport\s+\{\};\s*$/, "");
-	await page.addScriptTag({ content: `(function(){${plain}})()` });
-}
-
 test("js playbook fills a form field", async () => {
 	const { url, server } = await startTestServer();
 	const { context, sidePanel, close } = await launchExtension();
 
 	const testPage = await context.newPage();
 	await testPage.goto(url);
-	await injectContentScript(testPage);
+	await focusTargetTab(testPage);
 
-	// Switch to the JS tab
 	await sidePanel.locator("text=JS").click();
 
-	// Type the JS code
-	const code = `await page.snapshot();
-await page.fill("1", "hello");`;
+	const code = `const data = await page.snapshot_data();
+const input = data.nodes.find((el) => el.tag === "input");
+await page.fill({ refId: input.refId, value: "hello" });`;
 	await sidePanel.locator('textarea[placeholder="Type JS code..."]').fill(code);
 
-	// Click Run
+	await focusTargetTab(testPage);
 	await sidePanel.locator("button:has-text('Run')").click();
 
-	// Wait for the field to be filled
-	await expect(testPage.locator("#field")).toHaveValue("hello");
+	await expect(testPage.locator("#field")).toHaveValue("hello", {
+		timeout: 15000,
+	});
 
 	server.close();
 	await close();

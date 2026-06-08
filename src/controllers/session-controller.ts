@@ -1,12 +1,21 @@
-import { isAgentTraceEntry, isChatMessage } from "../protocol/worker-guards";
+import {
+	isAgentDiagnosticEvent,
+	isAgentTraceEntry,
+	isChatMessage,
+} from "../protocol/worker-guards";
 import type { SessionListItem } from "../state/slices/session-slice";
 import type { StorageBackend } from "../storage/storage-backend";
-import type { AgentTraceEntry, ChatMessage } from "../types/messages";
+import type {
+	AgentDiagnosticEvent,
+	AgentTraceEntry,
+	ChatMessage,
+} from "../types/messages";
 
 interface SessionData {
 	id: string;
 	messages: ChatMessage[];
 	trace: AgentTraceEntry[];
+	diagnostics: AgentDiagnosticEvent[];
 	timestamp: number;
 	title?: string;
 	customTitle?: string;
@@ -53,6 +62,7 @@ export class SessionController {
 				trace: Array.isArray(oldSession.trace)
 					? oldSession.trace.filter(isAgentTraceEntry)
 					: [],
+				diagnostics: [],
 				timestamp: oldSession.timestamp || Date.now(),
 				messageCount: Array.isArray(oldSession.messages)
 					? oldSession.messages.length
@@ -75,6 +85,7 @@ export class SessionController {
 				id: newId,
 				messages: [],
 				trace: [],
+				diagnostics: [],
 				timestamp: Date.now(),
 				messageCount: 0,
 			};
@@ -89,6 +100,7 @@ export class SessionController {
 	async load(): Promise<{
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
+		diagnostics: AgentDiagnosticEvent[];
 	} | null> {
 		try {
 			const activeId = this.meta?.activeSessionId;
@@ -100,9 +112,11 @@ export class SessionController {
 		}
 	}
 
-	private async loadForId(
-		id: string,
-	): Promise<{ messages: ChatMessage[]; trace: AgentTraceEntry[] } | null> {
+	private async loadForId(id: string): Promise<{
+		messages: ChatMessage[];
+		trace: AgentTraceEntry[];
+		diagnostics: AgentDiagnosticEvent[];
+	} | null> {
 		const raw = await this.storage.get<SessionData>(
 			SESSION_STORE,
 			`${SESSION_PREFIX}${id}`,
@@ -112,16 +126,23 @@ export class SessionController {
 		return {
 			messages: raw.messages.filter(isChatMessage),
 			trace: raw.trace.filter(isAgentTraceEntry),
+			diagnostics: Array.isArray(raw.diagnostics)
+				? raw.diagnostics.filter(isAgentDiagnosticEvent)
+				: [],
 		};
 	}
 
-	scheduleSave(messages: ChatMessage[], trace: AgentTraceEntry[]): void {
+	scheduleSave(
+		messages: ChatMessage[],
+		trace: AgentTraceEntry[],
+		diagnostics: AgentDiagnosticEvent[] = [],
+	): void {
 		if (!this.hydrated) return;
 		if (this.saveTimer) {
 			clearTimeout(this.saveTimer);
 		}
 		this.saveTimer = setTimeout(() => {
-			void this.save(messages, trace);
+			void this.save(messages, trace, diagnostics);
 		}, 500);
 	}
 
@@ -132,13 +153,28 @@ export class SessionController {
 		}
 	}
 
-	async save(messages: ChatMessage[], trace: AgentTraceEntry[]): Promise<void> {
+	async flushSave(
+		messages: ChatMessage[],
+		trace: AgentTraceEntry[],
+		diagnostics: AgentDiagnosticEvent[] = [],
+	): Promise<void> {
+		this.cancelPendingSave();
+		if (!this.hydrated) return;
+		await this.save(messages, trace, diagnostics);
+	}
+
+	async save(
+		messages: ChatMessage[],
+		trace: AgentTraceEntry[],
+		diagnostics: AgentDiagnosticEvent[] = [],
+	): Promise<void> {
 		try {
 			const activeId = this.meta?.activeSessionId;
 			const snapshot: SessionData = {
 				id: activeId || crypto.randomUUID(),
 				messages,
 				trace,
+				diagnostics,
 				timestamp: Date.now(),
 				messageCount: messages.length,
 			};
@@ -178,6 +214,7 @@ export class SessionController {
 			id: newId,
 			messages: [],
 			trace: [],
+			diagnostics: [],
 			timestamp: Date.now(),
 			messageCount: 0,
 		};
@@ -187,9 +224,11 @@ export class SessionController {
 		return newId;
 	}
 
-	async switchSession(
-		id: string,
-	): Promise<{ messages: ChatMessage[]; trace: AgentTraceEntry[] } | null> {
+	async switchSession(id: string): Promise<{
+		messages: ChatMessage[];
+		trace: AgentTraceEntry[];
+		diagnostics: AgentDiagnosticEvent[];
+	} | null> {
 		const data = await this.loadForId(id);
 		if (!data) return null;
 		this.meta = { activeSessionId: id };
@@ -213,6 +252,7 @@ export class SessionController {
 					id: newId,
 					messages: [],
 					trace: [],
+					diagnostics: [],
 					timestamp: Date.now(),
 					messageCount: 0,
 				};

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+	selectActiveSessionId,
 	selectActiveTab,
 	selectAgentActiveRunId,
 	selectAgentStatus,
@@ -16,7 +17,6 @@ import {
 	selectSettingsOpen,
 	selectTaskDraft,
 	selectTraceEntries,
-	selectActiveSessionId,
 } from "../../src/state/selectors";
 
 describe("selectors", () => {
@@ -27,11 +27,38 @@ describe("selectors", () => {
 				u1: { kind: "user", id: "u1", text: "hi", timestamp: 1 },
 			},
 		},
-		trace: { entries: [{ id: "t1", step: 1, status: "done" as const, toolName: "run_js", timestamp: 1 }] },
-		agent: { status: "running" as const, statusReason: "thinking", activeRunId: "run-1" },
-		ui: { taskDraft: "fill", activeTab: "chat" as const, jsCodeDraft: "page.click()", settingsOpen: false },
-		settings: { anthropicApiKey: "sk-test", baseUrl: "https://api.example.com", model: "claude-test" },
-		session: { sessionPanelOpen: true, sessions: [{ id: "s1", title: "Test" }], activeSessionId: "s1" },
+		trace: {
+			entries: [
+				{
+					id: "t1",
+					step: 1,
+					status: "done" as const,
+					toolName: "run_js",
+					timestamp: 1,
+				},
+			],
+		},
+		agent: {
+			status: "running" as const,
+			statusReason: "thinking",
+			activeRunId: "run-1",
+		},
+		ui: {
+			taskDraft: "fill",
+			activeTab: "chat" as const,
+			jsCodeDraft: "page.click()",
+			settingsOpen: false,
+		},
+		settings: {
+			anthropicApiKey: "sk-test",
+			baseUrl: "https://api.example.com",
+			model: "claude-test",
+		},
+		session: {
+			sessionPanelOpen: true,
+			sessions: [{ id: "s1", title: "Test" }],
+			activeSessionId: "s1",
+		},
 		extjs: { status: "ready" as const, output: "" },
 	};
 
@@ -40,11 +67,15 @@ describe("selectors", () => {
 	});
 
 	test("selectMessagesById returns messagesById", () => {
-		expect(selectMessagesById(mockStore as any)).toEqual(mockStore.chat.messagesById);
+		expect(selectMessagesById(mockStore as any)).toEqual(
+			mockStore.chat.messagesById,
+		);
 	});
 
 	test("selectTraceEntries returns trace entries", () => {
-		expect(selectTraceEntries(mockStore as any)).toEqual(mockStore.trace.entries);
+		expect(selectTraceEntries(mockStore as any)).toEqual(
+			mockStore.trace.entries,
+		);
 	});
 
 	test("selectAgentStatus returns agent status", () => {
@@ -92,7 +123,9 @@ describe("selectors", () => {
 	});
 
 	test("selectSessions returns sessions", () => {
-		expect(selectSessions(mockStore as any)).toEqual([{ id: "s1", title: "Test" }]);
+		expect(selectSessions(mockStore as any)).toEqual([
+			{ id: "s1", title: "Test" },
+		]);
 	});
 
 	test("selectActiveSessionId returns active session id", () => {

@@ -21,6 +21,10 @@ export function contentToText(blocks: Content[]): string {
 		.join("\n");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function toAnthropicContent(block: Content): AnthropicContentBlock {
 	switch (block.type) {
 		case "text":
@@ -30,10 +34,7 @@ export function toAnthropicContent(block: Content): AnthropicContentBlock {
 				type: "tool_use",
 				id: block.id,
 				name: block.name,
-				input:
-					typeof block.arguments === "object" && block.arguments !== null
-						? block.arguments
-						: {},
+				input: isRecord(block.arguments) ? block.arguments : {},
 			};
 		case "image":
 			return { type: "text", text: `[image: ${block.media_type}]` };
