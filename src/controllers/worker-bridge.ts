@@ -2,6 +2,7 @@ import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import {
 	isExtjsError,
 	isExtjsOutput,
+	isLoadSkillRequest,
 	isWorkerToPanel,
 } from "../protocol/worker-guards";
 import { browsergentStore } from "../state/store";
@@ -26,6 +27,13 @@ type ExtjsDocsRequestHandler = (msg: {
 	format: "json" | "markdown";
 }) => void;
 
+type LoadSkillRequestHandler = (msg: {
+	type: "loadSkillRequest";
+	id: string;
+	skill: string;
+	path?: string;
+}) => void;
+
 type WorkerReadyHandler = () => void;
 type AgentStoppedHandler = () => void;
 
@@ -39,17 +47,20 @@ export class WorkerBridge {
 	private worker: Worker | null = null;
 	private onExtjsRunRequest: ExtjsRunRequestHandler | null = null;
 	private onExtjsDocsRequest: ExtjsDocsRequestHandler | null = null;
+	private onLoadSkillRequest: LoadSkillRequestHandler | null = null;
 	private onWorkerReady: WorkerReadyHandler | null = null;
 	private onAgentStopped: AgentStoppedHandler | null = null;
 
 	constructor(options?: {
 		onExtjsRunRequest?: ExtjsRunRequestHandler;
 		onExtjsDocsRequest?: ExtjsDocsRequestHandler;
+		onLoadSkillRequest?: LoadSkillRequestHandler;
 		onWorkerReady?: WorkerReadyHandler;
 		onAgentStopped?: AgentStoppedHandler;
 	}) {
 		this.onExtjsRunRequest = options?.onExtjsRunRequest ?? null;
 		this.onExtjsDocsRequest = options?.onExtjsDocsRequest ?? null;
+		this.onLoadSkillRequest = options?.onLoadSkillRequest ?? null;
 		this.onWorkerReady = options?.onWorkerReady ?? null;
 		this.onAgentStopped = options?.onAgentStopped ?? null;
 	}
@@ -231,6 +242,11 @@ export class WorkerBridge {
 			case "extjsDocsRequest":
 				if (this.onExtjsDocsRequest) {
 					this.onExtjsDocsRequest(raw);
+				}
+				break;
+			case "loadSkillRequest":
+				if (isLoadSkillRequest(raw) && this.onLoadSkillRequest) {
+					this.onLoadSkillRequest(raw);
 				}
 				break;
 		}

@@ -7,6 +7,9 @@ import {
 	isExtjsDocsError,
 	isExtjsDocsRequest,
 	isExtjsDocsResult,
+	isLoadSkillError,
+	isLoadSkillRequest,
+	isLoadSkillResult,
 } from "../../src/protocol/worker-guards";
 
 describe("isAgentDiagnosticEvent", () => {
@@ -173,5 +176,75 @@ describe("isExtjsDocsError", () => {
 
 	test("rejects missing error", () => {
 		expect(isExtjsDocsError({ type: "extjsDocsError", id: "d1" })).toBe(false);
+	});
+});
+
+describe("isLoadSkillRequest", () => {
+	test("accepts valid request without path", () => {
+		expect(
+			isLoadSkillRequest({
+				type: "loadSkillRequest",
+				id: "s1",
+				skill: "capability-check",
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid request with path", () => {
+		expect(
+			isLoadSkillRequest({
+				type: "loadSkillRequest",
+				id: "s1",
+				skill: "capability-check",
+				path: "references/checklist.md",
+			}),
+		).toBe(true);
+	});
+
+	test("rejects missing skill", () => {
+		expect(isLoadSkillRequest({ type: "loadSkillRequest", id: "s1" })).toBe(
+			false,
+		);
+	});
+
+	test("rejects non-string path", () => {
+		expect(
+			isLoadSkillRequest({
+				type: "loadSkillRequest",
+				id: "s1",
+				skill: "x",
+				path: 42,
+			}),
+		).toBe(false);
+	});
+});
+
+describe("isLoadSkillResult", () => {
+	test("accepts valid result", () => {
+		expect(
+			isLoadSkillResult({
+				type: "loadSkillResult",
+				id: "s1",
+				content: "# Skill body",
+			}),
+		).toBe(true);
+	});
+
+	test("rejects missing content", () => {
+		expect(isLoadSkillResult({ type: "loadSkillResult", id: "s1" })).toBe(
+			false,
+		);
+	});
+});
+
+describe("isLoadSkillError", () => {
+	test("accepts valid error", () => {
+		expect(
+			isLoadSkillError({ type: "loadSkillError", id: "s1", error: "not found" }),
+		).toBe(true);
+	});
+
+	test("rejects missing error", () => {
+		expect(isLoadSkillError({ type: "loadSkillError", id: "s1" })).toBe(false);
 	});
 });

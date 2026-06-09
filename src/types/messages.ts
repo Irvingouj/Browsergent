@@ -13,6 +13,8 @@ export type PanelToWorker =
 			runId: string;
 			sessionId: string;
 			task: string;
+			resolvedTask?: string;
+			skillCatalog?: string;
 			settings: WorkerSettings;
 	  }
 	| { type: "agentStop"; runId?: string }
@@ -23,7 +25,9 @@ export type PanelToWorker =
 	| { type: "extjsRunResult"; id: string; result: CellResult }
 	| { type: "extjsRunError"; id: string; error: string }
 	| { type: "extjsDocsResult"; id: string; docs: string }
-	| { type: "extjsDocsError"; id: string; error: string };
+	| { type: "extjsDocsError"; id: string; error: string }
+	| { type: "loadSkillResult"; id: string; content: string }
+	| { type: "loadSkillError"; id: string; error: string };
 
 export interface WorkerSettings {
 	anthropicApiKey?: string;
@@ -45,7 +49,8 @@ export type WorkerToPanel =
 	| { type: "extjsOutput"; id: string; output: string }
 	| { type: "extjsError"; id: string; error: string }
 	| { type: "extjsRunRequest"; id: string; code: string }
-	| { type: "extjsDocsRequest"; id: string; format: "json" | "markdown" };
+	| { type: "extjsDocsRequest"; id: string; format: "json" | "markdown" }
+	| { type: "loadSkillRequest"; id: string; skill: string; path?: string };
 
 // --- Agent Status ---
 

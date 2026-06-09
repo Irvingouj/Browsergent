@@ -24,9 +24,10 @@ function expectErrorEnvelope(text: string) {
 }
 
 const mockGetDocs = vi.fn();
+const mockLoadSkill = vi.fn();
 
 function makeTools(runJs = vi.fn()) {
-	return createAgentTools(runJs, mockGetDocs);
+	return createAgentTools(runJs, mockGetDocs, mockLoadSkill);
 }
 
 describe("run_js tool error handling", () => {
@@ -160,6 +161,33 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
 		const envelope = expectErrorEnvelope(result as string);
 		expect(envelope.code).toBe("E_JS_RUNTIME");
+	});
+});
+
+describe("load_skill tool", () => {
+	function getLoadSkillHandler(tools: ReturnType<typeof createAgentTools>) {
+		const handler = tools.getHandler("load_skill");
+		if (!handler) throw new Error("load_skill handler not found");
+		return handler;
+	}
+
+	test("returns skill content", async () => {
+		mockLoadSkill.mockResolvedValue("# Skill body");
+		const tools = makeTools();
+		const handler = getLoadSkillHandler(tools);
+		const result = await handler({ skill: "capability-check" });
+		expect(result).toBe("# Skill body");
+		expect(mockLoadSkill).toHaveBeenCalledWith("capability-check", undefined);
+	});
+
+	test("returns error envelope for forbidden path", async () => {
+		const tools = makeTools();
+		const handler = getLoadSkillHandler(tools);
+		const result = await handler({
+			skill: "capability-check",
+			path: "../secrets",
+		});
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
 	});
 });
 

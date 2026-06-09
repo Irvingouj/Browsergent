@@ -14,6 +14,7 @@ import type {
 	ExtensionSession as ExtensionSessionType,
 } from "@pi-oxide/extension-js";
 import { setLogLevel } from "@pi-oxide/extension-js";
+import type { SkillFsClient, SkillFsListEntry } from "../skills/skill-types";
 import { browsergentStore } from "../state/store";
 
 const EXTJS_TIMEOUT_MS = 30_000;
@@ -50,11 +51,27 @@ interface ExtjsDocsError {
 	error: string;
 }
 
+interface LoadSkillResult {
+	type: "loadSkillResult";
+	id: string;
+	content: string;
+}
+
+interface LoadSkillError {
+	type: "loadSkillError";
+	id: string;
+	error: string;
+}
+
 type ExtjsRelayResponse =
 	| ExtjsRelayResult
 	| ExtjsRelayError
 	| ExtjsDocsResult
-	| ExtjsDocsError;
+	| ExtjsDocsError
+	| LoadSkillResult
+	| LoadSkillError;
+
+export type { ExtjsRelayResponse };
 
 function isExtjsRelayResponse(msg: unknown): msg is ExtjsRelayResponse {
 	if (typeof msg !== "object" || msg === null) return false;
@@ -63,12 +80,14 @@ function isExtjsRelayResponse(msg: unknown): msg is ExtjsRelayResponse {
 		(obj.type === "extjsRunResult" ||
 			obj.type === "extjsRunError" ||
 			obj.type === "extjsDocsResult" ||
-			obj.type === "extjsDocsError") &&
+			obj.type === "extjsDocsError" ||
+			obj.type === "loadSkillResult" ||
+			obj.type === "loadSkillError") &&
 		typeof obj.id === "string"
 	);
 }
 
-export class ExtensionJsClient {
+export class ExtensionJsClient implements SkillFsClient {
 	private static instance: ExtensionJsClient | null = null;
 	private session: ExtensionSessionType | null = null;
 	private runnerPromise: Promise<void> | null = null;
@@ -87,6 +106,10 @@ export class ExtensionJsClient {
 
 	async init(): Promise<void> {
 		if (this.initialized) return;
+		if (this.initPromise) {
+			await this.initPromise;
+			return;
+		}
 		this.initPromise = (async () => {
 			const { ExtensionSession } = await import("@pi-oxide/extension-js");
 			const [session, runner] = await ExtensionSession.init();
@@ -102,43 +125,78 @@ export class ExtensionJsClient {
 	async runJs(code: string): Promise<CellResult> {
 		await this.ensureReady();
 
-		return new Promise<CellResult>((resolve, reject) => {
-			// Chain onto queue and catch to prevent rejection from breaking future calls
-			this.queue = this.queue
-				.then(async () => {
-					try {
-						const result = await this.executeWithTimeout(code);
-						resolve(result);
-					} catch (err) {
-						reject(
-							err instanceof Error
-								? err
-								: new Error(
-										typeof err === "string" ? err : "JS execution failed",
-									),
-						);
-					}
-				})
-				// Prevent a rejected queue from propagating to subsequent calls
-				.catch(() => {});
-		});
+		return this.enqueue(
+			() => this.executeWithTimeout(code),
+			"JS execution failed",
+		);
 	}
 
 	async getApiDocs(format: "json" | "markdown"): Promise<string> {
 		await this.ensureReady();
 
-		return new Promise<string>((resolve, reject) => {
+		return this.enqueue(async () => {
+			return this.executeDocsWithTimeout(format);
+		}, "Docs request failed");
+	}
+
+	async fsExists(path: string): Promise<boolean> {
+		await this.ensureReady();
+		return this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			const result = await this.session.fsExists({ path });
+			return result.exists;
+		}, "fsExists failed");
+	}
+
+	async fsList(path: string): Promise<ReadonlyArray<SkillFsListEntry>> {
+		await this.ensureReady();
+		return this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			const result = await this.session.fsList({ path });
+			return result.entries.map((e) => ({ name: e.name, kind: e.kind }));
+		}, "fsList failed");
+	}
+
+	async fsReadText(path: string): Promise<string> {
+		await this.ensureReady();
+		return this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			const result = await this.session.fsReadText({ path });
+			return result.data;
+		}, "fsReadText failed");
+	}
+
+	async fsWriteText(path: string, data: string): Promise<void> {
+		await this.ensureReady();
+		await this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			await this.session.fsWriteText({ path, data });
+		}, "fsWriteText failed");
+	}
+
+	async fsMkdir(path: string): Promise<void> {
+		await this.ensureReady();
+		await this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			await this.session.fsMkdir({ path });
+		}, "fsMkdir failed");
+	}
+
+	private enqueue<T>(
+		fn: () => Promise<T>,
+		errorLabel: string,
+	): Promise<T> {
+		return new Promise<T>((resolve, reject) => {
 			this.queue = this.queue
 				.then(async () => {
 					try {
-						const docs = await this.executeDocsWithTimeout(format);
-						resolve(docs);
+						resolve(await fn());
 					} catch (err) {
 						reject(
 							err instanceof Error
 								? err
 								: new Error(
-										typeof err === "string" ? err : "Docs request failed",
+										typeof err === "string" ? err : errorLabel,
 									),
 						);
 					}

@@ -1,8 +1,6 @@
 /**
- * Type declarations for @pi-oxide/extension-js 0.4.0.
- * The upstream package.json points to index.d.ts which does not declare
- * the exported ExtensionSession, CellResult, or setLogLevel. This file
- * bridges the gap so TypeScript sees the runtime exports correctly.
+ * Type declarations for @pi-oxide/extension-js.
+ * Bridges gaps until upstream index.d.ts exports all runtime symbols.
  */
 
 declare module "@pi-oxide/extension-js" {
@@ -40,6 +38,36 @@ declare module "@pi-oxide/extension-js" {
 				execution_count: number;
 		  };
 
+	export interface FsPathParams {
+		path: string;
+	}
+
+	export interface FsWriteParams {
+		path: string;
+		data: string;
+	}
+
+	export interface FsExistsResult {
+		exists: boolean;
+	}
+
+	export interface FsBoolResult {
+		ok: boolean;
+	}
+
+	export interface FsStringResult {
+		data: string;
+	}
+
+	export interface FsListEntry {
+		name: string;
+		kind: string;
+	}
+
+	export interface FsListResult {
+		entries: FsListEntry[];
+	}
+
 	export class ExtensionSession {
 		static init(): Promise<[ExtensionSession, Promise<void>]>;
 		apiDocs(format: string): Promise<unknown>;
@@ -48,6 +76,11 @@ declare module "@pi-oxide/extension-js" {
 		stopWith(runnerPromise?: Promise<void>): Promise<void>;
 		reset(): void;
 		free(): void;
+		fsExists(params: FsPathParams): Promise<FsExistsResult>;
+		fsList(params: FsPathParams): Promise<FsListResult>;
+		fsReadText(params: FsPathParams): Promise<FsStringResult>;
+		fsWriteText(params: FsWriteParams): Promise<FsBoolResult>;
+		fsMkdir(params: FsPathParams): Promise<FsBoolResult>;
 	}
 
 	export function setLogLevel(level: string): void;

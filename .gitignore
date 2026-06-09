@@ -9,3 +9,4 @@ coverage/
 vendor/
 .opencode/
 .claude/
+browsergent-conversation-*.json

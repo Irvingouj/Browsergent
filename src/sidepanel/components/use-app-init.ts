@@ -61,6 +61,9 @@ export function useAppInit(): AppInitResult {
 				onExtjsDocsRequest: (msg) => {
 					extjsControllerRef.current?.handleDocsRelayRequest(msg);
 				},
+				onLoadSkillRequest: (msg) => {
+					extjsControllerRef.current?.handleLoadSkillRelayRequest(msg);
+				},
 				onWorkerReady: () => setWorkerReady(true),
 				onAgentStopped: () => {
 					extjsControllerRef.current?.stop().catch((err: unknown) => {

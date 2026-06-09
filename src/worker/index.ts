@@ -21,6 +21,7 @@ import type {
 import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 import { AgentLoop } from "./agent-loop";
 import type { AnthropicConfig } from "./anthropic";
+import { LoadSkillRelay } from "./load-skill-relay";
 
 enableStreamDebug();
 
@@ -92,6 +93,18 @@ function rejectAllPendingExtjsDocsRelays(reason: string): void {
 	}
 }
 
+const loadSkillRelay = new LoadSkillRelay(
+	(request) => {
+		post({
+			type: "loadSkillRequest",
+			id: request.id,
+			skill: request.skill,
+			path: request.path,
+		});
+	},
+	EXTJS_RELAY_TIMEOUT_MS,
+);
+
 /** Send JS code to the side panel for execution via ExtensionSession. */
 function relayExtjsExecution(code: string): Promise<CellResult> {
 	const relayId = `extjs-${++extjsRelayCounter}`;
@@ -132,6 +145,10 @@ function relayExtjsDocs(format: "json" | "markdown"): Promise<string> {
 	return promise;
 }
 
+function relayLoadSkill(skill: string, resourcePath?: string): Promise<string> {
+	return loadSkillRelay.relay(skill, resourcePath);
+}
+
 function handleExtjsRelayResult(id: string, result: CellResult): void {
 	const entry = pendingExtjsRelays.get(id);
 	if (entry) {
@@ -168,6 +185,14 @@ function handleExtjsDocsRelayError(id: string, error: string): void {
 	}
 }
 
+function handleLoadSkillRelayResult(id: string, content: string): void {
+	loadSkillRelay.resolve(id, content);
+}
+
+function handleLoadSkillRelayError(id: string, error: string): void {
+	loadSkillRelay.reject(id, error);
+}
+
 // --- Agent handling ---
 
 function postIfCurrentRun(runId: string, message: WorkerToPanel): void {
@@ -181,6 +206,8 @@ function handleAgentStart(
 	task: string,
 	settings: WorkerSettings,
 	runId: string,
+	resolvedTask?: string,
+	skillCatalog?: string,
 ): void {
 	currentRunId = runId;
 
@@ -209,7 +236,13 @@ function handleAgentStart(
 	};
 
 	agentLoop
-		.run(sessionId, task, config, {
+		.run(
+			sessionId,
+			task,
+			resolvedTask ?? task,
+			skillCatalog ?? "",
+			config,
+			{
 			onStatus(status, reason) {
 				postIfCurrentRun(runId, {
 					type: "agentStatus",
@@ -271,6 +304,9 @@ function handleAgentStart(
 			getDocs(format) {
 				return relayExtjsDocs(format);
 			},
+			loadSkill(skill, path) {
+				return relayLoadSkill(skill, path);
+			},
 		})
 		.catch((err) => {
 			if (runId === currentRunId) {
@@ -305,12 +341,14 @@ function handleAgentStop(runId?: string): void {
 	});
 	rejectAllPendingExtjsRelays("Agent stopped");
 	rejectAllPendingExtjsDocsRelays("Agent stopped");
+	loadSkillRelay.rejectAll("Agent stopped");
 }
 
 function handleAgentReset(): void {
 	agentLoop?.reset();
 	rejectAllPendingExtjsRelays("Agent reset");
 	rejectAllPendingExtjsDocsRelays("Agent reset");
+	loadSkillRelay.rejectAll("Agent reset");
 	agentLoop = null;
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
@@ -340,7 +378,14 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 	const msg = event.data;
 	switch (msg.type) {
 		case "agentStart":
-			handleAgentStart(msg.sessionId, msg.task, msg.settings, msg.runId);
+			handleAgentStart(
+				msg.sessionId,
+				msg.task,
+				msg.settings,
+				msg.runId,
+				msg.resolvedTask,
+				msg.skillCatalog,
+			);
 			break;
 		case "agentStop":
 			handleAgentStop(msg.runId);
@@ -354,10 +399,12 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 		case "extjsStop":
 			rejectAllPendingExtjsRelays("Extjs stopped");
 			rejectAllPendingExtjsDocsRelays("Extjs stopped");
+			loadSkillRelay.rejectAll("Extjs stopped");
 			break;
 		case "extjsReset":
 			rejectAllPendingExtjsRelays("Extjs reset");
 			rejectAllPendingExtjsDocsRelays("Extjs reset");
+			loadSkillRelay.rejectAll("Extjs reset");
 			break;
 		case "extjsRunResult":
 			handleExtjsRelayResult(msg.id, msg.result);
@@ -370,6 +417,12 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 			break;
 		case "extjsDocsError":
 			handleExtjsDocsRelayError(msg.id, msg.error);
+			break;
+		case "loadSkillResult":
+			handleLoadSkillRelayResult(msg.id, msg.content);
+			break;
+		case "loadSkillError":
+			handleLoadSkillRelayError(msg.id, msg.error);
 			break;
 	}
 };

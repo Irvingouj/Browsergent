@@ -1,5 +1,9 @@
 import { normalizeJsError } from "../errors/normalize-error";
-import { ExtensionJsClient } from "../sidepanel/extension-js-client";
+import { getSkillService } from "../skills/skill-service";
+import {
+	ExtensionJsClient,
+	type ExtjsRelayResponse,
+} from "../sidepanel/extension-js-client";
 import { browsergentStore } from "../state/store";
 import type { WorkerBridge } from "./worker-bridge";
 
@@ -15,8 +19,9 @@ export class ExtjsController {
 
 		try {
 			await this.client.init();
+			await getSkillService().ensureReady();
 			browsergentStore.getState().extjsReady();
-			ExtensionJsClient.relayCallback = (msg) => {
+			ExtensionJsClient.relayCallback = (msg: ExtjsRelayResponse) => {
 				this.bridge.post(msg);
 			};
 		} catch (err: unknown) {
@@ -39,6 +44,28 @@ export class ExtjsController {
 		format: "json" | "markdown";
 	}): void {
 		this.client.handleDocsRelayRequest(msg);
+	}
+
+	handleLoadSkillRelayRequest(msg: {
+		type: "loadSkillRequest";
+		id: string;
+		skill: string;
+		path?: string;
+	}): void {
+		const { id, skill, path: resourcePath } = msg;
+
+		getSkillService()
+			.loadSkill(skill, resourcePath)
+			.then((content) => {
+				this.bridge.post({ type: "loadSkillResult", id, content });
+			})
+			.catch((err: unknown) => {
+				this.bridge.post({
+					type: "loadSkillError",
+					id,
+					error: err instanceof Error ? err.message : String(err),
+				});
+			});
 	}
 
 	async stop(): Promise<void> {

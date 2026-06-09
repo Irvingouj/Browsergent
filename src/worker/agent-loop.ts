@@ -9,7 +9,7 @@ import type {
 import { streamLog } from "../utils/stream-logger";
 import { createAgentTools } from "./agent-tools";
 import type { AnthropicConfig } from "./anthropic";
-import { SYSTEM_PROMPT } from "./anthropic";
+import { composeSystemPrompt } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
 import { isToolErrorEnvelope, renderToolOutput } from "./tool-error-result";
 
@@ -44,6 +44,7 @@ export interface AgentLoopCallbacks {
 	onError: (code: string, message: string) => void;
 	runJs: (code: string) => Promise<CellResult>;
 	getDocs: (format: "json" | "markdown") => Promise<string>;
+	loadSkill: (skill: string, path?: string) => Promise<string>;
 }
 
 const STATUS_MAP: Record<string, AgentStatus> = {
@@ -67,7 +68,9 @@ export class AgentLoop {
 
 	async run(
 		sessionId: string,
-		task: string,
+		displayTask: string,
+		resolvedTask: string,
+		skillCatalog: string,
 		config: AnthropicConfig,
 		callbacks: AgentLoopCallbacks,
 	): Promise<void> {
@@ -79,14 +82,18 @@ export class AgentLoop {
 		callbacks.onStatus("loading");
 
 		const model = createAnthropicModel(config, callbacks.onDiagnostic);
-		const tools = createAgentTools(callbacks.runJs, callbacks.getDocs);
+		const tools = createAgentTools(
+			callbacks.runJs,
+			callbacks.getDocs,
+			callbacks.loadSkill,
+		);
 
 		this.agent = new Agent({
 			sessionId,
 			model,
 			tools,
 			store: indexedDbStore(),
-			instructions: SYSTEM_PROMPT,
+			instructions: composeSystemPrompt(skillCatalog),
 			context: {
 				maxTokens: 100_000,
 				toolResultLimit: 50_000,
@@ -199,10 +206,10 @@ export class AgentLoop {
 		});
 
 		callbacks.onStatus("running");
-		callbacks.onMessage("user", task);
+		callbacks.onMessage("user", displayTask);
 
 		try {
-			const result: AgentRunResult = await this.agent.run(task);
+			const result: AgentRunResult = await this.agent.run(resolvedTask);
 			callbacks.onDiagnostic({
 				kind: "agent_run_result",
 				timestamp: Date.now(),

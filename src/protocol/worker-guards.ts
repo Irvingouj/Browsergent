@@ -269,6 +269,40 @@ export function isExtjsDocsError(
 	return true;
 }
 
+export function isLoadSkillRequest(msg: unknown): msg is {
+	type: "loadSkillRequest";
+	id: string;
+	skill: string;
+	path?: string;
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "loadSkillRequest") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.skill)) return false;
+	if (msg.path !== undefined && !isString(msg.path)) return false;
+	return true;
+}
+
+export function isLoadSkillResult(
+	msg: unknown,
+): msg is { type: "loadSkillResult"; id: string; content: string } {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "loadSkillResult") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.content)) return false;
+	return true;
+}
+
+export function isLoadSkillError(
+	msg: unknown,
+): msg is { type: "loadSkillError"; id: string; error: string } {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "loadSkillError") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.error)) return false;
+	return true;
+}
+
 export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 	return (
 		isWorkerReady(msg) ||
@@ -283,7 +317,6 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isExtjsError(msg) ||
 		isExtjsRunRequest(msg) ||
 		isExtjsDocsRequest(msg) ||
-		isExtjsDocsResult(msg) ||
-		isExtjsDocsError(msg)
+		isLoadSkillRequest(msg)
 	);
 }

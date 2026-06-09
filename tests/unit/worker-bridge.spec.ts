@@ -376,6 +376,46 @@ describe("WorkerBridge", () => {
 		});
 	});
 
+	test("loadSkillRequest triggers onLoadSkillRequest callback", () => {
+		const skillSpy = vi.fn();
+		const bridge = new WorkerBridge({ onLoadSkillRequest: skillSpy });
+		bridge.start();
+		const worker = getWorkerInstance();
+		worker.onmessage?.(
+			new MessageEvent("message", {
+				data: {
+					type: "loadSkillRequest",
+					id: "skill-1",
+					skill: "capability-check",
+					path: "references/checklist.md",
+				},
+			}),
+		);
+		expect(skillSpy).toHaveBeenCalledWith({
+			type: "loadSkillRequest",
+			id: "skill-1",
+			skill: "capability-check",
+			path: "references/checklist.md",
+		});
+	});
+
+	test("loadSkillRequest is ignored when callback is not registered", () => {
+		const bridge = new WorkerBridge();
+		bridge.start();
+		const worker = getWorkerInstance();
+		expect(() =>
+			worker.onmessage?.(
+				new MessageEvent("message", {
+					data: {
+						type: "loadSkillRequest",
+						id: "skill-1",
+						skill: "capability-check",
+					},
+				}),
+			),
+		).not.toThrow();
+	});
+
 	test("invalid message appends system message", () => {
 		const bridge = new WorkerBridge();
 		bridge.start();

@@ -38,6 +38,26 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 			},
 		},
 	},
+	{
+		name: "load_skill",
+		description:
+			"Load a Browsergent skill body or resource file from OPFS. Use when a skill is listed in the catalog but not already in context, or when a skill references files under references/.",
+		input_schema: {
+			type: "object",
+			properties: {
+				skill: {
+					type: "string",
+					description: "Skill name, e.g. capability-check",
+				},
+				path: {
+					type: "string",
+					description:
+						"Optional relative path under the skill directory, e.g. references/checklist.md",
+				},
+			},
+			required: ["skill"],
+		},
+	},
 ];
 
 export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating JavaScript code via the run_js tool.
@@ -73,6 +93,15 @@ Cell isolation reminder: each run_js is an isolated async cell. Top-level let/co
 
 Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
 Do not use page.evaluate, chrome.scripting.executeScript, or tab.evaluate.`;
+
+export function composeSystemPrompt(skillCatalog: string): string {
+	const catalogBlock = skillCatalog.trim()
+		? `\n\n${skillCatalog.trim()}`
+		: "";
+	return `${SYSTEM_PROMPT}
+
+Use load_skill to load skill instructions listed above when relevant. Use load_skill with path when a skill references files under references/. Users may activate skills at compose time with /skill:name.${catalogBlock}`;
+}
 
 export interface AnthropicConfig {
 	apiKey: string;

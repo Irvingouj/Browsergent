@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { ExtjsController } from "../../src/controllers/extjs-controller";
 
+vi.mock("../../src/skills/skill-service", () => ({
+	getSkillService: vi.fn().mockReturnValue({
+		ensureReady: vi.fn().mockResolvedValue({ listSkills: vi.fn() }),
+		loadSkill: vi.fn().mockResolvedValue("skill body"),
+	}),
+}));
+
 // Mock ExtensionJsClient — factory must be self-contained (hoisted)
 vi.mock("../../src/sidepanel/extension-js-client", () => {
 	const mockInit = vi.fn().mockResolvedValue(undefined);

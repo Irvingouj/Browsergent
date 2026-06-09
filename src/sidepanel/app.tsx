@@ -23,6 +23,8 @@ import {
 	selectTraceEntries,
 } from "../state/selectors";
 import { browsergentStore } from "../state/store";
+import { getSkillService } from "../skills/skill-service";
+import { parseSkillActivation } from "../skills/resolve-skill-activations";
 import type { ChatMessage } from "../types/messages";
 import { ChatPanel } from "./components/ChatPanel";
 import { InputBar } from "./components/InputBar";
@@ -97,7 +99,7 @@ const App: FunctionalComponent = () => {
 		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages, trace]);
 
-	const handleRun = useCallback(() => {
+	const handleRun = useCallback(async () => {
 		const task = taskInput.trim();
 		if (!task) return;
 		if (!apiKey) {
@@ -106,6 +108,26 @@ const App: FunctionalComponent = () => {
 		}
 		const sessionId = sessionControllerRef.current?.getActiveSessionId();
 		if (!sessionId) return;
+
+		let resolvedTask = task;
+		let skillCatalog = "";
+		try {
+			const resolved = await getSkillService().resolveRunTask(task);
+			resolvedTask = resolved.resolvedTask;
+			skillCatalog = resolved.skillCatalog;
+		} catch (err: unknown) {
+			if (parseSkillActivation(task)) {
+				const message = err instanceof Error ? err.message : String(err);
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: `Skill activation failed: ${message}`,
+					timestamp: Date.now(),
+				});
+				return;
+			}
+			console.warn("Skill catalog failed:", err);
+		}
 
 		browsergentStore.getState().setTaskDraft("");
 
@@ -117,6 +139,8 @@ const App: FunctionalComponent = () => {
 			runId,
 			sessionId,
 			task,
+			resolvedTask,
+			skillCatalog,
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
 		});
 	}, [taskInput, apiKey, baseUrl, model, sessionControllerRef, bridgeRef]);
