@@ -82,6 +82,9 @@ const App: FunctionalComponent = () => {
 		sessionControllerRef,
 	} = useAppInit();
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
+	const inputRef = useRef<HTMLInputElement | null>(null);
+	const prevIsRunning = useRef<boolean>(false);
+	const shouldFocusRef = useRef<boolean>(false);
 	useTitleGeneration(sessionControllerRef, messages);
 
 	useEffect(() => {
@@ -223,6 +226,25 @@ const App: FunctionalComponent = () => {
 		status === "executing_tool";
 	const stepCount = trace.length;
 
+	useEffect(() => {
+		const stopped = prevIsRunning.current && !isRunning;
+		const canFocus = !isRunning && !showSettings && !sessionPanelOpen && activeTab === "chat";
+
+		if (stopped && canFocus) {
+			inputRef.current?.focus();
+		} else if (stopped) {
+			shouldFocusRef.current = true;
+		} else if (shouldFocusRef.current && canFocus) {
+			inputRef.current?.focus();
+			shouldFocusRef.current = false;
+		}
+
+		if (isRunning) {
+			shouldFocusRef.current = false;
+		}
+		prevIsRunning.current = isRunning;
+	}, [isRunning, showSettings, sessionPanelOpen, activeTab]);
+
 	return (
 		<div
 			data-initialized={initialized}
@@ -352,7 +374,7 @@ const App: FunctionalComponent = () => {
 
 			{/* Input */}
 			{activeTab === "chat" && (
-				<InputBar isRunning={isRunning} onRun={handleRun} onStop={handleStop} />
+				<InputBar isRunning={isRunning} onRun={handleRun} onStop={handleStop} inputRef={inputRef} />
 			)}
 
 			{sessionPanelOpen && sessionControllerRef.current && (

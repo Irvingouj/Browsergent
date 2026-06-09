@@ -4,7 +4,7 @@ interface Token {
 	type: string;
 }
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
 	return text
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
@@ -100,9 +100,9 @@ function collectTokens(
 }
 
 function resolveOverlaps(tokens: Token[]): Token[] {
-	tokens.sort((a, b) => a.start - b.start || b.end - a.end);
+	const sorted = [...tokens].sort((a, b) => a.start - b.start || b.end - a.end);
 	const resolved: Token[] = [];
-	for (const t of tokens) {
+	for (const t of sorted) {
 		const last = resolved[resolved.length - 1];
 		if (!last || t.start >= last.end) {
 			resolved.push(t);

@@ -1,4 +1,4 @@
-import type { FunctionalComponent } from "preact";
+import type { FunctionalComponent, Ref } from "preact";
 import { useStore } from "zustand/react";
 import { selectTaskDraft } from "../../state/selectors";
 import { browsergentStore } from "../../state/store";
@@ -7,19 +7,23 @@ interface InputBarProps {
 	isRunning: boolean;
 	onRun: () => void;
 	onStop: () => void;
+	inputRef?: Ref<HTMLInputElement>;
 }
 
 export const InputBar: FunctionalComponent<InputBarProps> = ({
 	isRunning,
 	onRun,
 	onStop,
+	inputRef,
 }) => {
 	const taskInput = useStore(browsergentStore, selectTaskDraft);
 
 	return (
 		<div class="relative z-10 px-md py-sm bg-bg-surface border-t border-border flex gap-sm items-end">
 			<input
+				ref={inputRef}
 				type="text"
+				data-testid="task-input"
 				value={taskInput}
 				onInput={(e) =>
 					browsergentStore

@@ -17,11 +17,14 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - Use \`console.log(...)\` or \`web.log(...)\` to return concise observations to the trace.
 - Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
 - Do not use \`page.evaluate\`, \`chrome.scripting.executeScript\`, or \`tab.evaluate\`; Browsergent forbids arbitrary JS execution outside the sandboxed runtime.
+- \`page.find()\` results may omit DOM attributes such as \`src\`, \`href\`, and \`alt\`, and may have a null \`refId\`. Inspect the returned shape before relying on those fields.
+- \`page.fetch()\` returns a text body, not binary bytes or base64. Do not use it to save images or other binary files unless a documented binary-safe API provides the bytes.
 
 ## Execution model
 - Each \`run_js\` call is an isolated async cell. Top-level \`let\`, \`const\`, and \`var\` do NOT persist across calls.
 - Prefer one block with multiple \`await\`s when the sequence is clear.
 - Cross-call state must use \`globalThis._bg\` (e.g., \`globalThis._bg.counter = 1\`).
+- Initialize cross-call state before writing it: \`globalThis._bg ??= {};\`.
 - Re-fetch or re-initialize any local bindings you need in each cell.
 - The last expression may appear in the tool result; use \`console.log\` for observations.
 
