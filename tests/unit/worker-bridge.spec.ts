@@ -6,6 +6,16 @@ import {
 import { browsergentStore } from "../../src/state/store";
 import { finalizeAllStreamingSignals } from "../../src/state/streaming-signals";
 
+const notifySkillsChanged = vi.fn();
+
+vi.mock("../../src/skills/skill-service", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../src/skills/skill-service")>();
+	return {
+		...actual,
+		notifySkillsChanged: () => notifySkillsChanged(),
+	};
+});
+
 describe("isStaleRunId", () => {
 	test("returns false for unknown runId", () => {
 		expect(isStaleRunId("unknown", "run-1")).toBe(false);
@@ -31,10 +41,12 @@ describe("WorkerBridge", () => {
 	let workerConstructor: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
+		notifySkillsChanged.mockClear();
 		browsergentStore.getState().agentReset();
 		browsergentStore.getState().clearChat();
 		browsergentStore.getState().clearTrace();
 		browsergentStore.getState().clearDiagnostics();
+		browsergentStore.getState().skillsDiagnosticsChanged([]);
 		finalizeAllStreamingSignals();
 
 		postMessageSpy = vi.fn();
@@ -147,6 +159,19 @@ describe("WorkerBridge", () => {
 			}),
 		);
 		expect(browsergentStore.getState().agent.status).toBe("done");
+	});
+
+	test("agentStatus refreshes skills on terminal states", () => {
+		browsergentStore.getState().agentRunRequested("run-1");
+		const bridge = new WorkerBridge();
+		bridge.start();
+		const worker = getWorkerInstance();
+		worker.onmessage?.(
+			new MessageEvent("message", {
+				data: { type: "agentStatus", runId: "run-1", status: "done" },
+			}),
+		);
+		expect(notifySkillsChanged).toHaveBeenCalledTimes(1);
 	});
 
 	test("agentMessage appends user message", () => {

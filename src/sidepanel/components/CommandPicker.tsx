@@ -1,5 +1,6 @@
 import type { FunctionalComponent } from "preact";
 import { useEffect, useRef } from "preact/hooks";
+import { rankFzfItems } from "../fzf-match";
 
 export interface CommandPickerItem {
 	id: string;
@@ -14,20 +15,14 @@ interface CommandPickerProps {
 	onSelect: (item: CommandPickerItem) => void;
 	onActiveIndexChange: (index: number) => void;
 	onDismiss: () => void;
-}
-
-function fuzzyMatch(query: string, label: string, description: string): boolean {
-	const q = query.trim().toLowerCase();
-	if (!q) return true;
-	const haystack = `${label} ${description}`.toLowerCase();
-	return haystack.includes(q);
+	emptyMessage?: string;
 }
 
 export function filterPickerItems(
 	items: ReadonlyArray<CommandPickerItem>,
 	query: string,
 ): CommandPickerItem[] {
-	return items.filter((item) => fuzzyMatch(query, item.label, item.description));
+	return rankFzfItems(items, query);
 }
 
 export const CommandPicker: FunctionalComponent<CommandPickerProps> = ({
@@ -36,6 +31,7 @@ export const CommandPicker: FunctionalComponent<CommandPickerProps> = ({
 	onSelect,
 	onActiveIndexChange,
 	onDismiss,
+	emptyMessage,
 }) => {
 	const listRef = useRef<HTMLDivElement>(null);
 
@@ -57,12 +53,22 @@ export const CommandPicker: FunctionalComponent<CommandPickerProps> = ({
 		return () => window.removeEventListener("keydown", onKey);
 	}, [onDismiss]);
 
-	if (items.length === 0) return null;
+	if (items.length === 0) {
+		if (!emptyMessage) return null;
+		return (
+			<div
+				class="command-picker absolute left-0 right-0 bottom-full mb-1 rounded-md border border-border bg-bg-surface-solid shadow-lg z-20 px-md py-sm text-xs text-text-dim"
+				data-testid="command-picker-empty"
+			>
+				{emptyMessage}
+			</div>
+		);
+	}
 
 	return (
 		<div
 			ref={listRef}
-			class="command-picker absolute left-0 right-0 bottom-full mb-1 max-h-48 overflow-y-auto rounded-md border border-border bg-bg-surface shadow-lg z-20"
+			class="command-picker absolute left-0 right-0 bottom-full mb-1 max-h-48 overflow-y-auto rounded-md border border-border bg-bg-surface-solid shadow-lg z-20"
 			data-testid="command-picker"
 		>
 			{items.map((item, index) => (

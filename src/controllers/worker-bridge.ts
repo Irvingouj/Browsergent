@@ -5,6 +5,7 @@ import {
 	isLoadSkillRequest,
 	isWorkerToPanel,
 } from "../protocol/worker-guards";
+import { notifySkillsChanged } from "../skills/skill-service";
 import { browsergentStore } from "../state/store";
 import {
 	appendStreamingDelta,
@@ -141,6 +142,7 @@ export class WorkerBridge {
 					raw.status === "done"
 				) {
 					this.finalizeActiveSignals();
+					notifySkillsChanged();
 				}
 				if (raw.status === "stopped") {
 					this.onAgentStopped?.();

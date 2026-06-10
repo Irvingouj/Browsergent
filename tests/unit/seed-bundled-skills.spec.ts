@@ -212,7 +212,7 @@ describe("seedBundledSkills", () => {
 		]);
 	});
 
-	test("digest mismatch throws and does not write files", async () => {
+	test("digest mismatch throws and does not write or delete files", async () => {
 		const skillContent = "bundled skill content";
 		stubChromeAndFetch({
 			"skills/seed-manifest.json": JSON.stringify({
@@ -227,12 +227,41 @@ describe("seedBundledSkills", () => {
 			"skills/bundled/demo/SKILL.md": skillContent,
 		});
 
-		const { fs, writes } = makeTrackingFs();
+		const { fs, writes, deletes } = makeTrackingFs({
+			"/skills/bundled/retired/SKILL.md": "old skill",
+		});
 
 		await expect(seedBundledSkills(fs)).rejects.toThrow(
 			"Bundled skill digest mismatch",
 		);
 		expect(writes).toEqual([]);
+		expect(deletes).toEqual([]);
+	});
+
+	test("fetch failure throws and does not mutate OPFS", async () => {
+		stubChromeAndFetch({
+			"skills/seed-manifest.json": JSON.stringify({
+				version: "2.0.0",
+				files: [
+					{
+						path: "/skills/bundled/demo/SKILL.md",
+						sha256: sha256("content"),
+					},
+				],
+			}),
+		});
+
+		const { fs, writes, deletes, files } = makeTrackingFs({
+			[SKILLS_SEED_VERSION_PATH]: "1.0.0",
+			"/skills/bundled/retired/SKILL.md": "old skill",
+		});
+
+		await expect(seedBundledSkills(fs)).rejects.toThrow(
+			"Failed to fetch bundled skill asset",
+		);
+		expect(writes).toEqual([]);
+		expect(deletes).toEqual([]);
+		expect(files["/skills/bundled/retired/SKILL.md"]).toBe("old skill");
 	});
 
 	test("removes retired bundled files on reseed", async () => {

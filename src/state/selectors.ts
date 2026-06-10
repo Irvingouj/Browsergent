@@ -23,3 +23,5 @@ export const selectSessions = (s: BrowsergentStore) => s.session.sessions;
 export const selectActiveSessionId = (s: BrowsergentStore) =>
 	s.session.activeSessionId;
 export const selectExtjsStatus = (s: BrowsergentStore) => s.extjs.status;
+export const selectSkillDiagnostics = (s: BrowsergentStore) =>
+	s.skills.diagnostics;

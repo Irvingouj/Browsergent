@@ -133,17 +133,14 @@ export class ExtensionJsClient implements SkillFsClient {
 
 	async getApiDocs(format: "json" | "markdown"): Promise<string> {
 		await this.ensureReady();
-
-		return this.enqueue(async () => {
-			return this.executeDocsWithTimeout(format);
-		}, "Docs request failed");
+		return this.executeDocsWithTimeout(format);
 	}
 
 	async fsExists(path: string): Promise<boolean> {
 		await this.ensureReady();
 		return this.enqueue(async () => {
 			if (!this.session) throw new Error("ExtensionSession not available");
-			const result = await this.session.fsExists({ path });
+			const result = await this.session.fs.exists({ path });
 			return result.exists;
 		}, "fsExists failed");
 	}
@@ -152,7 +149,7 @@ export class ExtensionJsClient implements SkillFsClient {
 		await this.ensureReady();
 		return this.enqueue(async () => {
 			if (!this.session) throw new Error("ExtensionSession not available");
-			const result = await this.session.fsList({ path });
+			const result = await this.session.fs.list({ path });
 			return result.entries.map((e) => ({ name: e.name, kind: e.kind }));
 		}, "fsList failed");
 	}
@@ -161,7 +158,7 @@ export class ExtensionJsClient implements SkillFsClient {
 		await this.ensureReady();
 		return this.enqueue(async () => {
 			if (!this.session) throw new Error("ExtensionSession not available");
-			const result = await this.session.fsReadText({ path });
+			const result = await this.session.fs.readText({ path });
 			return result.data;
 		}, "fsReadText failed");
 	}
@@ -170,7 +167,7 @@ export class ExtensionJsClient implements SkillFsClient {
 		await this.ensureReady();
 		await this.enqueue(async () => {
 			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fsWriteText({ path, data });
+			await this.session.fs.writeText({ path, data });
 		}, "fsWriteText failed");
 	}
 
@@ -178,7 +175,7 @@ export class ExtensionJsClient implements SkillFsClient {
 		await this.ensureReady();
 		await this.enqueue(async () => {
 			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fsMkdir({ path });
+			await this.session.fs.mkdir({ path });
 		}, "fsMkdir failed");
 	}
 
@@ -186,7 +183,7 @@ export class ExtensionJsClient implements SkillFsClient {
 		await this.ensureReady();
 		await this.enqueue(async () => {
 			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fsDelete({ path });
+			await this.session.fs.delete({ path });
 		}, "fsDelete failed");
 	}
 
@@ -222,11 +219,19 @@ export class ExtensionJsClient implements SkillFsClient {
 				this.dispatchRelayResponse({ type: "extjsRunResult", id, result });
 			})
 			.catch((err: Error) => {
-				this.dispatchRelayResponse({
-					type: "extjsRunError",
-					id,
-					error: err.message,
-				});
+				if (ExtensionJsClient.relayCallback) {
+					this.dispatchRelayResponse({
+						type: "extjsRunError",
+						id,
+						error: err.message,
+					});
+				} else {
+					console.error(
+						"[extension-js] relay error with no callback:",
+						err.message,
+						{ id },
+					);
+				}
 			});
 	}
 
@@ -243,20 +248,33 @@ export class ExtensionJsClient implements SkillFsClient {
 				this.dispatchRelayResponse({ type: "extjsDocsResult", id, docs });
 			})
 			.catch((err: Error) => {
-				this.dispatchRelayResponse({
-					type: "extjsDocsError",
-					id,
-					error: err.message,
-				});
+				if (ExtensionJsClient.relayCallback) {
+					this.dispatchRelayResponse({
+						type: "extjsDocsError",
+						id,
+						error: err.message,
+					});
+				} else {
+					console.error(
+						"[extension-js] docs relay error with no callback:",
+						err.message,
+						{ id },
+					);
+				}
 			});
 	}
 
 	/** Dispatch a relay response to the worker via postMessage. */
 	private dispatchRelayResponse(msg: ExtjsRelayResponse): void {
 		const handler = ExtensionJsClient.relayCallback;
-		if (handler) {
-			handler(msg);
+		if (!handler) {
+			console.error(
+				"[extension-js] relay response dropped: callback not installed",
+				{ type: msg.type, id: msg.id },
+			);
+			return;
 		}
+		handler(msg);
 	}
 
 	static relayCallback: ((msg: ExtjsRelayResponse) => void) | null = null;
@@ -321,8 +339,12 @@ export class ExtensionJsClient implements SkillFsClient {
 
 			return result;
 		} catch (err) {
-			// On timeout or crash, tear down and rebuild the session
-			await this.rebuildSession();
+			const isTimeout =
+				err instanceof Error &&
+				err.message.includes(`JS execution timed out after ${EXTJS_TIMEOUT_MS}ms`);
+			if (!isTimeout) {
+				await this.rebuildSession();
+			}
 			throw err;
 		}
 	}

@@ -31,12 +31,16 @@ describe("filterPickerItems", () => {
 		expect(filterPickerItems(items, "   ")).toHaveLength(3);
 	});
 
-	test("filters by label substring", () => {
-		expect(filterPickerItems(items, "fill")).toEqual([items[1]]);
+	test("filters by fzf subsequence in label", () => {
+		expect(filterPickerItems(items, "cap")).toEqual([items[0]]);
 	});
 
-	test("filters by description substring", () => {
+	test("filters by fzf subsequence in description", () => {
 		expect(filterPickerItems(items, "probe")).toEqual([items[0]]);
+	});
+
+	test("matches non-contiguous subsequence", () => {
+		expect(filterPickerItems(items, "fas")[0]?.id).toBe("fill-and-submit");
 	});
 
 	test("returns empty array when nothing matches", () => {

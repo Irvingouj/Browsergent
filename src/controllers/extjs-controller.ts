@@ -19,14 +19,22 @@ export class ExtjsController {
 
 		try {
 			await this.client.init();
-			await getSkillService().ensureReady();
-			browsergentStore.getState().extjsReady();
 			ExtensionJsClient.relayCallback = (msg: ExtjsRelayResponse) => {
 				this.bridge.post(msg);
 			};
+			browsergentStore.getState().extjsReady();
 		} catch (err: unknown) {
 			browsergentStore.getState().extjsFailed(normalizeJsError(err));
 			throw err;
+		}
+
+		try {
+			await getSkillService().ensureReady();
+		} catch (err: unknown) {
+			console.warn(
+				"Skill initialization failed:",
+				err instanceof Error ? err.message : String(err),
+			);
 		}
 	}
 

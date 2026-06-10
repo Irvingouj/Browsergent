@@ -113,13 +113,14 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	return (
 		<div class="relative z-10 px-md py-sm bg-bg-surface border-t border-border flex gap-sm items-end">
 			<div class="relative flex-1">
-				{slashState && filteredItems.length > 0 ? (
+				{slashState ? (
 					<CommandPicker
 						items={filteredItems}
 						activeIndex={activeIndex}
 						onSelect={applyPickerSelection}
 						onActiveIndexChange={setActiveIndex}
 						onDismiss={() => setSlashState(null)}
+						emptyMessage="No matching skills"
 					/>
 				) : null}
 				<input

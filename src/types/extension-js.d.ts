@@ -1,6 +1,6 @@
 /**
  * Type declarations for @pi-oxide/extension-js.
- * Bridges gaps until upstream index.d.ts exports all runtime symbols.
+ * Documents the high-level ExtensionSession API from index.js (0.7.x).
  */
 
 declare module "@pi-oxide/extension-js" {
@@ -68,20 +68,29 @@ declare module "@pi-oxide/extension-js" {
 		entries: FsListEntry[];
 	}
 
+	export interface FsWriteResult {
+		path: string;
+		bytes_written: number;
+	}
+
+	export interface ExtensionSessionFs {
+		exists(params: FsPathParams): Promise<FsExistsResult>;
+		list(params: FsPathParams): Promise<FsListResult>;
+		readText(params: FsPathParams): Promise<FsStringResult>;
+		writeText(params: FsWriteParams): Promise<FsWriteResult>;
+		mkdir(params: FsPathParams): Promise<FsBoolResult>;
+		delete(params: FsPathParams): Promise<FsBoolResult>;
+	}
+
 	export class ExtensionSession {
 		static init(): Promise<[ExtensionSession, Promise<void>]>;
+		readonly fs: ExtensionSessionFs;
 		apiDocs(format: string): Promise<unknown>;
 		runCellAsync(code: string, stdin?: string): Promise<CellResult>;
 		setFuelLimit(limit: number): void;
 		stopWith(runnerPromise?: Promise<void>): Promise<void>;
-		reset(): void;
+		reset(): Promise<unknown>;
 		free(): void;
-		fsExists(params: FsPathParams): Promise<FsExistsResult>;
-		fsList(params: FsPathParams): Promise<FsListResult>;
-		fsReadText(params: FsPathParams): Promise<FsStringResult>;
-		fsWriteText(params: FsWriteParams): Promise<FsBoolResult>;
-		fsMkdir(params: FsPathParams): Promise<FsBoolResult>;
-		fsDelete(params: FsPathParams): Promise<FsBoolResult>;
 	}
 
 	export function setLogLevel(level: string): void;

@@ -13,6 +13,7 @@ import type {
 	SkillMeta,
 } from "./skill-types";
 import { ExtensionJsClient } from "../sidepanel/extension-js-client";
+import { browsergentStore } from "../state/store";
 
 type SkillsChangedCallback = (skills: SkillMeta[]) => void;
 
@@ -49,17 +50,7 @@ export class SkillService {
 		if (!this.registry) return;
 		const result = await this.registry.listSkills();
 		this.diagnostics = result.diagnostics;
-		for (const diagnostic of this.diagnostics) {
-			if (diagnostic.kind === "validation") {
-				console.debug(
-					`[skills] validation ${diagnostic.path}: ${diagnostic.message}`,
-				);
-			} else {
-				console.debug(
-					`[skills] collision "${diagnostic.name}": ${diagnostic.loserPath} replaced by ${diagnostic.winnerPath}`,
-				);
-			}
-		}
+		browsergentStore.getState().skillsDiagnosticsChanged(this.diagnostics);
 	}
 
 	getDiagnostics(): ReadonlyArray<SkillDiagnostic> {

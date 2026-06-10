@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
 	escapeXmlAttr,
+	escapeXmlText,
 	validateSkillDescription,
 	validateSkillName,
 } from "../../src/skills/validate-skill-meta";
@@ -39,6 +40,14 @@ describe("validateSkillDescription", () => {
 	test("requires description", () => {
 		expect(validateSkillDescription(undefined)).toContain(
 			"description is required",
+		);
+	});
+});
+
+describe("escapeXmlText", () => {
+	test("escapes XML-significant characters", () => {
+		expect(escapeXmlText(`say "hi" <tag> & 'there'`)).toBe(
+			"say &quot;hi&quot; &lt;tag&gt; &amp; &apos;there&apos;",
 		);
 	});
 });

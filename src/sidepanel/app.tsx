@@ -19,9 +19,11 @@ import {
 	selectSessionPanelOpen,
 	selectSessions,
 	selectSettingsOpen,
+	selectSkillDiagnostics,
 	selectTaskDraft,
 	selectTraceEntries,
 } from "../state/selectors";
+import type { SkillDiagnostic } from "../skills/skill-types";
 import { browsergentStore } from "../state/store";
 import { getSkillService } from "../skills/skill-service";
 import { parseSkillActivation } from "../skills/resolve-skill-activations";
@@ -32,6 +34,13 @@ import { JsPlaybookPanel } from "./components/JsPlaybookPanel";
 import { SettingsForm } from "./components/SettingsForm";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
+
+function formatSkillDiagnostic(diagnostic: SkillDiagnostic): string {
+	if (diagnostic.kind === "validation") {
+		return `${diagnostic.path}: ${diagnostic.message}`;
+	}
+	return `collision "${diagnostic.name}": ${diagnostic.loserPath} replaced by ${diagnostic.winnerPath}`;
+}
 
 function currentSessionSnapshot(): {
 	messages: ChatMessage[];
@@ -74,6 +83,8 @@ const App: FunctionalComponent = () => {
 	const _sessions = useStore(browsergentStore, selectSessions);
 	const _activeSessionId = useStore(browsergentStore, selectActiveSessionId);
 	const activeTab = useStore(browsergentStore, selectActiveTab);
+	const skillDiagnostics = useStore(browsergentStore, selectSkillDiagnostics);
+	const skillIssueTitle = skillDiagnostics.map(formatSkillDiagnostic).join("\n");
 
 	const {
 		initialized,
@@ -396,6 +407,16 @@ const App: FunctionalComponent = () => {
 					{status}
 					{statusReason ? ` — ${statusReason}` : ""}
 				</span>
+				{skillDiagnostics.length > 0 ? (
+					<span
+						class="flex-shrink-0 text-warning normal-case tracking-normal"
+						data-testid="skill-diagnostics"
+						title={skillIssueTitle}
+					>
+						{skillDiagnostics.length} skill issue
+						{skillDiagnostics.length === 1 ? "" : "s"}
+					</span>
+				) : null}
 				<span class="flex-shrink-0 text-text-muted">{stepCount} steps</span>
 			</div>
 

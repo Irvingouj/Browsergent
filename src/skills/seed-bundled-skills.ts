@@ -104,6 +104,35 @@ async function removeOrphanedBundledFiles(
 	await removeEmptyDirs(fs, SKILLS_BUNDLED_ROOT);
 }
 
+function normalizeBundledPath(rawPath: string): string | null {
+	const opfsPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+	if (!opfsPath.startsWith("/skills/bundled/")) {
+		return null;
+	}
+	return opfsPath;
+}
+
+async function validateBundledAssets(
+	manifest: SeedManifest,
+): Promise<Map<string, string>> {
+	const validated = new Map<string, string>();
+
+	for (const file of manifest.files) {
+		const opfsPath = normalizeBundledPath(file.path);
+		if (!opfsPath) continue;
+
+		const relative = opfsPath.slice("/skills/bundled/".length);
+		const content = await fetchBundledAsset(relative);
+		const digest = await sha256Hex(content);
+		if (digest !== file.sha256) {
+			throw new Error(`Bundled skill digest mismatch: ${opfsPath}`);
+		}
+		validated.set(opfsPath, content);
+	}
+
+	return validated;
+}
+
 export async function seedBundledSkills(fs: SkillFsClient): Promise<void> {
 	const manifest = await fetchSeedManifest();
 	const currentVersion = await readSeedVersion(fs);
@@ -111,28 +140,12 @@ export async function seedBundledSkills(fs: SkillFsClient): Promise<void> {
 		return;
 	}
 
-	const manifestPaths = new Set<string>();
-	for (const file of manifest.files) {
-		const opfsPath = file.path.startsWith("/") ? file.path : `/${file.path}`;
-		if (!opfsPath.startsWith("/skills/bundled/")) {
-			continue;
-		}
-		manifestPaths.add(opfsPath);
-	}
+	const validated = await validateBundledAssets(manifest);
+	const manifestPaths = new Set(validated.keys());
 
 	await removeOrphanedBundledFiles(fs, manifestPaths);
 
-	for (const file of manifest.files) {
-		const opfsPath = file.path.startsWith("/") ? file.path : `/${file.path}`;
-		if (!opfsPath.startsWith("/skills/bundled/")) {
-			continue;
-		}
-		const relative = opfsPath.slice("/skills/bundled/".length);
-		const content = await fetchBundledAsset(relative);
-		const digest = await sha256Hex(content);
-		if (digest !== file.sha256) {
-			throw new Error(`Bundled skill digest mismatch: ${opfsPath}`);
-		}
+	for (const [opfsPath, content] of validated) {
 		await ensureParentDirs(fs, opfsPath);
 		await fs.fsWriteText(opfsPath, content);
 	}

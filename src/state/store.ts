@@ -11,6 +11,7 @@ import {
 	createSettingsSlice,
 	type SettingsSlice,
 } from "./slices/settings-slice";
+import { createSkillsSlice, type SkillsSlice } from "./slices/skills-slice";
 import { createTraceSlice, type TraceSlice } from "./slices/trace-slice";
 import { createUiSlice, type UiSlice } from "./slices/ui-slice";
 
@@ -22,7 +23,8 @@ export interface BrowsergentStore
 		DiagnosticsSlice,
 		ExtjsSlice,
 		UiSlice,
-		SessionSlice {}
+		SessionSlice,
+		SkillsSlice {}
 
 export const browsergentStore = createStore<BrowsergentStore>((set) => ({
 	...createSettingsSlice(set),
@@ -33,4 +35,5 @@ export const browsergentStore = createStore<BrowsergentStore>((set) => ({
 	...createExtjsSlice(set),
 	...createUiSlice(set),
 	...createSessionSlice(set),
+	...createSkillsSlice(set),
 }));

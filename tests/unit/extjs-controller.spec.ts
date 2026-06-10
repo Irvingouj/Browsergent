@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { ExtjsController } from "../../src/controllers/extjs-controller";
 
-vi.mock("../../src/skills/skill-service", () => ({
-	getSkillService: vi.fn().mockReturnValue({
-		ensureReady: vi.fn().mockResolvedValue({ listSkills: vi.fn() }),
-		loadSkill: vi.fn().mockResolvedValue("skill body"),
-	}),
-}));
+vi.mock("../../src/skills/skill-service", () => {
+	const mockEnsureReady = vi.fn().mockResolvedValue({ listSkills: vi.fn() });
+	return {
+		getSkillService: vi.fn().mockReturnValue({
+			ensureReady: mockEnsureReady,
+			loadSkill: vi.fn().mockResolvedValue("skill body"),
+		}),
+		__mockEnsureReady: mockEnsureReady,
+	};
+});
 
 // Mock ExtensionJsClient — factory must be self-contained (hoisted)
 vi.mock("../../src/sidepanel/extension-js-client", () => {
@@ -46,6 +50,7 @@ vi.mock("../../src/state/store", () => {
 async function getMocks() {
 	const extjsMod = await import("../../src/sidepanel/extension-js-client");
 	const storeMod = await import("../../src/state/store");
+	const skillMod = await import("../../src/skills/skill-service");
 	return {
 		mockInstance: (extjsMod as unknown as Record<string, unknown>)
 			.__mockInstance as {
@@ -55,6 +60,8 @@ async function getMocks() {
 		},
 		mockStoreState: (storeMod as unknown as Record<string, unknown>)
 			.__mockStoreState as Record<string, ReturnType<typeof vi.fn>>,
+		mockEnsureReady: (skillMod as unknown as Record<string, unknown>)
+			.__mockEnsureReady as ReturnType<typeof vi.fn>,
 	};
 }
 
@@ -72,14 +79,19 @@ function makeBridge() {
 
 describe("ExtjsController", () => {
 	beforeEach(async () => {
-		const { mockInstance, mockStoreState } = await getMocks();
+		const { mockInstance, mockStoreState, mockEnsureReady } = await getMocks();
 		mockInstance.init.mockClear().mockResolvedValue(undefined);
 		mockInstance.dispose.mockClear().mockResolvedValue(undefined);
 		mockInstance.handleRelayRequest.mockClear();
+		mockEnsureReady.mockClear().mockResolvedValue({ listSkills: vi.fn() });
 		mockStoreState.extjsInitializing.mockClear();
 		mockStoreState.extjsReady.mockClear();
 		mockStoreState.extjsFailed.mockClear();
 		mockStoreState.extjsDisposed.mockClear();
+		const extjsMod = await getExtjsClientModule();
+		(
+			extjsMod.ExtensionJsClient as unknown as { relayCallback: unknown }
+		).relayCallback = null;
 	});
 
 	test("init sets store to initializing then ready", async () => {
@@ -117,6 +129,36 @@ describe("ExtjsController", () => {
 		expect(mockStoreState.extjsFailed.mock.calls[0][0].code).toBe(
 			"E_JS_RUNTIME",
 		);
+		const extjsMod = await getExtjsClientModule();
+		expect(
+			(extjsMod.ExtensionJsClient as unknown as { relayCallback: unknown })
+				.relayCallback,
+		).toBeNull();
+	});
+
+	test("skill init failure still marks extjs ready and installs relay callback", async () => {
+		const { mockEnsureReady, mockStoreState } = await getMocks();
+		mockEnsureReady.mockRejectedValue(new Error("skill fs failed"));
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const bridge = makeBridge();
+		const ctrl = new ExtjsController(bridge as any);
+
+		await expect(ctrl.init()).resolves.toBeUndefined();
+
+		expect(mockStoreState.extjsReady).toHaveBeenCalled();
+		expect(mockStoreState.extjsFailed).not.toHaveBeenCalled();
+
+		const extjsMod = await getExtjsClientModule();
+		const callback = (
+			extjsMod.ExtensionJsClient as unknown as {
+				relayCallback: ((msg: unknown) => void) | null;
+			}
+		).relayCallback;
+		expect(callback).not.toBeNull();
+		callback?.({ type: "extjsDocsResult", id: "docs-1", docs: "{}" });
+		expect(bridge.posted).toHaveLength(1);
+
+		warnSpy.mockRestore();
 	});
 
 	test("handleRelayRequest delegates to client", async () => {

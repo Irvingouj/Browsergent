@@ -19,10 +19,25 @@ const hidden: SkillMeta = {
 };
 
 describe("format-skill-catalog", () => {
-	test("includes visible skills only", () => {
+	test("includes visible skills only in XML catalog", () => {
 		const catalog = formatSkillCatalog([bundled, hidden]);
-		expect(catalog).toContain("capability-check");
+		expect(catalog).toContain("<available_skills>");
+		expect(catalog).toContain("<name>capability-check</name>");
 		expect(catalog).not.toContain("hidden-skill");
+		expect(catalog).toContain("</available_skills>");
+	});
+
+	test("escapes multiline and XML-significant descriptions", () => {
+		const catalog = formatSkillCatalog([
+			{
+				...bundled,
+				description: "Line one\n- fake entry\nUse <script>",
+			},
+		]);
+		expect(catalog).toContain(
+			"<description>Line one\n- fake entry\nUse &lt;script&gt;</description>",
+		);
+		expect(catalog.match(/<skill>/g)?.length).toBe(1);
 	});
 
 	test("respects char budget", () => {

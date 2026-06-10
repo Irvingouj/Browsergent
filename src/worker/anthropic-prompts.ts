@@ -100,7 +100,7 @@ export function composeSystemPrompt(skillCatalog: string): string {
 		: "";
 	return `${SYSTEM_PROMPT}
 
-Use load_skill to load skill instructions listed above when relevant. Use load_skill with path when a skill references files under references/. Users may activate skills at compose time with /skill:name.${catalogBlock}`;
+Use load_skill to load skill instructions from the available_skills catalog when relevant. Use load_skill with path when a skill references files under references/. Users may activate skills at compose time with /skill:name.${catalogBlock}`;
 }
 
 export interface AnthropicConfig {

@@ -15,11 +15,20 @@ vi.mock("@pi-oxide/extension-js", () => {
 	const mockApiDocs = vi
 		.fn()
 		.mockResolvedValue('[{"namespace":"page","name":"snapshot"}]');
+	const mockFs = {
+		exists: vi.fn().mockResolvedValue({ exists: true }),
+		list: vi.fn().mockResolvedValue({ entries: [] }),
+		readText: vi.fn().mockResolvedValue({ data: "" }),
+		writeText: vi.fn().mockResolvedValue({ path: "/", bytes_written: 0 }),
+		mkdir: vi.fn().mockResolvedValue({ ok: true }),
+		delete: vi.fn().mockResolvedValue({ ok: true }),
+	};
 	const mockSession = {
 		stopWith: mockStopWith,
 		runCellAsync: mockRunCellAsync,
 		setFuelLimit: mockSetFuelLimit,
 		apiDocs: mockApiDocs,
+		fs: mockFs,
 	};
 	const mockRunnerPromise = Promise.resolve();
 	return {
@@ -105,7 +114,7 @@ describe("ExtensionJsClient", () => {
 		expect(mockRunCellAsync).toHaveBeenNthCalledWith(2, "2+2");
 	});
 
-	test("runJs times out and triggers rebuild", async () => {
+	test("runJs times out but does NOT trigger rebuild", async () => {
 		await client.init();
 		const { mockRunCellAsync, mockStoreState } = await getMocks();
 		// First call = never resolves (to trigger timeout); subsequent calls = fast
@@ -119,7 +128,7 @@ describe("ExtensionJsClient", () => {
 		await vi.advanceTimersByTimeAsync(31000);
 
 		await expect(run).rejects.toThrow("timed out");
-		expect(mockStoreState.extjsRestarting).toHaveBeenCalledWith("rebuild");
+		expect(mockStoreState.extjsRestarting).not.toHaveBeenCalled();
 	});
 
 	test("runJs resolves with result on success", async () => {
@@ -171,6 +180,28 @@ describe("ExtensionJsClient", () => {
 			id: "req-1",
 			result: { status: "ok", value: 42 },
 		});
+	});
+
+	test("handleRelayRequest logs error when relay callback is not installed", async () => {
+		await client.init();
+		const { mockRunCellAsync } = await getMocks();
+		mockRunCellAsync.mockResolvedValue({ status: "ok", value: 42 });
+		ExtensionJsClient.relayCallback = null;
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		client.handleRelayRequest({
+			type: "extjsRunRequest",
+			id: "req-no-callback",
+			code: "1+1",
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(errorSpy).toHaveBeenCalledWith(
+			"[extension-js] relay response dropped: callback not installed",
+			{ type: "extjsRunResult", id: "req-no-callback" },
+		);
+
+		errorSpy.mockRestore();
 	});
 
 	test("handleRelayRequest dispatches error on failure", async () => {
