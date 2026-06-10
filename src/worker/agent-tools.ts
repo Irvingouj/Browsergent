@@ -281,6 +281,13 @@ export function createAgentTools(
 					return truncateToolResult(content, 50000);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
+					if (msg.includes("disable-model-invocation")) {
+						return formatToolError(
+							"E_SKILL_INVOCATION_FORBIDDEN",
+							msg,
+							"Ask the user to activate this skill with /skill:name at compose time.",
+						);
+					}
 					return formatToolError(
 						"E_SKILL_NOT_FOUND",
 						msg,

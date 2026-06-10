@@ -19,6 +19,7 @@ vi.mock("zustand/react", () => ({
 
 vi.mock("../../src/skills/skill-service", () => ({
 	getSkillService: () => ({
+		subscribeSkillsChanged: vi.fn().mockReturnValue(() => {}),
 		listSkills: vi.fn().mockResolvedValue([
 			{
 				name: "capability-check",

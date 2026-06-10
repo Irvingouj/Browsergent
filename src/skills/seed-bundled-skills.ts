@@ -1,5 +1,6 @@
+import { sha256Hex } from "./sha256-hex";
+import { SKILLS_BUNDLED_ROOT, SKILLS_SEED_VERSION_PATH } from "./skill-paths";
 import type { SkillFsClient, SeedManifest } from "./skill-types";
-import { SKILLS_SEED_VERSION_PATH } from "./skill-paths";
 
 async function fetchBundledAsset(relativePath: string): Promise<string> {
 	const url = chrome.runtime.getURL(`skills/bundled/${relativePath}`);
@@ -50,12 +51,76 @@ async function ensureParentDirs(fs: SkillFsClient, filePath: string): Promise<vo
 	}
 }
 
+async function listAllFiles(
+	fs: SkillFsClient,
+	root: string,
+): Promise<string[]> {
+	const files: string[] = [];
+	const rootExists = await fs.fsExists(root);
+	if (!rootExists) return files;
+
+	async function walk(dir: string): Promise<void> {
+		const entries = await fs.fsList(dir);
+		for (const entry of entries) {
+			const child = `${dir}/${entry.name}`;
+			if (entry.kind === "directory") {
+				await walk(child);
+			} else {
+				files.push(child);
+			}
+		}
+	}
+
+	await walk(root);
+	return files;
+}
+
+async function removeEmptyDirs(fs: SkillFsClient, root: string): Promise<void> {
+	const rootExists = await fs.fsExists(root);
+	if (!rootExists) return;
+
+	const entries = await fs.fsList(root);
+	for (const entry of entries) {
+		if (entry.kind !== "directory") continue;
+		const child = `${root}/${entry.name}`;
+		await removeEmptyDirs(fs, child);
+		const after = await fs.fsList(child);
+		if (after.length === 0) {
+			await fs.fsDelete(child);
+		}
+	}
+}
+
+async function removeOrphanedBundledFiles(
+	fs: SkillFsClient,
+	manifestPaths: ReadonlySet<string>,
+): Promise<void> {
+	const existing = await listAllFiles(fs, SKILLS_BUNDLED_ROOT);
+	for (const path of existing) {
+		if (!manifestPaths.has(path)) {
+			await fs.fsDelete(path);
+		}
+	}
+	await removeEmptyDirs(fs, SKILLS_BUNDLED_ROOT);
+}
+
 export async function seedBundledSkills(fs: SkillFsClient): Promise<void> {
 	const manifest = await fetchSeedManifest();
 	const currentVersion = await readSeedVersion(fs);
 	if (currentVersion === manifest.version) {
 		return;
 	}
+
+	const manifestPaths = new Set<string>();
+	for (const file of manifest.files) {
+		const opfsPath = file.path.startsWith("/") ? file.path : `/${file.path}`;
+		if (!opfsPath.startsWith("/skills/bundled/")) {
+			continue;
+		}
+		manifestPaths.add(opfsPath);
+	}
+
+	await removeOrphanedBundledFiles(fs, manifestPaths);
 
 	for (const file of manifest.files) {
 		const opfsPath = file.path.startsWith("/") ? file.path : `/${file.path}`;
@@ -64,6 +129,10 @@ export async function seedBundledSkills(fs: SkillFsClient): Promise<void> {
 		}
 		const relative = opfsPath.slice("/skills/bundled/".length);
 		const content = await fetchBundledAsset(relative);
+		const digest = await sha256Hex(content);
+		if (digest !== file.sha256) {
+			throw new Error(`Bundled skill digest mismatch: ${opfsPath}`);
+		}
 		await ensureParentDirs(fs, opfsPath);
 		await fs.fsWriteText(opfsPath, content);
 	}

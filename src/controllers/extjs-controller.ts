@@ -51,11 +51,15 @@ export class ExtjsController {
 		id: string;
 		skill: string;
 		path?: string;
+		activatedSkills?: string[];
 	}): void {
-		const { id, skill, path: resourcePath } = msg;
+		const { id, skill, path: resourcePath, activatedSkills } = msg;
 
 		getSkillService()
-			.loadSkill(skill, resourcePath)
+			.loadSkill(skill, resourcePath, {
+				source: "tool",
+				activatedSkills,
+			})
 			.then((content) => {
 				this.bridge.post({ type: "loadSkillResult", id, content });
 			})

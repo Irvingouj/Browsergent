@@ -1,13 +1,26 @@
 import { formatSkillCatalog } from "./format-skill-catalog";
-import { resolveTaskWithSkill } from "./resolve-skill-activations";
+import {
+	parseSkillActivation,
+	resolveTaskWithSkill,
+} from "./resolve-skill-activations";
 import { seedBundledSkills } from "./seed-bundled-skills";
+import { assertSkillLoadAllowed } from "./skill-errors";
 import { SkillRegistry } from "./skill-registry";
-import type { SkillFsClient, SkillMeta } from "./skill-types";
+import type {
+	LoadSkillOptions,
+	SkillDiagnostic,
+	SkillFsClient,
+	SkillMeta,
+} from "./skill-types";
 import { ExtensionJsClient } from "../sidepanel/extension-js-client";
+
+type SkillsChangedCallback = (skills: SkillMeta[]) => void;
 
 export class SkillService {
 	private registry: SkillRegistry | null = null;
 	private readyPromise: Promise<void> | null = null;
+	private diagnostics: SkillDiagnostic[] = [];
+	private readonly subscribers = new Set<SkillsChangedCallback>();
 
 	async ensureReady(): Promise<SkillRegistry> {
 		if (this.registry) return this.registry;
@@ -29,11 +42,66 @@ export class SkillService {
 		await client.init();
 		await seedBundledSkills(client);
 		this.registry = new SkillRegistry(client);
+		await this.refreshDiagnostics();
+	}
+
+	private async refreshDiagnostics(): Promise<void> {
+		if (!this.registry) return;
+		const result = await this.registry.listSkills();
+		this.diagnostics = result.diagnostics;
+		for (const diagnostic of this.diagnostics) {
+			if (diagnostic.kind === "validation") {
+				console.debug(
+					`[skills] validation ${diagnostic.path}: ${diagnostic.message}`,
+				);
+			} else {
+				console.debug(
+					`[skills] collision "${diagnostic.name}": ${diagnostic.loserPath} replaced by ${diagnostic.winnerPath}`,
+				);
+			}
+		}
+	}
+
+	getDiagnostics(): ReadonlyArray<SkillDiagnostic> {
+		return this.diagnostics;
+	}
+
+	subscribeSkillsChanged(callback: SkillsChangedCallback): () => void {
+		this.subscribers.add(callback);
+		return () => {
+			this.subscribers.delete(callback);
+		};
+	}
+
+	notifySkillsChanged(): void {
+		void this.refresh().catch((err: unknown) => {
+			console.debug(
+				"[skills] refresh after notify failed:",
+				err instanceof Error ? err.message : String(err),
+			);
+		});
+	}
+
+	private emitSkillsChanged(skills: SkillMeta[]): void {
+		for (const callback of this.subscribers) {
+			callback(skills);
+		}
+	}
+
+	async refresh(): Promise<SkillMeta[]> {
+		this.registry = null;
+		this.readyPromise = null;
+		const registry = await this.ensureReady();
+		const { skills } = await registry.listSkills();
+		await this.refreshDiagnostics();
+		this.emitSkillsChanged(skills);
+		return skills;
 	}
 
 	async listSkills(): Promise<SkillMeta[]> {
 		const registry = await this.ensureReady();
-		return registry.listSkills();
+		const { skills } = await registry.listSkills();
+		return skills;
 	}
 
 	async formatCatalog(): Promise<string> {
@@ -45,18 +113,33 @@ export class SkillService {
 		task: string;
 		resolvedTask: string;
 		skillCatalog: string;
+		activatedSkills: string[];
 	}> {
 		const registry = await this.ensureReady();
-		const skillCatalog = formatSkillCatalog(await registry.listSkills());
+		const { skills } = await registry.listSkills();
+		const skillCatalog = formatSkillCatalog(skills);
+		const activation = parseSkillActivation(draft);
+		const activatedSkills = activation ? [activation.skillName] : [];
 		const { task, resolvedTask } = await resolveTaskWithSkill(
 			draft,
 			(name) => registry.loadSkillBody(name),
 		);
-		return { task, resolvedTask, skillCatalog };
+		return { task, resolvedTask, skillCatalog, activatedSkills };
 	}
 
-	async loadSkill(skill: string, path?: string): Promise<string> {
+	async loadSkill(
+		skill: string,
+		path?: string,
+		options: LoadSkillOptions = { source: "tool" },
+	): Promise<string> {
 		const registry = await this.ensureReady();
+		const meta = await registry.getSkill(skill);
+		if (!meta) {
+			throw new Error(`Unknown skill: ${skill}`);
+		}
+
+		assertSkillLoadAllowed(skill, meta.disableModelInvocation, options);
+
 		if (path) {
 			return registry.loadSkillResource(skill, path);
 		}
@@ -77,6 +160,10 @@ export function getSkillService(): SkillService {
 /** Test-only reset */
 export function resetSkillServiceForTests(): void {
 	skillServiceInstance = null;
+}
+
+export function notifySkillsChanged(): void {
+	getSkillService().notifySkillsChanged();
 }
 
 export function createSkillRegistryForFs(fs: SkillFsClient): SkillRegistry {

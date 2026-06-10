@@ -15,6 +15,7 @@ export type PanelToWorker =
 			task: string;
 			resolvedTask?: string;
 			skillCatalog?: string;
+			activatedSkills?: string[];
 			settings: WorkerSettings;
 	  }
 	| { type: "agentStop"; runId?: string }
@@ -50,7 +51,13 @@ export type WorkerToPanel =
 	| { type: "extjsError"; id: string; error: string }
 	| { type: "extjsRunRequest"; id: string; code: string }
 	| { type: "extjsDocsRequest"; id: string; format: "json" | "markdown" }
-	| { type: "loadSkillRequest"; id: string; skill: string; path?: string };
+	| {
+			type: "loadSkillRequest";
+			id: string;
+			skill: string;
+			path?: string;
+			activatedSkills?: string[];
+	  };
 
 // --- Agent Status ---
 

@@ -111,10 +111,12 @@ const App: FunctionalComponent = () => {
 
 		let resolvedTask = task;
 		let skillCatalog = "";
+		let activatedSkills: string[] = [];
 		try {
 			const resolved = await getSkillService().resolveRunTask(task);
 			resolvedTask = resolved.resolvedTask;
 			skillCatalog = resolved.skillCatalog;
+			activatedSkills = resolved.activatedSkills;
 		} catch (err: unknown) {
 			if (parseSkillActivation(task)) {
 				const message = err instanceof Error ? err.message : String(err);
@@ -141,6 +143,7 @@ const App: FunctionalComponent = () => {
 			task,
 			resolvedTask,
 			skillCatalog,
+			activatedSkills,
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
 		});
 	}, [taskInput, apiKey, baseUrl, model, sessionControllerRef, bridgeRef]);

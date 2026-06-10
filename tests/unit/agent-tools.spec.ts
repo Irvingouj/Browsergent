@@ -189,6 +189,20 @@ describe("load_skill tool", () => {
 		});
 		expect(isToolErrorEnvelope(result as string)).toBe(true);
 	});
+
+	test("returns E_SKILL_INVOCATION_FORBIDDEN for disable-model-invocation skill", async () => {
+		mockLoadSkill.mockRejectedValue(
+			new Error(
+				"Skill capability-check cannot be used with load_skill due to disable-model-invocation",
+			),
+		);
+		const tools = makeTools();
+		const handler = getLoadSkillHandler(tools);
+		const result = await handler({ skill: "capability-check" });
+		expect(isToolErrorEnvelope(result as string)).toBe(true);
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_SKILL_INVOCATION_FORBIDDEN");
+	});
 });
 
 describe("get_doc tool", () => {

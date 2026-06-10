@@ -217,6 +217,28 @@ describe("isLoadSkillRequest", () => {
 			}),
 		).toBe(false);
 	});
+
+	test("accepts activatedSkills array", () => {
+		expect(
+			isLoadSkillRequest({
+				type: "loadSkillRequest",
+				id: "s1",
+				skill: "capability-check",
+				activatedSkills: ["capability-check"],
+			}),
+		).toBe(true);
+	});
+
+	test("rejects invalid activatedSkills", () => {
+		expect(
+			isLoadSkillRequest({
+				type: "loadSkillRequest",
+				id: "s1",
+				skill: "x",
+				activatedSkills: ["ok", 1],
+			}),
+		).toBe(false);
+	});
 });
 
 describe("isLoadSkillResult", () => {

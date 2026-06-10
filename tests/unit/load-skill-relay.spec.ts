@@ -11,15 +11,25 @@ describe("LoadSkillRelay", () => {
 	});
 
 	test("posts loadSkillRequest when relay starts", async () => {
-		const posted: Array<{ id: string; skill: string; path?: string }> = [];
+		const posted: Array<{
+			id: string;
+			skill: string;
+			path?: string;
+			activatedSkills?: string[];
+		}> = [];
 		const relay = new LoadSkillRelay((request) => {
 			posted.push(request);
 		}, 30_000);
 
-		const promise = relay.relay("capability-check", "references/checklist.md");
+		const promise = relay.relay(
+			"capability-check",
+			"references/checklist.md",
+			["capability-check"],
+		);
 		expect(posted).toHaveLength(1);
 		expect(posted[0]?.skill).toBe("capability-check");
 		expect(posted[0]?.path).toBe("references/checklist.md");
+		expect(posted[0]?.activatedSkills).toEqual(["capability-check"]);
 		expect(posted[0]?.id).toMatch(/^load-skill-/);
 
 		relay.resolve(posted[0]?.id ?? "", "# checklist");

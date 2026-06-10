@@ -182,6 +182,14 @@ export class ExtensionJsClient implements SkillFsClient {
 		}, "fsMkdir failed");
 	}
 
+	async fsDelete(path: string): Promise<void> {
+		await this.ensureReady();
+		await this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			await this.session.fsDelete({ path });
+		}, "fsDelete failed");
+	}
+
 	private enqueue<T>(
 		fn: () => Promise<T>,
 		errorLabel: string,

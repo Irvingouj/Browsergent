@@ -81,6 +81,7 @@ declare module "@pi-oxide/extension-js" {
 		fsReadText(params: FsPathParams): Promise<FsStringResult>;
 		fsWriteText(params: FsWriteParams): Promise<FsBoolResult>;
 		fsMkdir(params: FsPathParams): Promise<FsBoolResult>;
+		fsDelete(params: FsPathParams): Promise<FsBoolResult>;
 	}
 
 	export function setLogLevel(level: string): void;

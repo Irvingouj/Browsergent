@@ -1,3 +1,5 @@
+import { parse as parseYaml } from "yaml";
+
 export interface SkillFrontmatter {
 	name?: string;
 	description?: string;
@@ -10,6 +12,36 @@ export interface ParsedSkillMd {
 	body: string;
 }
 
+export class SkillYamlParseError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "SkillYamlParseError";
+	}
+}
+
+function coerceFrontmatter(raw: unknown): SkillFrontmatter {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+		return {};
+	}
+	const obj = raw as Record<string, unknown>;
+	const frontmatter: SkillFrontmatter = {};
+
+	if (typeof obj.name === "string") {
+		frontmatter.name = obj.name;
+	}
+	if (typeof obj.description === "string") {
+		frontmatter.description = obj.description;
+	}
+	if (obj["disable-model-invocation"] === true) {
+		frontmatter["disable-model-invocation"] = true;
+	}
+	if (typeof obj.arguments === "string" || Array.isArray(obj.arguments)) {
+		frontmatter.arguments = obj.arguments as string | string[];
+	}
+
+	return frontmatter;
+}
+
 export function parseFrontmatter(raw: string): ParsedSkillMd {
 	const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n)?([\s\S]*)$/);
 	if (!match) {
@@ -17,33 +49,18 @@ export function parseFrontmatter(raw: string): ParsedSkillMd {
 	}
 	const yamlBlock = match[1] ?? "";
 	const body = (match[2] ?? "").trim();
-	const frontmatter: SkillFrontmatter = {};
 
-	for (const line of yamlBlock.split("\n")) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-		const colon = trimmed.indexOf(":");
-		if (colon === -1) continue;
-		const key = trimmed.slice(0, colon).trim();
-		let value = trimmed.slice(colon + 1).trim();
-		if (
-			(value.startsWith('"') && value.endsWith('"')) ||
-			(value.startsWith("'") && value.endsWith("'"))
-		) {
-			value = value.slice(1, -1);
-		}
-		if (key === "disable-model-invocation") {
-			frontmatter[key] = value === "true";
-		} else if (key === "arguments") {
-			frontmatter.arguments = value;
-		} else if (key === "name") {
-			frontmatter.name = value;
-		} else if (key === "description") {
-			frontmatter.description = value;
-		}
+	if (!yamlBlock.trim()) {
+		return { frontmatter: {}, body };
 	}
 
-	return { frontmatter, body };
+	try {
+		const parsed = parseYaml(yamlBlock);
+		return { frontmatter: coerceFrontmatter(parsed), body };
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		throw new SkillYamlParseError(`Invalid SKILL.md frontmatter: ${message}`);
+	}
 }
 
 export function parseArgumentNames(
@@ -53,7 +70,9 @@ export function parseArgumentNames(
 	const isValidName = (name: string): boolean =>
 		name.trim() !== "" && !/^\d+$/.test(name);
 	if (Array.isArray(argumentNames)) {
-		return argumentNames.filter(isValidName);
+		return argumentNames
+			.filter((name): name is string => typeof name === "string")
+			.filter(isValidName);
 	}
 	if (typeof argumentNames === "string") {
 		return argumentNames.split(/\s+/).filter(isValidName);

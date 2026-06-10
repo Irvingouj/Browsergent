@@ -313,7 +313,7 @@ Do **not** ship skills with only Layer 1 (palette that does nothing on Run) or o
   ```
 
 - [ ] Metadata only — not full `SKILL.md` bodies (those come from 2a inject or 2b tool).
-- [ ] Respect `disable-model-invocation: true`: list in catalog but document “load only via `/` activation or explicit `get_skill` when user asks”.
+- [x] Respect `disable-model-invocation: true`: excluded from catalog; `load_skill` blocked unless user activated at compose time
 
 ---
 
@@ -453,6 +453,16 @@ tests/unit/skill-registry.spec.ts
 
 7. Invalid `SKILL.md` fails CI validation (`skills-ref` or unit tests), not runtime.
 8. End-to-end: compose `/skill` → inject on Run **and** agent can `get_skill` for another skill mid-run.
+
+### Baseline correctness (pi parity, 2026-06-09)
+
+- [x] Enforce `disable-model-invocation` on `load_skill` via per-run `activatedSkills` whitelist
+- [x] Standards-compliant YAML frontmatter (`yaml` package; arrays, multiline, comments)
+- [x] Skill name/description validation per agentskills.io; XML-safe skill injection
+- [x] OPFS seed cleanup removes retired bundled files on manifest version change
+- [x] Validation and collision diagnostics (`SkillDiagnostic`; `console.debug` on init)
+- [x] Picker refresh via `SkillService.refresh()` / `subscribeSkillsChanged()` + input focus
+- [x] Manifest SHA-256 verification before writing seeded bundled files
 
 ### References
 

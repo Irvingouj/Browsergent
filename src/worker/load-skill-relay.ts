@@ -4,6 +4,7 @@ export interface LoadSkillRelayRequest {
 	id: string;
 	skill: string;
 	path?: string;
+	activatedSkills?: string[];
 }
 
 interface PendingEntry {
@@ -21,7 +22,11 @@ export class LoadSkillRelay {
 		private readonly timeoutMs: number = LOAD_SKILL_RELAY_TIMEOUT_MS,
 	) {}
 
-	relay(skill: string, resourcePath?: string): Promise<string> {
+	relay(
+		skill: string,
+		resourcePath?: string,
+		activatedSkills?: string[],
+	): Promise<string> {
 		const relayId = `load-skill-${++this.counter}`;
 
 		const promise = new Promise<string>((resolve, reject) => {
@@ -37,7 +42,12 @@ export class LoadSkillRelay {
 			this.pending.set(relayId, { resolve, reject, timeoutId });
 		});
 
-		this.postRequest({ id: relayId, skill, path: resourcePath });
+		this.postRequest({
+			id: relayId,
+			skill,
+			path: resourcePath,
+			activatedSkills,
+		});
 		return promise;
 	}
 

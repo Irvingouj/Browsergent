@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { parseFrontmatter, parseArgumentNames } from "../../src/skills/parse-skill-md";
+import {
+	parseArgumentNames,
+	parseFrontmatter,
+	SkillYamlParseError,
+} from "../../src/skills/parse-skill-md";
 
 describe("parse-skill-md", () => {
 	test("parses frontmatter and body", () => {
@@ -24,6 +28,59 @@ Hello`;
 		expect(parsed.body).toContain("# Body");
 	});
 
+	test("parses YAML array arguments", () => {
+		const raw = `---
+name: array-skill
+description: Array args
+arguments:
+  - foo
+  - bar
+---
+
+Body`;
+		const parsed = parseFrontmatter(raw);
+		expect(parseArgumentNames(parsed.frontmatter.arguments)).toEqual([
+			"foo",
+			"bar",
+		]);
+	});
+
+	test("parses multiline description", () => {
+		const raw = `---
+name: multi
+description: |
+  Line one
+  Line two
+---
+
+Body`;
+		const parsed = parseFrontmatter(raw);
+		expect(parsed.frontmatter.description).toContain("Line one");
+		expect(parsed.frontmatter.description).toContain("Line two");
+	});
+
+	test("parses quoted strings with escapes", () => {
+		const raw = `---
+name: quoted
+description: "Say \\"hello\\""
+---
+
+Body`;
+		const parsed = parseFrontmatter(raw);
+		expect(parsed.frontmatter.description).toBe('Say "hello"');
+	});
+
+	test("parses inline comment after value", () => {
+		const raw = `---
+name: commented
+description: A skill # not part of description
+---
+
+Body`;
+		const parsed = parseFrontmatter(raw);
+		expect(parsed.frontmatter.description).toBe("A skill");
+	});
+
 	test("no frontmatter returns empty frontmatter and trimmed body", () => {
 		const raw = "# Title\n\nNo YAML here.";
 		const parsed = parseFrontmatter(raw);
@@ -31,16 +88,13 @@ Hello`;
 		expect(parsed.body).toBe("# Title\n\nNo YAML here.");
 	});
 
-	test("empty description frontmatter parses but is not usable alone", () => {
+	test("malformed YAML throws SkillYamlParseError", () => {
 		const raw = `---
-name: empty-skill
-description:
+name: [broken
+description: bad
 ---
 
-Body only`;
-		const parsed = parseFrontmatter(raw);
-		expect(parsed.frontmatter.name).toBe("empty-skill");
-		expect(parsed.frontmatter.description).toBe("");
-		expect(parsed.body).toBe("Body only");
+Body`;
+		expect(() => parseFrontmatter(raw)).toThrow(SkillYamlParseError);
 	});
 });

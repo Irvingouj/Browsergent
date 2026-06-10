@@ -50,6 +50,7 @@ declare const self: DedicatedWorkerGlobalScope;
 
 let agentLoop: AgentLoop | null = null;
 let currentRunId: string | null = null;
+let currentActivatedSkills: string[] = [];
 
 function post(message: WorkerToPanel): void {
 	self.postMessage(message);
@@ -100,6 +101,7 @@ const loadSkillRelay = new LoadSkillRelay(
 			id: request.id,
 			skill: request.skill,
 			path: request.path,
+			activatedSkills: request.activatedSkills,
 		});
 	},
 	EXTJS_RELAY_TIMEOUT_MS,
@@ -146,7 +148,7 @@ function relayExtjsDocs(format: "json" | "markdown"): Promise<string> {
 }
 
 function relayLoadSkill(skill: string, resourcePath?: string): Promise<string> {
-	return loadSkillRelay.relay(skill, resourcePath);
+	return loadSkillRelay.relay(skill, resourcePath, currentActivatedSkills);
 }
 
 function handleExtjsRelayResult(id: string, result: CellResult): void {
@@ -208,8 +210,10 @@ function handleAgentStart(
 	runId: string,
 	resolvedTask?: string,
 	skillCatalog?: string,
+	activatedSkills?: string[],
 ): void {
 	currentRunId = runId;
+	currentActivatedSkills = activatedSkills ?? [];
 
 	if (!settings.anthropicApiKey) {
 		post({
@@ -333,6 +337,7 @@ function handleAgentStop(runId?: string): void {
 	}
 	const stoppedRunId = currentRunId ?? "unknown";
 	currentRunId = null; // prevent late agent callbacks from overwriting the stopped status
+	currentActivatedSkills = [];
 	post({
 		type: "agentStatus",
 		runId: stoppedRunId,
@@ -350,6 +355,7 @@ function handleAgentReset(): void {
 	rejectAllPendingExtjsDocsRelays("Agent reset");
 	loadSkillRelay.rejectAll("Agent reset");
 	agentLoop = null;
+	currentActivatedSkills = [];
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
 
@@ -385,6 +391,7 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 				msg.runId,
 				msg.resolvedTask,
 				msg.skillCatalog,
+				msg.activatedSkills,
 			);
 			break;
 		case "agentStop":

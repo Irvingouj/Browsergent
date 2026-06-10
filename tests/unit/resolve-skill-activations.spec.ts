@@ -25,6 +25,24 @@ describe("resolve-skill-activations", () => {
 		});
 	});
 
+	test("escapes XML-significant attribute values", () => {
+		const unsafeMeta = {
+			...meta,
+			name: "capability-check",
+			skillPath: '/skills/bundled/cap"check/SKILL.md',
+			baseDir: "/skills/bundled/cap<check>",
+		};
+		const resolved = buildResolvedTask(
+			"/skill:capability-check",
+			unsafeMeta,
+			"Body line",
+		);
+		expect(resolved).toContain('location="/skills/bundled/cap&quot;check/SKILL.md"');
+		expect(resolved).toContain(
+			"References are relative to /skills/bundled/cap&lt;check&gt;.",
+		);
+	});
+
 	test("builds XML block and strips token from remainder", () => {
 		const resolved = buildResolvedTask(
 			"/skill:capability-check focus",

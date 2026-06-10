@@ -48,50 +48,50 @@ function makeFs(files: Record<string, string>): SkillFsClient {
 	};
 }
 
-describe("skill-registry", () => {
-	test("user skill overrides bundled name", async () => {
+describe("skill diagnostics", () => {
+	test("user skill overriding bundled records collision diagnostic", async () => {
 		const fs = makeFs({
 			"/skills/bundled/demo/SKILL.md":
 				"---\nname: demo\ndescription: bundled\n---\nBundled",
 			"/skills/user/demo/SKILL.md":
-				"---\nname: demo\ndescription: user\n---\nUser",
+				"---\nname: demo\ndescription: user copy\n---\nUser",
 		});
 		const registry = createSkillRegistryForFs(fs);
-		const { skills } = await registry.listSkills();
+		const { skills, diagnostics } = await registry.listSkills();
 		expect(skills).toHaveLength(1);
 		expect(skills[0]?.scope).toBe("user");
-		expect(skills[0]?.description).toBe("user");
+		expect(diagnostics.some((d) => d.kind === "collision")).toBe(true);
 	});
 
-	test("loadSkillResource reads under baseDir", async () => {
-		const fs = makeFs({
-			"/skills/bundled/demo/SKILL.md":
-				"---\nname: demo\ndescription: d\n---\nBody",
-			"/skills/bundled/demo/references/extra.md": "Extra content",
-		});
-		const registry = createSkillRegistryForFs(fs);
-		const content = await registry.loadSkillResource(
-			"demo",
-			"references/extra.md",
-		);
-		expect(content).toBe("Extra content");
-	});
-
-	test('loadSkillBody("nonexistent") throws with useful message', async () => {
-		const fs = makeFs({});
-		const registry = createSkillRegistryForFs(fs);
-		await expect(registry.loadSkillBody("nonexistent")).rejects.toThrow(
-			"Unknown skill: nonexistent",
-		);
-	});
-
-	test("skill with empty description is excluded from registry", async () => {
+	test("empty description produces validation diagnostic and excludes skill", async () => {
 		const fs = makeFs({
 			"/skills/bundled/empty/SKILL.md":
 				"---\nname: empty\ndescription:\n---\nBody",
 		});
 		const registry = createSkillRegistryForFs(fs);
-		const { skills } = await registry.listSkills();
+		const { skills, diagnostics } = await registry.listSkills();
 		expect(skills).toHaveLength(0);
+		expect(
+			diagnostics.some(
+				(d) => d.kind === "validation" && d.message.includes("description"),
+			),
+		).toBe(true);
+	});
+
+	test("invalid name produces validation diagnostic", async () => {
+		const fs = makeFs({
+			"/skills/bundled/Bad_Name/SKILL.md":
+				"---\nname: Bad_Name\ndescription: bad name skill\n---\nBody",
+		});
+		const registry = createSkillRegistryForFs(fs);
+		const { skills, diagnostics } = await registry.listSkills();
+		expect(skills).toHaveLength(0);
+		expect(
+			diagnostics.some(
+				(d) =>
+					d.kind === "validation" &&
+					d.message.includes("invalid characters"),
+			),
+		).toBe(true);
 	});
 });

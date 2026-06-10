@@ -1,5 +1,6 @@
 import { substituteArguments } from "./substitute-arguments";
 import type { SkillMeta } from "./skill-types";
+import { escapeXmlAttr } from "./validate-skill-meta";
 
 const SKILL_TOKEN_RE = /\/skill:([a-z0-9-]+)(?:\s+([\s\S]*))?/;
 
@@ -26,8 +27,8 @@ export function buildSkillXmlBlock(
 	body: string,
 ): string {
 	return [
-		`<skill name="${meta.name}" location="${meta.skillPath}">`,
-		`References are relative to ${meta.baseDir}.`,
+		`<skill name="${escapeXmlAttr(meta.name)}" location="${escapeXmlAttr(meta.skillPath)}">`,
+		`References are relative to ${escapeXmlAttr(meta.baseDir)}.`,
 		"",
 		body,
 		"</skill>",

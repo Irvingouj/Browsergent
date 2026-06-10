@@ -57,7 +57,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const [slashState, setSlashState] = useState<SlashState | null>(null);
 	const [activeIndex, setActiveIndex] = useState(0);
 
-	useEffect(() => {
+	const loadSkills = useCallback(() => {
 		getSkillService()
 			.listSkills()
 			.then(setSkills)
@@ -65,6 +65,12 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				console.warn("Failed to load skills for picker:", err);
 			});
 	}, []);
+
+	useEffect(() => {
+		loadSkills();
+		const unsubscribe = getSkillService().subscribeSkillsChanged(setSkills);
+		return unsubscribe;
+	}, [loadSkills]);
 
 	const pickerItems = useMemo(() => skillsToPickerItems(skills), [skills]);
 	const filteredItems = useMemo(
@@ -126,6 +132,9 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						browsergentStore.getState().setTaskDraft(el.value);
 						refreshSlashState(el.value, el.selectionStart);
 						setActiveIndex(0);
+					}}
+					onFocus={() => {
+						loadSkills();
 					}}
 					onClick={(e) => {
 						const el = e.target as HTMLInputElement;

@@ -269,17 +269,30 @@ export function isExtjsDocsError(
 	return true;
 }
 
+function isStringArray(value: unknown): value is string[] {
+	return (
+		Array.isArray(value) && value.every((item) => typeof item === "string")
+	);
+}
+
 export function isLoadSkillRequest(msg: unknown): msg is {
 	type: "loadSkillRequest";
 	id: string;
 	skill: string;
 	path?: string;
+	activatedSkills?: string[];
 } {
 	if (!isObject(msg)) return false;
 	if (msg.type !== "loadSkillRequest") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.skill)) return false;
 	if (msg.path !== undefined && !isString(msg.path)) return false;
+	if (
+		msg.activatedSkills !== undefined &&
+		!isStringArray(msg.activatedSkills)
+	) {
+		return false;
+	}
 	return true;
 }
 
