@@ -129,10 +129,12 @@ function truncateToolResult(text: string, maxChars: number): string {
 	return `${text.slice(0, head)}\n\n... [truncated ${text.length - maxChars} chars] ...\n\n${text.slice(-tail)}`;
 }
 
-function classifyError(source: { kind?: string; message?: string }): {
-	code: string;
-	hint: string;
-} {
+function classifyError(source: {
+	kind?: string;
+	message?: string;
+	action?: string | null;
+	code?: string | null;
+}): { code: string; hint: string } {
 	if (source.kind === "compile" || source.message?.includes("compile error"))
 		return { code: "E_JS_COMPILE", hint: "Fix the syntax error and retry." };
 	if (source.kind === "fuel_exhausted" || source.message?.includes("timed out"))
@@ -140,13 +142,41 @@ function classifyError(source: { kind?: string; message?: string }): {
 			code: "E_JS_TIMEOUT",
 			hint: "The runtime has been rebuilt. Retry the same code.",
 		};
-	if (source.message?.includes("runtime error"))
+	// Use the structured code from the CellError when available (e.g. E_CONTENT_SCRIPT,
+	// E_PERMISSION, E_STALE) so the hint matches the actual failure mode.
+	const cellCode = source.code;
+	if (cellCode === "E_CONTENT_SCRIPT")
 		return {
-			code: "E_JS_RUNTIME",
-			hint: "Check the error, fix the code, and retry.",
+			code: cellCode,
+			hint: "The content script is not connected. Navigate to the tab or ask the user to refresh it.",
+		};
+	if (cellCode === "E_PERMISSION")
+		return {
+			code: cellCode,
+			hint: "A permission error occurred. Check that the target is a normal http(s) page tab.",
+		};
+	if (cellCode === "E_STALE")
+		return {
+			code: cellCode,
+			hint: "The element refId is stale. Take a fresh snapshot and use the new refIds.",
+		};
+	if (cellCode === "E_NOT_FOUND")
+		return {
+			code: cellCode,
+			hint: "No matching element found. Take a fresh snapshot and verify the label or refId.",
+		};
+	if (cellCode === "E_NO_TAB")
+		return {
+			code: cellCode,
+			hint: "No active tab resolved. Ensure the user is focused on an http(s) page, not chrome://.",
+		};
+	if (cellCode === "E_TIMEOUT")
+		return {
+			code: cellCode,
+			hint: "The operation timed out. The page may be slow or the selector may not appear.",
 		};
 	return {
-		code: "E_JS_RUNTIME",
+		code: cellCode ?? "E_JS_RUNTIME",
 		hint: "Check the error details and try a different approach.",
 	};
 }
@@ -183,6 +213,9 @@ export function createAgentTools(
 					if (result.status === "err") {
 						const { code: errCode, hint } = classifyError({
 							kind: result.error.kind,
+							message: result.error.message,
+							action: result.error.action,
+							code: result.error.code,
 						});
 						return formatToolError(errCode, formatJsRunResult(result), hint);
 					}

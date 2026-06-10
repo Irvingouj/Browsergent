@@ -219,4 +219,47 @@ describe("formatError", () => {
 			expect(formatError(error)).toBe(expected);
 		}
 	});
+
+	test("includes error name for runtime errors", () => {
+		const error: WasmCellError = {
+			kind: "runtime",
+			name: "TypeError",
+			message: "x is not a function",
+			line: null,
+			action: null,
+			code: null,
+		};
+		expect(formatError(error)).toBe(
+			"[runtime error] TypeError: x is not a function",
+		);
+	});
+
+	test("includes error name and line for runtime errors", () => {
+		const error: WasmCellError = {
+			kind: "runtime",
+			name: "ReferenceError",
+			message: "foo is not defined",
+			line: 7,
+			action: null,
+			code: null,
+		};
+		expect(formatError(error)).toBe(
+			"[runtime error] line 7: ReferenceError: foo is not defined",
+		);
+	});
+
+	test("passes through pre-formatted message when action/code exist (includes hint/recovery)", () => {
+		const error: WasmCellError = {
+			kind: "runtime",
+			name: "Error",
+			message:
+				"[page_snapshot] (E_PERMISSION): Cannot use DOM APIs on tab 123\n\nHint: Use an http(s) tab.\n\nRecovery:\n  1. await page.goto(url)",
+			line: null,
+			action: "page_snapshot",
+			code: "E_PERMISSION",
+		};
+		expect(formatError(error)).toBe(
+			"[page_snapshot] (E_PERMISSION): Cannot use DOM APIs on tab 123\n\nHint: Use an http(s) tab.\n\nRecovery:\n  1. await page.goto(url)",
+		);
+	});
 });
