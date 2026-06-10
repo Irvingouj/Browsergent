@@ -11,7 +11,7 @@ test("stop button appears when agent would be running", async () => {
 
 	// Type a task
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("test task");
 
 	// After clicking Run, we need an API key - it should show settings

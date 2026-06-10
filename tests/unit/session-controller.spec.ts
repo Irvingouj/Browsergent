@@ -253,7 +253,7 @@ describe("SessionController multi-session", () => {
 			);
 		}
 
-		const list = await ctrl.listSessions();
+		const { sessions: list } = await ctrl.listSessions();
 		expect(list.length).toBe(3);
 		expect(list[0].messageCount).toBe(1);
 		expect(list.map((l) => l.messageCount)).toEqual([1, 1, 1]);
@@ -276,11 +276,36 @@ describe("SessionController multi-session", () => {
 			);
 			vi.advanceTimersByTime(2);
 		}
-		const list = await ctrl.listSessions();
+		const { sessions: list } = await ctrl.listSessions();
 		expect(list.length).toBe(50);
 		// oldest sessions should have been deleted
 		const oldestId = ids[0];
 		expect(list.find((l) => l.id === oldestId)).toBeUndefined();
+		vi.useRealTimers();
+	});
+
+	test("listSessions() returns pruned session ids", async () => {
+		vi.useFakeTimers();
+		await ctrl.init();
+		const ids: string[] = [];
+		for (let i = 0; i < 52; i++) {
+			if (i > 0) {
+				const id = await ctrl.createSession();
+				ids.push(id);
+			} else {
+				ids.push(requireActiveId(ctrl));
+			}
+			await ctrl.save(
+				[{ id: `${i}`, kind: "user" as const, text: `msg${i}`, timestamp: i }],
+				[],
+			);
+			vi.advanceTimersByTime(2);
+		}
+		const { sessions: list, prunedIds } = await ctrl.listSessions();
+		expect(list.length).toBe(50);
+		expect(prunedIds).toHaveLength(2);
+		expect(prunedIds).toContain(ids[0]);
+		expect(prunedIds).toContain(ids[1]);
 		vi.useRealTimers();
 	});
 
@@ -324,7 +349,7 @@ describe("SessionController multi-session", () => {
 		await ctrl.init();
 		const id = requireActiveId(ctrl);
 		await ctrl.updateTitle(id, "My Title");
-		const list = await ctrl.listSessions();
+		const { sessions: list } = await ctrl.listSessions();
 		expect(list[0].title).toBe("My Title");
 	});
 
@@ -333,7 +358,7 @@ describe("SessionController multi-session", () => {
 		const id = requireActiveId(ctrl);
 		await ctrl.updateTitle(id, "Custom", true);
 		await ctrl.updateTitle(id, "Ignored", false);
-		const list = await ctrl.listSessions();
+		const { sessions: list } = await ctrl.listSessions();
 		expect(list[0].title).toBe("Custom");
 	});
 
@@ -345,6 +370,117 @@ describe("SessionController multi-session", () => {
 		);
 		await ctrl.clear();
 		expect(await ctrl.load()).toBeNull();
+	});
+});
+
+describe("SessionController filesIndex persistence", () => {
+	test("save and load roundtrip with filesIndex", async () => {
+		const storage = new MemoryStorage();
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const filesIndex = [
+			{
+				id: "f1",
+				name: "test.txt",
+				path: "/session-files/s1/f1-test.txt",
+				kind: "file" as const,
+				size: 12,
+				mime: "text/plain",
+			},
+		];
+		await ctrl.save([], [], [], filesIndex);
+		const loaded = await ctrl.load();
+		expect(loaded?.filesIndex).toEqual(filesIndex);
+	});
+
+	test("switchSession returns filesIndex", async () => {
+		const storage = new MemoryStorage();
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const id1 = requireActiveId(ctrl);
+		const filesIndex = [
+			{
+				id: "f1",
+				name: "a.txt",
+				path: "/session-files/s1/f1-a.txt",
+				kind: "file" as const,
+				size: 5,
+				mime: "text/plain",
+			},
+		];
+		await ctrl.save([], [], [], filesIndex);
+		const id2 = await ctrl.createSession();
+		await ctrl.save([{ id: "1", kind: "user" as const, text: "b", timestamp: 2 }], []);
+
+		const switched = await ctrl.switchSession(id1);
+		expect(switched?.filesIndex).toEqual(filesIndex);
+		expect(ctrl.getActiveSessionId()).toBe(id1);
+	});
+
+	test("old sessions without filesIndex load as undefined (backward compatible)", async () => {
+		const storage = new MemoryStorage();
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const id = requireActiveId(ctrl);
+		// Simulate old session data without filesIndex
+		await storage.set("sessions", `session_${id}`, {
+			id,
+			messages: [],
+			trace: [],
+			diagnostics: [],
+			timestamp: Date.now(),
+			messageCount: 0,
+		});
+		const loaded = await ctrl.load();
+		expect(loaded?.filesIndex).toBeUndefined();
+	});
+
+	test("scheduleSave debounces with filesIndex", async () => {
+		vi.useFakeTimers();
+		const storage = new MemoryStorage();
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		ctrl.hydrated = true;
+
+		const filesIndex = [
+			{
+				id: "f1",
+				name: "x.txt",
+				path: "/p/x.txt",
+				kind: "file" as const,
+				size: 1,
+				mime: "text/plain",
+			},
+		];
+
+		ctrl.scheduleSave([], [], [], filesIndex);
+		await vi.advanceTimersByTimeAsync(500);
+		const loaded = await ctrl.load();
+		expect(loaded?.filesIndex).toEqual(filesIndex);
+
+		vi.useRealTimers();
+	});
+
+	test("flushSave persists filesIndex immediately", async () => {
+		const storage = new MemoryStorage();
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		ctrl.hydrated = true;
+
+		const filesIndex = [
+			{
+				id: "f1",
+				name: "y.txt",
+				path: "/p/y.txt",
+				kind: "file" as const,
+				size: 2,
+				mime: "text/plain",
+			},
+		];
+
+		await ctrl.flushSave([], [], [], filesIndex);
+		const loaded = await ctrl.load();
+		expect(loaded?.filesIndex).toEqual(filesIndex);
 	});
 });
 

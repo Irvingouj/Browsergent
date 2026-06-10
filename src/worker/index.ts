@@ -359,25 +359,6 @@ function handleAgentReset(): void {
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
 
-// --- Standalone extension-js tab handling ---
-
-async function handleExtjsRun(id: string, code: string): Promise<void> {
-	try {
-		const result = await relayExtjsExecution(code);
-		const output =
-			result.status === "err"
-				? formatError(result.error)
-				: result.stdout.join("\n");
-		post({ type: "extjsOutput", id, output });
-	} catch (err) {
-		post({
-			type: "extjsError",
-			id,
-			error: err instanceof Error ? err.message : String(err),
-		});
-	}
-}
-
 // --- Message dispatch ---
 
 self.onmessage = (event: MessageEvent<PanelToWorker>) => {
@@ -399,9 +380,6 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 			break;
 		case "agentReset":
 			handleAgentReset();
-			break;
-		case "extjsRun":
-			void handleExtjsRun(msg.id, msg.code);
 			break;
 		case "extjsStop":
 			rejectAllPendingExtjsRelays("Extjs stopped");

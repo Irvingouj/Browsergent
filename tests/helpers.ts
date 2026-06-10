@@ -91,6 +91,79 @@ export async function focusTargetTab(page: Page): Promise<void> {
 	await page.click("body");
 }
 
+/** Upload a file through the Files panel hidden input (Files tab must be open). */
+export async function uploadFileViaPanel(
+	sidePanel: Page,
+	fileName: string,
+	content: string,
+	mimeType = "application/octet-stream",
+): Promise<void> {
+	await sidePanel.evaluate(
+		({ fileName, content, mimeType }) => {
+			const dataTransfer = new DataTransfer();
+			const file = new File([content], fileName, { type: mimeType });
+			dataTransfer.items.add(file);
+			const input = document.querySelector(
+				'[data-testid="file-upload"]',
+			) as HTMLInputElement | null;
+			if (input) {
+				input.files = dataTransfer.files;
+				input.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		},
+		{ fileName, content, mimeType },
+	);
+}
+
+const MOCK_END_TURN_CHUNKS = [
+	`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+	`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
+	`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Done." } })}\n\n`,
+	`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+];
+
+export function startSimpleMockProvider(): MockAnthropicServer {
+	return startMockAnthropicServer({
+		responses: [
+			{
+				chunks: MOCK_END_TURN_CHUNKS,
+				delays: [0, 0, 0, 0],
+				stopReason: "end_turn",
+			},
+		],
+	});
+}
+
+export function extractFirstUserMessageText(body: unknown): string {
+	if (typeof body !== "object" || body === null) {
+		throw new Error("Expected object request body");
+	}
+	const messages = (body as Record<string, unknown>).messages;
+	if (!Array.isArray(messages)) {
+		throw new Error("Expected messages array");
+	}
+	const userMessage = messages.find(
+		(m): m is Record<string, unknown> =>
+			typeof m === "object" && m !== null && m.role === "user",
+	);
+	if (!userMessage) {
+		throw new Error("Expected user message");
+	}
+	const content = userMessage.content;
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) {
+		return content
+			.map((c: unknown) => {
+				if (typeof c === "object" && c !== null && "text" in c) {
+					return String((c as Record<string, unknown>).text ?? "");
+				}
+				return "";
+			})
+			.join("");
+	}
+	throw new Error(`Unexpected content type: ${typeof content}`);
+}
+
 /** Configure mock Anthropic provider and close overlays that block the run button. */
 export async function configureMockProvider(
 	sidePanel: Page,

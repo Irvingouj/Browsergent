@@ -26,7 +26,7 @@ test("extension loads and side panel opens", async () => {
 test("side panel has task input and run button", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	const input = sidePanel.locator('input[placeholder="Type a task..."]');
+	const input = sidePanel.locator('input[data-testid="task-input"]');
 	await expect(input).toBeVisible();
 
 	const runButton = sidePanel.getByRole("button", { name: "Run task" });

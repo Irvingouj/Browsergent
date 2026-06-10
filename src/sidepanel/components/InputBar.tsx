@@ -3,36 +3,26 @@ import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
 import { getSkillService } from "../../skills/skill-service";
 import type { SkillMeta } from "../../skills/skill-types";
-import { selectTaskDraft } from "../../state/selectors";
+import { selectFilesState, selectTaskDraft } from "../../state/selectors";
 import { browsergentStore } from "../../state/store";
 import {
 	CommandPicker,
 	type CommandPickerItem,
 	filterPickerItems,
 } from "./CommandPicker";
+import {
+	filesToPickerItems,
+	type AtState,
+	type SlashState,
+	resolvePickerState,
+	buildPickerInsert,
+} from "../detect-mention-state";
 
 interface InputBarProps {
 	isRunning: boolean;
 	onRun: () => void;
 	onStop: () => void;
 	inputRef?: Ref<HTMLInputElement>;
-}
-
-interface SlashState {
-	start: number;
-	query: string;
-}
-
-export function detectSlashState(value: string, cursor: number): SlashState | null {
-	const before = value.slice(0, cursor);
-	const slashIndex = before.lastIndexOf("/");
-	if (slashIndex === -1) return null;
-	if (slashIndex > 0 && !/\s/.test(before[slashIndex - 1] ?? "")) {
-		return null;
-	}
-	const token = before.slice(slashIndex);
-	if (/\s/.test(token.slice(1))) return null;
-	return { start: slashIndex, query: token.slice(1) };
 }
 
 export function skillsToPickerItems(
@@ -53,8 +43,10 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	inputRef,
 }) => {
 	const taskInput = useStore(browsergentStore, selectTaskDraft);
+	const filesState = useStore(browsergentStore, selectFilesState);
 	const [skills, setSkills] = useState<SkillMeta[]>([]);
 	const [slashState, setSlashState] = useState<SlashState | null>(null);
+	const [atState, setAtState] = useState<AtState | null>(null);
 	const [activeIndex, setActiveIndex] = useState(0);
 
 	const loadSkills = useCallback(() => {
@@ -72,55 +64,80 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 		return unsubscribe;
 	}, [loadSkills]);
 
-	const pickerItems = useMemo(() => skillsToPickerItems(skills), [skills]);
-	const filteredItems = useMemo(
-		() => (slashState ? filterPickerItems(pickerItems, slashState.query) : []),
-		[pickerItems, slashState],
+	const skillPickerItems = useMemo(() => skillsToPickerItems(skills), [skills]);
+	const filteredSkillItems = useMemo(
+		() => (slashState ? filterPickerItems(skillPickerItems, slashState.query) : []),
+		[skillPickerItems, slashState],
 	);
 
-	const refreshSlashState = useCallback(
+	const filePickerItems = useMemo(
+		() => filesToPickerItems(Object.values(filesState.nodes)),
+		[filesState.nodes],
+	);
+	const filteredFileItems = useMemo(
+		() => (atState ? filterPickerItems(filePickerItems, atState.query) : []),
+		[filePickerItems, atState],
+	);
+
+	const refreshPickerState = useCallback(
 		(value: string, cursor: number | null) => {
 			if (cursor === null) {
 				setSlashState(null);
+				setAtState(null);
 				return;
 			}
-			setSlashState(detectSlashState(value, cursor));
+			const { atState: at, slashState: slash } = resolvePickerState(value, cursor);
+			setAtState(at);
+			setSlashState(slash);
 		},
 		[],
 	);
 
 	const applyPickerSelection = useCallback(
 		(item: CommandPickerItem) => {
-			if (!slashState) return;
+			const pickerState = atState ?? slashState;
+			if (!pickerState) return;
 			const el = inputRef && "current" in inputRef ? inputRef.current : null;
 			const cursor = el?.selectionStart ?? taskInput.length;
-			const before = taskInput.slice(0, slashState.start);
-			const after = taskInput.slice(cursor);
-			const next = `${before}${item.insertText}${after}`;
-			browsergentStore.getState().setTaskDraft(next);
-			setSlashState(null);
+			const { nextText, cursorPos } = buildPickerInsert(
+				taskInput,
+				cursor,
+				pickerState.startIndex,
+				item.insertText,
+				atState?.endIndex,
+			);
+			browsergentStore.getState().setTaskDraft(nextText);
+			if (atState) {
+				setAtState(null);
+			} else {
+				setSlashState(null);
+			}
 			setActiveIndex(0);
 			requestAnimationFrame(() => {
 				if (!el) return;
 				el.focus();
-				const pos = before.length + item.insertText.length;
-				el.setSelectionRange(pos, pos);
+				el.setSelectionRange(cursorPos, cursorPos);
 			});
 		},
-		[slashState, taskInput, inputRef],
+		[atState, slashState, taskInput, inputRef],
 	);
+
+	const isPickerOpen = atState !== null || slashState !== null;
+	const pickerItems = atState !== null ? filteredFileItems : filteredSkillItems;
+	const dismissPicker = atState !== null ? () => setAtState(null) : () => setSlashState(null);
+	const emptyMessage = atState !== null ? "No matching files" : "No matching skills";
 
 	return (
 		<div class="relative z-10 px-md py-sm bg-bg-surface border-t border-border flex gap-sm items-end">
 			<div class="relative flex-1">
-				{slashState ? (
+				{isPickerOpen ? (
 					<CommandPicker
-						items={filteredItems}
+						items={pickerItems}
 						activeIndex={activeIndex}
 						onSelect={applyPickerSelection}
 						onActiveIndexChange={setActiveIndex}
-						onDismiss={() => setSlashState(null)}
-						emptyMessage="No matching skills"
+						onDismiss={dismissPicker}
+						emptyMessage={emptyMessage}
 					/>
 				) : null}
 				<input
@@ -131,7 +148,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 					onInput={(e) => {
 						const el = e.target as HTMLInputElement;
 						browsergentStore.getState().setTaskDraft(el.value);
-						refreshSlashState(el.value, el.selectionStart);
+						refreshPickerState(el.value, el.selectionStart);
 						setActiveIndex(0);
 					}}
 					onFocus={() => {
@@ -139,18 +156,18 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 					}}
 					onClick={(e) => {
 						const el = e.target as HTMLInputElement;
-						refreshSlashState(el.value, el.selectionStart);
+						refreshPickerState(el.value, el.selectionStart);
 					}}
 					onKeyUp={(e) => {
 						const el = e.target as HTMLInputElement;
-						refreshSlashState(el.value, el.selectionStart);
+						refreshPickerState(el.value, el.selectionStart);
 					}}
 					onKeyDown={(e) => {
-						if (slashState && filteredItems.length > 0) {
+						if (isPickerOpen && pickerItems.length > 0) {
 							if (e.key === "ArrowDown") {
 								e.preventDefault();
 								setActiveIndex((i) =>
-									Math.min(i + 1, filteredItems.length - 1),
+									Math.min(i + 1, pickerItems.length - 1),
 								);
 								return;
 							}
@@ -161,19 +178,19 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 							}
 							if (e.key === "Enter") {
 								e.preventDefault();
-								const item = filteredItems[activeIndex];
+								const item = pickerItems[activeIndex];
 								if (item) applyPickerSelection(item);
 								return;
 							}
 							if (e.key === "Escape") {
 								e.preventDefault();
-								setSlashState(null);
+								dismissPicker();
 								return;
 							}
 						}
 						if (e.key === "Enter" && !isRunning) onRun();
 					}}
-					placeholder="Type a task... (/ for skills)"
+					placeholder="Type a task... (/ for skills, @ for files)"
 					disabled={isRunning}
 					class="w-full bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"
 				/>

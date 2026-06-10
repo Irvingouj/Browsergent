@@ -25,4 +25,9 @@ describe("agent prompt policy", () => {
 		expect(JS_TOOL_PROMPT).toContain("`page.fetch()` returns a text body");
 		expect(JS_TOOL_PROMPT).toContain("binary-safe API");
 	});
+
+	test("documents file attachment tokens", () => {
+		expect(JS_TOOL_PROMPT).toContain("@[file:");
+		expect(JS_TOOL_PROMPT).toContain("<attachment");
+	});
 });

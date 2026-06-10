@@ -3,6 +3,7 @@ import {
 	isAgentTraceEntry,
 	isChatMessage,
 } from "../protocol/worker-guards";
+import { isFileNode, type FileNode } from "../state/slices/files-slice";
 import type { SessionListItem } from "../state/slices/session-slice";
 import type { StorageBackend } from "../storage/storage-backend";
 import type {
@@ -16,6 +17,7 @@ interface SessionData {
 	messages: ChatMessage[];
 	trace: AgentTraceEntry[];
 	diagnostics: AgentDiagnosticEvent[];
+	filesIndex?: FileNode[];
 	timestamp: number;
 	title?: string;
 	customTitle?: string;
@@ -31,6 +33,11 @@ const META_KEY = "__meta";
 const OLD_SESSION_KEY = "current";
 const SESSION_PREFIX = "session_";
 const SESSION_CAP = 50;
+
+export interface ListSessionsResult {
+	sessions: SessionListItem[];
+	prunedIds: string[];
+}
 
 export class SessionController {
 	private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -101,6 +108,7 @@ export class SessionController {
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
 		diagnostics: AgentDiagnosticEvent[];
+		filesIndex?: FileNode[];
 	} | null> {
 		try {
 			const activeId = this.meta?.activeSessionId;
@@ -116,6 +124,7 @@ export class SessionController {
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
 		diagnostics: AgentDiagnosticEvent[];
+		filesIndex?: FileNode[];
 	} | null> {
 		const raw = await this.storage.get<SessionData>(
 			SESSION_STORE,
@@ -129,6 +138,9 @@ export class SessionController {
 			diagnostics: Array.isArray(raw.diagnostics)
 				? raw.diagnostics.filter(isAgentDiagnosticEvent)
 				: [],
+			filesIndex: Array.isArray(raw.filesIndex)
+			? raw.filesIndex.filter(isFileNode)
+			: undefined,
 		};
 	}
 
@@ -136,13 +148,14 @@ export class SessionController {
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
+		filesIndex?: FileNode[],
 	): void {
 		if (!this.hydrated) return;
 		if (this.saveTimer) {
 			clearTimeout(this.saveTimer);
 		}
 		this.saveTimer = setTimeout(() => {
-			void this.save(messages, trace, diagnostics);
+			void this.save(messages, trace, diagnostics, filesIndex);
 		}, 500);
 	}
 
@@ -157,16 +170,18 @@ export class SessionController {
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
+		filesIndex?: FileNode[],
 	): Promise<void> {
 		this.cancelPendingSave();
 		if (!this.hydrated) return;
-		await this.save(messages, trace, diagnostics);
+		await this.save(messages, trace, diagnostics, filesIndex);
 	}
 
 	async save(
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
+		filesIndex?: FileNode[],
 	): Promise<void> {
 		try {
 			const activeId = this.meta?.activeSessionId;
@@ -175,6 +190,7 @@ export class SessionController {
 				messages,
 				trace,
 				diagnostics,
+				filesIndex,
 				timestamp: Date.now(),
 				messageCount: messages.length,
 			};
@@ -228,6 +244,7 @@ export class SessionController {
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
 		diagnostics: AgentDiagnosticEvent[];
+		filesIndex?: FileNode[];
 	} | null> {
 		const data = await this.loadForId(id);
 		if (!data) return null;
@@ -240,7 +257,7 @@ export class SessionController {
 		await this.storage.remove(SESSION_STORE, `${SESSION_PREFIX}${id}`);
 
 		if (this.meta?.activeSessionId === id) {
-			const remaining = await this.listSessions();
+			const { sessions: remaining } = await this.listSessions();
 			if (remaining.length > 0) {
 				this.meta = {
 					activeSessionId: remaining[0]?.id ?? crypto.randomUUID(),
@@ -266,7 +283,7 @@ export class SessionController {
 		}
 	}
 
-	async listSessions(): Promise<SessionListItem[]> {
+	async listSessions(): Promise<ListSessionsResult> {
 		const keys = await this.storage.getAllKeys(SESSION_STORE);
 		const sessionKeys = keys.filter((k) => k.startsWith(SESSION_PREFIX));
 		const sessions: SessionData[] = [];
@@ -279,20 +296,25 @@ export class SessionController {
 
 		sessions.sort((a, b) => b.timestamp - a.timestamp);
 
+		const prunedIds: string[] = [];
 		if (sessions.length > SESSION_CAP) {
 			const toDelete = sessions.slice(SESSION_CAP);
 			for (const s of toDelete) {
+				prunedIds.push(s.id);
 				await this.storage.remove(SESSION_STORE, `${SESSION_PREFIX}${s.id}`);
 			}
 			sessions.length = SESSION_CAP;
 		}
 
-		return sessions.map((s) => ({
-			id: s.id,
-			title: s.customTitle || s.title || `Session ${s.id.slice(0, 8)}`,
-			timestamp: s.timestamp,
-			messageCount: s.messageCount,
-		}));
+		return {
+			sessions: sessions.map((s) => ({
+				id: s.id,
+				title: s.customTitle || s.title || `Session ${s.id.slice(0, 8)}`,
+				timestamp: s.timestamp,
+				messageCount: s.messageCount,
+			})),
+			prunedIds,
+		};
 	}
 
 	async updateTitle(

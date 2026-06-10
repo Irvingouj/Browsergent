@@ -29,7 +29,7 @@ async function addMessageWithoutMock(
 	sidePanel: Locator,
 	text: string = "test task",
 ) {
-	await sidePanel.locator('input[placeholder="Type a task..."]').fill(text);
+	await sidePanel.locator('input[data-testid="task-input"]').fill(text);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(
 		sidePanel.locator('[data-testid="chat-message-user"]'),
@@ -226,7 +226,7 @@ test("Agent running blocks switch", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("quick task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
@@ -234,7 +234,7 @@ test("Agent running blocks switch", async () => {
 	});
 	await expect(floatingNewButton(sidePanel)).toBeVisible({ timeout: 5000 });
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await sidePanel.waitForTimeout(500);
@@ -264,7 +264,7 @@ test("Floating New button hidden when running", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("quick task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
@@ -272,7 +272,7 @@ test("Floating New button hidden when running", async () => {
 	});
 	await expect(floatingNewButton(sidePanel)).toBeVisible({ timeout: 5000 });
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(floatingNewButton(sidePanel)).toBeHidden();

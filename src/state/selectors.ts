@@ -12,7 +12,6 @@ export const selectAgentActiveRunId = (s: BrowsergentStore) =>
 	s.agent.activeRunId;
 export const selectTaskDraft = (s: BrowsergentStore) => s.ui.taskDraft;
 export const selectActiveTab = (s: BrowsergentStore) => s.ui.activeTab;
-export const selectJsCodeDraft = (s: BrowsergentStore) => s.ui.jsCodeDraft;
 export const selectApiKey = (s: BrowsergentStore) => s.settings.anthropicApiKey;
 export const selectBaseUrl = (s: BrowsergentStore) => s.settings.baseUrl;
 export const selectModel = (s: BrowsergentStore) => s.settings.model;
@@ -25,3 +24,7 @@ export const selectActiveSessionId = (s: BrowsergentStore) =>
 export const selectExtjsStatus = (s: BrowsergentStore) => s.extjs.status;
 export const selectSkillDiagnostics = (s: BrowsergentStore) =>
 	s.skills.diagnostics;
+
+export const selectFilesState = (s: BrowsergentStore) => s.files;
+export const selectSelectedFileId = (s: BrowsergentStore) =>
+	s.files.selectedFileId;

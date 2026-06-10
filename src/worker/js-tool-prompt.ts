@@ -29,6 +29,11 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - Re-fetch or re-initialize any local bindings you need in each cell.
 - The last expression may appear in the tool result; use \`console.log\` for observations.
 
+## File attachments
+- The user may attach files using \`@[file:{fileId}:{displayName}]\` tokens. Attached file contents appear as \`<attachment name="..." id="...">\` XML blocks in the task context.
+- Treat attached files as part of the user's request — read, analyze, or modify them as instructed.
+- If a file is too large, it may be truncated with a \`[truncated]\` marker.
+
 ## Common patterns
 Current page:
 \`\`\`js

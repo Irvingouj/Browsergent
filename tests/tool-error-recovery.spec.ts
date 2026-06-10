@@ -45,7 +45,7 @@ test("agent continues after tool error and trace shows error status", async () =
 
 	// Start a run
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("test tool error recovery");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

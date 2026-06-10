@@ -13,6 +13,7 @@ import {
 	selectApiKey,
 	selectBaseUrl,
 	selectDiagnosticEvents,
+	selectFilesState,
 	selectMessageIds,
 	selectMessagesById,
 	selectModel,
@@ -28,12 +29,20 @@ import { browsergentStore } from "../state/store";
 import { getSkillService } from "../skills/skill-service";
 import { parseSkillActivation } from "../skills/resolve-skill-activations";
 import type { ChatMessage } from "../types/messages";
+import type { FileNode } from "../state/slices/files-slice";
 import { ChatPanel } from "./components/ChatPanel";
+import { FilesPanel } from "./components/FilesPanel";
 import { InputBar } from "./components/InputBar";
-import { JsPlaybookPanel } from "./components/JsPlaybookPanel";
 import { SettingsForm } from "./components/SettingsForm";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
+import {
+	buildDisplayTask,
+	mergeSkillAndFileAttachments,
+} from "./merge-run-task";
+import { parseFileMentions, resolveFileMentions } from "./resolve-file-mentions";
+import { hydrateAndSyncFiles } from "./hydrate-files";
+import { SessionPanel } from "./session-panel";
 
 function formatSkillDiagnostic(diagnostic: SkillDiagnostic): string {
 	if (diagnostic.kind === "validation") {
@@ -46,19 +55,23 @@ function currentSessionSnapshot(): {
 	messages: ChatMessage[];
 	trace: ReturnType<typeof selectTraceEntries>;
 	diagnostics: ReturnType<typeof selectDiagnosticEvents>;
+	filesIndex: FileNode[];
 } {
 	const state = browsergentStore.getState();
 	const messages = state.chat.messageIds
 		.map((id) => state.chat.messagesById[id])
 		.filter((message): message is ChatMessage => message !== undefined);
+	const files = state.files;
+	const filesIndex = Object.values(files.nodes).filter(
+		(node): node is FileNode => node !== undefined,
+	);
 	return {
 		messages,
 		trace: state.trace.entries,
 		diagnostics: state.diagnostics.events,
+		filesIndex,
 	};
 }
-
-import { SessionPanel } from "./session-panel";
 
 const App: FunctionalComponent = () => {
 	const messageIds = useStore(browsergentStore, selectMessageIds);
@@ -85,6 +98,7 @@ const App: FunctionalComponent = () => {
 	const activeTab = useStore(browsergentStore, selectActiveTab);
 	const skillDiagnostics = useStore(browsergentStore, selectSkillDiagnostics);
 	const skillIssueTitle = skillDiagnostics.map(formatSkillDiagnostic).join("\n");
+	const files = useStore(browsergentStore, selectFilesState);
 
 	const {
 		initialized,
@@ -93,6 +107,7 @@ const App: FunctionalComponent = () => {
 		extjsControllerRef: _extjsControllerRef,
 		settingsControllerRef,
 		sessionControllerRef,
+		filesControllerRef,
 	} = useAppInit();
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
@@ -101,8 +116,14 @@ const App: FunctionalComponent = () => {
 	useTitleGeneration(sessionControllerRef, messages);
 
 	useEffect(() => {
-		sessionControllerRef.current?.scheduleSave(messages, trace, diagnostics);
-	}, [messages, trace, diagnostics, sessionControllerRef]);
+		const snapshot = currentSessionSnapshot();
+		sessionControllerRef.current?.scheduleSave(
+			snapshot.messages,
+			snapshot.trace,
+			snapshot.diagnostics,
+			snapshot.filesIndex,
+		);
+	}, [messages, trace, diagnostics, files, sessionControllerRef]);
 
 	useEffect(() => {
 		const el = chatScrollRef.current;
@@ -142,6 +163,42 @@ const App: FunctionalComponent = () => {
 			console.warn("Skill catalog failed:", err);
 		}
 
+		// Resolve file mentions
+		const fileMentions = parseFileMentions(task);
+		if (fileMentions.length > 0) {
+			const filesController = filesControllerRef.current;
+			if (!filesController) {
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: "File attachment failed: files controller not available",
+					timestamp: Date.now(),
+				});
+				return;
+			}
+			try {
+				const attachments = await resolveFileMentions(
+					fileMentions,
+					filesController,
+					sessionId,
+				);
+				resolvedTask = mergeSkillAndFileAttachments(
+					task,
+					resolvedTask,
+					attachments,
+				);
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: `File attachment failed: ${message}`,
+					timestamp: Date.now(),
+				});
+				return;
+			}
+		}
+
 		browsergentStore.getState().setTaskDraft("");
 
 		const runId = crypto.randomUUID();
@@ -151,13 +208,21 @@ const App: FunctionalComponent = () => {
 			type: "agentStart",
 			runId,
 			sessionId,
-			task,
+			task: buildDisplayTask(task),
 			resolvedTask,
 			skillCatalog,
 			activatedSkills,
 			settings: { anthropicApiKey: apiKey, baseUrl, model },
 		});
-	}, [taskInput, apiKey, baseUrl, model, sessionControllerRef, bridgeRef]);
+	}, [
+		taskInput,
+		apiKey,
+		baseUrl,
+		model,
+		sessionControllerRef,
+		bridgeRef,
+		filesControllerRef,
+	]);
 
 	const handleStop = useCallback(() => {
 		const runId = browsergentStore.getState().agent.activeRunId;
@@ -180,10 +245,27 @@ const App: FunctionalComponent = () => {
 	}, [messages, trace, diagnostics]);
 
 	const reloadSessionList = useCallback(async () => {
-		const list = await sessionControllerRef.current?.listSessions();
-		if (list) {
-			browsergentStore.getState().sessionListLoaded(list);
+		const result = await sessionControllerRef.current?.listSessions();
+		if (result) {
+			browsergentStore.getState().sessionListLoaded(result.sessions);
+			for (const id of result.prunedIds) {
+				try {
+					await filesControllerRef.current?.cleanupSession(id);
+				} catch (err: unknown) {
+					console.warn("Files cleanup on session prune failed:", err);
+				}
+			}
 		}
+	}, [sessionControllerRef, filesControllerRef]);
+
+	const handleFilesChanged = useCallback(() => {
+		const snapshot = currentSessionSnapshot();
+		void sessionControllerRef.current?.flushSave(
+			snapshot.messages,
+			snapshot.trace,
+			snapshot.diagnostics,
+			snapshot.filesIndex,
+		);
 	}, [sessionControllerRef]);
 
 	const handleSwitchSession = useCallback(
@@ -193,20 +275,29 @@ const App: FunctionalComponent = () => {
 				snapshot.messages,
 				snapshot.trace,
 				snapshot.diagnostics,
+				snapshot.filesIndex,
 			);
 			const data = await sessionControllerRef.current?.switchSession(id);
 			if (data) {
 				browsergentStore.getState().hydrateChat(data.messages);
 				browsergentStore.getState().hydrateTrace(data.trace);
 				browsergentStore.getState().hydrateDiagnostics(data.diagnostics);
+				await hydrateAndSyncFiles(id, data.filesIndex, filesControllerRef.current);
+				browsergentStore.getState().activeSessionChanged(id);
+			} else {
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: "Session not found",
+					timestamp: Date.now(),
+				});
 			}
-			browsergentStore.getState().activeSessionChanged(id);
 			browsergentStore.getState().agentReset();
 			browsergentStore.getState().sessionPanelOpenChanged(false);
 			browsergentStore.getState().setSettingsOpen(false);
 			await reloadSessionList();
 		},
-		[reloadSessionList, sessionControllerRef],
+		[reloadSessionList, sessionControllerRef, filesControllerRef],
 	);
 
 	const handleCreateSession = useCallback(async () => {
@@ -215,17 +306,19 @@ const App: FunctionalComponent = () => {
 			snapshot.messages,
 			snapshot.trace,
 			snapshot.diagnostics,
+			snapshot.filesIndex,
 		);
 		const newId = await sessionControllerRef.current?.createSession();
 		if (!newId) return;
 		browsergentStore.getState().clearChat();
 		browsergentStore.getState().clearTrace();
 		browsergentStore.getState().clearDiagnostics();
+		await hydrateAndSyncFiles(newId, [], filesControllerRef.current);
 		browsergentStore.getState().agentReset();
 		browsergentStore.getState().sessionCreated(newId);
 		browsergentStore.getState().sessionPanelOpenChanged(false);
 		await reloadSessionList();
-	}, [reloadSessionList, sessionControllerRef]);
+	}, [reloadSessionList, sessionControllerRef, filesControllerRef]);
 
 	const handleDeleteSession = useCallback(
 		async (id: string) => {
@@ -233,6 +326,11 @@ const App: FunctionalComponent = () => {
 			const wasActive =
 				sessionControllerRef.current?.getActiveSessionId() === id;
 			await sessionControllerRef.current?.deleteSession(id);
+			try {
+				await filesControllerRef.current?.cleanupSession(id);
+			} catch (err: unknown) {
+				console.warn("Files cleanup on session delete failed:", err);
+			}
 			browsergentStore.getState().sessionDeleted(id);
 			const activeId = sessionControllerRef.current?.getActiveSessionId();
 			if (activeId && wasActive) {
@@ -241,12 +339,13 @@ const App: FunctionalComponent = () => {
 					browsergentStore.getState().hydrateChat(data.messages);
 					browsergentStore.getState().hydrateTrace(data.trace);
 					browsergentStore.getState().hydrateDiagnostics(data.diagnostics);
+					await hydrateAndSyncFiles(activeId, data.filesIndex, filesControllerRef.current);
 				}
 				browsergentStore.getState().activeSessionChanged(activeId);
 			}
 			await reloadSessionList();
 		},
-		[reloadSessionList, sessionControllerRef],
+		[reloadSessionList, sessionControllerRef, filesControllerRef],
 	);
 
 	const handleUpdateTitle = useCallback(
@@ -311,15 +410,15 @@ const App: FunctionalComponent = () => {
 						</button>
 						<button
 							type="button"
-							onClick={() => browsergentStore.getState().setActiveTab("js")}
+							onClick={() => browsergentStore.getState().setActiveTab("files")}
 							class={[
 								"px-sm py-[3px] text-xs font-medium cursor-pointer transition-all rounded-full",
-								activeTab === "js"
+								activeTab === "files"
 									? "bg-text-primary text-bg-base"
 									: "bg-transparent text-text-secondary hover:text-text-primary",
 							].join(" ")}
 						>
-							JS
+							Files
 						</button>
 					</div>
 					<button
@@ -380,7 +479,22 @@ const App: FunctionalComponent = () => {
 						</svg>
 					</button>
 				)}
-				{activeTab === "chat" ? <ChatPanel /> : <JsPlaybookPanel />}
+				{activeTab === "chat" ? (
+					<ChatPanel />
+				) : initialized && filesControllerRef.current ? (
+					<FilesPanel
+						sessionId={_activeSessionId ?? ""}
+						filesController={filesControllerRef.current}
+						onFilesChanged={handleFilesChanged}
+					/>
+				) : (
+					<div
+						data-testid="files-panel-loading"
+						class="flex flex-1 items-center justify-center text-sm text-text-muted"
+					>
+						Loading files…
+					</div>
+				)}
 			</div>
 
 			{/* Status bar */}

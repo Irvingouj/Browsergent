@@ -11,7 +11,6 @@ const mockState = {
 	ui: {
 		taskDraft: "",
 		activeTab: "chat" as const,
-		jsCodeDraft: "",
 		settingsOpen: false,
 	},
 	agent: { status: "idle" as const },

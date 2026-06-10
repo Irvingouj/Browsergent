@@ -20,7 +20,6 @@ export type PanelToWorker =
 	  }
 	| { type: "agentStop"; runId?: string }
 	| { type: "agentReset" }
-	| { type: "extjsRun"; id: string; code: string }
 	| { type: "extjsStop" }
 	| { type: "extjsReset" }
 	| { type: "extjsRunResult"; id: string; result: CellResult }

@@ -216,7 +216,7 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 				[],
 			);
 		}
-		const list = await controller.listSessions();
+		const { sessions: list } = await controller.listSessions();
 		expect(list.length).toBe(3);
 		expect(list[0].messageCount).toBe(1);
 	});
@@ -224,7 +224,7 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 	test("updateTitle() updates title", async () => {
 		const id = requireActiveId(controller);
 		await controller.updateTitle(id, "My Title");
-		const list = await controller.listSessions();
+		const { sessions: list } = await controller.listSessions();
 		expect(list[0].title).toBe("My Title");
 	});
 });

@@ -15,7 +15,7 @@ test.skip("tool stale ref — retry after fresh snapshot", async () => {
 	await configureMockProvider(sidePanel, mock.url, "fake-key");
 
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("click stale");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

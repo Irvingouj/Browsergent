@@ -54,7 +54,7 @@ test("agent shows error when API returns 401", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("test error");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

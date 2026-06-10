@@ -2,10 +2,14 @@
 
 ## Priority (suggested order)
 
-1. **Agent Skills system (§6)** — **both layers mandatory** (compose-time UI + runtime agent)
-2. Files panel (§2) + `@` mentions (§3)
+1. **§6 closure** — E2E acceptance + inject size cap (core layers **done** in code; see `PLAN.md` WU-1)
+2. **Files panel (§2)** — replace JS tab (`PLAN.md` WU-2–WU-4)
+3. **`@` mentions (§3)** — file context in task input (`PLAN.md` WU-5–WU-6)
+4. **§6 Phase D** (optional) — user skills from Files panel (`PLAN.md` WU-7)
 
 §4 is folded into §6 Layer 1 (not a separate optional track).
+
+**Execution plan:** see [`PLAN.md`](./PLAN.md) for work units, locked decisions, and acceptance criteria.
 
 ---
 
@@ -222,15 +226,15 @@ Do **not** ship skills with only Layer 1 (palette that does nothing on Run) or o
 
 **Goal:** `/` in the task input opens a palette backed by `SkillRegistry` metadata only (`name`, `description`). No worker, no model call.
 
-- [ ] `SkillRegistry` at sidepanel init: scan `dist/skills/**/SKILL.md` (bundled) + later user skills (§6 Phase D).
-- [ ] `listSkills(): SkillMeta[]` — `name`, `description`, `disableModelInvocation`, paths for UI badges.
-- [ ] **`/` palette** (`SlashCommandPicker`): fuzzy filter on name/description; share picker primitive with `@` (§3).
-- [ ] On skill select: insert token in draft, e.g. `/capability-check` or internal `skill:capability-check` (parseable at Run).
-- [ ] Track **activated skills** for this draft separately from free text (e.g. `ui.activatedSkillIds: string[]`).
-- [ ] While typing `/`: **agent is not involved** — pure React/Preact UI.
-- [ ] Optional builtins: thin aliases mapping to a skill id (same registry).
+- [x] `SkillRegistry` at sidepanel init: OPFS under `/skills/bundled/**` (seeded from `public/skills/bundled/`); user skills deferred to §6 Phase D.
+- [x] `listSkills(): SkillMeta[]` — `name`, `description`, `disableModelInvocation`, paths for UI badges.
+- [x] **`/` palette** (`CommandPicker` in `InputBar.tsx`): fuzzy filter on name/description; shared picker primitive ready for `@` (§3).
+- [x] On skill select: insert token `/skill:{name} ` (parseable at Run via `parseSkillActivation`).
+- [ ] Track **activated skills** for this draft separately from free text (e.g. `ui.activatedSkillIds: string[]`) — **deferred v1**: single `/skill:name` token in draft is sufficient.
+- [x] While typing `/`: **agent is not involved** — pure Preact UI.
+- [ ] Optional builtins: thin aliases mapping to a skill id (same registry) — not needed for v1.
 
-**Files:** `InputBar.tsx`, `SlashCommandPicker.tsx`, `skill-registry.ts`, `parse-skill-md.ts`
+**Files:** `InputBar.tsx`, `CommandPicker.tsx`, `skill-registry.ts`, `parse-skill-md.ts`, `skill-service.ts`
 
 **Acceptance:**
 
@@ -246,21 +250,14 @@ Do **not** ship skills with only Layer 1 (palette that does nothing on Run) or o
 
 **Goal:** On **Run**, resolve activated skills and inject instructions **before** the agent loop’s first model call.
 
-- [ ] `resolveActivatedSkills(draft)` → `SkillActivation[]` from tokens + `activatedSkillIds`.
-- [ ] `buildTaskWithSkills(userText, activations)`:
+- [x] `parseSkillActivation(draft)` → `SkillActivation` from `/skill:{name}` token (single skill v1).
+- [x] `buildResolvedTask` / `resolveTaskWithSkill` — XML `<skill>` block + optional `User task:` remainder.
 
-  ```text
-  [Skill: capability-check]
-  <full SKILL.md body, no frontmatter>
-  ---
-  User task: <user text>
-  ```
+- [x] Pass `resolvedTask` on `agentStart`; original `task` kept for display/export.
+- [x] `disable-model-invocation: true` skills: inject **only** if user activated via `/skill:`; excluded from catalog; `load_skill` gated by `activatedSkills` whitelist.
+- [x] Size cap + truncate with `[skill truncated]` marker on inject (tool results already capped in `agent-tools.ts`).
 
-- [ ] Pass result as `agentStart.task` (or equivalent first user message). Visible in diagnostics/export.
-- [ ] `disable-model-invocation: true` skills: inject **only** if user activated via `/` (Layer 1), never from system auto-list alone.
-- [ ] Size cap + truncate with `[skill truncated]` marker.
-
-**Files:** `resolve-skill-activations.ts`, `app.tsx` `handleRun`, `worker-bridge.ts` / `agentStart` payload
+**Files:** `resolve-skill-activations.ts`, `app.tsx` `handleRun`, `worker/index.ts` / `agentStart` payload
 
 **Acceptance:**
 
@@ -269,30 +266,28 @@ Do **not** ship skills with only Layer 1 (palette that does nothing on Run) or o
 
 ---
 
-### Layer 2b — `get_skill` tool (mandatory)
+### Layer 2b — `load_skill` tool (mandatory; spec name was `get_skill`)
 
 **Problem:** Agent needs skill text **during** a run (progressive disclosure, references/, skills not activated at compose time).
 
 **Goal:** Mirror `get_doc`: agent calls a tool; receives markdown in **`tool_result`**.
 
-- [ ] Add `get_skill` to `createAgentTools()` in `agent-tools.ts`:
+- [x] Add `load_skill` to `createAgentTools()` in `agent-tools.ts` (relay to sidepanel `SkillService.loadSkill`).
 
   ```typescript
-  get_skill({
+  load_skill({
     skill: string;           // required, e.g. "capability-check"
     path?: string;           // optional, e.g. "references/checklist.md"
-  }): string                // markdown or JSON, size-capped
+  }): string                // markdown, size-capped
   ```
 
-- [ ] No `path` → `SkillRegistry.loadSkillBody(skill)`.
-- [ ] With `path` → `SkillRegistry.loadSkillResource(skill, path)` under skill root only (no `..`).
-- [ ] Unknown skill / path → structured tool error with `hint` + `recovery` (same pattern as `get_doc` failures).
-- [ ] Register in `anthropic-prompts.ts` tool list + describe in `SYSTEM_PROMPT`:
-  - Use `get_skill` when following a skill listed in system metadata but not injected.
-  - Use `get_skill({ path })` when skill body points at `references/`.
-- [ ] Trace shows `get_skill` like `get_doc` (tool name + truncated result).
+- [x] No `path` → `SkillRegistry.loadSkillBody(skill)`.
+- [x] With `path` → `SkillRegistry.loadSkillResource(skill, path)` under skill root only (no `..`).
+- [x] Unknown skill / path → structured tool error with `hint` + `recovery` (same pattern as `get_doc` failures).
+- [x] Register in `anthropic-prompts.ts` tool list + describe in `composeSystemPrompt`.
+- [x] Trace shows `load_skill` like `get_doc` (tool name + truncated result).
 
-**No SDK changes** — same pattern as `get_doc`; worker + sidepanel registry only.
+**No SDK changes** — same pattern as `get_doc`; worker + sidepanel registry only. **Locked:** keep tool name `load_skill` (do not rename to `get_skill`).
 
 **Acceptance:**
 
@@ -304,15 +299,9 @@ Do **not** ship skills with only Layer 1 (palette that does nothing on Run) or o
 
 ### Layer 2c — System metadata catalog (mandatory for 2b to be useful)
 
-- [ ] Inject into `SYSTEM_PROMPT` (compact, every run):
+- [x] Inject `<available_skills>` XML catalog via `formatSkillCatalog` on every run (`composeSystemPrompt`).
 
-  ```text
-  Available skills (use get_skill to load body; user may activate with /name at compose time):
-  - capability-check: <description from frontmatter>
-  - fill-and-submit: ...
-  ```
-
-- [ ] Metadata only — not full `SKILL.md` bodies (those come from 2a inject or 2b tool).
+- [x] Metadata only — not full `SKILL.md` bodies (those come from 2a inject or 2b tool).
 - [x] Respect `disable-model-invocation: true`: excluded from catalog; `load_skill` blocked unless user activated at compose time
 
 ---
@@ -387,14 +376,15 @@ Skills are **procedural prompts with optional attachments** — a good fit for B
 
 ### Implementation order (within §6)
 
-1. `SkillRegistry` + bundled `public/skills/**` + CI validation
-2. **Layer 1** — `/` palette
-3. **Layer 2a** — inject on Run
-4. **Layer 2b** + **2c** — `get_skill` tool + system metadata catalog
-5. Ship first-party skills:
-   - `capability-check/` — developer probe prompt from conversation exports
+1. [x] `SkillRegistry` + bundled `public/skills/bundled/**` + unit validation (`tests/unit/skill-*.spec.ts`)
+2. [x] **Layer 1** — `/` palette
+3. [x] **Layer 2a** — inject on Run
+4. [x] **Layer 2b** + **2c** — `load_skill` tool + system metadata catalog
+5. [x] Ship first-party skills:
+   - `capability-check/` — developer probe prompt
    - `fill-and-submit/` — golden-path form workflow
-   - `create-skill/` — optional; skill authoring for Browsergent (follow agentskills.io layout)
+   - `create-skill/` — skill authoring for Browsergent
+6. [ ] **Closure:** inject size cap, Playwright E2E for compose → inject → `load_skill` mid-run
 
 #### Phase D — User skills (optional, ties to §2 Files)
 
@@ -418,18 +408,20 @@ Write skills for **browser agent**, not IDE agent:
 - scripts/probe-metadata.js — copy into run_js for step 1
 ```
 
-### Files to add
+### Files (implemented)
 
 ```text
-public/skills/
+public/skills/bundled/
   capability-check/SKILL.md
   fill-and-submit/SKILL.md
+  create-skill/SKILL.md
 src/skills/
-  parse-skill-md.ts       # frontmatter + body
-  skill-registry.ts       # discover, list, load
-  skill-types.ts          # SkillMeta, SkillDocument
-src/worker/agent-tools.ts # get_skill handler (Phase B)
-tests/unit/skill-registry.spec.ts
+  parse-skill-md.ts, skill-registry.ts, skill-types.ts, skill-service.ts
+  resolve-skill-activations.ts, format-skill-catalog.ts, seed-bundled-skills.ts
+src/worker/agent-tools.ts   # load_skill relay
+src/sidepanel/components/CommandPicker.tsx, InputBar.tsx
+tests/unit/skill-*.spec.ts, tests/unit/input-bar.spec.tsx, ...
+tests/skill-compose-inject.spec.ts   # TODO (E2E closure)
 ```
 
 ### Acceptance criteria (all mandatory layers)
@@ -445,14 +437,14 @@ tests/unit/skill-registry.spec.ts
 
 **Layer 2b + 2c**
 
-4. `get_skill({ skill })` returns body in tool_result without prior inject.
-5. `get_skill({ skill, path })` returns `references/*` content.
-6. System prompt lists skill metadata only; bodies not duplicated at startup.
+4. [x] `load_skill({ skill })` returns body in tool_result without prior inject (unit tests).
+5. [x] `load_skill({ skill, path })` returns `references/*` content (unit tests).
+6. [x] System prompt lists skill metadata only; bodies not duplicated at startup.
 
 **Shared**
 
-7. Invalid `SKILL.md` fails CI validation (`skills-ref` or unit tests), not runtime.
-8. End-to-end: compose `/skill` → inject on Run **and** agent can `get_skill` for another skill mid-run.
+7. [x] Invalid `SKILL.md` surfaces as `SkillDiagnostic` at init; unit tests in `validate-skill-meta.spec.ts`.
+8. [x] End-to-end: compose `/skill:` → inject on Run **and** agent can `load_skill` for another skill mid-run (Playwright).
 
 ### Baseline correctness (pi parity, 2026-06-09)
 

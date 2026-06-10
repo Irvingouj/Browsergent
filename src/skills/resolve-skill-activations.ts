@@ -1,8 +1,49 @@
 import { substituteArguments } from "./substitute-arguments";
 import type { SkillMeta } from "./skill-types";
 import { escapeXmlAttr } from "./validate-skill-meta";
+import { truncateWithMarker } from "../utils/truncate";
 
-const SKILL_TOKEN_RE = /\/skill:([a-z0-9-]+)(?:\s+([\s\S]*))?/;
+const SKILL_HEAD_RE = /\/skill:([a-z0-9-]+)/;
+const FILE_MENTION_TOKEN = "@[file:";
+
+interface SkillTokenSegment {
+	skillName: string;
+	args: string;
+	tokenStart: number;
+	tokenEnd: number;
+}
+
+function parseSkillTokenSegment(draft: string): SkillTokenSegment | null {
+	const headMatch = SKILL_HEAD_RE.exec(draft);
+	if (!headMatch || headMatch.index === undefined) return null;
+
+	const tokenStart = headMatch.index;
+	const skillName = headMatch[1] ?? "";
+	let tokenEnd = tokenStart + headMatch[0].length;
+	let args = "";
+
+	const rest = draft.slice(tokenEnd);
+	if (rest.startsWith(" ")) {
+		tokenEnd += 1;
+		const afterSpace = draft.slice(tokenEnd);
+		const fileIdx = afterSpace.indexOf(FILE_MENTION_TOKEN);
+		if (fileIdx === -1) {
+			args = afterSpace.trim();
+			tokenEnd = draft.length;
+		} else {
+			args = afterSpace.slice(0, fileIdx).trimEnd();
+			tokenEnd += fileIdx;
+		}
+	}
+
+	return { skillName, args, tokenStart, tokenEnd };
+}
+
+export const MAX_SKILL_INJECT_CHARS = 32_000;
+
+export function truncateSkillBody(body: string): string {
+	return truncateWithMarker(body, MAX_SKILL_INJECT_CHARS, "\n\n[skill truncated]\n\n");
+}
 
 export interface SkillActivation {
 	skillName: string;
@@ -10,16 +51,20 @@ export interface SkillActivation {
 }
 
 export function parseSkillActivation(draft: string): SkillActivation | null {
-	const match = draft.match(SKILL_TOKEN_RE);
-	if (!match) return null;
+	const parsed = parseSkillTokenSegment(draft);
+	if (!parsed) return null;
 	return {
-		skillName: match[1] ?? "",
-		args: (match[2] ?? "").trim(),
+		skillName: parsed.skillName,
+		args: parsed.args,
 	};
 }
 
 export function stripSkillToken(draft: string): string {
-	return draft.replace(SKILL_TOKEN_RE, "").trim();
+	const parsed = parseSkillTokenSegment(draft);
+	if (!parsed) return draft.trim();
+	const before = draft.slice(0, parsed.tokenStart);
+	const after = draft.slice(parsed.tokenEnd);
+	return `${before}${after}`.trim();
 }
 
 export function buildSkillXmlBlock(
@@ -49,7 +94,8 @@ export function buildResolvedTask(
 		true,
 		[...meta.argumentNames],
 	);
-	const skillBlock = buildSkillXmlBlock(meta, substituted);
+	const truncated = truncateSkillBody(substituted);
+	const skillBlock = buildSkillXmlBlock(meta, truncated);
 	const remainder = stripSkillToken(draft);
 
 	if (remainder) {

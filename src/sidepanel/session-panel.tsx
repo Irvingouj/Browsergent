@@ -45,8 +45,8 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	const [editValue, setEditValue] = useState("");
 
 	useEffect(() => {
-		sessionController.listSessions().then((list) => {
-			browsergentStore.getState().sessionListLoaded(list);
+		sessionController.listSessions().then(({ sessions }) => {
+			browsergentStore.getState().sessionListLoaded(sessions);
 		});
 	}, [sessionController]);
 
@@ -175,6 +175,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 							return (
 								<div
 									key={session.id}
+									data-testid="session-item"
 									onClick={() => handleItemClick(session.id)}
 									class={[
 										"group px-md py-sm border-b border-border cursor-pointer transition-all relative",

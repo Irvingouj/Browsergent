@@ -1,13 +1,12 @@
 import type { StoreApi } from "zustand/vanilla";
 import type { BrowsergentStore } from "../store";
 
-export type UiTab = "chat" | "js";
+export type UiTab = "chat" | "files";
 
 export interface UiState {
 	settingsOpen: boolean;
 	taskDraft: string;
 	activeTab: UiTab;
-	jsCodeDraft: string;
 }
 
 export interface UiSlice {
@@ -15,7 +14,6 @@ export interface UiSlice {
 	setSettingsOpen(open: boolean): void;
 	setTaskDraft(text: string): void;
 	setActiveTab(tab: UiTab): void;
-	setJsCodeDraft(text: string): void;
 }
 
 export function createUiSlice(
@@ -26,7 +24,6 @@ export function createUiSlice(
 			settingsOpen: false,
 			taskDraft: "",
 			activeTab: "chat",
-			jsCodeDraft: "",
 		},
 		setSettingsOpen(open) {
 			set((state) => ({ ui: { ...state.ui, settingsOpen: open } }));
@@ -36,9 +33,6 @@ export function createUiSlice(
 		},
 		setActiveTab(tab) {
 			set((state) => ({ ui: { ...state.ui, activeTab: tab } }));
-		},
-		setJsCodeDraft(text) {
-			set((state) => ({ ui: { ...state.ui, jsCodeDraft: text } }));
 		},
 	};
 }

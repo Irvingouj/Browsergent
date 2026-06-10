@@ -112,7 +112,7 @@ test("golden path: agent fills form and submits", async () => {
 	await focusTargetTab(testPage);
 
 	await sidePanel
-		.locator('input[placeholder="Type a task..."]')
+		.locator('input[data-testid="task-input"]')
 		.fill("fill the form and submit");
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();

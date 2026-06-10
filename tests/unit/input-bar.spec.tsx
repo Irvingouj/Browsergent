@@ -1,14 +1,15 @@
 import { render } from "preact-render-to-string";
 import { describe, expect, test, vi } from "vitest";
 import {
-	detectSlashState,
 	InputBar,
 	skillsToPickerItems,
 } from "../../src/sidepanel/components/InputBar";
+import { detectSlashState } from "../../src/sidepanel/detect-mention-state";
 import type { SkillMeta } from "../../src/skills/skill-types";
 
 const mockState = {
 	ui: { taskDraft: "test task" },
+	files: { nodes: {}, rootIds: [], selectedFileId: null, filesSessionId: null },
 };
 
 vi.mock("zustand/react", () => ({
@@ -79,7 +80,7 @@ describe("InputBar", () => {
 describe("detectSlashState", () => {
 	test("detects /skill: prefix at start", () => {
 		expect(detectSlashState("/skill:cap", 12)).toEqual({
-			start: 0,
+			startIndex: 0,
 			query: "skill:cap",
 		});
 	});

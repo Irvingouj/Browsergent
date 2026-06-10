@@ -10,7 +10,6 @@ describe("createUiSlice", () => {
 					settingsOpen: false,
 					taskDraft: "",
 					activeTab: "chat",
-					jsCodeDraft: "",
 				},
 			};
 			const result = fn(state);
@@ -37,14 +36,7 @@ describe("createUiSlice", () => {
 	test("setActiveTab switches tab", () => {
 		const { set, calls } = makeSet();
 		const slice = createUiSlice(set as any);
-		slice.setActiveTab("js");
-		expect((calls[0] as any).ui.activeTab).toBe("js");
-	});
-
-	test("setJsCodeDraft updates jsCodeDraft", () => {
-		const { set, calls } = makeSet();
-		const slice = createUiSlice(set as any);
-		slice.setJsCodeDraft("page.snapshot()");
-		expect((calls[0] as any).ui.jsCodeDraft).toBe("page.snapshot()");
+		slice.setActiveTab("files");
+		expect((calls[0] as any).ui.activeTab).toBe("files");
 	});
 });

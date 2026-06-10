@@ -8,8 +8,8 @@ Browsergent is **Claude Code for the browser** — an AI agent that lives in a C
 
 Browsergent has **two interfaces**:
 
-1. **Agent Chat** (primary): User types a task in plain English, agent reasons and executes.
-2. **JS Playbooks** (secondary): User writes and runs JavaScript scripts that control the browser through typed commands.
+1. **Agent Chat** (primary): User types a task in plain English, agent reasons and executes. Supports `/skill:` activation and `@[file:…]` attachments.
+2. **Files** (secondary): Upload and manage session files; attach them to chat tasks via `@` mentions.
 
 Architecture:
 
@@ -248,14 +248,26 @@ interface ElementSnapshot {
 ```typescript
 // UI → Worker
 type PanelToWorker =
-  | { type: "agentStart"; runId: string; sessionId: string; task: string; settings: WorkerSettings }
+  | {
+      type: "agentStart";
+      runId: string;
+      sessionId: string;
+      task: string; // display-only (skill/file tokens stripped)
+      resolvedTask?: string; // full prompt sent to the model
+      skillCatalog?: string;
+      activatedSkills?: string[];
+      settings: WorkerSettings;
+    }
   | { type: "agentStop"; runId?: string }
   | { type: "agentReset" }
-  | { type: "extjsRun"; id: string; code: string }
   | { type: "extjsStop" }
   | { type: "extjsReset" }
-  | { type: "extjsRunResult"; id: string; result: JsRunResult }
-  | { type: "extjsRunError"; id: string; error: string };
+  | { type: "extjsRunResult"; id: string; result: CellResult }
+  | { type: "extjsRunError"; id: string; error: string }
+  | { type: "extjsDocsResult"; id: string; docs: string }
+  | { type: "extjsDocsError"; id: string; error: string }
+  | { type: "loadSkillResult"; id: string; content: string }
+  | { type: "loadSkillError"; id: string; error: string };
 
 interface WorkerSettings {
   anthropicApiKey?: string;
@@ -270,11 +282,14 @@ type WorkerToPanel =
   | { type: "agentMessage"; runId: string; message: ChatMessage }
   | { type: "agentTextDelta"; runId: string; messageId: string; text: string }
   | { type: "agentTrace"; runId: string; entry: AgentTraceEntry }
+  | { type: "agentDiagnostic"; runId: string; event: AgentDiagnosticEvent }
   | { type: "agentMessageEnd"; runId: string; messageId: string }
   | { type: "agentError"; runId: string; error: BrowsergentError }
   | { type: "extjsOutput"; id: string; output: string }
   | { type: "extjsError"; id: string; error: string }
-  | { type: "extjsRunRequest"; id: string; code: string };
+  | { type: "extjsRunRequest"; id: string; code: string }
+  | { type: "extjsDocsRequest"; id: string; format: "json" | "markdown" }
+  | { type: "loadSkillRequest"; id: string; skill: string; path?: string; activatedSkills?: string[] };
 
 type AgentStatus = "idle" | "loading" | "running" | "waiting_for_model" | "executing_tool" | "done" | "stopped" | "error";
 ```

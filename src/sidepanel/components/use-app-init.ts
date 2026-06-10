@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ExtjsController } from "../../controllers/extjs-controller";
+import { FilesController } from "../../controllers/files-controller";
 import { SessionController } from "../../controllers/session-controller";
 import { SettingsController } from "../../controllers/settings-controller";
 import { WorkerBridge } from "../../controllers/worker-bridge";
+import { ExtensionJsClient } from "../extension-js-client";
+import { hydrateAndSyncFiles } from "../hydrate-files";
 import { browsergentStore } from "../../state/store";
 import { IndexedDBStorage } from "../../storage/indexeddb-storage";
 import { MemoryStorage } from "../../storage/memory-storage";
@@ -16,6 +19,7 @@ export interface AppInitResult {
 	extjsControllerRef: { current: ExtjsController | null };
 	settingsControllerRef: { current: SettingsController | null };
 	sessionControllerRef: { current: SessionController | null };
+	filesControllerRef: { current: FilesController | null };
 }
 
 export function useAppInit(): AppInitResult {
@@ -25,6 +29,7 @@ export function useAppInit(): AppInitResult {
 	const extjsControllerRef = useRef<ExtjsController | null>(null);
 	const settingsControllerRef = useRef<SettingsController | null>(null);
 	const sessionControllerRef = useRef<SessionController | null>(null);
+	const filesControllerRef = useRef<FilesController | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -83,29 +88,55 @@ export function useAppInit(): AppInitResult {
 			sessionControllerRef.current = sessionCtrl;
 			await sessionCtrl.init();
 
+			const filesCtrl = new FilesController(ExtensionJsClient.getInstance());
+			filesControllerRef.current = filesCtrl;
+
+			const cleanupPrunedSessions = async (
+				prunedIds: readonly string[],
+			): Promise<void> => {
+				for (const id of prunedIds) {
+					try {
+						await filesCtrl.cleanupSession(id);
+					} catch (err: unknown) {
+						console.warn("Files cleanup on session prune failed:", err);
+					}
+				}
+			};
+
 			extjs.init().catch((err: unknown) => {
 				console.warn("JS init failed:", err);
 			});
 			bridge.start();
 			sessionCtrl
 				.load()
-				.then((session) => {
+				.then(async (session) => {
 					if (session) {
+						const activeSessionId = sessionCtrl.getActiveSessionId() ?? "";
 						browsergentStore.getState().hydrateChat(session.messages);
 						browsergentStore.getState().hydrateTrace(session.trace);
 						browsergentStore.getState().hydrateDiagnostics(session.diagnostics);
+						await hydrateAndSyncFiles(activeSessionId, session.filesIndex, filesCtrl);
 					}
 					sessionCtrl.hydrated = true;
+					const { sessions: sessionList, prunedIds } =
+						await sessionCtrl.listSessions();
+					await cleanupPrunedSessions(prunedIds);
+					browsergentStore.getState().sessionListLoaded(sessionList);
+					browsergentStore
+						.getState()
+						.activeSessionChanged(sessionCtrl.getActiveSessionId() || "");
 				})
-				.catch((err: unknown) => {
+				.catch(async (err: unknown) => {
 					console.warn("Session load failed:", err);
 					sessionCtrl.hydrated = true;
+					const activeSessionId = sessionCtrl.getActiveSessionId() ?? "";
+					await hydrateAndSyncFiles(activeSessionId, [], filesCtrl);
+					const { sessions: sessionList, prunedIds } =
+						await sessionCtrl.listSessions();
+					await cleanupPrunedSessions(prunedIds);
+					browsergentStore.getState().sessionListLoaded(sessionList);
+					browsergentStore.getState().activeSessionChanged(activeSessionId);
 				});
-			const sessionList = await sessionCtrl.listSessions();
-			browsergentStore.getState().sessionListLoaded(sessionList);
-			browsergentStore
-				.getState()
-				.activeSessionChanged(sessionCtrl.getActiveSessionId() || "");
 
 			settingsCtrl.load().catch((err: unknown) => {
 				console.warn("Settings load failed:", err);
@@ -137,5 +168,6 @@ export function useAppInit(): AppInitResult {
 		extjsControllerRef,
 		settingsControllerRef,
 		sessionControllerRef,
+		filesControllerRef,
 	};
 }

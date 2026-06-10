@@ -8,7 +8,6 @@ import {
 	selectApiKey,
 	selectBaseUrl,
 	selectExtjsStatus,
-	selectJsCodeDraft,
 	selectMessageIds,
 	selectMessagesById,
 	selectModel,
@@ -46,7 +45,6 @@ describe("selectors", () => {
 		ui: {
 			taskDraft: "fill",
 			activeTab: "chat" as const,
-			jsCodeDraft: "page.click()",
 			settingsOpen: false,
 		},
 		settings: {
@@ -96,10 +94,6 @@ describe("selectors", () => {
 
 	test("selectActiveTab returns tab", () => {
 		expect(selectActiveTab(mockStore as any)).toBe("chat");
-	});
-
-	test("selectJsCodeDraft returns code", () => {
-		expect(selectJsCodeDraft(mockStore as any)).toBe("page.click()");
 	});
 
 	test("selectApiKey returns key", () => {
