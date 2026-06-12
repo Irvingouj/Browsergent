@@ -6,6 +6,10 @@
 2. **Files panel (§2)** — replace JS tab (`PLAN.md` WU-2–WU-4)
 3. **`@` mentions (§3)** — file context in task input (`PLAN.md` WU-5–WU-6)
 4. **§6 Phase D** (optional) — user skills from Files panel (`PLAN.md` WU-7)
+5. **§7 Multi-line input** — Shift+Enter for newline, Enter to send
+6. **§8 Direct file tools** — native read/edit/delete/ls tools for the agent (not only through `run_js`)
+7. **§9 Chat file drop** — drag-and-drop files onto chat input → upload to OPFS + auto-attach to task
+8. **§10 `run_js` file reference** — expose `run_js` with a direct file reference so agent can execute uploaded scripts
 
 §4 is folded into §6 Layer 1 (not a separate optional track).
 
@@ -461,3 +465,123 @@ tests/skill-compose-inject.spec.ts   # TODO (E2E closure)
 - [Cursor Agent Skills docs](https://cursor.com/docs/skills)
 - [agentskills.io specification](https://agentskills.io/specification)
 - Browsergent probe prompt → candidate content for `public/skills/capability-check/SKILL.md`
+
+---
+
+## 7. Multi-line input (Shift+Enter for newline)
+
+**Problem:** Currently `Enter` sends the task immediately. There is no way to write multi-line tasks (e.g., pasted code, step-by-step instructions, multi-paragraph prompts) without the agent starting prematurely.
+
+**Goal:** `Enter` sends, `Shift+Enter` inserts a newline. The input should grow to fit content (auto-resize textarea).
+
+### UI behavior
+
+- [ ] Replace `<input>` with `<textarea>` in `InputBar.tsx` (required for multi-line)
+- [ ] `Enter` (without modifiers) → send (call `onRun`)
+- [ ] `Shift+Enter` → insert newline, do not send
+- [ ] Auto-resize: textarea height grows with content up to a max (e.g., 40vh), then scrolls
+- [ ] Reset height to single-line when draft is cleared (after send)
+- [ ] Picker (`@` / `/`) still works: anchored to cursor position in textarea
+
+### Plumbing
+
+- [ ] Update `inputRef` type from `HTMLInputElement` to `HTMLTextAreaElement`
+- [ ] Update `onKeyDown` handler: check `e.shiftKey` before triggering send on Enter
+- [ ] Update `refreshPickerState` and `applyPickerSelection` to work with textarea selection API
+- [ ] CSS: `resize: none`, `min-h` / `max-h` for auto-grow, `overflow-y: auto` when tall
+
+### Acceptance criteria
+
+1. `Enter` sends the task (same as today).
+2. `Shift+Enter` inserts a visible newline; task is not sent.
+3. Textarea grows with content and does not push the chat area off-screen.
+4. After send, textarea resets to single-line height.
+5. `@` and `/` pickers still open and insert correctly in multi-line content.
+6. Cursor position and selection still work after picker insertion.
+
+**Problem:** The agent can only interact with uploaded files by reading their content through `@[file:...]` mention injection at compose time. During a run, the agent has no way to read, edit, delete, or list files — it would need to emit `run_js` code that calls OPFS APIs, which is fragile and indirect.
+
+**Goal:** Expose native agent tools for file operations, similar to how `load_skill` exposes skill resources.
+
+### Tools
+
+- [ ] `file_read({ path })` — read file content from OPFS session store; text only; size-capped
+- [ ] `file_edit({ path, patch })` — apply a text patch (diff or full replacement) to an existing file
+- [ ] `file_delete({ path })` — remove a file from the session's OPFS store and index
+- [ ] `file_list({ prefix? })` — list files in the current session's store; optional prefix filter
+
+### Plumbing
+
+- [ ] Route tool calls through `agent-tools.ts` → worker relay → sidepanel `FilesController` (same pattern as `load_skill`)
+- [ ] `FilesController` already has `readFileText`, `deleteFile`, `listSessionFiles` — expose via tool interface
+- [ ] Add `editFile` method to `FilesController` (read → apply patch → write → update index)
+- [ ] Add tool descriptions to `js-tool-prompt.ts` or `anthropic-prompts.ts`
+- [ ] Trace entries for file tools (same as `run_js` / `load_skill`)
+
+### Acceptance criteria
+
+1. Agent can `file_list()` and see session files during a run.
+2. Agent can `file_read({ path: "notes.md" })` and receive file content.
+3. Agent can `file_edit({ path: "notes.md", patch: "..." })` and the file is updated in OPFS + index.
+4. Agent can `file_delete({ path: "notes.md" })` and the file is removed.
+5. Tools only access files within the current session's OPFS scope (path traversal blocked).
+
+---
+
+## 8. Chat input file drop → upload + auto-attach
+
+**Problem:** Users must switch to the Files tab, upload a file, switch back to Chat, and type `@[file:...]`. This is cumbersome for the common case of "attach this file and do something with it."
+
+**Goal:** Drag-and-drop (or paste) a file directly onto the chat input bar → upload to OPFS → auto-insert `@[file:...]` token into the draft.
+
+### UI behavior
+
+- [ ] Detect `drop` / `paste` events on the task input or input bar area
+- [ ] On file drop: upload to OPFS via `FilesController.uploadFiles`, add to store
+- [ ] After upload, insert `@[file:id:filename]` token into the task draft at cursor position
+- [ ] Show a brief upload indicator (spinner or progress) while uploading
+- [ ] Support multiple files: one token per file, inserted sequentially
+
+### Plumbing
+
+- [ ] `InputBar.tsx` — `onDrop` / `onPaste` handlers that call `FilesController.uploadFiles`
+- [ ] Need access to `FilesController` in `InputBar` (via props or store)
+- [ ] Need access to `sessionId` in `InputBar` (from store)
+- [ ] `onFilesChanged` callback to flush session save after upload
+
+### Acceptance criteria
+
+1. Drop a `.txt` file onto the input → file uploads, `@[file:...]` token appears in draft.
+2. Drop multiple files → all uploaded, all tokens inserted.
+3. Run with the token → agent receives file content as attachment.
+4. Drop a binary file → token inserted, but mention resolution shows "File is not text" error.
+5. Paste an image → handled gracefully (upload as binary or reject with message).
+
+---
+
+## 9. `run_js` with file reference
+
+**Problem:** The agent's only tool is `run_js`, which takes inline JS code. If a user uploads a script file (`.js`) via the Files panel or drops it on the input, the agent cannot execute it directly — it would need to read the file content and embed it in a `run_js` call.
+
+**Goal:** Allow `run_js` to accept a file reference, so the agent can execute an uploaded script without manually reading and inlining its content.
+
+### Tool enhancement
+
+- [ ] Extend `run_js` tool input schema with optional `file?: { id: string }` parameter
+- [ ] When `file` is provided: read file content from OPFS → prepend/replace as the code to execute
+- [ ] When both `code` and `file` are provided: `file` content runs first, then `code` (or `code` overrides — TBD)
+- [ ] Update `js-tool-prompt.ts` to document the `file` parameter
+
+### Plumbing
+
+- [ ] `agent-tools.ts` — resolve file reference before sending to `relayExtjsExecution`
+- [ ] `FilesController.readFileText(sessionId, fileId)` — already exists
+- [ ] Need session ID and files controller access in the worker relay path
+- [ ] Trace entry shows file reference + execution result
+
+### Acceptance criteria
+
+1. Agent calls `run_js({ file: { id: "abc" } })` → file content is loaded from OPFS and executed.
+2. Agent calls `run_js({ code: "...", file: { id: "abc" } })` → both are available (exact semantics TBD).
+3. File not found or not text → structured tool error with hint.
+4. File content is still subject to the same size/cap limits as inline code.
