@@ -11,6 +11,7 @@ import { createAgentTools } from "./agent-tools";
 import type { AnthropicConfig } from "./anthropic";
 import { composeSystemPrompt } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
+import type { FileOp, FileOpResult } from "./file-op-relay";
 import { isToolErrorEnvelope, renderToolOutput } from "./tool-error-result";
 
 function isTextContentBlock(c: {
@@ -45,6 +46,7 @@ export interface AgentLoopCallbacks {
 	runJs: (code: string) => Promise<CellResult>;
 	getDocs: (format: "json" | "markdown") => Promise<string>;
 	loadSkill: (skill: string, path?: string) => Promise<string>;
+	fileOp: (op: FileOp) => Promise<FileOpResult>;
 }
 
 const STATUS_MAP: Record<string, AgentStatus> = {
@@ -86,6 +88,7 @@ export class AgentLoop {
 			callbacks.runJs,
 			callbacks.getDocs,
 			callbacks.loadSkill,
+			callbacks.fileOp,
 		);
 
 		this.agent = new Agent({

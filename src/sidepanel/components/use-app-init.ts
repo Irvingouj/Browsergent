@@ -5,6 +5,7 @@ import { SessionController } from "../../controllers/session-controller";
 import { SettingsController } from "../../controllers/settings-controller";
 import { WorkerBridge } from "../../controllers/worker-bridge";
 import { ExtensionJsClient } from "../extension-js-client";
+import { handleFileOp } from "../file-op-handler";
 import { hydrateAndSyncFiles } from "../hydrate-files";
 import { browsergentStore } from "../../state/store";
 import { IndexedDBStorage } from "../../storage/indexeddb-storage";
@@ -68,6 +69,46 @@ export function useAppInit(): AppInitResult {
 				},
 				onLoadSkillRequest: (msg) => {
 					extjsControllerRef.current?.handleLoadSkillRelayRequest(msg);
+				},
+				onFileOpRequest: (msg) => {
+					const filesCtrl = filesControllerRef.current;
+					const bridgeInstance = bridgeRef.current;
+					if (!filesCtrl || !bridgeInstance) {
+						bridgeInstance?.post({
+							type: "fileOpError",
+							id: msg.id,
+							error: "Files controller unavailable",
+						});
+						return;
+					}
+					handleFileOp(msg, filesCtrl)
+						.then(async (result) => {
+							bridgeRef.current?.post({
+								type: "fileOpResult",
+								id: msg.id,
+								result,
+							});
+							if (result.op === "edit" || result.op === "delete") {
+								try {
+									const fresh = await filesCtrl.listSessionFiles(msg.sessionId);
+									browsergentStore.getState().setFileNodes(fresh);
+								} catch (refreshErr) {
+									console.warn(
+										"Files state refresh after tool op failed:",
+										refreshErr,
+									);
+								}
+							}
+						})
+						.catch((err: unknown) => {
+							const message =
+								err instanceof Error ? err.message : String(err);
+							bridgeRef.current?.post({
+								type: "fileOpError",
+								id: msg.id,
+								error: message,
+							});
+						});
 				},
 				onWorkerReady: () => setWorkerReady(true),
 				onAgentStopped: () => {

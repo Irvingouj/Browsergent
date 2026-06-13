@@ -2,6 +2,7 @@ import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import {
 	isExtjsError,
 	isExtjsOutput,
+	isFileOpRequest,
 	isLoadSkillRequest,
 	isWorkerToPanel,
 } from "../protocol/worker-guards";
@@ -15,6 +16,7 @@ import {
 	initStreamingSignal,
 } from "../state/streaming-signals";
 import type { PanelToWorker } from "../types/messages";
+import type { FileOp } from "../worker/file-op-relay";
 
 type ExtjsRunRequestHandler = (msg: {
 	type: "extjsRunRequest";
@@ -35,6 +37,13 @@ type LoadSkillRequestHandler = (msg: {
 	path?: string;
 }) => void;
 
+type FileOpRequestHandler = (msg: {
+	type: "fileOpRequest";
+	id: string;
+	sessionId: string;
+	op: FileOp;
+}) => void;
+
 type WorkerReadyHandler = () => void;
 type AgentStoppedHandler = () => void;
 
@@ -49,6 +58,7 @@ export class WorkerBridge {
 	private onExtjsRunRequest: ExtjsRunRequestHandler | null = null;
 	private onExtjsDocsRequest: ExtjsDocsRequestHandler | null = null;
 	private onLoadSkillRequest: LoadSkillRequestHandler | null = null;
+	private onFileOpRequest: FileOpRequestHandler | null = null;
 	private onWorkerReady: WorkerReadyHandler | null = null;
 	private onAgentStopped: AgentStoppedHandler | null = null;
 
@@ -56,12 +66,14 @@ export class WorkerBridge {
 		onExtjsRunRequest?: ExtjsRunRequestHandler;
 		onExtjsDocsRequest?: ExtjsDocsRequestHandler;
 		onLoadSkillRequest?: LoadSkillRequestHandler;
+		onFileOpRequest?: FileOpRequestHandler;
 		onWorkerReady?: WorkerReadyHandler;
 		onAgentStopped?: AgentStoppedHandler;
 	}) {
 		this.onExtjsRunRequest = options?.onExtjsRunRequest ?? null;
 		this.onExtjsDocsRequest = options?.onExtjsDocsRequest ?? null;
 		this.onLoadSkillRequest = options?.onLoadSkillRequest ?? null;
+		this.onFileOpRequest = options?.onFileOpRequest ?? null;
 		this.onWorkerReady = options?.onWorkerReady ?? null;
 		this.onAgentStopped = options?.onAgentStopped ?? null;
 	}
@@ -249,6 +261,16 @@ export class WorkerBridge {
 			case "loadSkillRequest":
 				if (isLoadSkillRequest(raw) && this.onLoadSkillRequest) {
 					this.onLoadSkillRequest(raw);
+				}
+				break;
+			case "fileOpRequest":
+				if (isFileOpRequest(raw) && this.onFileOpRequest) {
+					this.onFileOpRequest(raw as {
+						type: "fileOpRequest";
+						id: string;
+						sessionId: string;
+						op: FileOp;
+					});
 				}
 				break;
 		}

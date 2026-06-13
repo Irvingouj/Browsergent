@@ -2,6 +2,7 @@
 
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { CellResult } from "./extjs-utils";
+import type { FileOp, FileOpResult } from "../worker/file-op-relay";
 
 export type { BrowsergentError };
 
@@ -27,7 +28,9 @@ export type PanelToWorker =
 	| { type: "extjsDocsResult"; id: string; docs: string }
 	| { type: "extjsDocsError"; id: string; error: string }
 	| { type: "loadSkillResult"; id: string; content: string }
-	| { type: "loadSkillError"; id: string; error: string };
+	| { type: "loadSkillError"; id: string; error: string }
+	| { type: "fileOpResult"; id: string; result: FileOpResult }
+	| { type: "fileOpError"; id: string; error: string };
 
 export interface WorkerSettings {
 	anthropicApiKey?: string;
@@ -56,7 +59,8 @@ export type WorkerToPanel =
 			skill: string;
 			path?: string;
 			activatedSkills?: string[];
-	  };
+	  }
+	| { type: "fileOpRequest"; id: string; sessionId: string; op: FileOp };
 
 // --- Agent Status ---
 

@@ -316,6 +316,41 @@ export function isLoadSkillError(
 	return true;
 }
 
+export function isFileOpRequest(msg: unknown): msg is {
+	type: "fileOpRequest";
+	id: string;
+	sessionId: string;
+	op: unknown;
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "fileOpRequest") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.sessionId)) return false;
+	return true;
+}
+
+export function isFileOpResult(msg: unknown): msg is {
+	type: "fileOpResult";
+	id: string;
+	result: unknown;
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "fileOpResult") return false;
+	if (!isString(msg.id)) return false;
+	if (msg.result === undefined) return false;
+	return true;
+}
+
+export function isFileOpError(
+	msg: unknown,
+): msg is { type: "fileOpError"; id: string; error: string } {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "fileOpError") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.error)) return false;
+	return true;
+}
+
 export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 	return (
 		isWorkerReady(msg) ||
@@ -330,6 +365,7 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isExtjsError(msg) ||
 		isExtjsRunRequest(msg) ||
 		isExtjsDocsRequest(msg) ||
-		isLoadSkillRequest(msg)
+		isLoadSkillRequest(msg) ||
+		isFileOpRequest(msg)
 	);
 }

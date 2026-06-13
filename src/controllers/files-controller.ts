@@ -163,6 +163,79 @@ export class FilesController {
 		return index.entries.map(buildFileNode);
 	}
 
+	async editFile(
+		sessionId: string,
+		fileId: string,
+		oldString: string,
+		newString: string,
+		replaceAll: boolean,
+	): Promise<{ occurrences: number; bytes: number }> {
+		return this.runSerialized(sessionId, () =>
+			this.editFileUnlocked(
+				sessionId,
+				fileId,
+				oldString,
+				newString,
+				replaceAll,
+			),
+		);
+	}
+
+	private async editFileUnlocked(
+		sessionId: string,
+		fileId: string,
+		oldString: string,
+		newString: string,
+		replaceAll: boolean,
+	): Promise<{ occurrences: number; bytes: number }> {
+		const cleanSessionId = sanitizeSessionId(sessionId);
+		const index = await this.readIndex(cleanSessionId);
+		const idx = index.entries.findIndex((e) => e.id === fileId);
+		if (idx === -1) {
+			throw new Error(`File not found: ${fileId}`);
+		}
+		const entry = index.entries[idx]!;
+		const expectedPrefix = `/session-files/${cleanSessionId}/`;
+		if (!entry.path.startsWith(expectedPrefix)) {
+			throw new Error(`File path out of scope: ${fileId}`);
+		}
+		if (!entry.isText) {
+			throw new Error(`File is not text: ${fileId}`);
+		}
+		if (oldString === newString) {
+			throw new Error("old_string and new_string must differ");
+		}
+
+		const original = await this.fs.fsReadText(entry.path);
+		if (oldString.length === 0) {
+			throw new Error("old_string must not be empty");
+		}
+		const occurrences = countOccurrences(original, oldString);
+		if (occurrences === 0) {
+			throw new Error("old_string not found in file");
+		}
+		if (occurrences > 1 && !replaceAll) {
+			throw new Error(
+				`old_string matches ${occurrences} times; provide more context or set replace_all=true`,
+			);
+		}
+
+		const updated = replaceAll
+			? original.split(oldString).join(newString)
+			: original.replace(oldString, newString);
+		if (updated.length > MAX_TEXT_FILE_SIZE) {
+			throw new Error(
+				`Edit would exceed max file size (${MAX_TEXT_FILE_SIZE} bytes)`,
+			);
+		}
+		await this.fs.fsWriteText(entry.path, updated);
+
+		index.entries[idx] = { ...entry, size: updated.length };
+		await this.writeIndex(cleanSessionId, index);
+
+		return { occurrences: replaceAll ? occurrences : 1, bytes: updated.length };
+	}
+
 	// Session load/switch replays IndexedDB filesIndex into OPFS. Upload/delete
 	// persist filesIndex immediately via flushSave so snapshot stays authoritative.
 	async syncIndexFromSnapshot(
@@ -251,4 +324,15 @@ export class FilesController {
 		const path = `${dirPath}/.index.json`;
 		await this.fs.fsWriteText(path, JSON.stringify(index));
 	}
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+	if (needle.length === 0) return 0;
+	let count = 0;
+	let i = 0;
+	while ((i = haystack.indexOf(needle, i)) !== -1) {
+		count++;
+		i += needle.length;
+	}
+	return count;
 }

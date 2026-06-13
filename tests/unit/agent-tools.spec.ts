@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createAgentTools } from "../../src/worker/agent-tools";
 import {
 	isToolErrorEnvelope,
@@ -25,9 +25,10 @@ function expectErrorEnvelope(text: string) {
 
 const mockGetDocs = vi.fn();
 const mockLoadSkill = vi.fn();
+const mockFileOp = vi.fn();
 
 function makeTools(runJs = vi.fn()) {
-	return createAgentTools(runJs, mockGetDocs, mockLoadSkill);
+	return createAgentTools(runJs, mockGetDocs, mockLoadSkill, mockFileOp);
 }
 
 describe("run_js tool error handling", () => {
@@ -283,5 +284,165 @@ describe("get_doc tool", () => {
 		const envelope = expectErrorEnvelope(result as string);
 		expect(envelope.code).toBe("E_JS_RUNTIME");
 		expect(envelope.message).toContain("docs generation failed");
+	});
+});
+
+describe("file_list tool", () => {
+	beforeEach(() => {
+		mockFileOp.mockReset();
+	});
+
+	test("returns formatted list of files", async () => {
+		mockFileOp.mockResolvedValue({
+			op: "list",
+			files: [
+				{ id: "f1", name: "notes.md", size: 12, mime: "text/markdown", isText: true },
+				{ id: "f2", name: "image.png", size: 100, mime: "image/png", isText: false },
+			],
+		});
+		const tools = makeTools();
+		const handler = tools.getHandler("file_list");
+		if (!handler) throw new Error("file_list handler not found");
+		const result = (await handler({})) as string;
+		expect(result).toContain("name\tsize\tmime\tisText");
+		expect(result).toContain("notes.md\t12\ttext/markdown\tyes");
+		expect(result).toContain("image.png\t100\timage/png\tno");
+	});
+
+	test("returns 'No files in session' when empty", async () => {
+		mockFileOp.mockResolvedValue({ op: "list", files: [] });
+		const tools = makeTools();
+		const handler = tools.getHandler("file_list");
+		const result = (await handler({})) as string;
+		expect(result).toBe("No files in session.");
+	});
+
+	test("passes prefix through to fileOp", async () => {
+		mockFileOp.mockResolvedValue({ op: "list", files: [] });
+		const tools = makeTools();
+		const handler = tools.getHandler("file_list");
+		await handler({ prefix: "notes" });
+		expect(mockFileOp).toHaveBeenCalledWith({ op: "list", prefix: "notes" });
+	});
+});
+
+describe("file_read tool", () => {
+	beforeEach(() => {
+		mockFileOp.mockReset();
+	});
+
+	test("returns content on success", async () => {
+		mockFileOp.mockResolvedValue({
+			op: "read",
+			content: "hello world",
+			bytes: 11,
+			truncated: false,
+		});
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		if (!handler) throw new Error("file_read handler not found");
+		const result = (await handler({ path: "notes.md" })) as string;
+		expect(result).toBe("hello world");
+	});
+
+	test("returns E_FILE_INVALID on empty path", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		const result = (await handler({ path: "  " })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_INVALID");
+	});
+
+	test("returns E_FILE_PATH_SCOPE on path traversal", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		const result = (await handler({ path: "../etc/passwd" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
+	});
+
+	test("returns E_FILE_NOT_FOUND when fileOp throws not found", async () => {
+		mockFileOp.mockRejectedValue(new Error("File not found in session: x.md"));
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		const result = (await handler({ path: "x.md" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_NOT_FOUND");
+	});
+});
+
+describe("file_edit tool", () => {
+	beforeEach(() => {
+		mockFileOp.mockReset();
+	});
+
+	test("returns formatted result on success", async () => {
+		mockFileOp.mockResolvedValue({ op: "edit", occurrences: 1, bytes: 14 });
+		const tools = makeTools();
+		const handler = tools.getHandler("file_edit");
+		if (!handler) throw new Error("file_edit handler not found");
+		const result = (await handler({
+			path: "notes.md",
+			old_string: "world",
+			new_string: "browser",
+		})) as string;
+		expect(result).toBe(
+			"Edited notes.md: replaced 1 occurrence; file is now 14 bytes.",
+		);
+	});
+
+	test("returns E_FILE_NOT_UNIQUE when old_string matches multiple times", async () => {
+		mockFileOp.mockRejectedValue(new Error("old_string matches 2 times"));
+		const tools = makeTools();
+		const handler = tools.getHandler("file_edit");
+		const result = (await handler({
+			path: "notes.md",
+			old_string: "a",
+			new_string: "b",
+		})) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_NOT_UNIQUE");
+	});
+
+	test("returns E_FILE_STRING_NOT_FOUND when old_string missing", async () => {
+		mockFileOp.mockRejectedValue(new Error("old_string not found in file"));
+		const tools = makeTools();
+		const handler = tools.getHandler("file_edit");
+		const result = (await handler({
+			path: "notes.md",
+			old_string: "x",
+			new_string: "y",
+		})) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_STRING_NOT_FOUND");
+	});
+});
+
+describe("file_delete tool", () => {
+	beforeEach(() => {
+		mockFileOp.mockReset();
+	});
+
+	test("returns success message", async () => {
+		mockFileOp.mockResolvedValue({ op: "delete" });
+		const tools = makeTools();
+		const handler = tools.getHandler("file_delete");
+		if (!handler) throw new Error("file_delete handler not found");
+		const result = (await handler({ path: "notes.md" })) as string;
+		expect(result).toBe("Deleted notes.md.");
+	});
+
+	test("returns E_FILE_INVALID on empty path", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_delete");
+		const result = (await handler({ path: "" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_INVALID");
 	});
 });

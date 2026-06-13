@@ -418,6 +418,113 @@ describe("FilesController.deleteFile", () => {
 	});
 });
 
+describe("FilesController.editFile", () => {
+	let fs: MockFs;
+	let ctrl: FilesController;
+	let fileId: string;
+	let filePath: string;
+
+	beforeEach(async () => {
+		fs = createMockFs();
+		ctrl = new FilesController(fs);
+		const file = new File(["hello world"], "test.md", {
+			type: "text/markdown",
+		});
+		const nodes = await ctrl.uploadFiles("s1", [file]);
+		fileId = nodes[0].id;
+		filePath = nodes[0].path;
+	});
+
+	test("replaces a unique occurrence and updates index size", async () => {
+		const result = await ctrl.editFile(
+			"s1",
+			fileId,
+			"world",
+			"browser",
+			false,
+		);
+		expect(result.occurrences).toBe(1);
+		expect(result.bytes).toBe("hello browser".length);
+		expect(fs.storage.get(filePath)).toBe("hello browser");
+
+		const index = JSON.parse(
+			fs.storage.get("/session-files/s1/.index.json")!,
+		);
+		expect(index.entries[0].size).toBe("hello browser".length);
+	});
+
+	test("rejects when old_string matches multiple times without replace_all", async () => {
+		// Seed content with two occurrences of "x"
+		fs.storage.set(filePath, "x and x");
+		const index = JSON.parse(
+			fs.storage.get("/session-files/s1/.index.json")!,
+		);
+		index.entries[0].size = 7;
+		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
+
+		await expect(
+			ctrl.editFile("s1", fileId, "x", "y", false),
+		).rejects.toThrow("matches 2 times");
+	});
+
+	test("replaces all occurrences when replace_all=true", async () => {
+		fs.storage.set(filePath, "x and x");
+		const index = JSON.parse(
+			fs.storage.get("/session-files/s1/.index.json")!,
+		);
+		index.entries[0].size = 7;
+		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
+
+		const result = await ctrl.editFile("s1", fileId, "x", "y", true);
+		expect(result.occurrences).toBe(2);
+		expect(fs.storage.get(filePath)).toBe("y and y");
+	});
+
+	test("throws when old_string not found", async () => {
+		await expect(
+			ctrl.editFile("s1", fileId, "missing", "x", false),
+		).rejects.toThrow("not found in file");
+	});
+
+	test("throws when old_string equals new_string", async () => {
+		await expect(
+			ctrl.editFile("s1", fileId, "hello", "hello", false),
+		).rejects.toThrow("must differ");
+	});
+
+	test("throws for non-existent file id", async () => {
+		await expect(
+			ctrl.editFile("s1", "bad-id", "a", "b", false),
+		).rejects.toThrow("File not found");
+	});
+
+	test("throws for binary files", async () => {
+		const binFile = new File(["bin"], "img.png", { type: "image/png" });
+		const nodes = await ctrl.uploadFiles("s1", [binFile]);
+		await expect(
+			ctrl.editFile("s1", nodes[0].id, "a", "b", false),
+		).rejects.toThrow("not text");
+	});
+
+	test("throws when index entry path is out of session scope", async () => {
+		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
+		const index = JSON.parse(indexText);
+		index.entries[0].path = "/session-files/s2/f1-test.md";
+		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
+
+		await expect(
+			ctrl.editFile("s1", fileId, "hello", "hi", false),
+		).rejects.toThrow("out of scope");
+	});
+
+	test("rejects edit that would exceed max file size", async () => {
+		const bigReplacement = "x".repeat(1_000_002);
+		await expect(
+			ctrl.editFile("s1", fileId, "world", bigReplacement, false),
+		).rejects.toThrow("max file size");
+	});
+});
+
 describe("FilesController.listSessionFiles", () => {
 	test("returns empty array for new session", async () => {
 		const fs = createMockFs();

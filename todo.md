@@ -505,18 +505,18 @@ tests/skill-compose-inject.spec.ts   # TODO (E2E closure)
 
 ### Tools
 
-- [ ] `file_read({ path })` — read file content from OPFS session store; text only; size-capped
-- [ ] `file_edit({ path, patch })` — apply a text patch (diff or full replacement) to an existing file
-- [ ] `file_delete({ path })` — remove a file from the session's OPFS store and index
-- [ ] `file_list({ prefix? })` — list files in the current session's store; optional prefix filter
+- [x] `file_read({ path })` — read file content from OPFS session store; text only; size-capped
+- [x] `file_edit({ path, patch })` — apply a text patch (diff or full replacement) to an existing file
+- [x] `file_delete({ path })` — remove a file from the session's OPFS store and index
+- [x] `file_list({ prefix? })` — list files in the current session's store; optional prefix filter
 
 ### Plumbing
 
-- [ ] Route tool calls through `agent-tools.ts` → worker relay → sidepanel `FilesController` (same pattern as `load_skill`)
-- [ ] `FilesController` already has `readFileText`, `deleteFile`, `listSessionFiles` — expose via tool interface
-- [ ] Add `editFile` method to `FilesController` (read → apply patch → write → update index)
-- [ ] Add tool descriptions to `js-tool-prompt.ts` or `anthropic-prompts.ts`
-- [ ] Trace entries for file tools (same as `run_js` / `load_skill`)
+- [x] Route tool calls through `agent-tools.ts` → worker relay → sidepanel `FilesController` (same pattern as `load_skill`)
+- [x] `FilesController` already has `readFileText`, `deleteFile`, `listSessionFiles` — expose via tool interface
+- [x] Add `editFile` method to `FilesController` (read → apply patch → write → update index)
+- [x] Add tool descriptions to `js-tool-prompt.ts` or `anthropic-prompts.ts`
+- [x] Trace entries for file tools (same as `run_js` / `load_skill`)
 
 ### Acceptance criteria
 

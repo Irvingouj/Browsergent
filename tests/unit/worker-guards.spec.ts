@@ -7,6 +7,9 @@ import {
 	isExtjsDocsError,
 	isExtjsDocsRequest,
 	isExtjsDocsResult,
+	isFileOpError,
+	isFileOpRequest,
+	isFileOpResult,
 	isLoadSkillError,
 	isLoadSkillRequest,
 	isLoadSkillResult,
@@ -268,5 +271,84 @@ describe("isLoadSkillError", () => {
 
 	test("rejects missing error", () => {
 		expect(isLoadSkillError({ type: "loadSkillError", id: "s1" })).toBe(false);
+	});
+});
+
+describe("isFileOpRequest", () => {
+	test("accepts valid list request", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "list" },
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid edit request", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: {
+					op: "edit",
+					path: "x.md",
+					oldString: "a",
+					newString: "b",
+				},
+			}),
+		).toBe(true);
+	});
+
+	test("rejects missing sessionId", () => {
+		expect(
+			isFileOpRequest({ type: "fileOpRequest", id: "f1", op: { op: "list" } }),
+		).toBe(false);
+	});
+
+	test("rejects missing id", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				sessionId: "s1",
+				op: { op: "list" },
+			}),
+		).toBe(false);
+	});
+});
+
+describe("isFileOpResult", () => {
+	test("accepts valid result", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "list", files: [] },
+			}),
+		).toBe(true);
+	});
+
+	test("rejects missing result", () => {
+		expect(isFileOpResult({ type: "fileOpResult", id: "f1" })).toBe(false);
+	});
+});
+
+describe("isFileOpError", () => {
+	test("accepts valid error", () => {
+		expect(
+			isFileOpError({ type: "fileOpError", id: "f1", error: "not found" }),
+		).toBe(true);
+	});
+
+	test("rejects missing error", () => {
+		expect(isFileOpError({ type: "fileOpError", id: "f1" })).toBe(false);
+	});
+
+	test("rejects non-string error", () => {
+		expect(
+			isFileOpError({ type: "fileOpError", id: "f1", error: 42 }),
+		).toBe(false);
 	});
 });

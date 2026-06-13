@@ -22,6 +22,8 @@ import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 import { AgentLoop } from "./agent-loop";
 import type { AnthropicConfig } from "./anthropic";
 import { LoadSkillRelay } from "./load-skill-relay";
+import { FileOpRelay } from "./file-op-relay";
+import type { FileOp, FileOpResult } from "./file-op-relay";
 
 enableStreamDebug();
 
@@ -50,6 +52,7 @@ declare const self: DedicatedWorkerGlobalScope;
 
 let agentLoop: AgentLoop | null = null;
 let currentRunId: string | null = null;
+let currentSessionId: string | null = null;
 let currentActivatedSkills: string[] = [];
 
 function post(message: WorkerToPanel): void {
@@ -106,6 +109,35 @@ const loadSkillRelay = new LoadSkillRelay(
 	},
 	EXTJS_RELAY_TIMEOUT_MS,
 );
+
+const fileOpRelay = new FileOpRelay(
+	(request) => {
+		post({
+			type: "fileOpRequest",
+			id: request.id,
+			sessionId: request.sessionId,
+			op: request.op,
+		});
+	},
+	EXTJS_RELAY_TIMEOUT_MS,
+);
+
+function relayFileOp(op: FileOp) {
+	if (!currentSessionId) {
+		return Promise.reject(
+			new Error("No active session — cannot perform file operation"),
+		);
+	}
+	return fileOpRelay.relay(currentSessionId, op);
+}
+
+function handleFileOpRelayResult(id: string, result: FileOpResult): void {
+	fileOpRelay.resolve(id, result);
+}
+
+function handleFileOpRelayError(id: string, error: string): void {
+	fileOpRelay.reject(id, error);
+}
 
 /** Send JS code to the side panel for execution via ExtensionSession. */
 function relayExtjsExecution(code: string): Promise<CellResult> {
@@ -213,6 +245,7 @@ function handleAgentStart(
 	activatedSkills?: string[],
 ): void {
 	currentRunId = runId;
+	currentSessionId = sessionId;
 	currentActivatedSkills = activatedSkills ?? [];
 
 	if (!settings.anthropicApiKey) {
@@ -311,6 +344,9 @@ function handleAgentStart(
 			loadSkill(skill, path) {
 				return relayLoadSkill(skill, path);
 			},
+			fileOp(op) {
+				return relayFileOp(op);
+			},
 		})
 		.catch((err) => {
 			if (runId === currentRunId) {
@@ -337,6 +373,7 @@ function handleAgentStop(runId?: string): void {
 	}
 	const stoppedRunId = currentRunId ?? "unknown";
 	currentRunId = null; // prevent late agent callbacks from overwriting the stopped status
+	currentSessionId = null;
 	currentActivatedSkills = [];
 	post({
 		type: "agentStatus",
@@ -347,6 +384,7 @@ function handleAgentStop(runId?: string): void {
 	rejectAllPendingExtjsRelays("Agent stopped");
 	rejectAllPendingExtjsDocsRelays("Agent stopped");
 	loadSkillRelay.rejectAll("Agent stopped");
+	fileOpRelay.rejectAll("Agent stopped");
 }
 
 function handleAgentReset(): void {
@@ -354,7 +392,9 @@ function handleAgentReset(): void {
 	rejectAllPendingExtjsRelays("Agent reset");
 	rejectAllPendingExtjsDocsRelays("Agent reset");
 	loadSkillRelay.rejectAll("Agent reset");
+	fileOpRelay.rejectAll("Agent reset");
 	agentLoop = null;
+	currentSessionId = null;
 	currentActivatedSkills = [];
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
@@ -385,11 +425,13 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 			rejectAllPendingExtjsRelays("Extjs stopped");
 			rejectAllPendingExtjsDocsRelays("Extjs stopped");
 			loadSkillRelay.rejectAll("Extjs stopped");
+			fileOpRelay.rejectAll("Extjs stopped");
 			break;
 		case "extjsReset":
 			rejectAllPendingExtjsRelays("Extjs reset");
 			rejectAllPendingExtjsDocsRelays("Extjs reset");
 			loadSkillRelay.rejectAll("Extjs reset");
+			fileOpRelay.rejectAll("Extjs reset");
 			break;
 		case "extjsRunResult":
 			handleExtjsRelayResult(msg.id, msg.result);
@@ -408,6 +450,12 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 			break;
 		case "loadSkillError":
 			handleLoadSkillRelayError(msg.id, msg.error);
+			break;
+		case "fileOpResult":
+			handleFileOpRelayResult(msg.id, msg.result);
+			break;
+		case "fileOpError":
+			handleFileOpRelayError(msg.id, msg.error);
 			break;
 	}
 };

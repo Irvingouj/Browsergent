@@ -2,6 +2,7 @@ import type { AgentToolDefinition, AgentTools } from "@pi-oxide/pi-host-web";
 import { z } from "zod";
 import type { CellResult } from "../types/extjs-utils";
 import { formatJsRunResult } from "../types/extjs-utils";
+import type { FileOp, FileOpResult } from "./file-op-relay";
 import { JS_TOOL_PROMPT } from "./js-tool-prompt";
 import { formatToolError } from "./tool-error-result";
 
@@ -183,10 +184,118 @@ function classifyError(source: {
 
 const RUN_JS_DESCRIPTION = JS_TOOL_PROMPT;
 
+const FILE_LIST_DESCRIPTION = `List files in the current session's OPFS store.
+Use this to discover what files are available before reading or editing.
+Returns each file's id, name, size, mime, and isText flag. Binary files (isText=false)
+cannot be read with file_read — use a different approach for those.`;
+
+const FILE_READ_DESCRIPTION = `Read text content from a session file.
+- \`path\` is the file NAME (e.g. "notes.md"), not a full OPFS path. Find names via file_list.
+- Returns the text content; long files are truncated with a [truncated] marker.
+- Binary files return E_FILE_BINARY. Files outside the session scope are rejected.
+Prefer this over run_js when you just want to read an uploaded file's content.`;
+
+const FILE_EDIT_DESCRIPTION = `Apply an exact text replacement to a session file.
+- \`path\` is the file NAME (e.g. "notes.md").
+- \`old_string\` must match the file content exactly (indentation, whitespace, quotes).
+- If \`old_string\` matches multiple locations, the call fails unless \`replace_all\` is true.
+- Use this for precise edits to uploaded files. For new files, use run_js or ask the user.`;
+
+const FILE_DELETE_DESCRIPTION = `Permanently remove a file from the session's OPFS store.
+- \`path\` is the file NAME (e.g. "notes.md").
+- Cannot be undone. Use only when the user asks to delete or when a file is no longer needed.`;
+
+const FILE_PATH_HELP =
+	'Call file_list first to see available file names, then pass the name (e.g. "notes.md").';
+const MAX_FILE_READ_CHARS = 50_000;
+
+function validateFileToolPath(path: string): string | null {
+	const trimmed = path.trim();
+	if (!trimmed) return "path must not be empty";
+	if (trimmed.includes("..")) return "path must not contain '..'";
+	if (trimmed.startsWith("/")) return "path must be a relative file name, not start with '/'";
+	return null;
+}
+
+function formatFileOpError(err: unknown): string {
+	const msg = err instanceof Error ? err.message : String(err);
+	if (msg.includes("not text")) {
+		return formatToolError("E_FILE_BINARY", msg, FILE_PATH_HELP);
+	}
+	if (msg.includes("not found in file")) {
+		return formatToolError(
+			"E_FILE_STRING_NOT_FOUND",
+			msg,
+			"Use file_read to inspect the exact content; whitespace and quotes must match.",
+		);
+	}
+	if (msg.includes("not found")) {
+		return formatToolError("E_FILE_NOT_FOUND", msg, FILE_PATH_HELP);
+	}
+	if (msg.includes("out of scope") || msg.includes("out-of-scope")) {
+		return formatToolError(
+			"E_FILE_PATH_SCOPE",
+			msg,
+			"Only files in the current session are accessible.",
+		);
+	}
+	if (msg.includes("matches")) {
+		return formatToolError(
+			"E_FILE_NOT_UNIQUE",
+			msg,
+			"Include more surrounding context in old_string, or set replace_all=true.",
+		);
+	}
+	if (msg.includes("must differ") || msg.includes("must not be empty")) {
+		return formatToolError("E_FILE_NO_CHANGE", msg, "");
+	}
+	if (msg.includes("max file size") || msg.includes("too large")) {
+		return formatToolError("E_FILE_TOO_LARGE", msg, "");
+	}
+	return formatToolError("E_FILE_UNKNOWN", msg, FILE_PATH_HELP);
+}
+
+function truncateFileContent(content: string): { text: string; truncated: boolean } {
+	if (content.length <= MAX_FILE_READ_CHARS) {
+		return { text: content, truncated: false };
+	}
+	const marker = "\n\n[truncated]\n\n";
+	const half = Math.floor(MAX_FILE_READ_CHARS - marker.length);
+	return {
+		text: content.slice(0, half) + marker,
+		truncated: true,
+	};
+}
+
+function formatFileListResult(files: {
+	id: string;
+	name: string;
+	size: number;
+	mime: string;
+	isText: boolean;
+}[]): string {
+	if (files.length === 0) return "No files in session.";
+	const header = "name\tsize\tmime\tisText";
+	const rows = files.map(
+		(f) => `${f.name}\t${f.size}\t${f.mime}\t${f.isText ? "yes" : "no"}`,
+	);
+	return [header, ...rows].join("\n");
+}
+
+function formatFileReadResult(content: string, bytes: number, truncated: boolean): string {
+	const head = truncated ? `[truncated — file is ${bytes} bytes]\n\n` : "";
+	return head + content;
+}
+
+function formatFileEditResult(occurrences: number, bytes: number, name: string): string {
+	return `Edited ${name}: replaced ${occurrences} occurrence${occurrences === 1 ? "" : "s"}; file is now ${bytes} bytes.`;
+}
+
 export function createAgentTools(
 	runJs: (code: string) => Promise<CellResult>,
 	getDocs: (format: "json" | "markdown") => Promise<string>,
 	loadSkill: (skill: string, path?: string) => Promise<string>,
+	fileOp: (op: FileOp) => Promise<FileOpResult>,
 ): AgentTools {
 	const definitions: AgentToolDefinition[] = [
 		{
@@ -326,6 +435,198 @@ export function createAgentTools(
 						msg,
 						"Check skill names in the catalog or ask the user to activate with /skill:name.",
 					);
+				}
+			},
+		},
+		{
+			name: "file_list",
+			description: FILE_LIST_DESCRIPTION,
+			inputSchema: {
+				type: "object",
+				properties: {
+					prefix: {
+						type: "string",
+						description:
+							"Optional case-sensitive prefix filter (e.g. 'notes' matches 'notes.md').",
+					},
+				},
+			},
+			run: async (input: unknown) => {
+				const parsed = z
+					.object({ prefix: z.string().optional() })
+					.safeParse(input);
+				const prefix = parsed.success ? parsed.data.prefix : undefined;
+				try {
+					const result = await fileOp({ op: "list", prefix });
+					if (result.op !== "list") {
+						return formatToolError(
+							"E_FILE_UNKNOWN",
+							"Unexpected result for file_list",
+							"",
+						);
+					}
+					return formatFileListResult(result.files);
+				} catch (err) {
+					return formatFileOpError(err);
+				}
+			},
+		},
+		{
+			name: "file_read",
+			description: FILE_READ_DESCRIPTION,
+			inputSchema: {
+				type: "object",
+				properties: {
+					path: {
+						type: "string",
+						description: 'File name within the session (e.g. "notes.md").',
+					},
+				},
+				required: ["path"],
+			},
+			run: async (input: unknown) => {
+				const parsed = z.object({ path: z.string() }).safeParse(input);
+				if (!parsed.success || !parsed.data.path.trim()) {
+					return formatToolError(
+						"E_FILE_INVALID",
+						"file_read requires a non-empty 'path' string",
+						FILE_PATH_HELP,
+					);
+				}
+				const pathError = validateFileToolPath(parsed.data.path);
+				if (pathError) {
+					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+				}
+				try {
+					const result = await fileOp({ op: "read", path: parsed.data.path });
+					if (result.op !== "read") {
+						return formatToolError(
+							"E_FILE_UNKNOWN",
+							"Unexpected result for file_read",
+							"",
+						);
+					}
+					const { text, truncated } = truncateFileContent(result.content);
+					return formatFileReadResult(text, result.bytes, truncated);
+				} catch (err) {
+					return formatFileOpError(err);
+				}
+			},
+		},
+		{
+			name: "file_edit",
+			description: FILE_EDIT_DESCRIPTION,
+			inputSchema: {
+				type: "object",
+				properties: {
+					path: {
+						type: "string",
+						description: 'File name within the session (e.g. "notes.md").',
+					},
+					old_string: {
+						type: "string",
+						description: "The exact text to replace.",
+					},
+					new_string: {
+						type: "string",
+						description: "The text to replace it with.",
+					},
+					replace_all: {
+						type: "boolean",
+						description:
+							"If true, replace every occurrence. Defaults to false (requires uniqueness).",
+					},
+				},
+				required: ["path", "old_string", "new_string"],
+			},
+			run: async (input: unknown) => {
+				const parsed = z
+					.object({
+						path: z.string(),
+						old_string: z.string(),
+						new_string: z.string(),
+						replace_all: z.boolean().optional(),
+					})
+					.safeParse(input);
+				if (
+					!parsed.success ||
+					!parsed.data.path.trim() ||
+					!parsed.data.old_string ||
+					!parsed.data.new_string
+				) {
+					return formatToolError(
+						"E_FILE_INVALID",
+						"file_edit requires non-empty path, old_string, and new_string",
+						FILE_PATH_HELP,
+					);
+				}
+				const pathError = validateFileToolPath(parsed.data.path);
+				if (pathError) {
+					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+				}
+				try {
+					const result = await fileOp({
+						op: "edit",
+						path: parsed.data.path,
+						oldString: parsed.data.old_string,
+						newString: parsed.data.new_string,
+						replaceAll: parsed.data.replace_all ?? false,
+					});
+					if (result.op !== "edit") {
+						return formatToolError(
+							"E_FILE_UNKNOWN",
+							"Unexpected result for file_edit",
+							"",
+						);
+					}
+					return formatFileEditResult(
+						result.occurrences,
+						result.bytes,
+						parsed.data.path,
+					);
+				} catch (err) {
+					return formatFileOpError(err);
+				}
+			},
+		},
+		{
+			name: "file_delete",
+			description: FILE_DELETE_DESCRIPTION,
+			inputSchema: {
+				type: "object",
+				properties: {
+					path: {
+						type: "string",
+						description: 'File name within the session (e.g. "notes.md").',
+					},
+				},
+				required: ["path"],
+			},
+			run: async (input: unknown) => {
+				const parsed = z.object({ path: z.string() }).safeParse(input);
+				if (!parsed.success || !parsed.data.path.trim()) {
+					return formatToolError(
+						"E_FILE_INVALID",
+						"file_delete requires a non-empty 'path' string",
+						FILE_PATH_HELP,
+					);
+				}
+				const pathError = validateFileToolPath(parsed.data.path);
+				if (pathError) {
+					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+				}
+				try {
+					const result = await fileOp({ op: "delete", path: parsed.data.path });
+					if (result.op !== "delete") {
+						return formatToolError(
+							"E_FILE_UNKNOWN",
+							"Unexpected result for file_delete",
+							"",
+						);
+					}
+					return `Deleted ${parsed.data.path}.`;
+				} catch (err) {
+					return formatFileOpError(err);
 				}
 			},
 		},
