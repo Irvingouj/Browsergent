@@ -1,4 +1,5 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
+import type { FileOp, FileOpResult } from "../worker/file-op-relay";
 import type {
 	AgentDiagnosticEvent,
 	AgentStatus,
@@ -316,28 +317,70 @@ export function isLoadSkillError(
 	return true;
 }
 
+function isValidFileOp(op: unknown): op is FileOp {
+	if (!isObject(op)) return false;
+	const o = op as Record<string, unknown>;
+	if (o.op !== "list" && o.op !== "read" && o.op !== "edit" && o.op !== "delete")
+		return false;
+	if (o.op === "list") {
+		if (o.prefix !== undefined && typeof o.prefix !== "string") return false;
+		return true;
+	}
+	if (o.op === "read" || o.op === "delete") {
+		return typeof o.path === "string";
+	}
+	// edit
+	return (
+		typeof o.path === "string" &&
+		typeof o.oldString === "string" &&
+		typeof o.newString === "string" &&
+		(o.replaceAll === undefined || typeof o.replaceAll === "boolean")
+	);
+}
+
+function isValidFileOpResult(result: unknown): result is FileOpResult {
+	if (!isObject(result)) return false;
+	const r = result as Record<string, unknown>;
+	if (r.op !== "list" && r.op !== "read" && r.op !== "edit" && r.op !== "delete")
+		return false;
+	if (r.op === "list") return Array.isArray(r.files);
+	if (r.op === "read") {
+		return (
+			typeof r.content === "string" &&
+			typeof r.bytes === "number" &&
+			typeof r.truncated === "boolean"
+		);
+	}
+	if (r.op === "edit") {
+		return typeof r.occurrences === "number" && typeof r.bytes === "number";
+	}
+	return true; // delete has no extra fields
+}
+
 export function isFileOpRequest(msg: unknown): msg is {
 	type: "fileOpRequest";
 	id: string;
 	sessionId: string;
-	op: unknown;
+	op: FileOp;
 } {
 	if (!isObject(msg)) return false;
 	if (msg.type !== "fileOpRequest") return false;
 	if (!isString(msg.id)) return false;
 	if (!isString(msg.sessionId)) return false;
+	if (!isValidFileOp(msg.op)) return false;
 	return true;
 }
 
 export function isFileOpResult(msg: unknown): msg is {
 	type: "fileOpResult";
 	id: string;
-	result: unknown;
+	result: FileOpResult;
 } {
 	if (!isObject(msg)) return false;
 	if (msg.type !== "fileOpResult") return false;
 	if (!isString(msg.id)) return false;
 	if (msg.result === undefined) return false;
+	if (!isValidFileOpResult(msg.result)) return false;
 	return true;
 }
 

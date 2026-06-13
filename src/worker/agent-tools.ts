@@ -214,6 +214,8 @@ function validateFileToolPath(path: string): string | null {
 	if (!trimmed) return "path must not be empty";
 	if (trimmed.includes("..")) return "path must not contain '..'";
 	if (trimmed.startsWith("/")) return "path must be a relative file name, not start with '/'";
+	if (trimmed.includes("\\")) return "path must not contain backslashes";
+	if (trimmed.includes("\0")) return "path must not contain null bytes";
 	return null;
 }
 
@@ -260,9 +262,11 @@ function truncateFileContent(content: string): { text: string; truncated: boolea
 		return { text: content, truncated: false };
 	}
 	const marker = "\n\n[truncated]\n\n";
-	const half = Math.floor(MAX_FILE_READ_CHARS - marker.length);
+	const budget = MAX_FILE_READ_CHARS - marker.length;
+	const head = Math.ceil(budget / 2);
+	const tail = budget - head;
 	return {
-		text: content.slice(0, half) + marker,
+		text: content.slice(0, head) + marker + content.slice(-tail),
 		truncated: true,
 	};
 }

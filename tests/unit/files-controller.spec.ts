@@ -492,6 +492,12 @@ describe("FilesController.editFile", () => {
 		).rejects.toThrow("must differ");
 	});
 
+	test("throws when old_string is empty", async () => {
+		await expect(
+			ctrl.editFile("s1", fileId, "", "x", false),
+		).rejects.toThrow("must not be empty");
+	});
+
 	test("throws for non-existent file id", async () => {
 		await expect(
 			ctrl.editFile("s1", "bad-id", "a", "b", false),

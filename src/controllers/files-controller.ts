@@ -230,8 +230,18 @@ export class FilesController {
 		}
 		await this.fs.fsWriteText(entry.path, updated);
 
-		index.entries[idx] = { ...entry, size: updated.length };
-		await this.writeIndex(cleanSessionId, index);
+		try {
+			index.entries[idx] = { ...entry, size: updated.length };
+			await this.writeIndex(cleanSessionId, index);
+		} catch (indexErr) {
+			// Roll back content mutation so OPFS stays consistent with the index.
+			try {
+				await this.fs.fsWriteText(entry.path, original);
+			} catch (restoreErr) {
+				console.warn("Failed to restore original after index write failure:", restoreErr);
+			}
+			throw indexErr;
+		}
 
 		return { occurrences: replaceAll ? occurrences : 1, bytes: updated.length };
 	}

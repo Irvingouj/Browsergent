@@ -187,4 +187,13 @@ describe("handleFileOp", () => {
 			),
 		).rejects.toThrow("out of scope");
 	});
+
+	test("rejects path with null byte", async () => {
+		await expect(
+			handleFileOp(
+				{ id: "r1", sessionId: "s1", op: { op: "read", path: "evil\0.md" } },
+				ctrl as unknown as FilesController,
+			),
+		).rejects.toThrow("out of scope");
+	});
 });
