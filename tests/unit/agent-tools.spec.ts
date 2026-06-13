@@ -90,7 +90,7 @@ describe("run_js tool error handling", () => {
 		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
 		const result = await handler({ code: "" });
-		expect(result).toBe("run_js requires a non-empty 'code' string");
+		expect(result).toMatch(/requires a non-empty/);
 		expect(runJs).not.toHaveBeenCalled();
 	});
 
@@ -599,3 +599,105 @@ describe("file_read truncation", () => {
 		expect(result).not.toContain("[truncated]");
 	});
 });
+
+describe("run_js file reference", () => {
+	beforeEach(() => {
+		mockFileOp.mockReset();
+	});
+
+	test("file only succeeds with file content as code", async () => {
+		mockFileOp.mockResolvedValue({
+			op: "read",
+			content: "console.log('hi')",
+			bytes: 17,
+			truncated: false,
+		});
+		const runJs = vi.fn().mockResolvedValue({
+			status: "ok",
+			result: "ok",
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ file: { name: "script.js" } });
+		expect(mockFileOp).toHaveBeenCalledWith({ op: "read", path: "script.js" });
+		expect(runJs).toHaveBeenCalledWith("console.log('hi')");
+		expect(typeof result).toBe("string");
+	});
+
+	test("code only still works without calling fileOp", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "ok",
+			result: "ok",
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		await handler({ code: "1+1" });
+		expect(mockFileOp).not.toHaveBeenCalled();
+		expect(runJs).toHaveBeenCalledWith("1+1");
+	});
+
+	test("both code and file returns E_JS_INVALID_INPUT", async () => {
+		const runJs = vi.fn();
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "1+1",
+			file: { name: "script.js" },
+		}) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_JS_INVALID_INPUT");
+		expect(runJs).not.toHaveBeenCalled();
+		expect(mockFileOp).not.toHaveBeenCalled();
+	});
+
+	test("neither code nor file returns validation message", async () => {
+		const runJs = vi.fn();
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({});
+		expect(result).toMatch(/requires a non-empty/);
+		expect(runJs).not.toHaveBeenCalled();
+	});
+
+	test("file not found returns E_FILE_NOT_FOUND", async () => {
+		mockFileOp.mockRejectedValue(new Error("File not found in session: missing.js"));
+		const runJs = vi.fn();
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ file: { name: "missing.js" } }) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_NOT_FOUND");
+		expect(runJs).not.toHaveBeenCalled();
+	});
+
+	test("binary file returns E_FILE_BINARY", async () => {
+		mockFileOp.mockRejectedValue(new Error("File is not text: img.png"));
+		const runJs = vi.fn();
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ file: { name: "img.png" } }) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_BINARY");
+		expect(runJs).not.toHaveBeenCalled();
+	});
+
+	test("file path traversal rejected before fileOp call", async () => {
+		const runJs = vi.fn();
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ file: { name: "../etc/passwd" } }) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
+		expect(mockFileOp).not.toHaveBeenCalled();
+		expect(runJs).not.toHaveBeenCalled();
+	});
+});
+

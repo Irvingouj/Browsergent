@@ -308,19 +308,74 @@ export function createAgentTools(
 			inputSchema: {
 				type: "object",
 				properties: {
-					code: { type: "string", description: "JavaScript code to execute" },
+					code: {
+						type: "string",
+						description: "Inline JS code to execute. Mutually exclusive with 'file'.",
+					},
+					file: {
+						type: "object",
+						properties: {
+							name: {
+								type: "string",
+								description: 'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
+							},
+						},
+						required: ["name"],
+						description: "Reference to an uploaded file. Mutually exclusive with 'code'.",
+					},
 				},
-				required: ["code"],
 			},
 			run: async (input: unknown) => {
-				const parsed = z.object({ code: z.string() }).safeParse(input);
+				const parsed = z
+					.object({
+						code: z.string().optional(),
+						file: z.object({ name: z.string() }).optional(),
+					})
+					.safeParse(input);
 				if (!parsed.success) {
-					return "run_js requires a non-empty 'code' string";
+					return "run_js input must be an object with 'code' (string) and/or 'file' ({ name: string })";
 				}
-				const code = parsed.data.code;
+				const hasCode = parsed.data.code !== undefined && parsed.data.code.trim().length > 0;
+				const hasFile = parsed.data.file !== undefined && parsed.data.file.name.trim().length > 0;
+				if (hasCode && hasFile) {
+					return formatToolError(
+						"E_JS_INVALID_INPUT",
+						"Provide exactly one of 'code' or 'file' — they are mutually exclusive",
+						"",
+					);
+				}
+				if (!hasCode && !hasFile) {
+					return "run_js requires a non-empty 'code' string or a 'file' with non-empty 'name'";
+				}
+
+				let code: string;
+				if (hasFile) {
+					const fileName = parsed.data.file!.name;
+					const pathError = validateFileToolPath(fileName);
+					if (pathError) {
+						return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+					}
+					try {
+						const readResult = await fileOp({ op: "read", path: fileName });
+						if (readResult.op !== "read") {
+							return formatToolError(
+								"E_FILE_UNKNOWN",
+								`Unexpected result op for file_read: ${readResult.op}`,
+								"",
+							);
+						}
+						code = readResult.content;
+					} catch (err) {
+						return formatFileOpError(err);
+					}
+				} else {
+					code = parsed.data.code!;
+				}
+
 				if (!code.trim()) {
 					return "run_js requires a non-empty 'code' string";
 				}
+
 				try {
 					const result = await runJs(code);
 					if (result.status === "err") {

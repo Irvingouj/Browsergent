@@ -13,9 +13,22 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 		input_schema: {
 			type: "object",
 			properties: {
-				code: { type: "string", description: "JavaScript code to execute" },
+				code: {
+					type: "string",
+					description: "Inline JS code to execute. Mutually exclusive with 'file'.",
+				},
+				file: {
+					type: "object",
+					properties: {
+						name: {
+							type: "string",
+							description: 'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
+						},
+					},
+					required: ["name"],
+					description: "Reference to an uploaded file. Mutually exclusive with 'code'.",
+				},
 			},
-			required: ["code"],
 		},
 	},
 	{

@@ -54,6 +54,15 @@ export function isTextFile(name: string): boolean {
 	return false;
 }
 
+export function findSkillManifest(files: File[]): File | null {
+	for (const f of files) {
+		if (f.name === "SKILL.md") return f;
+		const wrp = (f as File & { webkitRelativePath?: string }).webkitRelativePath;
+		if (wrp?.endsWith("/SKILL.md")) return f;
+	}
+	return null;
+}
+
 export function buildFileNode(entry: FilesIndexEntry): FileNode {
 	return {
 		id: entry.id,

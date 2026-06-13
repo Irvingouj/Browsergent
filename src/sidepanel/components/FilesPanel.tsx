@@ -1,8 +1,9 @@
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
-import { isTextFile } from "../../controllers/files-utils";
+import { findSkillManifest, isTextFile } from "../../controllers/files-utils";
 import type { FilesController } from "../../controllers/files-controller";
+import { getSkillService } from "../../skills/skill-service";
 import {
 	selectFilesState,
 	selectSelectedFileId,
@@ -28,6 +29,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 	const [previewError, setPreviewError] = useState<string | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [skillImportToast, setSkillImportToast] = useState<string | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const fileNodes = useMemo(
@@ -103,16 +105,24 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		async (fileList: FileList | null) => {
 			if (!fileList || fileList.length === 0 || !sessionId) return;
 			const files = Array.from(fileList);
+			const skillMdFile = findSkillManifest(files);
 			try {
-				const nodes = await filesController.uploadFiles(
-					sessionId,
-					files,
-				);
-				for (const node of nodes) {
-					browsergentStore.getState().addFileNode(node);
+				if (skillMdFile) {
+					const skillService = getSkillService();
+					const result = await skillService.importUserSkill(files);
+					setError(null);
+					setSkillImportToast(`Imported skill: ${result.name} (${result.fileCount} files)`);
+				} else {
+					const nodes = await filesController.uploadFiles(
+						sessionId,
+						files,
+					);
+					for (const node of nodes) {
+						browsergentStore.getState().addFileNode(node);
+					}
+					onFilesChanged?.();
+					setError(null);
 				}
-				onFilesChanged?.();
-				setError(null);
 			} catch (err) {
 				setError(err instanceof Error ? err.message : "Upload failed");
 			}
@@ -145,6 +155,12 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		const timer = setTimeout(() => setError(null), 5000);
 		return () => clearTimeout(timer);
 	}, [error]);
+
+	useEffect(() => {
+		if (!skillImportToast) return;
+		const timer = setTimeout(() => setSkillImportToast(null), 5000);
+		return () => clearTimeout(timer);
+	}, [skillImportToast]);
 
 	const handleDragOver = useCallback((e: DragEvent) => {
 		e.preventDefault();
@@ -267,6 +283,11 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 			{error && (
 				<div class="mx-md mb-sm px-sm py-xs text-xs text-danger bg-danger/10 border border-danger/20 rounded">
 					{error}
+				</div>
+			)}
+			{skillImportToast && (
+				<div class="mx-md mb-sm px-sm py-xs text-xs text-success bg-success-soft/40 border border-success/20 rounded">
+					{skillImportToast}
 				</div>
 			)}
 			<div

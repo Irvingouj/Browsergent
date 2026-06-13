@@ -5,6 +5,8 @@ import {
 } from "./resolve-skill-activations";
 import { seedBundledSkills } from "./seed-bundled-skills";
 import { assertSkillLoadAllowed } from "./skill-errors";
+import { SkillImportController } from "./skill-import-controller";
+import type { SkillImportResult } from "./skill-import-controller";
 import { SkillRegistry } from "./skill-registry";
 import type {
 	LoadSkillOptions,
@@ -19,9 +21,14 @@ type SkillsChangedCallback = (skills: SkillMeta[]) => void;
 
 export class SkillService {
 	private registry: SkillRegistry | null = null;
+	private skillImport: SkillImportController | null = null;
 	private readyPromise: Promise<void> | null = null;
 	private diagnostics: SkillDiagnostic[] = [];
 	private readonly subscribers = new Set<SkillsChangedCallback>();
+
+	constructor(
+		private readonly fsFactory: (() => Promise<SkillFsClient>) | null = null,
+	) {}
 
 	async ensureReady(): Promise<SkillRegistry> {
 		if (this.registry) return this.registry;
@@ -39,11 +46,21 @@ export class SkillService {
 	}
 
 	private async initInternal(): Promise<void> {
+		const client = this.fsFactory
+			? await this.fsFactory()
+			: await this.defaultFsClient();
+		if (!this.fsFactory) {
+			await seedBundledSkills(client);
+		}
+		this.registry = new SkillRegistry(client);
+		this.skillImport = new SkillImportController(client);
+		await this.refreshDiagnostics();
+	}
+
+	private async defaultFsClient(): Promise<SkillFsClient> {
 		const client = ExtensionJsClient.getInstance();
 		await client.init();
-		await seedBundledSkills(client);
-		this.registry = new SkillRegistry(client);
-		await this.refreshDiagnostics();
+		return client;
 	}
 
 	private async refreshDiagnostics(): Promise<void> {
@@ -80,8 +97,6 @@ export class SkillService {
 	}
 
 	async refresh(): Promise<SkillMeta[]> {
-		this.registry = null;
-		this.readyPromise = null;
 		const registry = await this.ensureReady();
 		const { skills } = await registry.listSkills();
 		await this.refreshDiagnostics();
@@ -136,6 +151,23 @@ export class SkillService {
 		}
 		const doc = await registry.loadSkillBody(skill);
 		return doc.body;
+	}
+
+	async importUserSkill(files: File[]): Promise<SkillImportResult> {
+		if (!this.skillImport) {
+			throw new Error("SkillService not initialized");
+		}
+		const result = await this.skillImport.importSkill(files);
+		this.notifySkillsChanged();
+		return result;
+	}
+
+	async deleteUserSkill(name: string): Promise<void> {
+		if (!this.skillImport) {
+			throw new Error("SkillService not initialized");
+		}
+		await this.skillImport.deleteSkill(name);
+		this.notifySkillsChanged();
 	}
 }
 
