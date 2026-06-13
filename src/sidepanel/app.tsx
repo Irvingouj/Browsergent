@@ -536,7 +536,15 @@ const App: FunctionalComponent = () => {
 
 			{/* Input */}
 			{activeTab === "chat" && (
-				<InputBar isRunning={isRunning} onRun={handleRun} onStop={handleStop} inputRef={inputRef} />
+				<InputBar
+					isRunning={isRunning}
+					onRun={handleRun}
+					onStop={handleStop}
+					inputRef={inputRef}
+					filesController={filesControllerRef.current}
+					sessionId={_activeSessionId ?? ""}
+					onFilesChanged={handleFilesChanged}
+				/>
 			)}
 
 			{sessionPanelOpen && sessionControllerRef.current && (

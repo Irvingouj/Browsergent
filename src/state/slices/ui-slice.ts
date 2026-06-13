@@ -3,10 +3,17 @@ import type { BrowsergentStore } from "../store";
 
 export type UiTab = "chat" | "files";
 
+export type ChatUploadStatus =
+	| { kind: "idle" }
+	| { kind: "uploading" }
+	| { kind: "error"; message: string };
+
 export interface UiState {
 	settingsOpen: boolean;
 	taskDraft: string;
 	activeTab: UiTab;
+	chatUpload: ChatUploadStatus;
+	chatDragOver: boolean;
 }
 
 export interface UiSlice {
@@ -14,6 +21,8 @@ export interface UiSlice {
 	setSettingsOpen(open: boolean): void;
 	setTaskDraft(text: string): void;
 	setActiveTab(tab: UiTab): void;
+	setChatUploadStatus(status: ChatUploadStatus): void;
+	setChatDragOver(dragOver: boolean): void;
 }
 
 export function createUiSlice(
@@ -24,6 +33,8 @@ export function createUiSlice(
 			settingsOpen: false,
 			taskDraft: "",
 			activeTab: "chat",
+			chatUpload: { kind: "idle" },
+			chatDragOver: false,
 		},
 		setSettingsOpen(open) {
 			set((state) => ({ ui: { ...state.ui, settingsOpen: open } }));
@@ -33,6 +44,12 @@ export function createUiSlice(
 		},
 		setActiveTab(tab) {
 			set((state) => ({ ui: { ...state.ui, activeTab: tab } }));
+		},
+		setChatUploadStatus(status) {
+			set((state) => ({ ui: { ...state.ui, chatUpload: status } }));
+		},
+		setChatDragOver(dragOver) {
+			set((state) => ({ ui: { ...state.ui, chatDragOver: dragOver } }));
 		},
 	};
 }

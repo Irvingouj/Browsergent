@@ -67,8 +67,12 @@ export function buildPickerInsert(
 	return { nextText, cursorPos };
 }
 
-function sanitizeTokenName(name: string): string {
+export function sanitizeTokenName(name: string): string {
 	return name.replace(/[\[\]:]/g, "_");
+}
+
+export function buildFileMentionToken(id: string, name: string): string {
+	return `@[file:${id}:${sanitizeTokenName(name)}]`;
 }
 
 export function filesToPickerItems(files: ReadonlyArray<FileNode>): CommandPickerItem[] {
@@ -78,6 +82,6 @@ export function filesToPickerItems(files: ReadonlyArray<FileNode>): CommandPicke
 			id: file.id,
 			label: file.name,
 			description: file.path,
-			insertText: `@[file:${file.id}:${sanitizeTokenName(file.name)}]`,
+			insertText: buildFileMentionToken(file.id, file.name),
 		}));
 }

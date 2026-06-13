@@ -5,6 +5,8 @@ import {
 	filesToPickerItems,
 	resolvePickerState,
 	buildPickerInsert,
+	buildFileMentionToken,
+	sanitizeTokenName,
 } from "../../src/sidepanel/detect-mention-state";
 
 describe("detectAtState", () => {
@@ -262,5 +264,37 @@ describe("filesToPickerItems token insertion", () => {
 		const items = filesToPickerItems(files);
 		expect(items).toHaveLength(1);
 		expect(items[0]?.id).toBe("f1");
+	});
+});
+
+describe("buildFileMentionToken", () => {
+	test("builds @[file:id:name] format", () => {
+		expect(buildFileMentionToken("abc", "readme.md")).toBe("@[file:abc:readme.md]");
+	});
+
+	test("preserves spaces in name", () => {
+		expect(buildFileMentionToken("abc", "my file.txt")).toBe("@[file:abc:my file.txt]");
+	});
+
+	test("sanitizes special characters that would break token parsing", () => {
+		expect(buildFileMentionToken("abc", "data[1].txt")).toBe("@[file:abc:data_1_.txt]");
+	});
+
+	test("agrees with filesToPickerItems insertText", () => {
+		const files = [
+			{ id: "f1", name: "readme.md", path: "/readme.md", kind: "file" as const },
+		];
+		const items = filesToPickerItems(files);
+		expect(buildFileMentionToken("f1", "readme.md")).toBe(items[0]?.insertText);
+	});
+});
+
+describe("sanitizeTokenName", () => {
+	test("replaces brackets and colons with underscore", () => {
+		expect(sanitizeTokenName("a[b]:c")).toBe("a_b__c");
+	});
+
+	test("passes through plain names", () => {
+		expect(sanitizeTokenName("readme.md")).toBe("readme.md");
 	});
 });

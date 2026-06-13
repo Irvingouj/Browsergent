@@ -536,18 +536,18 @@ tests/skill-compose-inject.spec.ts   # TODO (E2E closure)
 
 ### UI behavior
 
-- [ ] Detect `drop` / `paste` events on the task input or input bar area
-- [ ] On file drop: upload to OPFS via `FilesController.uploadFiles`, add to store
-- [ ] After upload, insert `@[file:id:filename]` token into the task draft at cursor position
-- [ ] Show a brief upload indicator (spinner or progress) while uploading
-- [ ] Support multiple files: one token per file, inserted sequentially
+- [x] Detect `drop` / `paste` events on the task input or input bar area
+- [x] On file drop: upload to OPFS via `FilesController.uploadFiles`, add to store
+- [x] After upload, insert `@[file:id:filename]` token into the task draft at cursor position
+- [x] Show a brief upload indicator (spinner or progress) while uploading
+- [x] Support multiple files: one token per file, inserted sequentially
 
 ### Plumbing
 
-- [ ] `InputBar.tsx` — `onDrop` / `onPaste` handlers that call `FilesController.uploadFiles`
-- [ ] Need access to `FilesController` in `InputBar` (via props or store)
-- [ ] Need access to `sessionId` in `InputBar` (from store)
-- [ ] `onFilesChanged` callback to flush session save after upload
+- [x] `InputBar.tsx` — `onDrop` / `onPaste` handlers that call `FilesController.uploadFiles`
+- [x] Need access to `FilesController` in `InputBar` (via props or store)
+- [x] Need access to `sessionId` in `InputBar` (from store)
+- [x] `onFilesChanged` callback to flush session save after upload
 
 ### Acceptance criteria
 

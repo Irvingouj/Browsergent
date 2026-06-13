@@ -8,7 +8,11 @@ import { detectSlashState } from "../../src/sidepanel/detect-mention-state";
 import type { SkillMeta } from "../../src/skills/skill-types";
 
 const mockState = {
-	ui: { taskDraft: "test task" },
+	ui: {
+		taskDraft: "test task",
+		chatUpload: { kind: "idle" as const },
+		chatDragOver: false,
+	},
 	files: { nodes: {}, rootIds: [], selectedFileId: null, filesSessionId: null },
 };
 
@@ -47,7 +51,13 @@ vi.mock("../../src/skills/skill-service", () => ({
 describe("InputBar", () => {
 	test("shows Run button when not running", () => {
 		const html = render(
-			<InputBar isRunning={false} onRun={() => {}} onStop={() => {}} />,
+			<InputBar
+				isRunning={false}
+				onRun={() => {}}
+				onStop={() => {}}
+				filesController={null}
+				sessionId="session-1"
+			/>,
 		);
 		expect(html).toContain("Run");
 		expect(html).not.toContain("Stop");
@@ -56,7 +66,13 @@ describe("InputBar", () => {
 
 	test("shows Stop button when running", () => {
 		const html = render(
-			<InputBar isRunning={true} onRun={() => {}} onStop={() => {}} />,
+			<InputBar
+				isRunning={true}
+				onRun={() => {}}
+				onStop={() => {}}
+				filesController={null}
+				sessionId="session-1"
+			/>,
 		);
 		expect(html).toContain("Stop");
 		expect(html).not.toContain("Run");
@@ -64,14 +80,26 @@ describe("InputBar", () => {
 
 	test("disables input when running", () => {
 		const html = render(
-			<InputBar isRunning={true} onRun={() => {}} onStop={() => {}} />,
+			<InputBar
+				isRunning={true}
+				onRun={() => {}}
+				onStop={() => {}}
+				filesController={null}
+				sessionId="session-1"
+			/>,
 		);
 		expect(html).toMatch(/disabled[ >]/);
 	});
 
 	test("does not disable input when not running", () => {
 		const html = render(
-			<InputBar isRunning={false} onRun={() => {}} onStop={() => {}} />,
+			<InputBar
+				isRunning={false}
+				onRun={() => {}}
+				onStop={() => {}}
+				filesController={null}
+				sessionId="session-1"
+			/>,
 		);
 		expect(html).not.toMatch(/disabled[ >]/);
 	});

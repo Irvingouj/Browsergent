@@ -12,6 +12,8 @@ export const selectAgentActiveRunId = (s: BrowsergentStore) =>
 	s.agent.activeRunId;
 export const selectTaskDraft = (s: BrowsergentStore) => s.ui.taskDraft;
 export const selectActiveTab = (s: BrowsergentStore) => s.ui.activeTab;
+export const selectChatUpload = (s: BrowsergentStore) => s.ui.chatUpload;
+export const selectChatDragOver = (s: BrowsergentStore) => s.ui.chatDragOver;
 export const selectApiKey = (s: BrowsergentStore) => s.settings.anthropicApiKey;
 export const selectBaseUrl = (s: BrowsergentStore) => s.settings.baseUrl;
 export const selectModel = (s: BrowsergentStore) => s.settings.model;
