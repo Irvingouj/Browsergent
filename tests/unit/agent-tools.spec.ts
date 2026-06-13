@@ -372,6 +372,47 @@ describe("file_read tool", () => {
 		const envelope = expectErrorEnvelope(result);
 		expect(envelope.code).toBe("E_FILE_NOT_FOUND");
 	});
+
+	test("returns E_FILE_PATH_SCOPE on backslash in path", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		const result = (await handler({ path: "folder\\file.md" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
+		expect(mockFileOp).not.toHaveBeenCalled();
+	});
+
+	test("returns E_FILE_PATH_SCOPE on null byte in path", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		const result = (await handler({ path: "evil\0.md" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
+		expect(mockFileOp).not.toHaveBeenCalled();
+	});
+
+	test("returns E_FILE_BINARY when fileOp throws not-text", async () => {
+		mockFileOp.mockRejectedValue(new Error("File is not text: bad.md"));
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		const result = (await handler({ path: "bad.md" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_BINARY");
+	});
+
+	test("returns E_FILE_UNKNOWN on unrecognized error", async () => {
+		mockFileOp.mockRejectedValue(new Error("disk exploded"));
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		const result = (await handler({ path: "x.md" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_UNKNOWN");
+		expect(envelope.message).toContain("disk exploded");
+	});
 });
 
 describe("file_edit tool", () => {
@@ -421,6 +462,48 @@ describe("file_edit tool", () => {
 		const envelope = expectErrorEnvelope(result);
 		expect(envelope.code).toBe("E_FILE_STRING_NOT_FOUND");
 	});
+
+	test("returns E_FILE_NO_CHANGE when old_string equals new_string", async () => {
+		mockFileOp.mockRejectedValue(new Error("old_string and new_string must differ"));
+		const tools = makeTools();
+		const handler = tools.getHandler("file_edit");
+		const result = (await handler({
+			path: "notes.md",
+			old_string: "a",
+			new_string: "b",
+		})) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_NO_CHANGE");
+	});
+
+	test("returns E_FILE_TOO_LARGE when edit exceeds max file size", async () => {
+		mockFileOp.mockRejectedValue(new Error("Edit would exceed max file size"));
+		const tools = makeTools();
+		const handler = tools.getHandler("file_edit");
+		const result = (await handler({
+			path: "notes.md",
+			old_string: "a",
+			new_string: "b",
+		})) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_TOO_LARGE");
+	});
+
+	test("returns E_FILE_PATH_SCOPE on null byte in path", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_edit");
+		const result = (await handler({
+			path: "evil\0.md",
+			old_string: "a",
+			new_string: "b",
+		})) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
+		expect(mockFileOp).not.toHaveBeenCalled();
+	});
 });
 
 describe("file_delete tool", () => {
@@ -444,5 +527,75 @@ describe("file_delete tool", () => {
 		expect(isToolErrorEnvelope(result)).toBe(true);
 		const envelope = expectErrorEnvelope(result);
 		expect(envelope.code).toBe("E_FILE_INVALID");
+	});
+
+	test("returns E_FILE_PATH_SCOPE on backslash in path", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_delete");
+		const result = (await handler({ path: "folder\\file.md" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
+		expect(mockFileOp).not.toHaveBeenCalled();
+	});
+
+	test("returns E_FILE_PATH_SCOPE on null byte in path", async () => {
+		const tools = makeTools();
+		const handler = tools.getHandler("file_delete");
+		const result = (await handler({ path: "evil\0.md" })) as string;
+		expect(isToolErrorEnvelope(result)).toBe(true);
+		const envelope = expectErrorEnvelope(result);
+		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
+		expect(mockFileOp).not.toHaveBeenCalled();
+	});
+});
+
+
+describe("file_read truncation", () => {
+	beforeEach(() => {
+		mockFileOp.mockReset();
+	});
+
+	test("truncates content exceeding MAX_FILE_READ_CHARS with head+tail+marker", async () => {
+		const huge = "A".repeat(50_001);
+		mockFileOp.mockResolvedValue({
+			op: "read",
+			content: huge,
+			bytes: 50_001,
+			truncated: true,
+		});
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		if (!handler) throw new Error("file_read handler not found");
+		const result = (await handler({ path: "big.txt" })) as string;
+
+		expect(result).toContain("[truncated — file is 50001 bytes]");
+		expect(result).toContain("\n\n[truncated]\n\n");
+
+		const marker = "\n\n[truncated]\n\n";
+		const budget = 50_000 - marker.length;
+		const expectedHead = Math.ceil(budget / 2);
+		const expectedTail = budget - expectedHead;
+
+		const prefix = `[truncated — file is 50001 bytes]\n\n`;
+		expect(result.startsWith(prefix + "A".repeat(expectedHead))).toBe(true);
+		expect(result.endsWith("A".repeat(expectedTail))).toBe(true);
+		expect(result).not.toBe(huge);
+	});
+
+	test("does not truncate content at exactly MAX_FILE_READ_CHARS", async () => {
+		const exact = "B".repeat(50_000);
+		mockFileOp.mockResolvedValue({
+			op: "read",
+			content: exact,
+			bytes: 50_000,
+			truncated: false,
+		});
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		if (!handler) throw new Error("file_read handler not found");
+		const result = (await handler({ path: "exact.txt" })) as string;
+		expect(result).toBe(exact);
+		expect(result).not.toContain("[truncated]");
 	});
 });

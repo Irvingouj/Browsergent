@@ -317,6 +317,127 @@ describe("isFileOpRequest", () => {
 			}),
 		).toBe(false);
 	});
+
+	test("accepts valid read op", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "read", path: "x.md" },
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid delete op", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "delete", path: "x.md" },
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid list op with prefix", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "list", prefix: "notes" },
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid edit op with replaceAll", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "edit", path: "x.md", oldString: "a", newString: "b", replaceAll: true },
+			}),
+		).toBe(true);
+	});
+
+	test("rejects op with wrong discriminant", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "bogus" },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects list op with non-string prefix", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "list", prefix: 42 },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects read op missing path", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "read" },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects edit op missing oldString", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "edit", path: "x.md", newString: "b" },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects edit op missing newString", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "edit", path: "x.md", oldString: "a" },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects edit op with non-boolean replaceAll", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: { op: "edit", path: "x.md", oldString: "a", newString: "b", replaceAll: "yes" },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects op that is not an object", () => {
+		expect(
+			isFileOpRequest({
+				type: "fileOpRequest",
+				id: "f1",
+				sessionId: "s1",
+				op: "list",
+			}),
+		).toBe(false);
+	});
 });
 
 describe("isFileOpResult", () => {
@@ -332,6 +453,116 @@ describe("isFileOpResult", () => {
 
 	test("rejects missing result", () => {
 		expect(isFileOpResult({ type: "fileOpResult", id: "f1" })).toBe(false);
+	});
+
+	test("accepts valid read result", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "read", content: "x", bytes: 1, truncated: false },
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid edit result", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "edit", occurrences: 1, bytes: 10 },
+			}),
+		).toBe(true);
+	});
+
+	test("accepts valid delete result", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "delete" },
+			}),
+		).toBe(true);
+	});
+
+	test("rejects result with wrong discriminant", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "bogus" },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects list result without files array", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "list", files: "notarray" },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects read result missing content", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "read", bytes: 1, truncated: false },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects read result missing bytes", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "read", content: "x", truncated: false },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects read result missing truncated", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "read", content: "x", bytes: 1 },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects edit result missing occurrences", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "edit", bytes: 10 },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects edit result missing bytes", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: { op: "edit", occurrences: 1 },
+			}),
+		).toBe(false);
+	});
+
+	test("rejects result that is not an object", () => {
+		expect(
+			isFileOpResult({
+				type: "fileOpResult",
+				id: "f1",
+				result: "delete",
+			}),
+		).toBe(false);
 	});
 });
 

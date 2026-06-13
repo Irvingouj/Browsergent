@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { SkillFsClient } from "../../src/skills/skill-types";
 import {
 	buildFileNode,
@@ -528,6 +528,56 @@ describe("FilesController.editFile", () => {
 		await expect(
 			ctrl.editFile("s1", fileId, "world", bigReplacement, false),
 		).rejects.toThrow("max file size");
+	});
+
+	test("rolls back file content when index write fails", async () => {
+		const original = fs.storage.get(filePath)!;
+
+		const originalWriteText = fs.fsWriteText.bind(fs);
+		fs.fsWriteText = async (path: string, data: string) => {
+			if (path.includes(".index.json")) {
+				throw new Error("index disk full");
+			}
+			return originalWriteText(path, data);
+		};
+
+		await expect(
+			ctrl.editFile("s1", fileId, "world", "browser", false),
+		).rejects.toThrow("index disk full");
+
+		expect(fs.storage.get(filePath)).toBe(original);
+	});
+
+	test("still propagates index error when rollback restore also fails", async () => {
+		const original = fs.storage.get(filePath)!;
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		const originalWriteText = fs.fsWriteText.bind(fs);
+		let restoreAttempted = false;
+		fs.fsWriteText = async (path: string, data: string) => {
+			if (path.includes(".index.json")) {
+				if (restoreAttempted) {
+					throw new Error("index still broken");
+				}
+				throw new Error("index disk full");
+			}
+			if (data === original && path === filePath) {
+				restoreAttempted = true;
+				throw new Error("restore disk dead");
+			}
+			return originalWriteText(path, data);
+		};
+
+		await expect(
+			ctrl.editFile("s1", fileId, "world", "browser", false),
+		).rejects.toThrow("index disk full");
+
+		expect(restoreAttempted).toBe(true);
+		expect(warnSpy).toHaveBeenCalledWith(
+			"Failed to restore original after index write failure:",
+			expect.any(Error),
+		);
+		warnSpy.mockRestore();
 	});
 });
 

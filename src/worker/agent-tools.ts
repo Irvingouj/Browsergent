@@ -266,7 +266,7 @@ function truncateFileContent(content: string): { text: string; truncated: boolea
 	const head = Math.ceil(budget / 2);
 	const tail = budget - head;
 	return {
-		text: content.slice(0, head) + marker + content.slice(-tail),
+		text: content.slice(0, head) + marker + (tail > 0 ? content.slice(-tail) : ""),
 		truncated: true,
 	};
 }
