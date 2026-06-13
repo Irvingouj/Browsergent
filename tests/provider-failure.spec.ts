@@ -46,7 +46,7 @@ test("agent shows error on 503 and UI remains usable", async () => {
 
 	// Start a run
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("test 503");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

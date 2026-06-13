@@ -13,7 +13,7 @@ test("missing file mention shows system error and does not call provider", async
 	await configureMockProvider(sidePanel, mock.url);
 
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("Check @[file:nonexistent-id:missing.txt] please");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

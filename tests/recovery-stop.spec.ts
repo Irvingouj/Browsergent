@@ -43,7 +43,7 @@ test("stop during provider stream", async () => {
 	await configureMockSettings(sidePanel, mock.url);
 
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
@@ -82,7 +82,7 @@ test("stop during tool", async () => {
 	await configureMockSettings(sidePanel, mock.url);
 
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("run tool");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

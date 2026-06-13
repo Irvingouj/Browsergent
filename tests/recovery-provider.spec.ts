@@ -35,7 +35,7 @@ test("provider bad stream", async () => {
 	await configureMockSettings(sidePanel, mock.url);
 
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("bad stream");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
@@ -109,7 +109,7 @@ test("provider weak network recovers after retry", async () => {
 	await configureMockSettings(sidePanel, mockUrl);
 
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("retry task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

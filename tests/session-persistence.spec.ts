@@ -40,7 +40,7 @@ test("chat messages accumulate across multiple runs", async () => {
 
 	// First run
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("first task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=First response")).toBeVisible({
@@ -49,7 +49,7 @@ test("chat messages accumulate across multiple runs", async () => {
 
 	// Second run
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("second task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Second response")).toBeVisible({

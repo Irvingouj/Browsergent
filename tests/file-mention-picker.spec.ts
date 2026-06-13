@@ -20,7 +20,7 @@ test("@ picker inserts file mention token into task input", async () => {
 	});
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	const taskInput = sidePanel.locator('input[data-testid="task-input"]');
+	const taskInput = sidePanel.locator('[data-testid="task-input"]');
 	await taskInput.click();
 	await taskInput.fill("@");
 	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({

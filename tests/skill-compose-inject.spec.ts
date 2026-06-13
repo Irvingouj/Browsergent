@@ -88,7 +88,7 @@ test("compose /skill: injects skill body and agent can load_skill mid-run", asyn
 
 	// Type skill activation directly in the input
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("/skill:capability-check run a check");
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();

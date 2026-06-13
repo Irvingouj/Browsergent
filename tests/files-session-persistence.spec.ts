@@ -30,7 +30,7 @@ test("files survive session switch", async () => {
 
 	// Run a task to give the session a message (so it appears in the session list)
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("test task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Hello world")).toBeVisible({
@@ -131,7 +131,7 @@ test("deleting a session cleans up its files", async () => {
 
 	// Run a task to give the session a message
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("test task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Hello world")).toBeVisible({
@@ -194,7 +194,7 @@ test("sessions keep file trees isolated when switching both ways", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("session A task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Hello world")).toBeVisible({
@@ -220,7 +220,7 @@ test("sessions keep file trees isolated when switching both ways", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	await sidePanel
-		.locator('input[data-testid="task-input"]')
+		.locator('[data-testid="task-input"]')
 		.fill("session B task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Hello world")).toBeVisible({
