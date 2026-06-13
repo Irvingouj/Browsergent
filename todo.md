@@ -476,19 +476,19 @@ tests/skill-compose-inject.spec.ts   # TODO (E2E closure)
 
 ### UI behavior
 
-- [ ] Replace `<input>` with `<textarea>` in `InputBar.tsx` (required for multi-line)
-- [ ] `Enter` (without modifiers) → send (call `onRun`)
-- [ ] `Shift+Enter` → insert newline, do not send
-- [ ] Auto-resize: textarea height grows with content up to a max (e.g., 40vh), then scrolls
-- [ ] Reset height to single-line when draft is cleared (after send)
-- [ ] Picker (`@` / `/`) still works: anchored to cursor position in textarea
+- [x] Replace `<input>` with `<textarea>` in `InputBar.tsx` (required for multi-line)
+- [x] `Enter` (without modifiers) → send (call `onRun`)
+- [x] `Shift+Enter` → insert newline, do not send
+- [x] Auto-resize: textarea height grows with content up to a max (e.g., 40vh), then scrolls
+- [x] Reset height to single-line when draft is cleared (after send)
+- [x] Picker (`@` / `/`) still works: anchored to cursor position in textarea
 
 ### Plumbing
 
-- [ ] Update `inputRef` type from `HTMLInputElement` to `HTMLTextAreaElement`
-- [ ] Update `onKeyDown` handler: check `e.shiftKey` before triggering send on Enter
-- [ ] Update `refreshPickerState` and `applyPickerSelection` to work with textarea selection API
-- [ ] CSS: `resize: none`, `min-h` / `max-h` for auto-grow, `overflow-y: auto` when tall
+- [x] Update `inputRef` type from `HTMLInputElement` to `HTMLTextAreaElement`
+- [x] Update `onKeyDown` handler: check `e.shiftKey` before triggering send on Enter
+- [x] Update `refreshPickerState` and `applyPickerSelection` to work with textarea selection API
+- [x] CSS: `resize: none`, `min-h` / `max-h` for auto-grow, `overflow-y: auto` when tall
 
 ### Acceptance criteria
 

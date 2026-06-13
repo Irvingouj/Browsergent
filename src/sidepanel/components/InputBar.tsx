@@ -18,11 +18,13 @@ import {
 	buildPickerInsert,
 } from "../detect-mention-state";
 
+const MAX_INPUT_HEIGHT = 200;
+
 interface InputBarProps {
 	isRunning: boolean;
 	onRun: () => void;
 	onStop: () => void;
-	inputRef?: Ref<HTMLInputElement>;
+	inputRef?: Ref<HTMLTextAreaElement>;
 }
 
 export function skillsToPickerItems(
@@ -63,6 +65,15 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 		const unsubscribe = getSkillService().subscribeSkillsChanged(setSkills);
 		return unsubscribe;
 	}, [loadSkills]);
+
+	useEffect(() => {
+		const el =
+			inputRef && "current" in inputRef ? inputRef.current : null;
+		if (!el) return;
+		el.style.height = "auto";
+		const next = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
+		el.style.height = `${next}px`;
+	}, [taskInput, inputRef]);
 
 	const skillPickerItems = useMemo(() => skillsToPickerItems(skills), [skills]);
 	const filteredSkillItems = useMemo(
@@ -140,13 +151,13 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						emptyMessage={emptyMessage}
 					/>
 				) : null}
-				<input
+				<textarea
 					ref={inputRef}
-					type="text"
+					rows={1}
 					data-testid="task-input"
 					value={taskInput}
 					onInput={(e) => {
-						const el = e.target as HTMLInputElement;
+						const el = e.target as HTMLTextAreaElement;
 						browsergentStore.getState().setTaskDraft(el.value);
 						refreshPickerState(el.value, el.selectionStart);
 						setActiveIndex(0);
@@ -155,11 +166,11 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						loadSkills();
 					}}
 					onClick={(e) => {
-						const el = e.target as HTMLInputElement;
+						const el = e.target as HTMLTextAreaElement;
 						refreshPickerState(el.value, el.selectionStart);
 					}}
 					onKeyUp={(e) => {
-						const el = e.target as HTMLInputElement;
+						const el = e.target as HTMLTextAreaElement;
 						refreshPickerState(el.value, el.selectionStart);
 					}}
 					onKeyDown={(e) => {
@@ -188,11 +199,14 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 								return;
 							}
 						}
-						if (e.key === "Enter" && !isRunning) onRun();
+						if (e.key === "Enter" && !e.shiftKey && !isRunning) {
+							e.preventDefault();
+							onRun();
+						}
 					}}
-					placeholder="Type a task... (/ for skills, @ for files)"
+					placeholder="Type a task... (/ for skills, @ for files, Shift+Enter for newline)"
 					disabled={isRunning}
-					class="w-full bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"
+					class="w-full bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] max-h-[200px] overflow-y-auto resize-none leading-normal focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"
 				/>
 			</div>
 			{isRunning ? (

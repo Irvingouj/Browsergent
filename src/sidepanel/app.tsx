@@ -110,7 +110,7 @@ const App: FunctionalComponent = () => {
 		filesControllerRef,
 	} = useAppInit();
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
-	const inputRef = useRef<HTMLInputElement | null>(null);
+	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 	const prevIsRunning = useRef<boolean>(false);
 	const shouldFocusRef = useRef<boolean>(false);
 	useTitleGeneration(sessionControllerRef, messages);
