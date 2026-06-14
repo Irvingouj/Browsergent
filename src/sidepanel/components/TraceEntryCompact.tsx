@@ -3,6 +3,7 @@ import { useState } from "preact/hooks";
 import type { AgentTraceEntry } from "../../types/messages";
 import { highlightCode } from "../../utils/syntax-highlight";
 import { parseTraceInput } from "../../utils/parse-trace-input";
+import { parseToolErrorEnvelope } from "../../worker/tool-error-result";
 
 function SpinnerIcon() {
 	return (
@@ -24,6 +25,33 @@ function SpinnerIcon() {
 				strokeLinecap="round"
 			/>
 		</svg>
+	);
+}
+
+export function ResultBody({ text }: { text: string }) {
+	const envelope = parseToolErrorEnvelope(text);
+	if (!envelope) {
+		return (
+			<div class="bg-bg-surface border border-border rounded-md px-sm py-xs font-mono text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
+				{text}
+			</div>
+		);
+	}
+	return (
+		<div class="bg-danger-soft border border-danger/30 rounded-md px-sm py-xs font-mono text-[10px] leading-relaxed">
+			<div class="text-danger font-semibold">[{envelope.code}] {envelope.message}</div>
+			{envelope.hint && (
+				<div class="text-text-secondary mt-xs">
+					<span class="text-text-dim">Recovery:</span> {envelope.hint}
+				</div>
+			)}
+			{envelope.stack && (
+				<details class="mt-xs">
+					<summary class="text-text-dim cursor-pointer select-none">Stack</summary>
+					<pre class="mt-xs text-text-dim whitespace-pre-wrap break-words max-h-[160px] overflow-auto">{envelope.stack}</pre>
+				</details>
+			)}
+		</div>
 	);
 }
 
@@ -103,9 +131,7 @@ export const TraceEntryCompact: FunctionalComponent<{
 							<div class="text-[10px] uppercase tracking-wider text-text-dim mb-xs">
 								Result
 							</div>
-							<div class="bg-bg-surface border border-border rounded-md px-sm py-xs font-mono text-text-secondary text-[10px] leading-relaxed whitespace-pre-wrap break-words max-h-[200px] overflow-auto">
-								{entry.result}
-							</div>
+							<ResultBody text={entry.result} />
 						</div>
 					)}
 				</div>

@@ -94,6 +94,7 @@ export class ExtensionJsClient implements SkillFsClient {
 	private queue: Promise<unknown> = Promise.resolve();
 	private initialized = false;
 	private initPromise: Promise<void> | null = null;
+	private onFsMutation: (() => void) | null = null;
 
 	private constructor() {}
 
@@ -102,6 +103,10 @@ export class ExtensionJsClient implements SkillFsClient {
 			ExtensionJsClient.instance = new ExtensionJsClient();
 		}
 		return ExtensionJsClient.instance;
+	}
+
+	setOnFsMutation(cb: (() => void) | null): void {
+		this.onFsMutation = cb;
 	}
 
 	async init(): Promise<void> {
@@ -169,6 +174,7 @@ export class ExtensionJsClient implements SkillFsClient {
 			if (!this.session) throw new Error("ExtensionSession not available");
 			await this.session.fs.writeText({ path, data });
 		}, "fsWriteText failed");
+		this.onFsMutation?.();
 	}
 
 	async fsMkdir(path: string): Promise<void> {
@@ -177,6 +183,7 @@ export class ExtensionJsClient implements SkillFsClient {
 			if (!this.session) throw new Error("ExtensionSession not available");
 			await this.session.fs.mkdir({ path });
 		}, "fsMkdir failed");
+		this.onFsMutation?.();
 	}
 
 	async fsDelete(path: string): Promise<void> {
@@ -185,6 +192,7 @@ export class ExtensionJsClient implements SkillFsClient {
 			if (!this.session) throw new Error("ExtensionSession not available");
 			await this.session.fs.delete({ path });
 		}, "fsDelete failed");
+		this.onFsMutation?.();
 	}
 
 	private enqueue<T>(

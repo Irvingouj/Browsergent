@@ -21,10 +21,10 @@ export class ExtjsController {
 			await this.client.init();
 			ExtensionJsClient.relayCallback = (msg: ExtjsRelayResponse) => {
 				this.bridge.post(msg);
-				if (msg.type === "extjsRunResult" || msg.type === "extjsRunError") {
-					browsergentStore.getState().incrementFilesVersion();
-				}
 			};
+			this.client.setOnFsMutation(() => {
+				browsergentStore.getState().incrementFilesVersion();
+			});
 			browsergentStore.getState().extjsReady();
 		} catch (err: unknown) {
 			browsergentStore.getState().extjsFailed(normalizeJsError(err));

@@ -133,7 +133,7 @@ export function createAnthropicModel(
 						onDiagnostic({
 							kind: "model_response",
 							timestamp: Date.now(),
-							providerStopReason: "stream_error",
+							providerStopReason: `stream_error: ${chunk.message}`,
 							sdkStopReason: "error",
 							content: [],
 						});

@@ -52,4 +52,39 @@ describe("FilesSlice", () => {
 		expect(state.nodes["/sub"]).toEqual(nodes[0]);
 		expect(state.nodes["/sub/a.txt"]).toEqual(nodes[1]);
 	});
+
+	test("expandedFolderIds starts empty", () => {
+		expect(browsergentStore.getState().files.expandedFolderIds).toEqual([]);
+	});
+
+	test("toggleFolderExpanded adds folder id when not present", () => {
+		browsergentStore.getState().toggleFolderExpanded("/sub");
+		expect(browsergentStore.getState().files.expandedFolderIds).toEqual([
+			"/sub",
+		]);
+	});
+
+	test("toggleFolderExpanded removes folder id when already present", () => {
+		browsergentStore.getState().toggleFolderExpanded("/sub");
+		browsergentStore.getState().toggleFolderExpanded("/other");
+		expect(browsergentStore.getState().files.expandedFolderIds).toEqual([
+			"/sub",
+			"/other",
+		]);
+		browsergentStore.getState().toggleFolderExpanded("/sub");
+		expect(browsergentStore.getState().files.expandedFolderIds).toEqual([
+			"/other",
+		]);
+	});
+
+	test("toggleFolderExpanded preserves other state", () => {
+		browsergentStore.getState().setFileNodes([
+			{ id: "f1", name: "a.txt", path: "/a.txt", kind: "file", size: 1 },
+		]);
+		browsergentStore.getState().toggleFolderExpanded("/sub");
+		const state = browsergentStore.getState().files;
+		expect(state.nodes["f1"]).toBeDefined();
+		expect(state.rootIds).toEqual(["f1"]);
+		expect(state.expandedFolderIds).toEqual(["/sub"]);
+	});
 });

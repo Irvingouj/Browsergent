@@ -358,3 +358,115 @@ test("file_read on missing file returns E_FILE_NOT_FOUND error in trace", async 
 	await close();
 	mock.server.close();
 });
+
+test("panel delete on directory row removes directory and descendants", async () => {
+	test.setTimeout(90000);
+	const mock = startMockAnthropicServer({
+		responses: [
+			{
+				chunks: [
+					MSG_START("msg-1"),
+					toolUseChunk(0, "tc-a", "file_write", {
+						path: "sub/a.md",
+						content: "alpha",
+					}),
+					BLOCK_STOP,
+				],
+				delays: [0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: [
+					MSG_START("msg-2"),
+					toolUseChunk(0, "tc-b", "file_write", {
+						path: "sub/b.md",
+						content: "beta",
+					}),
+					BLOCK_STOP,
+				],
+				delays: [0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: [
+					MSG_START("msg-3"),
+					textChunk(0, "Done."),
+					BLOCK_STOP,
+				],
+				delays: [0, 0, 0],
+				stopReason: "end_turn",
+			},
+		],
+	});
+
+	const { sidePanel, close } = await launchExtension();
+	await configureMockProvider(sidePanel, mock.url);
+
+	await sidePanel
+		.locator('[data-testid="task-input"]')
+		.fill("write two files into sub/");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+
+	await expect(
+		sidePanel.locator('[data-testid="trace-entry"] >> text=file_write').first(),
+	).toBeVisible({ timeout: 30000 });
+	await expect(sidePanel.getByTestId("agent-status")).toHaveText("done", {
+		timeout: 30000,
+	});
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.locator("text=sub")).toBeVisible({ timeout: 10000 });
+
+	const dirRow = sidePanel.locator('[data-testid="tree-directory"]').filter({
+		hasText: "sub",
+	});
+	await dirRow.locator("button[title='Delete directory']").click();
+
+	await expect(sidePanel.locator("text=sub")).not.toBeVisible({
+		timeout: 10000,
+	});
+
+	await close();
+	mock.server.close();
+});
+
+test("panel upload into non-existent subdirectory creates parent dirs", async () => {
+	test.setTimeout(90000);
+	const mock = startMockAnthropicServer({
+		responses: [
+			{
+				chunks: [
+					MSG_START("msg-1"),
+					textChunk(0, "Done."),
+					BLOCK_STOP,
+				],
+				delays: [0, 0, 0],
+				stopReason: "end_turn",
+			},
+		],
+	});
+
+	const { sidePanel, close } = await launchExtension();
+	await configureMockProvider(sidePanel, mock.url);
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await uploadFileViaPanel(
+		sidePanel,
+		"sub2/notes.md",
+		"hello world",
+		"text/markdown",
+	);
+
+	await expect(sidePanel.locator("text=sub2")).toBeVisible({ timeout: 10000 });
+	await sidePanel.locator("text=sub2").click();
+	await expect(sidePanel.locator("text=notes.md")).toBeVisible({
+		timeout: 10000,
+	});
+
+	await sidePanel.locator("text=notes.md").click();
+	const preview = sidePanel.locator('[data-testid="file-preview"]');
+	await expect(preview).toContainText("hello world", { timeout: 10000 });
+
+	await close();
+	mock.server.close();
+});

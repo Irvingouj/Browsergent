@@ -87,13 +87,6 @@ export function useAppInit(): AppInitResult {
 								id: msg.id,
 								result,
 							});
-							if (
-								result.op === "write" ||
-								result.op === "edit" ||
-								result.op === "delete"
-							) {
-								browsergentStore.getState().incrementFilesVersion();
-							}
 						})
 						.catch((err: unknown) => {
 							const message =

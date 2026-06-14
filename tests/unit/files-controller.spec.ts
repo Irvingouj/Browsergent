@@ -20,7 +20,12 @@ function createMockFs(): MockFs {
 		logs,
 		async fsExists(path: string): Promise<boolean> {
 			logs.push(`exists:${path}`);
-			return storage.has(path);
+			if (storage.has(path)) return true;
+			const prefix = path === "/" ? "/" : `${path}/`;
+			for (const key of storage.keys()) {
+				if (key.startsWith(prefix)) return true;
+			}
+			return false;
 		},
 		async fsList(path: string): Promise<{ name: string; kind: string }[]> {
 			logs.push(`list:${path}`);
@@ -198,15 +203,38 @@ describe("FilesController.uploadFiles", () => {
 		expect(fs.storage.size).toBe(0);
 	});
 
-	test("sanitizes names with slashes", async () => {
+	test("interprets slashes in name as subdirectory path", async () => {
 		const file = new File(["x"], "path/to/file.md", {
 			type: "text/markdown",
 		});
 		const nodes = await ctrl.uploadFiles([file]);
 
-		expect(nodes[0].name).toBe("pathtofile.md");
-		expect(nodes[0].path).toBe("/pathtofile.md");
-		expect(fs.storage.get("/pathtofile.md")).toBe("x");
+		expect(nodes[0].name).toBe("file.md");
+		expect(nodes[0].path).toBe("/path/to/file.md");
+		expect(nodes[0].parentId).toBe("/path/to");
+		expect(fs.storage.get("/path/to/file.md")).toBe("x");
+		expect(fs.logs).toContain("mkdir:/path");
+		expect(fs.logs).toContain("mkdir:/path/to");
+	});
+
+	test("rejects names with .. path traversal segments", async () => {
+		const file = new File(["x"], "../etc/passwd.md", {
+			type: "text/markdown",
+		});
+		await expect(ctrl.uploadFiles([file])).rejects.toThrow(
+			"Invalid file name",
+		);
+	});
+
+	test("does not call mkdir for already-existing parent directories", async () => {
+		fs.storage.set("/existing/.keep", "1"); // pre-create /existing dir via a sentinel file
+		const file = new File(["x"], "existing/notes.md", {
+			type: "text/markdown",
+		});
+		await ctrl.uploadFiles([file]);
+		expect(fs.storage.get("/existing/notes.md")).toBe("x");
+		// fsExists is called to check the dir; mkdir should NOT appear in logs for the existing dir
+		expect(fs.logs).not.toContain("mkdir:/existing");
 	});
 
 	test("throws for empty name after sanitization", async () => {
@@ -344,6 +372,18 @@ describe("FilesController.deleteFile", () => {
 	test("succeeds when file does not exist (deletes no-op)", async () => {
 		// fsDelete just calls storage.delete which is a no-op for missing keys
 		await expect(ctrl.deleteFile("/ghost.txt")).resolves.toBeUndefined();
+	});
+
+	test("dispatches fsDelete for a directory path", async () => {
+		fs.storage.set("/sub/a.md", "a");
+		fs.storage.set("/sub/b.md", "b");
+
+		await ctrl.deleteFile("/sub");
+
+		// The real extension-js fsDelete handles directory recursion; the controller's
+		// job is just to dispatch the call with the directory path. We assert the
+		// dispatch, not the descendants' removal (which is the SDK's responsibility).
+		expect(fs.logs).toContain("delete:/sub");
 	});
 });
 

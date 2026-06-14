@@ -42,11 +42,21 @@ export class FilesController {
 	private async uploadFilesUnlocked(files: File[]): Promise<FileNode[]> {
 		const nodes: FileNode[] = [];
 		for (const file of files) {
-			const name = sanitizeFileName(file.name);
-			if (!name) {
+			const rawSegments = file.name.split("/");
+			const segments: string[] = [];
+			for (const raw of rawSegments) {
+				const seg = sanitizeFileName(raw);
+				if (seg.length === 0) continue;
+				if (seg === "." || seg === "..") {
+					throw new Error(`Invalid file name: ${file.name}`);
+				}
+				segments.push(seg);
+			}
+			if (segments.length === 0) {
 				throw new Error(`Invalid file name: ${file.name}`);
 			}
-			if (!isTextFile(file.name)) {
+			const name = segments[segments.length - 1]!;
+			if (!isTextFile(name)) {
 				throw new Error(`Binary uploads unsupported: ${file.name}`);
 			}
 			if (file.size > MAX_TEXT_FILE_SIZE) {
@@ -55,9 +65,20 @@ export class FilesController {
 				);
 			}
 			const text = await file.text();
-			const path = `/${name}`;
+			const dirSegments = segments.slice(0, -1);
+			let dirPath = "";
+			for (const seg of dirSegments) {
+				dirPath = dirPath === "" ? `/${seg}` : `${dirPath}/${seg}`;
+				if (!(await this.fs.fsExists(dirPath))) {
+					await this.fs.fsMkdir(dirPath);
+				}
+			}
+			const path = "/" + segments.join("/");
 			await this.fs.fsWriteText(path, text);
-			nodes.push(buildFileNode({ name, path, size: text.length }));
+			const parentId = dirSegments.length > 0 ? "/" + dirSegments.join("/") : undefined;
+			nodes.push(
+				buildFileNode({ name, path, ...(parentId !== undefined ? { parentId } : {}), size: text.length }),
+			);
 		}
 		return nodes;
 	}

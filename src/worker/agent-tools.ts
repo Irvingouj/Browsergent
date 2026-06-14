@@ -4,7 +4,7 @@ import type { CellResult } from "../types/extjs-utils";
 import { formatJsRunResult } from "../types/extjs-utils";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { JS_TOOL_PROMPT } from "./js-tool-prompt";
-import { formatToolError } from "./tool-error-result";
+import { formatToolError, isStackUseful } from "./tool-error-result";
 
 interface ExtensionJsApiEntry {
 	namespace: string;
@@ -134,6 +134,17 @@ function classifyError(source: {
 	kind?: string;
 	message?: string;
 	action?: string | null;
+	code?: string | null;
+	stack?: string | null;
+}): { code: string; hint: string; stack?: string } {
+	const stack = isStackUseful(source.stack) ? source.stack : undefined;
+	const base = classifyErrorBase(source);
+	return stack ? { ...base, stack } : base;
+}
+
+function classifyErrorBase(source: {
+	kind?: string;
+	message?: string;
 	code?: string | null;
 }): { code: string; hint: string } {
 	if (source.kind === "compile" || source.message?.includes("compile error"))
@@ -389,15 +400,22 @@ export function createAgentTools(
 							message?: string;
 							action?: string | null;
 							code?: string | null;
+							stack?: string | null;
 						};
-						const { code: errCode, hint } = classifyError(err);
-						return formatToolError(errCode, formatJsRunResult(result), hint);
+						const { code: errCode, hint, stack } = classifyError(err);
+						return formatToolError(
+							errCode,
+							formatJsRunResult(result),
+							hint,
+							stack,
+						);
 					}
 					return truncateToolResult(formatJsRunResult(result), 50000);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
-					const { code: errCode, hint } = classifyError({ message: msg });
-					return formatToolError(errCode, msg, hint);
+					const stack = err instanceof Error && err.stack ? err.stack : undefined;
+					const { code: errCode, hint } = classifyError({ message: msg, stack });
+					return formatToolError(errCode, msg, hint, stack);
 				}
 			},
 		},

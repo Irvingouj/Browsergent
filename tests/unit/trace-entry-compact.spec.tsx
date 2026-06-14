@@ -1,6 +1,9 @@
 import { render } from "preact-render-to-string";
 import { describe, expect, test } from "vitest";
-import { TraceEntryCompact } from "../../src/sidepanel/components/TraceEntryCompact";
+import {
+	ResultBody,
+	TraceEntryCompact,
+} from "../../src/sidepanel/components/TraceEntryCompact";
 import type { AgentTraceEntry } from "../../src/types/messages";
 
 function makeEntry(status: AgentTraceEntry["status"]): AgentTraceEntry {
@@ -91,5 +94,41 @@ describe("TraceEntryCompact", () => {
 		const html = render(<TraceEntryCompact entry={entry} />);
 		expect(html).toContain("run_js");
 		expect(html).not.toContain("page.snapshot()");
+	});
+
+	test("renders envelope stack in collapsible details", () => {
+		const text = JSON.stringify({
+			_is_error: true,
+			code: "E_JS_RUNTIME",
+			message: "TypeError: foo is undefined",
+			hint: "Check the variable before access",
+			stack: "TypeError: foo is undefined\n    at baz (file.js:1:7)\n    at qux (file.js:2:5)",
+		});
+		const html = render(<ResultBody text={text} />);
+		expect(html).toContain("[E_JS_RUNTIME] TypeError: foo is undefined");
+		expect(html).toContain("Check the variable before access");
+		expect(html).toContain("Recovery:");
+		expect(html).toContain("<details");
+		expect(html).toContain(">Stack</summary>");
+		expect(html).toContain("at baz (file.js:1:7)");
+	});
+
+	test("omits stack section when envelope has no stack", () => {
+		const text = JSON.stringify({
+			_is_error: true,
+			code: "E_JS_TIMEOUT",
+			message: "timed out",
+			hint: "retry",
+		});
+		const html = render(<ResultBody text={text} />);
+		expect(html).toContain("[E_JS_TIMEOUT] timed out");
+		expect(html).not.toContain("<details");
+		expect(html).not.toContain(">Stack</summary>");
+	});
+
+	test("renders plain text when not an envelope", () => {
+		const html = render(<ResultBody text="just normal output" />);
+		expect(html).toContain("just normal output");
+		expect(html).not.toContain("<details");
 	});
 });

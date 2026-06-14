@@ -7,6 +7,7 @@ import {
 	selectAgentStatusReason,
 	selectApiKey,
 	selectBaseUrl,
+	selectExpandedFolderIds,
 	selectExtjsStatus,
 	selectMessageIds,
 	selectMessagesById,
@@ -58,6 +59,13 @@ describe("selectors", () => {
 			activeSessionId: "s1",
 		},
 		extjs: { status: "ready" as const, output: "" },
+		files: {
+			nodes: {},
+			rootIds: [],
+			selectedFileId: null,
+			filesVersion: 0,
+			expandedFolderIds: ["/sub"],
+		},
 	};
 
 	test("selectMessageIds returns messageIds", () => {
@@ -128,5 +136,9 @@ describe("selectors", () => {
 
 	test("selectExtjsStatus returns extjs status", () => {
 		expect(selectExtjsStatus(mockStore as any)).toBe("ready");
+	});
+
+	test("selectExpandedFolderIds returns expanded folder ids", () => {
+		expect(selectExpandedFolderIds(mockStore as any)).toEqual(["/sub"]);
 	});
 });

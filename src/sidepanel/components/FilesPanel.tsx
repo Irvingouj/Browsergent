@@ -5,6 +5,7 @@ import { findSkillManifest, isTextFile } from "../../controllers/files-utils";
 import type { FilesController } from "../../controllers/files-controller";
 import { getSkillService } from "../../skills/skill-service";
 import {
+	selectExpandedFolderIds,
 	selectFilesState,
 	selectFilesVersion,
 	selectSelectedFileId,
@@ -24,13 +25,13 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 	const filesState = useStore(browsergentStore, selectFilesState);
 	const selectedFileId = useStore(browsergentStore, selectSelectedFileId);
 	const filesVersion = useStore(browsergentStore, selectFilesVersion);
+	const expandedFolderIds = useStore(browsergentStore, selectExpandedFolderIds);
 
 	const [previewContent, setPreviewContent] = useState<string | null>(null);
 	const [previewError, setPreviewError] = useState<string | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [skillImportToast, setSkillImportToast] = useState<string | null>(null);
-	const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const fileCount = useMemo(
@@ -54,6 +55,11 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		return map;
 	}, [filesState.nodes]);
 
+	const expandedIds = useMemo(
+		() => new Set<string>(expandedFolderIds),
+		[expandedFolderIds],
+	);
+
 	const loadFiles = useCallback(async () => {
 		try {
 			const nodes = await filesController.listAllFiles();
@@ -64,16 +70,14 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 	}, [filesController]);
 
 	useEffect(() => {
-		loadFiles();
+		const timer = setTimeout(() => {
+			void loadFiles();
+		}, 0);
+		return () => clearTimeout(timer);
 	}, [loadFiles, filesVersion]);
 
 	const toggleExpand = useCallback((id: string) => {
-		setExpandedIds((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
+		browsergentStore.getState().toggleFolderExpanded(id);
 	}, []);
 
 	useEffect(() => {
@@ -468,25 +472,23 @@ const TreeNode: FunctionalComponent<TreeNodeProps> = ({
 					</svg>
 				)}
 				<span class="truncate flex-1">{node.name}</span>
-				{!isDirectory && (
-					<button
-						type="button"
-						onClick={(e) => onDelete(node.id, e)}
-						class={[
-							"opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-danger hover:bg-danger-soft transition-all cursor-pointer flex-shrink-0",
-							isSelected ? "opacity-100" : "",
-						].join(" ")}
-						title="Delete file"
-					>
-						<svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-							<path
-								d="M3 4h10M6 4V2.5a1 1 0 011-1h2a1 1 0 011 1V4m2 0v9.5a1 1 0 01-1 1H5a1 1 0 01-1-1V4h8z"
-								stroke="currentColor"
-								stroke-width="1.2"
-							/>
-						</svg>
-					</button>
-				)}
+				<button
+					type="button"
+					onClick={(e) => onDelete(node.id, e)}
+					class={[
+						"opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-danger hover:bg-danger-soft transition-all cursor-pointer flex-shrink-0",
+						isSelected ? "opacity-100" : "",
+					].join(" ")}
+					title={isDirectory ? "Delete directory" : "Delete file"}
+				>
+					<svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+						<path
+							d="M3 4h10M6 4V2.5a1 1 0 011-1h2a1 1 0 011 1V4m2 0v9.5a1 1 0 01-1 1H5a1 1 0 01-1-1V4h8z"
+							stroke="currentColor"
+							stroke-width="1.2"
+						/>
+					</svg>
+				</button>
 			</div>
 			{isDirectory && isExpanded && children.length > 0 && (
 				<div>

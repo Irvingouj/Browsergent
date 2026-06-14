@@ -34,6 +34,7 @@ export interface FilesState {
 	rootIds: FileNodeId[];
 	selectedFileId: FileNodeId | null;
 	filesVersion: number;
+	expandedFolderIds: FileNodeId[];
 }
 
 export interface FilesSlice {
@@ -44,6 +45,7 @@ export interface FilesSlice {
 	clearFiles(): void;
 	setFileNodes(nodes: FileNode[]): void;
 	incrementFilesVersion(): void;
+	toggleFolderExpanded(id: FileNodeId): void;
 }
 
 function buildFileState(nodes: FileNode[]): Pick<FilesState, "nodes" | "rootIds"> {
@@ -67,6 +69,7 @@ export function createFilesSlice(
 			rootIds: [],
 			selectedFileId: null,
 			filesVersion: 0,
+			expandedFolderIds: [],
 		},
 		setSelectedFileId(id) {
 			set((state) => ({
@@ -107,6 +110,7 @@ export function createFilesSlice(
 					nodes: {},
 					rootIds: [],
 					selectedFileId: null,
+					expandedFolderIds: [],
 				},
 			}));
 		},
@@ -123,6 +127,14 @@ export function createFilesSlice(
 			set((state) => ({
 				files: { ...state.files, filesVersion: state.files.filesVersion + 1 },
 			}));
+		},
+		toggleFolderExpanded(id) {
+			set((state) => {
+				const expandedFolderIds = state.files.expandedFolderIds.includes(id)
+					? state.files.expandedFolderIds.filter((x) => x !== id)
+					: [...state.files.expandedFolderIds, id];
+				return { files: { ...state.files, expandedFolderIds } };
+			});
 		},
 	};
 }

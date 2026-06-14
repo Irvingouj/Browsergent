@@ -17,10 +17,12 @@ vi.mock("../../src/sidepanel/extension-js-client", () => {
 	const mockInit = vi.fn().mockResolvedValue(undefined);
 	const mockDispose = vi.fn().mockResolvedValue(undefined);
 	const mockHandleRelayRequest = vi.fn();
+	const mockSetOnFsMutation = vi.fn();
 	const mockInstance = {
 		init: mockInit,
 		dispose: mockDispose,
 		handleRelayRequest: mockHandleRelayRequest,
+		setOnFsMutation: mockSetOnFsMutation,
 	};
 	return {
 		ExtensionJsClient: {
@@ -58,6 +60,7 @@ async function getMocks() {
 			init: ReturnType<typeof vi.fn>;
 			dispose: ReturnType<typeof vi.fn>;
 			handleRelayRequest: ReturnType<typeof vi.fn>;
+			setOnFsMutation: ReturnType<typeof vi.fn>;
 		},
 		mockStoreState: (storeMod as unknown as Record<string, unknown>)
 			.__mockStoreState as Record<string, ReturnType<typeof vi.fn>>,
@@ -84,6 +87,7 @@ describe("ExtjsController", () => {
 		mockInstance.init.mockClear().mockResolvedValue(undefined);
 		mockInstance.dispose.mockClear().mockResolvedValue(undefined);
 		mockInstance.handleRelayRequest.mockClear();
+		mockInstance.setOnFsMutation.mockClear();
 		mockEnsureReady.mockClear().mockResolvedValue({ listSkills: vi.fn() });
 		mockStoreState.extjsInitializing.mockClear();
 		mockStoreState.extjsReady.mockClear();
@@ -119,6 +123,36 @@ describe("ExtjsController", () => {
 		expect(callback).not.toBeNull();
 		callback?.({ type: "extjsRunResult", id: "r1", result: {} });
 		expect(bridge.posted).toHaveLength(1);
+	});
+
+	test("init relayCallback does NOT bump filesVersion on run result", async () => {
+		const { mockStoreState } = await getMocks();
+		const bridge = makeBridge();
+		const ctrl = new ExtjsController(bridge as any);
+		await ctrl.init();
+
+		const extjsMod = await getExtjsClientModule();
+		const callback = (
+			extjsMod.ExtensionJsClient as unknown as {
+				relayCallback: ((msg: unknown) => void) | null;
+			}
+		).relayCallback;
+		callback?.({ type: "extjsRunResult", id: "r1", result: {} });
+		callback?.({ type: "extjsRunError", id: "r2", error: "x" });
+
+		expect(mockStoreState.incrementFilesVersion).not.toHaveBeenCalled();
+	});
+
+	test("init wires onFsMutation to bump filesVersion", async () => {
+		const { mockInstance, mockStoreState } = await getMocks();
+		const bridge = makeBridge();
+		const ctrl = new ExtjsController(bridge as any);
+		await ctrl.init();
+
+		expect(mockInstance.setOnFsMutation).toHaveBeenCalledTimes(1);
+		const cb = mockInstance.setOnFsMutation.mock.calls[0][0] as () => void;
+		cb();
+		expect(mockStoreState.incrementFilesVersion).toHaveBeenCalledTimes(1);
 	});
 
 	test("init failure stores error and rethrows", async () => {

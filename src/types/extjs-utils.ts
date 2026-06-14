@@ -1,4 +1,5 @@
 import type { CellResult } from "@pi-oxide/extension-js";
+import { isStackUseful } from "../worker/tool-error-result";
 
 export type { CellResult };
 
@@ -34,15 +35,25 @@ export function formatError(error: WasmCellError): string {
 			return "[execution limit reached] possible infinite loop — try a different approach";
 		case "runtime": {
 			// When action/code exist, Rust already formatted the full message including
-			// hint and recovery into error.message (via format_js_exception). Use it as-is.
+			// hint and recovery into error.message (via format_js_exception).
+			// For either branch, fall back to stack when message is empty so a bare
+			// TypeError with no message still surfaces a failure location.
+			//
+			// QuickJS's wasm32 backtrace is intentionally disabled (its stack capture
+			// crashes the runtime), so engine-thrown errors carry an empty message
+			// AND a 5-char garbage stack. The isStackUseful check ensures we only
+			// fall back to stacks that actually contain frame info.
+			const trimmedStack = isStackUseful(error.stack)
+				? error.stack.trim()
+				: "";
 			if (error.action || error.code) {
-				return error.message;
+				return error.message || trimmedStack;
 			}
-			// For plain runtime errors, compose name + message so the error type is visible.
+			const message = error.message || trimmedStack;
 			const name = error.name ? `${error.name}: ` : "";
 			return error.line !== null
-				? `[runtime error] line ${error.line}: ${name}${error.message}`
-				: `[runtime error] ${name}${error.message}`;
+				? `[runtime error] line ${error.line}: ${name}${message}`
+				: `[runtime error] ${name}${message}`;
 		}
 		case "internal":
 			return `[internal error] ${error.message}`;

@@ -73,4 +73,67 @@ describe("tool-error-result", () => {
 		expect(renderToolOutput("normal output")).toBe("normal output");
 		expect(renderToolOutput("")).toBe("");
 	});
+
+	test("formatToolError omits stack when not provided or whitespace-only", async () => {
+		const { formatToolError, parseToolErrorEnvelope } = await import(
+			"../../src/worker/tool-error-result"
+		);
+		const noStack = formatToolError("E_JS_RUNTIME", "err", "hint");
+		expect(parseToolErrorEnvelope(noStack)?.stack).toBeUndefined();
+
+		const blankStack = formatToolError("E_JS_RUNTIME", "err", "hint", "   ");
+		expect(parseToolErrorEnvelope(blankStack)?.stack).toBeUndefined();
+	});
+
+	test("formatToolError + parseToolErrorEnvelope round-trip stack", async () => {
+		const { formatToolError, parseToolErrorEnvelope } = await import(
+			"../../src/worker/tool-error-result"
+		);
+		const frames = "Error: foo\n    at baz (file.js:1:7)\n    at qux (file.js:2:5)";
+		const env = formatToolError("E_JS_RUNTIME", "err", "hint", frames);
+		const parsed = parseToolErrorEnvelope(env);
+		expect(parsed?.stack).toBe(frames);
+	});
+
+	test("renderToolOutput includes Stack section when envelope has stack", async () => {
+		const { formatToolError, renderToolOutput } = await import(
+			"../../src/worker/tool-error-result"
+		);
+		const frames = "Error: foo\n    at baz (file.js:1:7)";
+		const text = renderToolOutput(
+			formatToolError("E_JS_TIMEOUT", "timeout error", "retry", frames),
+		);
+		expect(text).toBe(
+			"[E_JS_TIMEOUT] timeout error\nRecovery: retry\nStack:\n" + frames,
+		);
+	});
+
+	test("isStackUseful rejects QuickJS wasm32 garbage stacks", async () => {
+		const { isStackUseful } = await import("../../src/worker/tool-error-result");
+		// Real QuickJS wasm32 backtrace barrier yields ~5 garbage bytes.
+		// The exact bytes are engine-dependent; what matters is no useful frame.
+		expect(isStackUseful(")\n")).toBe(false);
+		expect(isStackUseful("")).toBe(false);
+		expect(isStackUseful("   ")).toBe(false);
+		expect(isStackUseful(undefined)).toBe(false);
+		expect(isStackUseful(null)).toBe(false);
+	});
+
+	test("isStackUseful accepts stacks containing frame info", async () => {
+		const { isStackUseful } = await import("../../src/worker/tool-error-result");
+		expect(isStackUseful("Error: foo\n    at baz (file.js:1:7)")).toBe(true);
+		expect(isStackUseful("at qux (eval:3:11)")).toBe(true);
+		expect(isStackUseful("foo.js:10:5")).toBe(true);
+	});
+
+	test("formatToolError strips garbage stack from envelope", async () => {
+		const { formatToolError, parseToolErrorEnvelope } = await import(
+			"../../src/worker/tool-error-result"
+		);
+		// Pre-fix: garbage stack would be attached and the UI would render
+		// control chars in a Stack section. Post-fix: stack is dropped.
+		const env = formatToolError("E_JS_RUNTIME", "ReferenceError", "retry", ")\n");
+		const parsed = parseToolErrorEnvelope(env);
+		expect(parsed?.stack).toBeUndefined();
+	});
 });

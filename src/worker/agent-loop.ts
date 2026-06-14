@@ -12,7 +12,7 @@ import type { AnthropicConfig } from "./anthropic";
 import { composeSystemPrompt } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
 import type { FileOp, FileOpResult } from "./file-op-relay";
-import { isToolErrorEnvelope, renderToolOutput } from "./tool-error-result";
+import { isToolErrorEnvelope } from "./tool-error-result";
 
 function isTextContentBlock(c: {
 	type: string;
@@ -160,11 +160,7 @@ export class AgentLoop {
 					: typeof t.output === "string"
 						? t.output
 						: JSON.stringify(t.output);
-				const resultText = (
-					typeof t.output === "string" && !t.error
-						? renderToolOutput(rawOutput)
-						: rawOutput
-				).slice(0, 8000);
+				const resultText = rawOutput.slice(0, 8000);
 				const traceStatus = computeToolEndTraceStatus(
 					t.status,
 					t.error,

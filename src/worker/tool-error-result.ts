@@ -3,6 +3,19 @@ export interface ToolErrorEnvelope {
 	code: string;
 	message: string;
 	hint: string;
+	stack?: string;
+}
+
+/**
+ * QuickJS's wasm32 backtrace is intentionally disabled (its stack capture
+ * crashes the runtime), so engine-thrown errors carry a 5-char garbage stack
+ * (`\u00%x\u00%x\u00%x)\n`). Detect "useful" stacks via the presence of a frame
+ * marker (`at fn (loc)`) or `file:line:col` so we don't leak the garbage into
+ * the agent's view.
+ */
+export function isStackUseful(stack: unknown): stack is string {
+	if (typeof stack !== "string") return false;
+	return /\bat\b.+\(.+\)|\b[\w.-]+:\d+:\d+/.test(stack);
 }
 
 // Tools return envelopes instead of throwing because the SDK hardcodes is_error: false on tool results.
@@ -11,13 +24,11 @@ export function formatToolError(
 	code: string,
 	message: string,
 	hint: string,
+	stack?: string,
 ): string {
-	return JSON.stringify({
-		_is_error: true,
-		code,
-		message,
-		hint,
-	} satisfies ToolErrorEnvelope);
+	const envelope: ToolErrorEnvelope = { _is_error: true, code, message, hint };
+	if (isStackUseful(stack)) envelope.stack = stack;
+	return JSON.stringify(envelope);
 }
 
 export function parseToolErrorEnvelope(text: string): ToolErrorEnvelope | null {
@@ -31,12 +42,16 @@ export function parseToolErrorEnvelope(text: string): ToolErrorEnvelope | null {
 			typeof rec.code === "string" &&
 			typeof rec.message === "string"
 		) {
-			return {
+			const envelope: ToolErrorEnvelope = {
 				_is_error: true,
 				code: rec.code,
 				message: rec.message,
 				hint: typeof rec.hint === "string" ? rec.hint : "",
 			};
+			if (isStackUseful(rec.stack)) {
+				envelope.stack = rec.stack;
+			}
+			return envelope;
 		}
 		return null;
 	} catch {
@@ -51,5 +66,8 @@ export function isToolErrorEnvelope(text: string): boolean {
 export function renderToolOutput(text: string): string {
 	const envelope = parseToolErrorEnvelope(text);
 	if (!envelope) return text;
-	return `[${envelope.code}] ${envelope.message}\nRecovery: ${envelope.hint}`;
+	const stackSection = envelope.stack
+		? `\nStack:\n${envelope.stack}`
+		: "";
+	return `[${envelope.code}] ${envelope.message}\nRecovery: ${envelope.hint}${stackSection}`;
 }

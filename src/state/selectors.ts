@@ -32,3 +32,5 @@ export const selectSelectedFileId = (s: BrowsergentStore) =>
 	s.files.selectedFileId;
 export const selectFilesVersion = (s: BrowsergentStore) =>
 	s.files.filesVersion;
+export const selectExpandedFolderIds = (s: BrowsergentStore) =>
+	s.files.expandedFolderIds;

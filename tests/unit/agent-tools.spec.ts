@@ -163,6 +163,52 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const envelope = expectErrorEnvelope(result as string);
 		expect(envelope.code).toBe("E_JS_RUNTIME");
 	});
+
+	test("runtime error with stack forwards stack to envelope", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "Cannot read 'x'",
+				line: 7,
+				action: null,
+				code: null,
+				stack: "TypeError: Cannot read 'x'\n    at foo (file.js:7:9)",
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "bad" });
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.stack).toBe(
+			"TypeError: Cannot read 'x'\n    at foo (file.js:7:9)",
+		);
+	});
+
+	test("runtime error without stack omits stack from envelope", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: null,
+				message: "boom",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "bad" });
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.stack).toBeUndefined();
+	});
 });
 
 describe("load_skill tool", () => {

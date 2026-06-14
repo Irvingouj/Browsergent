@@ -317,62 +317,60 @@ export function isLoadSkillError(
 	return true;
 }
 
-function isValidFileOp(op: unknown): op is FileOp {
+export function isValidFileOp(op: unknown): op is FileOp {
 	if (!isObject(op)) return false;
 	const o = op as Record<string, unknown>;
-	if (
-		o.op !== "list" &&
-		o.op !== "read" &&
-		o.op !== "edit" &&
-		o.op !== "delete" &&
-		o.op !== "write"
-	)
-		return false;
-	if (o.op === "list") {
-		if (o.prefix !== undefined && typeof o.prefix !== "string") return false;
-		return true;
+	if (typeof o.op !== "string") return false;
+	const tag = o.op as FileOp["op"];
+	switch (tag) {
+		case "list":
+			return o.prefix === undefined || typeof o.prefix === "string";
+		case "read":
+		case "delete":
+			return typeof o.path === "string";
+		case "write":
+			return typeof o.path === "string" && typeof o.content === "string";
+		case "edit":
+			return (
+				typeof o.path === "string" &&
+				typeof o.oldString === "string" &&
+				typeof o.newString === "string" &&
+				(o.replaceAll === undefined || typeof o.replaceAll === "boolean")
+			);
+		default: {
+			const _: never = tag;
+			void _;
+			return false;
+		}
 	}
-	if (o.op === "read" || o.op === "delete") {
-		return typeof o.path === "string";
-	}
-	if (o.op === "write") {
-		return typeof o.path === "string" && typeof o.content === "string";
-	}
-	// edit
-	return (
-		typeof o.path === "string" &&
-		typeof o.oldString === "string" &&
-		typeof o.newString === "string" &&
-		(o.replaceAll === undefined || typeof o.replaceAll === "boolean")
-	);
 }
 
-function isValidFileOpResult(result: unknown): result is FileOpResult {
+export function isValidFileOpResult(result: unknown): result is FileOpResult {
 	if (!isObject(result)) return false;
 	const r = result as Record<string, unknown>;
-	if (
-		r.op !== "list" &&
-		r.op !== "read" &&
-		r.op !== "edit" &&
-		r.op !== "delete" &&
-		r.op !== "write"
-	)
-		return false;
-	if (r.op === "list") return Array.isArray(r.files);
-	if (r.op === "read") {
-		return (
-			typeof r.content === "string" &&
-			typeof r.bytes === "number" &&
-			typeof r.truncated === "boolean"
-		);
+	if (typeof r.op !== "string") return false;
+	const tag = r.op as FileOpResult["op"];
+	switch (tag) {
+		case "list":
+			return Array.isArray(r.files);
+		case "read":
+			return (
+				typeof r.content === "string" &&
+				typeof r.bytes === "number" &&
+				typeof r.truncated === "boolean"
+			);
+		case "edit":
+			return typeof r.occurrences === "number" && typeof r.bytes === "number";
+		case "write":
+			return typeof r.bytes === "number";
+		case "delete":
+			return true;
+		default: {
+			const _: never = tag;
+			void _;
+			return false;
+		}
 	}
-	if (r.op === "edit") {
-		return typeof r.occurrences === "number" && typeof r.bytes === "number";
-	}
-	if (r.op === "write") {
-		return typeof r.bytes === "number";
-	}
-	return true; // delete has no extra fields
 }
 
 export function isFileOpRequest(msg: unknown): msg is {

@@ -18,6 +18,7 @@ declare module "@pi-oxide/extension-js" {
 				line: number | null;
 				action: string | null;
 				code: string | null;
+				stack: string | null;
 		  }
 		| { kind: "fuel_exhausted" }
 		| { kind: "internal"; message: string };

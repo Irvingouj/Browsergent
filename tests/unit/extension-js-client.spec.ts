@@ -40,6 +40,7 @@ vi.mock("@pi-oxide/extension-js", () => {
 		__mockStopWith: mockStopWith,
 		__mockRunCellAsync: mockRunCellAsync,
 		__mockApiDocs: mockApiDocs,
+		__mockFs: mockFs,
 	};
 });
 
@@ -96,6 +97,74 @@ describe("ExtensionJsClient", () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+	});
+
+	describe("onFsMutation hook", () => {
+		beforeEach(async () => {
+			await client.init();
+		});
+
+		test("fsWriteText fires onFsMutation after success", async () => {
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			await client.fsWriteText("/notes.md", "body");
+			expect(calls).toEqual(["hit"]);
+		});
+
+		test("fsMkdir fires onFsMutation after success", async () => {
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			await client.fsMkdir("/sub");
+			expect(calls).toEqual(["hit"]);
+		});
+
+		test("fsDelete fires onFsMutation after success", async () => {
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			await client.fsDelete("/notes.md");
+			expect(calls).toEqual(["hit"]);
+		});
+
+		test("fsExists does NOT fire onFsMutation", async () => {
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			await client.fsExists("/notes.md");
+			expect(calls).toEqual([]);
+		});
+
+		test("fsList does NOT fire onFsMutation", async () => {
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			await client.fsList("/");
+			expect(calls).toEqual([]);
+		});
+
+		test("fsReadText does NOT fire onFsMutation", async () => {
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			await client.fsReadText("/notes.md");
+			expect(calls).toEqual([]);
+		});
+
+		test("fsWriteText failure does NOT fire onFsMutation", async () => {
+			const mod = await import("@pi-oxide/extension-js");
+			const mockFs = (
+				mod as unknown as { __mockFs: { writeText: ReturnType<typeof vi.fn> } }
+			).__mockFs;
+			mockFs.writeText.mockRejectedValueOnce(new Error("disk full"));
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			await expect(client.fsWriteText("/x", "y")).rejects.toThrow("disk full");
+			expect(calls).toEqual([]);
+		});
+
+		test("setOnFsMutation(null) clears the callback", async () => {
+			const calls: string[] = [];
+			client.setOnFsMutation(() => calls.push("hit"));
+			client.setOnFsMutation(null);
+			await client.fsWriteText("/notes.md", "body");
+			expect(calls).toEqual([]);
+		});
 	});
 
 	test("init creates ExtensionSession and sets fuel limit", async () => {
