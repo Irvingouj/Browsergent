@@ -22,9 +22,16 @@ function createMockFs(): MockFs {
 		async fsExists(path: string): Promise<boolean> {
 			return storage.has(path);
 		},
-		async fsList(): Promise<{ name: string; kind: string }[]> {
-			return [];
-		},
+			async fsList(dir: string): Promise<{ name: string; kind: string }[]> {
+				const entries: { name: string; kind: string }[] = [];
+				for (const path of storage.keys()) {
+					const parent = path.substring(0, path.lastIndexOf("/")) || "/";
+					if (parent === dir) {
+						entries.push({ name: path.substring(path.lastIndexOf("/") + 1), kind: "file" });
+					}
+				}
+				return entries;
+			},
 		async fsReadText(path: string): Promise<string> {
 			const data = storage.get(path);
 			if (data === undefined) throw new Error(`Not found: ${path}`);
@@ -196,10 +203,10 @@ describe("resolveFileMentions", () => {
 		const file = new File(["hello world"], "test.md", {
 			type: "text/markdown",
 		});
-		await ctrl.uploadFiles("s1", [file]);
+		await ctrl.uploadFiles([file]);
 
-		const nodes = await ctrl.listSessionFiles("s1");
-		const realId = nodes[0].id;
+		const nodes = await ctrl.listAllFiles();
+		const realId = nodes[0].path;
 		const mentions = [
 			{
 				fileId: realId,
@@ -208,7 +215,7 @@ describe("resolveFileMentions", () => {
 			},
 		];
 
-		const resolved = await resolveFileMentions(mentions, ctrl, "s1");
+		const resolved = await resolveFileMentions(mentions, ctrl);
 		expect(resolved).toHaveLength(1);
 		expect(resolved[0].fileId).toBe(realId);
 		expect(resolved[0].displayName).toBe("test.md");
@@ -218,24 +225,24 @@ describe("resolveFileMentions", () => {
 	test("throws for missing file id", async () => {
 		const mentions = [
 			{
-				fileId: "missing",
+				fileId: "/missing",
 				displayName: "x.md",
-				raw: "@[file:missing:x.md]",
+				raw: "@[file:/missing:x.md]",
 			},
 		];
 		await expect(
-			resolveFileMentions(mentions, ctrl, "s1"),
-		).rejects.toThrow("File not found");
+			resolveFileMentions(mentions, ctrl),
+		).rejects.toThrow(/not found/i);
 	});
 
 	test("dedupes mentions by fileId", async () => {
 		const file = new File(["hello world"], "test.md", {
 			type: "text/markdown",
 		});
-		await ctrl.uploadFiles("s1", [file]);
+		await ctrl.uploadFiles([file]);
 
-		const nodes = await ctrl.listSessionFiles("s1");
-		const realId = nodes[0].id;
+		const nodes = await ctrl.listAllFiles();
+		const realId = nodes[0].path;
 		const mentions = [
 			{
 				fileId: realId,
@@ -249,7 +256,7 @@ describe("resolveFileMentions", () => {
 			},
 		];
 
-		const resolved = await resolveFileMentions(mentions, ctrl, "s1");
+		const resolved = await resolveFileMentions(mentions, ctrl);
 		expect(resolved).toHaveLength(1);
 	});
 
@@ -258,10 +265,10 @@ describe("resolveFileMentions", () => {
 		const file = new File([bigContent], "big.md", {
 			type: "text/markdown",
 		});
-		await ctrl.uploadFiles("s1", [file]);
+		await ctrl.uploadFiles([file]);
 
-		const nodes = await ctrl.listSessionFiles("s1");
-		const realId = nodes[0].id;
+		const nodes = await ctrl.listAllFiles();
+		const realId = nodes[0].path;
 		const mentions = [
 			{
 				fileId: realId,
@@ -270,7 +277,7 @@ describe("resolveFileMentions", () => {
 			},
 		];
 
-		const resolved = await resolveFileMentions(mentions, ctrl, "s1");
+		const resolved = await resolveFileMentions(mentions, ctrl);
 		expect(resolved[0].content.length).toBe(MAX_FILE_ATTACHMENT_CHARS);
 		expect(resolved[0].content).toContain("[truncated]");
 	});

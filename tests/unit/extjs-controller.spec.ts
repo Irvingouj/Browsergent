@@ -38,6 +38,7 @@ vi.mock("../../src/state/store", () => {
 		extjsReady: vi.fn(),
 		extjsFailed: vi.fn(),
 		extjsDisposed: vi.fn(),
+		incrementFilesVersion: vi.fn(),
 	};
 	return {
 		browsergentStore: {
@@ -88,6 +89,7 @@ describe("ExtjsController", () => {
 		mockStoreState.extjsReady.mockClear();
 		mockStoreState.extjsFailed.mockClear();
 		mockStoreState.extjsDisposed.mockClear();
+		mockStoreState.incrementFilesVersion.mockClear();
 		const extjsMod = await getExtjsClientModule();
 		(
 			extjsMod.ExtensionJsClient as unknown as { relayCallback: unknown }

@@ -18,13 +18,15 @@ export type FileOp =
 			newString: string;
 			replaceAll?: boolean;
 	  }
-	| { op: "delete"; path: string };
+	| { op: "delete"; path: string }
+	| { op: "write"; path: string; content: string };
 
 export type FileOpResult =
 	| { op: "list"; files: FileOpListEntry[] }
 	| { op: "read"; content: string; bytes: number; truncated: boolean }
 	| { op: "edit"; occurrences: number; bytes: number }
-	| { op: "delete" };
+	| { op: "delete" }
+	| { op: "write"; bytes: number };
 
 export interface FileOpRelayRequest {
 	id: string;

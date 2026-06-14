@@ -13,7 +13,6 @@ import {
 	selectApiKey,
 	selectBaseUrl,
 	selectDiagnosticEvents,
-	selectFilesState,
 	selectMessageIds,
 	selectMessagesById,
 	selectModel,
@@ -29,7 +28,6 @@ import { browsergentStore } from "../state/store";
 import { getSkillService } from "../skills/skill-service";
 import { parseSkillActivation } from "../skills/resolve-skill-activations";
 import type { ChatMessage } from "../types/messages";
-import type { FileNode } from "../state/slices/files-slice";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/FilesPanel";
 import { InputBar } from "./components/InputBar";
@@ -41,7 +39,6 @@ import {
 	mergeSkillAndFileAttachments,
 } from "./merge-run-task";
 import { parseFileMentions, resolveFileMentions } from "./resolve-file-mentions";
-import { hydrateAndSyncFiles } from "./hydrate-files";
 import { SessionPanel } from "./session-panel";
 
 function formatSkillDiagnostic(diagnostic: SkillDiagnostic): string {
@@ -55,21 +52,15 @@ function currentSessionSnapshot(): {
 	messages: ChatMessage[];
 	trace: ReturnType<typeof selectTraceEntries>;
 	diagnostics: ReturnType<typeof selectDiagnosticEvents>;
-	filesIndex: FileNode[];
 } {
 	const state = browsergentStore.getState();
 	const messages = state.chat.messageIds
 		.map((id) => state.chat.messagesById[id])
 		.filter((message): message is ChatMessage => message !== undefined);
-	const files = state.files;
-	const filesIndex = Object.values(files.nodes).filter(
-		(node): node is FileNode => node !== undefined,
-	);
 	return {
 		messages,
 		trace: state.trace.entries,
 		diagnostics: state.diagnostics.events,
-		filesIndex,
 	};
 }
 
@@ -98,7 +89,6 @@ const App: FunctionalComponent = () => {
 	const activeTab = useStore(browsergentStore, selectActiveTab);
 	const skillDiagnostics = useStore(browsergentStore, selectSkillDiagnostics);
 	const skillIssueTitle = skillDiagnostics.map(formatSkillDiagnostic).join("\n");
-	const files = useStore(browsergentStore, selectFilesState);
 
 	const {
 		initialized,
@@ -121,9 +111,8 @@ const App: FunctionalComponent = () => {
 			snapshot.messages,
 			snapshot.trace,
 			snapshot.diagnostics,
-			snapshot.filesIndex,
 		);
-	}, [messages, trace, diagnostics, files, sessionControllerRef]);
+	}, [messages, trace, diagnostics, sessionControllerRef]);
 
 	useEffect(() => {
 		const el = chatScrollRef.current;
@@ -180,7 +169,6 @@ const App: FunctionalComponent = () => {
 				const attachments = await resolveFileMentions(
 					fileMentions,
 					filesController,
-					sessionId,
 				);
 				resolvedTask = mergeSkillAndFileAttachments(
 					task,
@@ -244,19 +232,23 @@ const App: FunctionalComponent = () => {
 		exportConversation(buildExportSnapshot(messages, trace, diagnostics));
 	}, [messages, trace, diagnostics]);
 
+	const refreshFiles = useCallback(async () => {
+		const ctrl = filesControllerRef.current;
+		if (!ctrl) return;
+		try {
+			const nodes = await ctrl.listAllFiles();
+			browsergentStore.getState().setFileNodes(nodes);
+		} catch (err) {
+			console.warn("Failed to refresh files:", err);
+		}
+	}, [filesControllerRef]);
+
 	const reloadSessionList = useCallback(async () => {
 		const result = await sessionControllerRef.current?.listSessions();
 		if (result) {
 			browsergentStore.getState().sessionListLoaded(result.sessions);
-			for (const id of result.prunedIds) {
-				try {
-					await filesControllerRef.current?.cleanupSession(id);
-				} catch (err: unknown) {
-					console.warn("Files cleanup on session prune failed:", err);
-				}
-			}
 		}
-	}, [sessionControllerRef, filesControllerRef]);
+	}, [sessionControllerRef]);
 
 	const handleFilesChanged = useCallback(() => {
 		const snapshot = currentSessionSnapshot();
@@ -264,7 +256,6 @@ const App: FunctionalComponent = () => {
 			snapshot.messages,
 			snapshot.trace,
 			snapshot.diagnostics,
-			snapshot.filesIndex,
 		);
 	}, [sessionControllerRef]);
 
@@ -275,14 +266,13 @@ const App: FunctionalComponent = () => {
 				snapshot.messages,
 				snapshot.trace,
 				snapshot.diagnostics,
-				snapshot.filesIndex,
 			);
 			const data = await sessionControllerRef.current?.switchSession(id);
 			if (data) {
 				browsergentStore.getState().hydrateChat(data.messages);
 				browsergentStore.getState().hydrateTrace(data.trace);
 				browsergentStore.getState().hydrateDiagnostics(data.diagnostics);
-				await hydrateAndSyncFiles(id, data.filesIndex, filesControllerRef.current);
+				await refreshFiles();
 				browsergentStore.getState().activeSessionChanged(id);
 			} else {
 				browsergentStore.getState().appendSystemMessage({
@@ -297,7 +287,7 @@ const App: FunctionalComponent = () => {
 			browsergentStore.getState().setSettingsOpen(false);
 			await reloadSessionList();
 		},
-		[reloadSessionList, sessionControllerRef, filesControllerRef],
+		[reloadSessionList, refreshFiles, sessionControllerRef],
 	);
 
 	const handleCreateSession = useCallback(async () => {
@@ -306,19 +296,17 @@ const App: FunctionalComponent = () => {
 			snapshot.messages,
 			snapshot.trace,
 			snapshot.diagnostics,
-			snapshot.filesIndex,
 		);
 		const newId = await sessionControllerRef.current?.createSession();
 		if (!newId) return;
 		browsergentStore.getState().clearChat();
 		browsergentStore.getState().clearTrace();
 		browsergentStore.getState().clearDiagnostics();
-		await hydrateAndSyncFiles(newId, [], filesControllerRef.current);
 		browsergentStore.getState().agentReset();
 		browsergentStore.getState().sessionCreated(newId);
 		browsergentStore.getState().sessionPanelOpenChanged(false);
 		await reloadSessionList();
-	}, [reloadSessionList, sessionControllerRef, filesControllerRef]);
+	}, [reloadSessionList, sessionControllerRef]);
 
 	const handleDeleteSession = useCallback(
 		async (id: string) => {
@@ -326,11 +314,6 @@ const App: FunctionalComponent = () => {
 			const wasActive =
 				sessionControllerRef.current?.getActiveSessionId() === id;
 			await sessionControllerRef.current?.deleteSession(id);
-			try {
-				await filesControllerRef.current?.cleanupSession(id);
-			} catch (err: unknown) {
-				console.warn("Files cleanup on session delete failed:", err);
-			}
 			browsergentStore.getState().sessionDeleted(id);
 			const activeId = sessionControllerRef.current?.getActiveSessionId();
 			if (activeId && wasActive) {
@@ -339,13 +322,13 @@ const App: FunctionalComponent = () => {
 					browsergentStore.getState().hydrateChat(data.messages);
 					browsergentStore.getState().hydrateTrace(data.trace);
 					browsergentStore.getState().hydrateDiagnostics(data.diagnostics);
-					await hydrateAndSyncFiles(activeId, data.filesIndex, filesControllerRef.current);
+					await refreshFiles();
 				}
 				browsergentStore.getState().activeSessionChanged(activeId);
 			}
 			await reloadSessionList();
 		},
-		[reloadSessionList, sessionControllerRef, filesControllerRef],
+		[reloadSessionList, refreshFiles, sessionControllerRef],
 	);
 
 	const handleUpdateTitle = useCallback(
@@ -483,7 +466,6 @@ const App: FunctionalComponent = () => {
 					<ChatPanel />
 				) : initialized && filesControllerRef.current ? (
 					<FilesPanel
-						sessionId={_activeSessionId ?? ""}
 						filesController={filesControllerRef.current}
 						onFilesChanged={handleFilesChanged}
 					/>

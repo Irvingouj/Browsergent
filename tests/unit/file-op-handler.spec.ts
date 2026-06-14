@@ -1,68 +1,91 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { handleFileOp } from "../../src/sidepanel/file-op-handler";
 import type { FilesController } from "../../src/controllers/files-controller";
+import type { FileNode } from "../../src/state/slices/files-slice";
 
 class FakeFilesController {
-	storage = new Map<string, { content: string; isText: boolean }>();
-	index = new Map<string, { id: string; name: string; isText: boolean }>();
+	private storage = new Map<string, string>();
 
-	async listSessionFiles(): Promise<
-		Array<{ id: string; name: string; size: number; mime: string }>
-	> {
-		return Array.from(this.index.values()).map((e) => {
-			const data = this.storage.get(e.id);
-			return {
-				id: e.id,
-				name: e.name,
-				size: data?.content.length ?? 0,
-				mime: e.isText ? "text/plain" : "application/octet-stream",
-			};
-		});
+	async listAllFiles(): Promise<FileNode[]> {
+		const entries = await this.fsList("/");
+		const nodes: FileNode[] = [];
+		for (const entry of entries) {
+			const path = `/${entry.name}`;
+			if (entry.kind === "file") {
+				const content = this.storage.get(path);
+				nodes.push({
+					id: path,
+					name: entry.name,
+					path,
+					kind: "file",
+					size: content?.length ?? 0,
+					mime: "text/plain",
+				});
+			}
+		}
+		return nodes;
 	}
 
-	async readFileText(_sessionId: string, fileId: string): Promise<string> {
-		const data = this.storage.get(fileId);
-		if (!data) throw new Error("File not found");
-		return data.content;
+	async readFileText(path: string): Promise<string> {
+		const content = this.storage.get(path);
+		if (content === undefined) throw new Error("File not found");
+		return content;
+	}
+
+	async writeFile(path: string, content: string): Promise<void> {
+		this.storage.set(path, content);
+	}
+
+	async deleteFile(path: string): Promise<void> {
+		if (!this.storage.has(path)) throw new Error("File not found");
+		this.storage.delete(path);
 	}
 
 	async editFile(
-		_sessionId: string,
-		fileId: string,
+		path: string,
 		oldString: string,
 		newString: string,
 		replaceAll: boolean,
 	): Promise<{ occurrences: number; bytes: number }> {
-		const data = this.storage.get(fileId);
-		if (!data) throw new Error("File not found");
-		if (!data.isText) throw new Error("File is not text");
-		if (oldString === newString) throw new Error("old_string and new_string must differ");
+		const content = this.storage.get(path);
+		if (content === undefined) throw new Error("File not found");
 
-		const occurrences = countOccurrences(data.content, oldString);
+		const occurrences = countOccurrences(content, oldString);
 		if (occurrences === 0) throw new Error("old_string not found in file");
 		if (occurrences > 1 && !replaceAll) {
 			throw new Error(`old_string matches ${occurrences} times`);
 		}
 
 		const updated = replaceAll
-			? data.content.split(oldString).join(newString)
-			: data.content.replace(oldString, newString);
-		this.storage.set(fileId, { ...data, content: updated });
+			? content.split(oldString).join(newString)
+			: content.replace(oldString, newString);
+		this.storage.set(path, updated);
 		return { occurrences: replaceAll ? occurrences : 1, bytes: updated.length };
 	}
 
-	async deleteFile(_sessionId: string, fileId: string): Promise<void> {
-		const entry = Array.from(this.index.entries()).find(([, v]) => v.id === fileId);
-		if (!entry) throw new Error("File not found");
-		this.index.delete(entry[0]);
-		this.storage.delete(fileId);
+	private async fsList(path: string): Promise<{ name: string; kind: string }[]> {
+		const prefix = path === "/" ? "/" : `${path}/`;
+		const seen = new Set<string>();
+		const entries: { name: string; kind: string }[] = [];
+		for (const key of this.storage.keys()) {
+			if (!key.startsWith(prefix)) continue;
+			const rest = key.slice(prefix.length);
+			if (rest.length === 0) continue;
+			const firstSeg = rest.split("/")[0]!;
+			if (rest.includes("/")) {
+				if (!seen.has(firstSeg)) {
+					seen.add(firstSeg);
+					entries.push({ name: firstSeg, kind: "directory" });
+				}
+			} else {
+				entries.push({ name: firstSeg, kind: "file" });
+			}
+		}
+		return entries;
 	}
 
-	addFile(name: string, content: string, isText = true): string {
-		const id = `id-${name}`;
-		this.index.set(name, { id, name, isText });
-		this.storage.set(id, { content, isText });
-		return id;
+	addFile(path: string, content: string): void {
+		this.storage.set(path, content);
 	}
 }
 
@@ -82,14 +105,14 @@ describe("handleFileOp", () => {
 
 	beforeEach(() => {
 		ctrl = new FakeFilesController();
-		ctrl.addFile("notes.md", "hello world");
-		ctrl.addFile("data.json", '{"key": "value"}');
-		ctrl.addFile("image.png", "binary", false);
+		ctrl.addFile("/notes.md", "hello world");
+		ctrl.addFile("/data.json", '{"key": "value"}');
+		ctrl.addFile("/image.png", "binary");
 	});
 
 	test("list returns all files", async () => {
 		const result = await handleFileOp(
-			{ id: "r1", sessionId: "s1", op: { op: "list" } },
+			{ id: "r1", op: { op: "list" } },
 			ctrl as unknown as FilesController,
 		);
 		expect(result.op).toBe("list");
@@ -100,9 +123,9 @@ describe("handleFileOp", () => {
 		);
 	});
 
-	test("list with prefix filters", async () => {
+	test("list with prefix filters by path", async () => {
 		const result = await handleFileOp(
-			{ id: "r1", sessionId: "s1", op: { op: "list", prefix: "dat" } },
+			{ id: "r1", op: { op: "list", prefix: "/dat" } },
 			ctrl as unknown as FilesController,
 		);
 		if (result.op !== "list") throw new Error("unreachable");
@@ -112,7 +135,7 @@ describe("handleFileOp", () => {
 
 	test("read returns content of a text file", async () => {
 		const result = await handleFileOp(
-			{ id: "r1", sessionId: "s1", op: { op: "read", path: "notes.md" } },
+			{ id: "r1", op: { op: "read", path: "/notes.md" } },
 			ctrl as unknown as FilesController,
 		);
 		if (result.op !== "read") throw new Error("unreachable");
@@ -123,27 +146,38 @@ describe("handleFileOp", () => {
 	test("read throws on missing file", async () => {
 		await expect(
 			handleFileOp(
-				{ id: "r1", sessionId: "s1", op: { op: "read", path: "missing.md" } },
+				{ id: "r1", op: { op: "read", path: "/missing.md" } },
 				ctrl as unknown as FilesController,
 			),
-		).rejects.toThrow("File not found in session");
+		).rejects.toThrow("File not found: /missing.md");
 	});
 
 	test("read throws on binary file", async () => {
 		await expect(
 			handleFileOp(
-				{ id: "r1", sessionId: "s1", op: { op: "read", path: "image.png" } },
+				{ id: "r1", op: { op: "read", path: "/image.png" } },
 				ctrl as unknown as FilesController,
 			),
 		).rejects.toThrow("binary");
+	});
+
+	test("write creates a new file and returns byte count", async () => {
+		const result = await handleFileOp(
+			{ id: "r1", op: { op: "write", path: "/new.md", content: "hello" } },
+			ctrl as unknown as FilesController,
+		);
+		expect(result.op).toBe("write");
+		if (result.op !== "write") throw new Error("unreachable");
+		expect(result.bytes).toBe(5);
+		const content = await ctrl.readFileText("/new.md");
+		expect(content).toBe("hello");
 	});
 
 	test("edit applies replacement", async () => {
 		const result = await handleFileOp(
 			{
 				id: "r1",
-				sessionId: "s1",
-				op: { op: "edit", path: "notes.md", oldString: "world", newString: "browser" },
+				op: { op: "edit", path: "/notes.md", oldString: "world", newString: "browser" },
 			},
 			ctrl as unknown as FilesController,
 		);
@@ -154,35 +188,35 @@ describe("handleFileOp", () => {
 
 	test("delete removes the file", async () => {
 		await handleFileOp(
-			{ id: "r1", sessionId: "s1", op: { op: "delete", path: "notes.md" } },
+			{ id: "r1", op: { op: "delete", path: "/notes.md" } },
 			ctrl as unknown as FilesController,
 		);
-		const remaining = await ctrl.listSessionFiles();
+		const remaining = await ctrl.listAllFiles();
 		expect(remaining.find((f) => f.name === "notes.md")).toBeUndefined();
+	});
+
+	test("allows absolute path", async () => {
+		const result = await handleFileOp(
+			{ id: "r1", op: { op: "read", path: "/notes.md" } },
+			ctrl as unknown as FilesController,
+		);
+		if (result.op !== "read") throw new Error("unreachable");
+		expect(result.content).toBe("hello world");
 	});
 
 	test("rejects path with ..", async () => {
 		await expect(
 			handleFileOp(
-				{ id: "r1", sessionId: "s1", op: { op: "read", path: "../etc/passwd" } },
+				{ id: "r1", op: { op: "read", path: "../etc/passwd" } },
 				ctrl as unknown as FilesController,
 			),
 		).rejects.toThrow("out of scope");
 	});
 
-	test("rejects absolute path", async () => {
+	test("rejects path with backslash", async () => {
 		await expect(
 			handleFileOp(
-				{ id: "r1", sessionId: "s1", op: { op: "read", path: "/etc/passwd" } },
-				ctrl as unknown as FilesController,
-			),
-		).rejects.toThrow("out of scope");
-	});
-
-	test("rejects backslash path", async () => {
-		await expect(
-			handleFileOp(
-				{ id: "r1", sessionId: "s1", op: { op: "read", path: "Windows\\system32" } },
+				{ id: "r1", op: { op: "read", path: "Windows\\system32" } },
 				ctrl as unknown as FilesController,
 			),
 		).rejects.toThrow("out of scope");
@@ -191,7 +225,7 @@ describe("handleFileOp", () => {
 	test("rejects path with null byte", async () => {
 		await expect(
 			handleFileOp(
-				{ id: "r1", sessionId: "s1", op: { op: "read", path: "evil\0.md" } },
+				{ id: "r1", op: { op: "read", path: "evil\0.md" } },
 				ctrl as unknown as FilesController,
 			),
 		).rejects.toThrow("out of scope");

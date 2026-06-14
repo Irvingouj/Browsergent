@@ -15,35 +15,8 @@ const TEXT_EXTENSIONS = new Set([
 	".yml",
 ]);
 
-export interface FilesIndexEntry {
-	id: string;
-	name: string;
-	size: number;
-	mime: string;
-	isText: boolean;
-	path: string;
-}
-
-export interface FilesIndex {
-	version: 1;
-	entries: FilesIndexEntry[];
-}
-
 export function sanitizeFileName(name: string): string {
 	return name.replace(/[\/\\\x00-\x1f\x7f]/g, "");
-}
-
-function sanitizeSessionId(sessionId: string): string {
-	return sessionId.replace(/[\/\\\x00-\x1f\x7f]/g, "").replace(/\.\.+/g, "");
-}
-
-export function buildOpfsPath(
-	sessionId: string,
-	fileId: string,
-	sanitizedName: string,
-): string {
-	const cleanSessionId = sanitizeSessionId(sessionId);
-	return `/session-files/${cleanSessionId}/${fileId}-${sanitizedName}`;
 }
 
 export function isTextFile(name: string): boolean {
@@ -63,13 +36,38 @@ export function findSkillManifest(files: File[]): File | null {
 	return null;
 }
 
-export function buildFileNode(entry: FilesIndexEntry): FileNode {
+interface FileNodeInput {
+	name: string;
+	path: string;
+	parentId?: string;
+	size?: number;
+	mime?: string;
+}
+
+export function buildFileNode(input: FileNodeInput): FileNode {
 	return {
-		id: entry.id,
-		name: entry.name,
-		path: entry.path,
+		id: input.path,
+		name: input.name,
+		path: input.path,
 		kind: "file",
-		size: entry.size,
-		mime: entry.mime,
+		...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+		...(input.size !== undefined ? { size: input.size } : {}),
+		...(input.mime !== undefined ? { mime: input.mime } : {}),
+	};
+}
+
+interface DirectoryNodeInput {
+	name: string;
+	path: string;
+	parentId?: string;
+}
+
+export function buildDirectoryNode(input: DirectoryNodeInput): FileNode {
+	return {
+		id: input.path,
+		name: input.name,
+		path: input.path,
+		kind: "directory",
+		...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
 	};
 }

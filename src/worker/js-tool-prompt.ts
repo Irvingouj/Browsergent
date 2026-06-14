@@ -29,14 +29,17 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - Re-fetch or re-initialize any local bindings you need in each cell.
 - The last expression may appear in the tool result; use \`console.log\` for observations.
 
-## File attachments
-- The user may attach files using \`@[file:{fileId}:{displayName}]\` tokens. Attached file contents appear as \`<attachment name="..." id="...">\` XML blocks in the task context.
-- Treat attached files as part of the user's request — read, analyze, or modify them as instructed.
-- If a file is too large, it may be truncated with a \`[truncated]\` marker.
+## File attachments and the shared filesystem
+- The Files panel and the agent share ONE OPFS filesystem rooted at \`/\`. There is no per-session sandbox — files persist across sessions and are visible everywhere.
+- Files you write via \`fs.writeText\`, \`fs.appendText\`, or the \`file_write\` tool are immediately visible in the panel. Files the user uploads appear at \`/{name}\`.
+- Use \`file_list\` to see every file in the filesystem (or call \`fs.list('/')\` via run_js for raw entries).
+- The user may attach files using \`@[file:{path}:{displayName}]\` tokens at compose time. Attached contents appear as \`<attachment name="..." id="...">\` XML blocks in the task context. Treat them as part of the user's request.
+- \`file_read\`, \`file_edit\`, \`file_delete\`, \`file_write\` take a \`path\` argument — absolute (\`/foo.md\`) or relative (\`foo.md\` resolves to \`/foo.md\`).
+- If an attached file is too large, it may be truncated with a \`[truncated]\` marker.
 
 ## Running uploaded scripts
-- \`run_js\` accepts either \`code\` (inline string) OR \`file: { name: "script.js" }\` (uploaded file). They are mutually exclusive — providing both returns E_JS_INVALID_INPUT.
-- Use \`file_list\` to discover uploaded file names, then \`run_js({ file: { name: "script.js" } })\` to execute.
+- \`run_js\` accepts either \`code\` (inline string) OR \`file: { name: "script.js" }\` (path to a text file in the shared OPFS filesystem). They are mutually exclusive — providing both returns E_JS_INVALID_INPUT.
+- Use \`file_list\` to discover file paths, then \`run_js({ file: { name: "scripts/build.js" } })\` to execute.
 - The file's text content becomes the cell body. Same execution model applies: isolated cell, no cross-call locals, top-level bindings do not persist.
 - Binary files (images, archives) are rejected with E_FILE_BINARY. Only text files can be executed.
 - \`@[file:...]\` attachments (mentioned above) inject file content into the task context for analysis. \`run_js({ file })\` is different: it executes the file as JS code.

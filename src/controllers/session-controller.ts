@@ -3,7 +3,7 @@ import {
 	isAgentTraceEntry,
 	isChatMessage,
 } from "../protocol/worker-guards";
-import { isFileNode, type FileNode } from "../state/slices/files-slice";
+
 import type { SessionListItem } from "../state/slices/session-slice";
 import type { StorageBackend } from "../storage/storage-backend";
 import type {
@@ -17,7 +17,6 @@ interface SessionData {
 	messages: ChatMessage[];
 	trace: AgentTraceEntry[];
 	diagnostics: AgentDiagnosticEvent[];
-	filesIndex?: FileNode[];
 	timestamp: number;
 	title?: string;
 	customTitle?: string;
@@ -108,7 +107,6 @@ export class SessionController {
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
 		diagnostics: AgentDiagnosticEvent[];
-		filesIndex?: FileNode[];
 	} | null> {
 		try {
 			const activeId = this.meta?.activeSessionId;
@@ -124,7 +122,6 @@ export class SessionController {
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
 		diagnostics: AgentDiagnosticEvent[];
-		filesIndex?: FileNode[];
 	} | null> {
 		const raw = await this.storage.get<SessionData>(
 			SESSION_STORE,
@@ -138,9 +135,6 @@ export class SessionController {
 			diagnostics: Array.isArray(raw.diagnostics)
 				? raw.diagnostics.filter(isAgentDiagnosticEvent)
 				: [],
-			filesIndex: Array.isArray(raw.filesIndex)
-			? raw.filesIndex.filter(isFileNode)
-			: undefined,
 		};
 	}
 
@@ -148,14 +142,13 @@ export class SessionController {
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
-		filesIndex?: FileNode[],
 	): void {
 		if (!this.hydrated) return;
 		if (this.saveTimer) {
 			clearTimeout(this.saveTimer);
 		}
 		this.saveTimer = setTimeout(() => {
-			void this.save(messages, trace, diagnostics, filesIndex);
+			void this.save(messages, trace, diagnostics);
 		}, 500);
 	}
 
@@ -170,18 +163,16 @@ export class SessionController {
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
-		filesIndex?: FileNode[],
 	): Promise<void> {
 		this.cancelPendingSave();
 		if (!this.hydrated) return;
-		await this.save(messages, trace, diagnostics, filesIndex);
+		await this.save(messages, trace, diagnostics);
 	}
 
 	async save(
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
-		filesIndex?: FileNode[],
 	): Promise<void> {
 		try {
 			const activeId = this.meta?.activeSessionId;
@@ -190,7 +181,6 @@ export class SessionController {
 				messages,
 				trace,
 				diagnostics,
-				filesIndex,
 				timestamp: Date.now(),
 				messageCount: messages.length,
 			};
@@ -244,7 +234,6 @@ export class SessionController {
 		messages: ChatMessage[];
 		trace: AgentTraceEntry[];
 		diagnostics: AgentDiagnosticEvent[];
-		filesIndex?: FileNode[];
 	} | null> {
 		const data = await this.loadForId(id);
 		if (!data) return null;

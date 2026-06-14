@@ -184,36 +184,41 @@ function classifyError(source: {
 
 const RUN_JS_DESCRIPTION = JS_TOOL_PROMPT;
 
-const FILE_LIST_DESCRIPTION = `List files in the current session's OPFS store.
-Use this to discover what files are available before reading or editing.
-Returns each file's id, name, size, mime, and isText flag. Binary files (isText=false)
-cannot be read with file_read — use a different approach for those.`;
+const FILE_LIST_DESCRIPTION = `List all files in the shared OPFS filesystem (rooted at /).
+Returns each file's path, name, size, mime, and isText flag. Binary files (isText=false)
+cannot be read with file_read.`;
 
-const FILE_READ_DESCRIPTION = `Read text content from a session file.
-- \`path\` is the file NAME (e.g. "notes.md"), not a full OPFS path. Find names via file_list.
+const FILE_READ_DESCRIPTION = `Read text content from a file.
+- \`path\` is the file path (e.g. "/foo.md" or "sub/bar.md"). Relative paths resolve against root "/".
+- Use file_list to discover paths.
 - Returns the text content; long files are truncated with a [truncated] marker.
-- Binary files return E_FILE_BINARY. Files outside the session scope are rejected.
-Prefer this over run_js when you just want to read an uploaded file's content.`;
+- Binary files return E_FILE_BINARY.
+Prefer this over run_js when you just want to read a file's content.`;
 
-const FILE_EDIT_DESCRIPTION = `Apply an exact text replacement to a session file.
-- \`path\` is the file NAME (e.g. "notes.md").
+const FILE_EDIT_DESCRIPTION = `Apply an exact text replacement to a file.
+- \`path\` is the file path (e.g. "/foo.md" or "sub/bar.md"). Relative paths resolve against root "/".
+- Use file_list to discover paths.
 - \`old_string\` must match the file content exactly (indentation, whitespace, quotes).
-- If \`old_string\` matches multiple locations, the call fails unless \`replace_all\` is true.
-- Use this for precise edits to uploaded files. For new files, use run_js or ask the user.`;
+- If \`old_string\` matches multiple locations, the call fails unless \`replace_all\` is true.`;
 
-const FILE_DELETE_DESCRIPTION = `Permanently remove a file from the session's OPFS store.
-- \`path\` is the file NAME (e.g. "notes.md").
+const FILE_DELETE_DESCRIPTION = `Permanently remove a file from the shared OPFS filesystem.
+- \`path\` is the file path (e.g. "/foo.md" or "sub/bar.md").
 - Cannot be undone. Use only when the user asks to delete or when a file is no longer needed.`;
 
+const FILE_WRITE_DESCRIPTION = `Create or overwrite a text file at the given path.
+- \`path\` is the file path (e.g. "/foo.md" or "sub/bar.md"). Relative paths resolve against root "/".
+- \`content\` is the new file body (UTF-8 text).
+- Auto-creates parent directories. Overwrites if the file exists.
+- Prefer this over run_js+fs.writeText when you just need to write a file.`;
+
 const FILE_PATH_HELP =
-	'Call file_list first to see available file names, then pass the name (e.g. "notes.md").';
+	'Call file_list first to see available paths. Paths may be absolute ("/foo.md") or relative ("foo.md" resolves to "/foo.md").';
 const MAX_FILE_READ_CHARS = 50_000;
 
 function validateFileToolPath(path: string): string | null {
 	const trimmed = path.trim();
 	if (!trimmed) return "path must not be empty";
 	if (trimmed.includes("..")) return "path must not contain '..'";
-	if (trimmed.startsWith("/")) return "path must be a relative file name, not start with '/'";
 	if (trimmed.includes("\\")) return "path must not contain backslashes";
 	if (trimmed.includes("\0")) return "path must not contain null bytes";
 	return null;
@@ -379,12 +384,13 @@ export function createAgentTools(
 				try {
 					const result = await runJs(code);
 					if (result.status === "err") {
-						const { code: errCode, hint } = classifyError({
-							kind: result.error.kind,
-							message: result.error.message,
-							action: result.error.action,
-							code: result.error.code,
-						});
+						const err = result.error as {
+							kind: string;
+							message?: string;
+							action?: string | null;
+							code?: string | null;
+						};
+						const { code: errCode, hint } = classifyError(err);
 						return formatToolError(errCode, formatJsRunResult(result), hint);
 					}
 					return truncateToolResult(formatJsRunResult(result), 50000);
@@ -538,7 +544,7 @@ export function createAgentTools(
 				properties: {
 					path: {
 						type: "string",
-						description: 'File name within the session (e.g. "notes.md").',
+						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
 				},
 				required: ["path"],
@@ -580,7 +586,7 @@ export function createAgentTools(
 				properties: {
 					path: {
 						type: "string",
-						description: 'File name within the session (e.g. "notes.md").',
+						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
 					old_string: {
 						type: "string",
@@ -656,7 +662,7 @@ export function createAgentTools(
 				properties: {
 					path: {
 						type: "string",
-						description: 'File name within the session (e.g. "notes.md").',
+						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
 				},
 				required: ["path"],
@@ -689,7 +695,50 @@ export function createAgentTools(
 				}
 			},
 		},
-	];
+		{
+			name: "file_write",
+			description: FILE_WRITE_DESCRIPTION,
+			inputSchema: {
+				type: "object",
+				properties: {
+					path: {
+						type: "string",
+						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
+					},
+					content: {
+						type: "string",
+						description: "UTF-8 text content for the file.",
+					},
+				},
+				required: ["path", "content"],
+			},
+			run: async (input: unknown) => {
+				const parsed = z
+					.object({ path: z.string(), content: z.string() })
+					.safeParse(input);
+				if (!parsed.success || !parsed.data.path.trim() || !parsed.data.content) {
+					return formatToolError(
+						"E_FILE_INVALID",
+						"file_write requires non-empty 'path' and 'content' strings",
+						FILE_PATH_HELP,
+					);
+				}
+				const pathError = validateFileToolPath(parsed.data.path);
+				if (pathError) {
+					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+				}
+				try {
+					const result = await fileOp({ op: "write", path: parsed.data.path, content: parsed.data.content });
+					if (result.op !== "write") {
+						return formatToolError("E_FILE_UNKNOWN", "Unexpected result for file_write", "");
+					}
+					return `Wrote ${parsed.data.path}: ${result.bytes} bytes.`;
+				} catch (err) {
+					return formatFileOpError(err);
+				}
+			},
+			},
+		];
 
 	return {
 		definitions,

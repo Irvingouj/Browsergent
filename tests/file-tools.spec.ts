@@ -265,6 +265,58 @@ test("file_delete tool removes file from session", async () => {
 	mock.server.close();
 });
 
+test("file_write creates a file visible in the Files panel", async () => {
+	test.setTimeout(90000);
+	const mock = startMockAnthropicServer({
+		responses: [
+			{
+				chunks: [
+					MSG_START("msg-1"),
+					toolUseChunk(0, "tc-write", "file_write", {
+						path: "out.md",
+						content: "hello world",
+					}),
+					BLOCK_STOP,
+				],
+				delays: [0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: [
+					MSG_START("msg-2"),
+					textChunk(0, "Created."),
+					BLOCK_STOP,
+				],
+				delays: [0, 0, 0],
+				stopReason: "end_turn",
+			},
+		],
+	});
+
+	const { sidePanel, close } = await launchExtension();
+	await configureMockProvider(sidePanel, mock.url);
+
+	await sidePanel
+		.locator('[data-testid="task-input"]')
+		.fill("create out.md");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+
+	await expect(
+		sidePanel.locator('[data-testid="trace-entry"] >> text=file_write'),
+	).toBeVisible({ timeout: 30000 });
+	await expect(sidePanel.getByTestId("agent-status")).toHaveText("done", {
+		timeout: 30000,
+	});
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await sidePanel.locator("text=out.md").click();
+	const preview = sidePanel.locator('[data-testid="file-preview"]');
+	await expect(preview).toContainText("hello world", { timeout: 10000 });
+
+	await close();
+	mock.server.close();
+});
+
 test("file_read on missing file returns E_FILE_NOT_FOUND error in trace", async () => {
 	test.setTimeout(90000);
 	const mock = startMockAnthropicServer({

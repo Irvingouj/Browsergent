@@ -6,60 +6,78 @@ import type { FilesController } from "../../controllers/files-controller";
 import { getSkillService } from "../../skills/skill-service";
 import {
 	selectFilesState,
+	selectFilesVersion,
 	selectSelectedFileId,
 } from "../../state/selectors";
 import { browsergentStore } from "../../state/store";
-import type { FileNode } from "../../state/slices/files-slice";
+import type { FileNode, FileNodeId } from "../../state/slices/files-slice";
 
 interface FilesPanelProps {
-	sessionId: string;
 	filesController: FilesController;
 	onFilesChanged?: () => void;
 }
 
 export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
-	sessionId,
 	filesController,
 	onFilesChanged,
 }) => {
 	const filesState = useStore(browsergentStore, selectFilesState);
 	const selectedFileId = useStore(browsergentStore, selectSelectedFileId);
+	const filesVersion = useStore(browsergentStore, selectFilesVersion);
 
 	const [previewContent, setPreviewContent] = useState<string | null>(null);
 	const [previewError, setPreviewError] = useState<string | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [skillImportToast, setSkillImportToast] = useState<string | null>(null);
+	const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
-	const fileNodes = useMemo(
+	const fileCount = useMemo(
 		() =>
 			Object.values(filesState.nodes).filter(
 				(node): node is FileNode => node !== undefined && node.kind === "file",
-			),
+			).length,
 		[filesState.nodes],
 	);
 
-	const loadFiles = useCallback(async () => {
-		if (!sessionId) return;
-		const currentFiles = browsergentStore.getState().files;
-		if (currentFiles.filesSessionId === sessionId) {
-			return;
+	const childrenByParent = useMemo(() => {
+		const map = new Map<FileNodeId, FileNode[]>();
+		for (const node of Object.values(filesState.nodes)) {
+			if (!node) continue;
+			const parent = node.parentId;
+			if (parent === undefined) continue;
+			const arr = map.get(parent);
+			if (arr) arr.push(node);
+			else map.set(parent, [node]);
 		}
+		return map;
+	}, [filesState.nodes]);
+
+	const loadFiles = useCallback(async () => {
 		try {
-			const nodes = await filesController.listSessionFiles(sessionId);
-			browsergentStore.getState().hydrateFiles(nodes, sessionId);
+			const nodes = await filesController.listAllFiles();
+			browsergentStore.getState().setFileNodes(nodes);
 		} catch (err) {
 			console.warn("Failed to load files:", err);
 		}
-	}, [sessionId, filesController]);
+	}, [filesController]);
 
 	useEffect(() => {
 		loadFiles();
-	}, [loadFiles]);
+	}, [loadFiles, filesVersion]);
+
+	const toggleExpand = useCallback((id: string) => {
+		setExpandedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, []);
 
 	useEffect(() => {
-		if (!selectedFileId || !sessionId) {
+		if (!selectedFileId) {
 			setPreviewContent(null);
 			setPreviewError(null);
 			return;
@@ -80,7 +98,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 
 		let cancelled = false;
 		filesController
-			.readFileText(sessionId, selectedFileId)
+			.readFileText(node.path)
 			.then((text) => {
 				if (!cancelled) {
 					setPreviewContent(text);
@@ -99,11 +117,11 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedFileId, sessionId, filesState.nodes, filesController]);
+	}, [selectedFileId, filesState.nodes, filesController]);
 
 	const handleUpload = useCallback(
 		async (fileList: FileList | null) => {
-			if (!fileList || fileList.length === 0 || !sessionId) return;
+			if (!fileList || fileList.length === 0) return;
 			const files = Array.from(fileList);
 			const skillMdFile = findSkillManifest(files);
 			try {
@@ -113,10 +131,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 					setError(null);
 					setSkillImportToast(`Imported skill: ${result.name} (${result.fileCount} files)`);
 				} else {
-					const nodes = await filesController.uploadFiles(
-						sessionId,
-						files,
-					);
+					const nodes = await filesController.uploadFiles(files);
 					for (const node of nodes) {
 						browsergentStore.getState().addFileNode(node);
 					}
@@ -127,23 +142,23 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 				setError(err instanceof Error ? err.message : "Upload failed");
 			}
 		},
-		[sessionId, filesController, onFilesChanged],
+		[filesController, onFilesChanged],
 	);
 
 	const handleDelete = useCallback(
 		async (fileId: string, event: Event) => {
 			event.stopPropagation();
-			if (!sessionId) return;
 			try {
-				await filesController.deleteFile(sessionId, fileId);
+				await filesController.deleteFile(fileId);
 				browsergentStore.getState().removeFileNode(fileId);
+				browsergentStore.getState().incrementFilesVersion();
 				onFilesChanged?.();
 				setError(null);
 			} catch (err) {
 				setError(err instanceof Error ? err.message : "Delete failed");
 			}
 		},
-		[sessionId, filesController, onFilesChanged],
+		[filesController, onFilesChanged],
 	);
 
 	const handleFileClick = useCallback((fileId: string) => {
@@ -185,60 +200,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		? filesState.nodes[selectedFileId]
 		: undefined;
 
-	function renderFile(node: FileNode) {
-		const isSelected = selectedFileId === node.id;
-		return (
-			<div
-				key={node.id}
-				onClick={() => handleFileClick(node.id)}
-				class={[
-					"cursor-pointer py-[3px] px-sm flex items-center gap-xs text-sm transition-colors select-none group",
-					isSelected
-						? "bg-accent-soft text-accent"
-						: "text-text-primary hover:bg-bg-hover",
-				].join(" ")}
-			>
-				<svg
-					width="14"
-					height="14"
-					viewBox="0 0 16 16"
-					fill="none"
-					class={[
-						"flex-shrink-0",
-						isSelected ? "text-accent" : "text-text-muted",
-					].join(" ")}
-				>
-					<path
-						d="M9 1H3v14h10V5L9 1z"
-						stroke="currentColor"
-						stroke-width="1.2"
-						fill="none"
-					/>
-					<path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2" fill="none" />
-				</svg>
-				<span class="truncate flex-1">{node.name}</span>
-				<button
-					type="button"
-					onClick={(e) => handleDelete(node.id, e)}
-					class={[
-						"opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-danger hover:bg-danger-soft transition-all cursor-pointer flex-shrink-0",
-						isSelected ? "opacity-100" : "",
-					].join(" ")}
-					title="Delete file"
-				>
-					<svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-						<path
-							d="M3 4h10M6 4V2.5a1 1 0 011-1h2a1 1 0 011 1V4m2 0v9.5a1 1 0 01-1 1H5a1 1 0 01-1-1V4h8z"
-							stroke="currentColor"
-							stroke-width="1.2"
-						/>
-					</svg>
-				</button>
-			</div>
-		);
-	}
-
-	const hasFiles = fileNodes.length > 0;
+	const hasFiles = filesState.rootIds.length > 0;
 
 	return (
 		<div
@@ -275,7 +237,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 				/>
 				<span class="text-xs text-text-muted">
 					{hasFiles
-						? `${fileNodes.length} file${fileNodes.length === 1 ? "" : "s"}`
+						? `${fileCount} file${fileCount === 1 ? "" : "s"}`
 						: "Drop files here"}
 				</span>
 			</div>
@@ -301,7 +263,25 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 				onDrop={handleDrop}
 			>
 				{hasFiles ? (
-					<div>{fileNodes.map((node) => renderFile(node))}</div>
+					<div>
+						{filesState.rootIds.map((id) => {
+							const node = filesState.nodes[id];
+							if (!node) return null;
+							return (
+								<TreeNode
+									key={node.id}
+									node={node}
+									depth={0}
+									expandedIds={expandedIds}
+									childrenByParent={childrenByParent}
+									selectedFileId={selectedFileId}
+									onToggle={toggleExpand}
+									onSelectFile={handleFileClick}
+									onDelete={handleDelete}
+								/>
+							);
+						})}
+					</div>
 				) : (
 					<div class="flex flex-col items-center justify-center h-full gap-sm text-text-muted">
 						<svg
@@ -383,6 +363,146 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 							</p>
 						)}
 					</div>
+				</div>
+			)}
+		</div>
+	);
+};
+
+interface TreeNodeProps {
+	node: FileNode;
+	depth: number;
+	expandedIds: Set<string>;
+	childrenByParent: Map<FileNodeId, FileNode[]>;
+	selectedFileId: string | null;
+	onToggle: (id: string) => void;
+	onSelectFile: (id: string) => void;
+	onDelete: (id: string, event: Event) => void;
+}
+
+const TreeNode: FunctionalComponent<TreeNodeProps> = ({
+	node,
+	depth,
+	expandedIds,
+	childrenByParent,
+	selectedFileId,
+	onToggle,
+	onSelectFile,
+	onDelete,
+}) => {
+	const isDirectory = node.kind === "directory";
+	const isExpanded = expandedIds.has(node.id);
+	const isSelected = selectedFileId === node.id;
+	const children = isDirectory ? (childrenByParent.get(node.id) ?? []) : [];
+
+	const handleClick = () => {
+		if (isDirectory) onToggle(node.id);
+		else onSelectFile(node.id);
+	};
+
+	return (
+		<div>
+			<div
+				data-testid={isDirectory ? "tree-directory" : "tree-file"}
+				onClick={handleClick}
+				class={[
+					"cursor-pointer py-[3px] pr-sm flex items-center gap-xs text-sm transition-colors select-none group",
+					!isDirectory && isSelected
+						? "bg-accent-soft text-accent"
+						: "text-text-primary hover:bg-bg-hover",
+				].join(" ")}
+				style={{ paddingLeft: `${depth * 12 + 8}px` }}
+			>
+				{isDirectory ? (
+					<>
+						<svg
+							width="10"
+							height="10"
+							viewBox="0 0 16 16"
+							fill="none"
+							class="flex-shrink-0 text-text-muted transition-transform"
+							style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+						>
+							<path
+								d="M5 3l6 5-6 5"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 16 16"
+							fill="none"
+							class="flex-shrink-0 text-text-muted"
+						>
+							<path
+								d="M1.5 4.5h4l1.5 2h7v8h-13V4.5z"
+								stroke="currentColor"
+								stroke-width="1.2"
+								fill={isExpanded ? "currentColor" : "none"}
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</>
+				) : (
+					<svg
+						width="14"
+						height="14"
+						viewBox="0 0 16 16"
+						fill="none"
+						class={[
+							"flex-shrink-0",
+							isSelected ? "text-accent" : "text-text-muted",
+						].join(" ")}
+					>
+						<path
+							d="M9 1H3v14h10V5L9 1z"
+							stroke="currentColor"
+							stroke-width="1.2"
+							fill="none"
+						/>
+						<path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2" fill="none" />
+					</svg>
+				)}
+				<span class="truncate flex-1">{node.name}</span>
+				{!isDirectory && (
+					<button
+						type="button"
+						onClick={(e) => onDelete(node.id, e)}
+						class={[
+							"opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-danger hover:bg-danger-soft transition-all cursor-pointer flex-shrink-0",
+							isSelected ? "opacity-100" : "",
+						].join(" ")}
+						title="Delete file"
+					>
+						<svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+							<path
+								d="M3 4h10M6 4V2.5a1 1 0 011-1h2a1 1 0 011 1V4m2 0v9.5a1 1 0 01-1 1H5a1 1 0 01-1-1V4h8z"
+								stroke="currentColor"
+								stroke-width="1.2"
+							/>
+						</svg>
+					</button>
+				)}
+			</div>
+			{isDirectory && isExpanded && children.length > 0 && (
+				<div>
+					{children.map((child) => (
+						<TreeNode
+							key={child.id}
+							node={child}
+							depth={depth + 1}
+							expandedIds={expandedIds}
+							childrenByParent={childrenByParent}
+							selectedFileId={selectedFileId}
+							onToggle={onToggle}
+							onSelectFile={onSelectFile}
+							onDelete={onDelete}
+						/>
+					))}
 				</div>
 			)}
 		</div>

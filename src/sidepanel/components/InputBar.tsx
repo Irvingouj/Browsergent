@@ -162,7 +162,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 			const cursor = el?.selectionStart ?? taskInput.length;
 			browsergentStore.getState().setChatUploadStatus({ kind: "uploading" });
 			try {
-				const nodes = await filesController.uploadFiles(sessionId, files);
+				const nodes = await filesController.uploadFiles(files);
 				for (const node of nodes) {
 					browsergentStore.getState().addFileNode(node);
 				}
@@ -380,7 +380,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						class="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all bg-text-primary text-bg-base hover:bg-text-secondary active:bg-text-muted"
 					>
 						<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-							<path d="M4 2.5v11l9-5.5-9-5.5z" />
+							<path d="M15.5 8L.5 1.5 2.5 8 .5 14.5 15.5 8z" />
 						</svg>
 					</button>
 				)}

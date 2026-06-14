@@ -67,12 +67,10 @@ export function dedupeFileMentionsById(
 export async function resolveFileMentions(
 	mentions: FileMention[],
 	filesController: FilesController,
-	sessionId: string,
 ): Promise<ResolvedAttachment[]> {
 	const resolved: ResolvedAttachment[] = [];
 	for (const mention of dedupeFileMentionsById(mentions)) {
 		const content = await filesController.readFileText(
-			sessionId,
 			mention.fileId,
 		);
 		const truncated = truncateFileContent(content);

@@ -1,215 +1,145 @@
 import type { FileNode } from "../state/slices/files-slice";
 import type { SkillFsClient } from "../skills/skill-types";
 import {
+	buildDirectoryNode,
 	buildFileNode,
-	buildOpfsPath,
 	isTextFile,
 	sanitizeFileName,
 } from "./files-utils";
-import type { FilesIndex, FilesIndexEntry } from "./files-utils";
-export { isTextFile, sanitizeFileName, buildOpfsPath, buildFileNode } from "./files-utils";
-export type { FilesIndex, FilesIndexEntry } from "./files-utils";
+
+export {
+	isTextFile,
+	sanitizeFileName,
+	buildFileNode,
+	buildDirectoryNode,
+} from "./files-utils";
 
 const MAX_TEXT_FILE_SIZE = 1_000_000; // 1 MB
 
-function sanitizeSessionId(sessionId: string): string {
-	return sessionId.replace(/[\/\\\x00-\x1f\x7f]/g, "").replace(/\.\.+/g, "");
-}
-
 export class FilesController {
-	private readonly sessionChains = new Map<string, Promise<void>>();
+	private chain: Promise<void> = Promise.resolve();
 
 	constructor(private readonly fs: SkillFsClient) {}
 
-	private runSerialized<T>(
-		sessionId: string,
-		operation: () => Promise<T>,
-	): Promise<T> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const previous = this.sessionChains.get(cleanSessionId) ?? Promise.resolve();
+	private runSerialized<T>(operation: () => Promise<T>): Promise<T> {
+		const previous = this.chain;
 		let release!: () => void;
 		const gate = new Promise<void>((resolve) => {
 			release = resolve;
 		});
-		const chain = previous.then(() => gate);
-		this.sessionChains.set(cleanSessionId, chain);
+		this.chain = previous.then(() => gate);
 		return previous
 			.then(() => operation())
 			.finally(() => {
 				release();
-				if (this.sessionChains.get(cleanSessionId) === chain) {
-					this.sessionChains.delete(cleanSessionId);
-				}
 			});
 	}
 
-	async uploadFiles(sessionId: string, files: File[]): Promise<FileNode[]> {
-		return this.runSerialized(sessionId, () =>
-			this.uploadFilesUnlocked(sessionId, files),
-		);
+	async uploadFiles(files: File[]): Promise<FileNode[]> {
+		return this.runSerialized(() => this.uploadFilesUnlocked(files));
 	}
 
-	private async uploadFilesUnlocked(
-		sessionId: string,
-		files: File[],
-	): Promise<FileNode[]> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const index = await this.readIndex(cleanSessionId);
+	private async uploadFilesUnlocked(files: File[]): Promise<FileNode[]> {
 		const nodes: FileNode[] = [];
-		const writtenPaths: string[] = [];
-
-		try {
-			for (const file of files) {
-				const fileId = crypto.randomUUID();
-				const sanitizedName = sanitizeFileName(file.name);
-				const path = buildOpfsPath(cleanSessionId, fileId, sanitizedName);
-				const textFile = isTextFile(file.name);
-
-				if (textFile) {
-					if (file.size > MAX_TEXT_FILE_SIZE) {
-						throw new Error(
-							`File too large: ${file.name} (${file.size} bytes, max ${MAX_TEXT_FILE_SIZE})`,
-						);
-					}
-					const text = await file.text();
-					await this.fs.fsWriteText(path, text);
-					writtenPaths.push(path);
-				}
-
-				const entry: FilesIndexEntry = {
-					id: fileId,
-					name: file.name,
-					size: file.size,
-					mime: file.type || "application/octet-stream",
-					isText: textFile,
-					path,
-				};
-
-				index.entries.push(entry);
-				nodes.push(buildFileNode(entry));
+		for (const file of files) {
+			const name = sanitizeFileName(file.name);
+			if (!name) {
+				throw new Error(`Invalid file name: ${file.name}`);
 			}
-
-			await this.writeIndex(cleanSessionId, index);
-		} catch (err) {
-			// Roll back partially uploaded text files
-			for (const p of writtenPaths) {
-				try {
-					await this.fs.fsDelete(p);
-				} catch (e) {
-					console.warn("Best-effort cleanup failed:", e);
-				}
+			if (!isTextFile(file.name)) {
+				throw new Error(`Binary uploads unsupported: ${file.name}`);
 			}
-			throw err;
+			if (file.size > MAX_TEXT_FILE_SIZE) {
+				throw new Error(
+					`File too large: ${file.name} (${file.size} bytes, max ${MAX_TEXT_FILE_SIZE})`,
+				);
+			}
+			const text = await file.text();
+			const path = `/${name}`;
+			await this.fs.fsWriteText(path, text);
+			nodes.push(buildFileNode({ name, path, size: text.length }));
 		}
-
 		return nodes;
 	}
 
-	async readFileText(sessionId: string, fileId: string): Promise<string> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const index = await this.readIndex(cleanSessionId);
-		const entry = index.entries.find((e) => e.id === fileId);
-		if (!entry) {
-			throw new Error(`File not found: ${fileId}`);
-		}
-		if (!entry.isText) {
-			throw new Error(`File is not text: ${fileId}`);
-		}
-		const expectedPrefix = `/session-files/${cleanSessionId}/`;
-		if (!entry.path.startsWith(expectedPrefix)) {
-			throw new Error(`File path out of scope: ${fileId}`);
-		}
-		return this.fs.fsReadText(entry.path);
+	async listAllFiles(): Promise<FileNode[]> {
+		return this.scanRecursive("/", undefined);
 	}
 
-	async deleteFile(sessionId: string, fileId: string): Promise<void> {
-		return this.runSerialized(sessionId, () =>
-			this.deleteFileUnlocked(sessionId, fileId),
-		);
-	}
-
-	private async deleteFileUnlocked(
-		sessionId: string,
-		fileId: string,
-	): Promise<void> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const index = await this.readIndex(cleanSessionId);
-		const idx = index.entries.findIndex((e) => e.id === fileId);
-		if (idx === -1) {
-			throw new Error(`File not found: ${fileId}`);
+	private async scanRecursive(
+		root: string,
+		parentId: string | undefined,
+	): Promise<FileNode[]> {
+		let entries: ReadonlyArray<{ name: string; kind: string }>;
+		try {
+			entries = await this.fs.fsList(root);
+		} catch {
+			return [];
 		}
-		const entry = index.entries[idx]!;
-
-		const expectedPrefix = `/session-files/${cleanSessionId}/`;
-		if (!entry.path.startsWith(expectedPrefix)) {
-			throw new Error(`File path out of scope: ${fileId}`);
-		}
-
-		if (entry.isText) {
-			try {
-				await this.fs.fsDelete(entry.path);
-			} catch (e) {
-				console.warn("Best-effort file deletion failed:", e);
+		const out: FileNode[] = [];
+		for (const entry of entries) {
+			const childPath =
+				root === "/" ? `/${entry.name}` : `${root}/${entry.name}`;
+			if (entry.kind === "directory") {
+				out.push(
+					buildDirectoryNode({
+						name: entry.name,
+						path: childPath,
+						parentId,
+					}),
+				);
+				out.push(...(await this.scanRecursive(childPath, childPath)));
+			} else {
+				out.push(
+					buildFileNode({ name: entry.name, path: childPath, parentId }),
+				);
 			}
 		}
-
-		index.entries.splice(idx, 1);
-		await this.writeIndex(cleanSessionId, index);
+		return out;
 	}
 
-	async listSessionFiles(sessionId: string): Promise<FileNode[]> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const index = await this.readIndex(cleanSessionId);
-		return index.entries.map(buildFileNode);
+	async readFileText(path: string): Promise<string> {
+		return this.fs.fsReadText(path);
+	}
+
+	async writeFile(path: string, content: string): Promise<void> {
+		if (content.length > MAX_TEXT_FILE_SIZE) {
+			throw new Error(
+				`Content too large (${content.length} bytes, max ${MAX_TEXT_FILE_SIZE})`,
+			);
+		}
+		return this.runSerialized(() => this.fs.fsWriteText(path, content));
+	}
+
+	async deleteFile(path: string): Promise<void> {
+		return this.runSerialized(() => this.fs.fsDelete(path));
 	}
 
 	async editFile(
-		sessionId: string,
-		fileId: string,
+		path: string,
 		oldString: string,
 		newString: string,
 		replaceAll: boolean,
 	): Promise<{ occurrences: number; bytes: number }> {
-		return this.runSerialized(sessionId, () =>
-			this.editFileUnlocked(
-				sessionId,
-				fileId,
-				oldString,
-				newString,
-				replaceAll,
-			),
+		return this.runSerialized(() =>
+			this.editFileUnlocked(path, oldString, newString, replaceAll),
 		);
 	}
 
 	private async editFileUnlocked(
-		sessionId: string,
-		fileId: string,
+		path: string,
 		oldString: string,
 		newString: string,
 		replaceAll: boolean,
 	): Promise<{ occurrences: number; bytes: number }> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const index = await this.readIndex(cleanSessionId);
-		const idx = index.entries.findIndex((e) => e.id === fileId);
-		if (idx === -1) {
-			throw new Error(`File not found: ${fileId}`);
-		}
-		const entry = index.entries[idx]!;
-		const expectedPrefix = `/session-files/${cleanSessionId}/`;
-		if (!entry.path.startsWith(expectedPrefix)) {
-			throw new Error(`File path out of scope: ${fileId}`);
-		}
-		if (!entry.isText) {
-			throw new Error(`File is not text: ${fileId}`);
-		}
 		if (oldString === newString) {
 			throw new Error("old_string and new_string must differ");
 		}
-
-		const original = await this.fs.fsReadText(entry.path);
 		if (oldString.length === 0) {
 			throw new Error("old_string must not be empty");
 		}
+
+		const original = await this.fs.fsReadText(path);
 		const occurrences = countOccurrences(original, oldString);
 		if (occurrences === 0) {
 			throw new Error("old_string not found in file");
@@ -228,111 +158,9 @@ export class FilesController {
 				`Edit would exceed max file size (${MAX_TEXT_FILE_SIZE} bytes)`,
 			);
 		}
-		await this.fs.fsWriteText(entry.path, updated);
 
-		try {
-			index.entries[idx] = { ...entry, size: updated.length };
-			await this.writeIndex(cleanSessionId, index);
-		} catch (indexErr) {
-			// Roll back content mutation so OPFS stays consistent with the index.
-			try {
-				await this.fs.fsWriteText(entry.path, original);
-			} catch (restoreErr) {
-				console.warn("Failed to restore original after index write failure:", restoreErr);
-			}
-			throw indexErr;
-		}
-
+		await this.fs.fsWriteText(path, updated);
 		return { occurrences: replaceAll ? occurrences : 1, bytes: updated.length };
-	}
-
-	// Session load/switch replays IndexedDB filesIndex into OPFS. Upload/delete
-	// persist filesIndex immediately via flushSave so snapshot stays authoritative.
-	async syncIndexFromSnapshot(
-		sessionId: string,
-		nodes: FileNode[],
-	): Promise<void> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const scopePrefix = `/session-files/${cleanSessionId}/`;
-		const entries: FilesIndexEntry[] = [];
-		for (const node of nodes) {
-			if (!node.path.startsWith(scopePrefix)) {
-				console.warn("Skipping cross-session node in snapshot:", node.id, node.path);
-				continue;
-			}
-			entries.push({
-				id: node.id,
-				name: node.name,
-				size: node.size ?? 0,
-				mime: node.mime ?? "application/octet-stream",
-				isText: isTextFile(node.name),
-				path: node.path,
-			});
-		}
-		await this.writeIndex(cleanSessionId, { version: 1, entries });
-	}
-
-	async cleanupSession(sessionId: string): Promise<void> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const dirPath = `/session-files/${cleanSessionId}`;
-		try {
-			const entries = await this.fs.fsList(dirPath);
-			for (const entry of entries) {
-				if (entry.name === "." || entry.name === "..") continue;
-				const safeName = sanitizeFileName(entry.name);
-				try {
-					await this.fs.fsDelete(`${dirPath}/${safeName}`);
-				} catch (e) {
-					console.warn("Best-effort file deletion failed:", e);
-				}
-			}
-			await this.fs.fsDelete(dirPath);
-		} catch {
-			// Directory might not exist
-		}
-	}
-
-	private async readIndex(sessionId: string): Promise<FilesIndex> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const path = `/session-files/${cleanSessionId}/.index.json`;
-		try {
-			const text = await this.fs.fsReadText(path);
-			const parsed = JSON.parse(text) as unknown;
-			if (
-				typeof parsed === "object" &&
-				parsed !== null &&
-				"version" in parsed &&
-				(parsed as Record<string, unknown>).version === 1 &&
-				"entries" in parsed &&
-				Array.isArray((parsed as Record<string, unknown>).entries)
-			) {
-				const rawEntries = (parsed as Record<string, unknown>).entries as unknown[];
-				const entries = rawEntries.filter(
-					(e): e is FilesIndexEntry =>
-						typeof (e as Record<string, unknown>).id === "string" &&
-						typeof (e as Record<string, unknown>).name === "string" &&
-						typeof (e as Record<string, unknown>).path === "string",
-				);
-				return { version: 1, entries };
-			}
-		} catch (e) {
-			console.warn("Corrupt files index, resetting:", e);
-		}
-		return { version: 1, entries: [] };
-	}
-
-	private async writeIndex(
-		sessionId: string,
-		index: FilesIndex,
-	): Promise<void> {
-		const cleanSessionId = sanitizeSessionId(sessionId);
-		const dirPath = `/session-files/${cleanSessionId}`;
-		const exists = await this.fs.fsExists(dirPath);
-		if (!exists) {
-			await this.fs.fsMkdir(dirPath);
-		}
-		const path = `${dirPath}/.index.json`;
-		await this.fs.fsWriteText(path, JSON.stringify(index));
 	}
 }
 

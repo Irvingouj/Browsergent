@@ -2,18 +2,25 @@
 
 ## Priority (suggested order)
 
-1. **§6 closure** — E2E acceptance + inject size cap (core layers **done** in code; see `PLAN.md` WU-1)
-2. **Files panel (§2)** — replace JS tab (`PLAN.md` WU-2–WU-4)
-3. **`@` mentions (§3)** — file context in task input (`PLAN.md` WU-5–WU-6)
-4. **§6 Phase D** (optional) — user skills from Files panel (`PLAN.md` WU-7)
-5. **§7 Multi-line input** — Shift+Enter for newline, Enter to send
-6. **§8 Direct file tools** — native read/edit/delete/ls tools for the agent (not only through `run_js`)
-7. **§9 Chat file drop** — drag-and-drop files onto chat input → upload to OPFS + auto-attach to task
-8. **§10 `run_js` file reference** — expose `run_js` with a direct file reference so agent can execute uploaded scripts
+Most of the original list is **done** as of 2026-06-13. What's left:
 
-§4 is folded into §6 Layer 1 (not a separate optional track).
+1. **Files panel UX for nested dirs** (§2 follow-up) — panel currently renders a flat list; with the unified FS, agent-written files in subdirs (e.g. `/sub/foo.md`) need a tree view.
+2. **Auto-refresh panel on agent writes** — `file_write` / `fs.writeText` mutate OPFS but the panel doesn't re-scan; user must toggle tabs to see new files.
+3. **E2E for `file_write`** — extend `tests/file-tools.spec.ts` to cover the new tool end-to-end.
+4. **§6 closure** — Playwright E2E for compose → inject → `load_skill` mid-run; verify inject size cap holds under oversized skills.
+5. **Delete JS tab scaffolding** (§2 leftover) — `JsPlaybookPanel.tsx`, `UiTab="js"`, `tests/js-playbook-fill-form.spec.ts` are still in the tree per the original §2 plan.
 
-**Execution plan:** see [`PLAN.md`](./PLAN.md) for work units, locked decisions, and acceptance criteria.
+Recently shipped:
+- **§11 File API ergonomics** — `file_write` tool + unified OPFS root (panel and agent share `/`, no session-scope, no IndexedDB index). web-js 0.8.3 made `fs.*` accept relative paths.
+- **§10 `run_js` file reference** — `run_js({ file: { name } })` resolves path through `fileOp` relay.
+- **§9 Chat file drop** — drag/drop on input bar uploads + inserts mention.
+- **§8 Direct file tools** — `file_list`/`read`/`edit`/`delete` (now path-based).
+- **§7 Multi-line input** — Shift+Enter newline, auto-grow textarea.
+- **§6 Phase D (user skills)** — drop `SKILL.md` on Files panel → imports under `/skills/`.
+- **§3 `@` mentions** — parse → XML attachment block.
+- **§6 Layers 1/2a/2b/2c** — `/` palette, activation inject, `load_skill` tool, system catalog.
+
+§4 is folded into §6 Layer 1 (not a separate track).
 
 ---
 
@@ -58,11 +65,11 @@
 
 ---
 
-## 2. Remove JS tab → Files panel (tree + preview + upload)
+## 2. Remove JS tab → Files panel (file tree + preview + upload)
 
 **Problem:** The **JS** tab (`JsPlaybookPanel`, header toggle in `app.tsx`) is unused. Secondary manual JS runner duplicates what the agent already does via `run_js`.
 
-**Goal:** Replace the JS tab with a **Files** side-panel view: file tree, preview pane, upload.
+**Goal:** Replace the JS tab with a **Files** side-panel view. The primary view is a **file tree**; upload is a feature within it, not the main purpose.
 
 ### Remove
 
@@ -76,9 +83,9 @@
 ### Add — Files panel
 
 - [ ] New tab: **Files** (or icon-only) replacing JS in header toggle.
-- [ ] **File tree** (left or top): folders + files, expand/collapse.
-- [ ] **Preview** (right or bottom): text/markdown for `.md`, `.txt`, `.json`, etc.; binary shows name + size only.
-- [ ] **Upload**: button + drag-and-drop onto tree; multi-file supported.
+- [ ] **File tree** (primary, left pane): folders + files, expand/collapse, select to preview.
+- [ ] **Preview** (right pane): text/markdown for `.md`, `.txt`, `.json`, etc.; binary shows name + size only.
+- [ ] **Upload**: button in tree header + drag-and-drop onto tree area; multi-file supported.
 - [ ] **Storage** (pick one, document in code):
   - Session-scoped virtual FS in IndexedDB, and/or
   - `extension-js` `fs.*` if suitable for extension context, and/or
@@ -91,12 +98,14 @@
 ┌─────────────────────────────────────┐
 │ Chat │ Files          [⋯]          │
 ├─────────────────────────────────────┤
-│  tree/          │  preview          │
+│  Files tree     │  Preview          │
 │  ├─ notes.md    │  # Hello          │
 │  └─ data.json   │  ...              │
 │  [+ Upload]     │                   │
 └─────────────────────────────────────┘
 ```
+
+The **Files tree** is the main view; **Upload** is an action within it, not a separate tab. Treat it like a file manager (tree first, upload as a toolbar action).
 
 ### Files likely touched
 
@@ -585,3 +594,87 @@ tests/skill-compose-inject.spec.ts   # TODO (E2E closure)
 2. Agent calls `run_js({ code: "...", file: { id: "abc" } })` → both are available (exact semantics TBD).
 3. File not found or not text → structured tool error with hint.
 4. File content is still subject to the same size/cap limits as inline code.
+
+---
+
+## 10. File API ergonomics for LLM (DONE 2026-06-13)
+
+**Status:** Shipped. Two layers:
+
+1. **web-js 0.8.3** — `path_parts` accepts relative paths (resolved against root `/`), `FsError::InvalidPath` carries context, `fs.*` docs explain path rules. `fs.writeText("foo.md", ...)` works in one call.
+2. **Browsergent unified FS refactor** — added `file_write({ path, content })` tool; dropped `/session-files/{sid}/` namespace, `.index.json` side index, IndexedDB `filesIndex`, `{uuid}-{name}` IDs. Panel + agent share OPFS root `/`. See §11 below.
+
+Original problem statement (preserved for context):
+
+**Problem:** Agent took **13 steps** to create a simple file (`fs struggle.json` trace). Root causes:
+
+1. **No `file_write` / `file_create` tool** — agent has `file_list/read/edit/delete` but can only *edit existing* files. To create a new file it fell back to the low-level `fs.*` API.
+2. **`file_edit` rejects new files** — returns `E_FILE_NOT_FOUND` when the file doesn't exist (no upsert).
+3. **`fs.*` path rules are undocumented** — requires absolute paths (`/tmp/foo.md`), but `get_doc` just says `path: File path`. Agent wasted 6+ steps discovering this via trial-and-error `E_INVALID_PATH`.
+4. **`/tmp/` writes are invisible** — agent eventually wrote to `/tmp/reddit_feed_today.md`, but Files panel only shows `/session-files/{sessionId}/`. User couldn't find the file.
+
+**Goal:** The agent should create a session file in **1 step**, and the file should appear in the Files panel immediately.
+
+### Design — intent-based tools (no paths needed)
+
+- [ ] **Add `file_write(name, content)` tool** — creates or overwrites a session file. Full-content write, no `old_string` matching. This is the "I want to save this" intent.
+- [ ] **Keep `file_edit(name, old_string, new_string)` as-is** — for precise in-place edits where the agent must match existing content. Not for creation.
+- [ ] Both write to `/session-files/{sessionId}/` → auto-appear in Files panel → user can preview/download.
+
+### Design — `fs.*` low-level API guidance
+
+- [ ] **Add path convention to `js-tool-prompt.ts`**:
+  ```
+`
+  ## Filesystem paths (fs.*)
+  - All paths must be absolute (start with `/`).
+  - `/session-files/{sessionId}/` — session files (visible in Files panel). Prefer file_write/file_edit tools instead.
+  - `/tmp/` — scratch space (not visible to user, cleared on session end).
+  - `/skills/user/{name}/` — user-imported skills.
+  - Bare filenames like `foo.md` are invalid — always use `/tmp/foo.md` or a full path.
+  ```
+  ```
+- [ ] **Improve `E_INVALID_PATH` recovery hint** in agent error formatting — suggest `"Paths must be absolute. Example: /tmp/foo.md"`.
+- [ ] (Upstream, optional) Enrich `get_doc` output for `fs` namespace with path examples.
+
+### Implementation notes
+
+- `file_write` handler in `agent-tools.ts`: takes `{ name: string, content: string }`, calls `fileOp` relay with a new `write` op (or reuse `edit` with empty `old_string`).
+- `FileOpRelay` (`file-op-relay.ts`) may need a new `write` op, OR `file_edit` semantics change to: empty `old_string` + file-not-exists → create.
+- Size cap: same as inline code (`MAX_FILE_BYTES` from `files-utils.ts` or similar).
+- Session file index (`/session-files/{sessionId}/.index.json`) must be updated so the file appears in the panel.
+
+### Acceptance criteria
+
+1. Agent says "create a file with this content" → calls `file_write` → file appears in Files panel in 1 step.
+2. `file_write` to an existing name → overwrites cleanly (no duplicate).
+3. `file_edit` on a non-existent file without empty `old_string` → still returns `E_FILE_NOT_FOUND` (edit is still strict-match).
+4. `fs.writeText('foo.md', ...)` (bare filename) → error message says "use absolute path like /tmp/foo.md".
+5. Files written via `file_write` are immediately visible in the Files panel without manual refresh.
+
+---
+
+## 11. Unified OPFS filesystem (DONE 2026-06-13)
+
+**Principle:** "We only have one file system, and everything is exposed to user and LLM, just like you can access everything on my computer. We don't add crappy abstractions on top of anything."
+
+**What was removed:**
+
+| Abstraction | Disposition |
+|---|---|
+| `/session-files/{sessionId}/` namespace | Dropped — files live at OPFS root `/` |
+| `.index.json` side-index file | Dropped — panel scans OPFS directly |
+| IndexedDB `filesIndex: FileNode[]` in session records | Dropped — OPFS is the source of truth |
+| `{uuid}-{name}` file IDs | Dropped — path IS the ID |
+| `validateFileToolPath` "no leading `/`" rule | Dropped — absolute paths allowed |
+| `findFileEntry` name→id lookup | Dropped — handler operates by path |
+| `syncIndexFromSnapshot` / `hydrateAndSyncFiles` / `cleanupSession` | Dropped — files are global to extension |
+
+**New surface:**
+
+- `FilesController.uploadFiles(files)` / `listAllFiles()` / `readFileText(path)` / `writeFile(path, content)` / `deleteFile(path)` / `editFile(path, ...)`
+- `file_write({ path, content })` tool — added alongside `file_list/read/edit/delete`
+- `FileOp`/`FileOpResult` unions gained `write` variant
+- `js-tool-prompt.ts` documents shared-FS semantics
+
+**Follow-ups (see Priority list):** nested-dir tree view in panel, auto-refresh on agent writes, E2E for `file_write`.

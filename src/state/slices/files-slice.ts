@@ -33,7 +33,7 @@ export interface FilesState {
 	nodes: Record<FileNodeId, FileNode>;
 	rootIds: FileNodeId[];
 	selectedFileId: FileNodeId | null;
-	filesSessionId: string | null;
+	filesVersion: number;
 }
 
 export interface FilesSlice {
@@ -42,8 +42,8 @@ export interface FilesSlice {
 	addFileNode(node: FileNode): void;
 	removeFileNode(id: FileNodeId): void;
 	clearFiles(): void;
-	setFileNodes(nodes: FileNode[], sessionId?: string): void;
-	hydrateFiles(nodes: FileNode[], sessionId: string): void;
+	setFileNodes(nodes: FileNode[]): void;
+	incrementFilesVersion(): void;
 }
 
 function buildFileState(nodes: FileNode[]): Pick<FilesState, "nodes" | "rootIds"> {
@@ -66,7 +66,7 @@ export function createFilesSlice(
 			nodes: {},
 			rootIds: [],
 			selectedFileId: null,
-			filesSessionId: null,
+			filesVersion: 0,
 		},
 		setSelectedFileId(id) {
 			set((state) => ({
@@ -107,27 +107,21 @@ export function createFilesSlice(
 					nodes: {},
 					rootIds: [],
 					selectedFileId: null,
-					filesSessionId: null,
 				},
 			}));
 		},
-		setFileNodes(nodes, sessionId) {
-			set((state) => ({
-				files: {
-					...state.files,
-					...buildFileState(nodes),
-					...(sessionId !== undefined ? { filesSessionId: sessionId } : {}),
-				},
-			}));
-		},
-		hydrateFiles(nodes, sessionId) {
+		setFileNodes(nodes) {
 			set((state) => ({
 				files: {
 					...state.files,
 					...buildFileState(nodes),
 					selectedFileId: null,
-					filesSessionId: sessionId,
 				},
+			}));
+		},
+		incrementFilesVersion() {
+			set((state) => ({
+				files: { ...state.files, filesVersion: state.files.filesVersion + 1 },
 			}));
 		},
 	};

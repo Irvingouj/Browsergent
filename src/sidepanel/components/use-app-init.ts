@@ -6,7 +6,6 @@ import { SettingsController } from "../../controllers/settings-controller";
 import { WorkerBridge } from "../../controllers/worker-bridge";
 import { ExtensionJsClient } from "../extension-js-client";
 import { handleFileOp } from "../file-op-handler";
-import { hydrateAndSyncFiles } from "../hydrate-files";
 import { browsergentStore } from "../../state/store";
 import { IndexedDBStorage } from "../../storage/indexeddb-storage";
 import { MemoryStorage } from "../../storage/memory-storage";
@@ -82,22 +81,18 @@ export function useAppInit(): AppInitResult {
 						return;
 					}
 					handleFileOp(msg, filesCtrl)
-						.then(async (result) => {
+						.then((result) => {
 							bridgeRef.current?.post({
 								type: "fileOpResult",
 								id: msg.id,
 								result,
 							});
-							if (result.op === "edit" || result.op === "delete") {
-								try {
-									const fresh = await filesCtrl.listSessionFiles(msg.sessionId);
-									browsergentStore.getState().setFileNodes(fresh);
-								} catch (refreshErr) {
-									console.warn(
-										"Files state refresh after tool op failed:",
-										refreshErr,
-									);
-								}
+							if (
+								result.op === "write" ||
+								result.op === "edit" ||
+								result.op === "delete"
+							) {
+								browsergentStore.getState().incrementFilesVersion();
 							}
 						})
 						.catch((err: unknown) => {
@@ -132,18 +127,6 @@ export function useAppInit(): AppInitResult {
 			const filesCtrl = new FilesController(ExtensionJsClient.getInstance());
 			filesControllerRef.current = filesCtrl;
 
-			const cleanupPrunedSessions = async (
-				prunedIds: readonly string[],
-			): Promise<void> => {
-				for (const id of prunedIds) {
-					try {
-						await filesCtrl.cleanupSession(id);
-					} catch (err: unknown) {
-						console.warn("Files cleanup on session prune failed:", err);
-					}
-				}
-			};
-
 			extjs.init().catch((err: unknown) => {
 				console.warn("JS init failed:", err);
 			});
@@ -156,12 +139,12 @@ export function useAppInit(): AppInitResult {
 						browsergentStore.getState().hydrateChat(session.messages);
 						browsergentStore.getState().hydrateTrace(session.trace);
 						browsergentStore.getState().hydrateDiagnostics(session.diagnostics);
-						await hydrateAndSyncFiles(activeSessionId, session.filesIndex, filesCtrl);
+						const nodes = await filesCtrl.listAllFiles();
+						browsergentStore.getState().setFileNodes(nodes);
 					}
 					sessionCtrl.hydrated = true;
 					const { sessions: sessionList, prunedIds } =
 						await sessionCtrl.listSessions();
-					await cleanupPrunedSessions(prunedIds);
 					browsergentStore.getState().sessionListLoaded(sessionList);
 					browsergentStore
 						.getState()
@@ -171,10 +154,10 @@ export function useAppInit(): AppInitResult {
 					console.warn("Session load failed:", err);
 					sessionCtrl.hydrated = true;
 					const activeSessionId = sessionCtrl.getActiveSessionId() ?? "";
-					await hydrateAndSyncFiles(activeSessionId, [], filesCtrl);
+					const nodes = await filesCtrl.listAllFiles();
+					browsergentStore.getState().setFileNodes(nodes);
 					const { sessions: sessionList, prunedIds } =
 						await sessionCtrl.listSessions();
-					await cleanupPrunedSessions(prunedIds);
 					browsergentStore.getState().sessionListLoaded(sessionList);
 					browsergentStore.getState().activeSessionChanged(activeSessionId);
 				});

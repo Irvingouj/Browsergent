@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { SkillFsClient } from "../../src/skills/skill-types";
 import {
 	buildFileNode,
-	buildOpfsPath,
 	FilesController,
 	isTextFile,
 	sanitizeFileName,
@@ -25,15 +24,21 @@ function createMockFs(): MockFs {
 		},
 		async fsList(path: string): Promise<{ name: string; kind: string }[]> {
 			logs.push(`list:${path}`);
+			const prefix = path === "/" ? "/" : `${path}/`;
+			const seen = new Set<string>();
 			const entries: { name: string; kind: string }[] = [];
-			const prefix = path.endsWith("/") ? path : `${path}/`;
 			for (const key of storage.keys()) {
-				if (key.startsWith(prefix)) {
-					const rest = key.slice(prefix.length);
-					const name = rest.split("/")[0];
-					if (name && !entries.find((e) => e.name === name)) {
-						entries.push({ name, kind: "file" });
+				if (!key.startsWith(prefix)) continue;
+				const rest = key.slice(prefix.length);
+				if (rest.length === 0) continue;
+				const firstSeg = rest.split("/")[0]!;
+				if (rest.includes("/")) {
+					if (!seen.has(firstSeg)) {
+						seen.add(firstSeg);
+						entries.push({ name: firstSeg, kind: "directory" });
 					}
+				} else {
+					entries.push({ name: firstSeg, kind: "file" });
 				}
 			}
 			return entries;
@@ -50,7 +55,6 @@ function createMockFs(): MockFs {
 		},
 		async fsMkdir(path: string): Promise<void> {
 			logs.push(`mkdir:${path}`);
-			storage.set(path, "__DIR__");
 		},
 		async fsDelete(path: string): Promise<void> {
 			logs.push(`delete:${path}`);
@@ -75,26 +79,6 @@ describe("sanitizeFileName", () => {
 	test("preserves normal characters", () => {
 		expect(sanitizeFileName("hello world-123_日本語.md")).toBe(
 			"hello world-123_日本語.md",
-		);
-	});
-});
-
-describe("buildOpfsPath", () => {
-	test("formats path correctly", () => {
-		expect(buildOpfsPath("sess-1", "file-1", "name.txt")).toBe(
-			"/session-files/sess-1/file-1-name.txt",
-		);
-	});
-
-	test("handles names with spaces", () => {
-		expect(buildOpfsPath("s1", "f1", "my file.md")).toBe(
-			"/session-files/s1/f1-my file.md",
-		);
-	});
-
-	test("sanitizes sessionId with path separators and dot-dot", () => {
-		expect(buildOpfsPath("s1/../other", "f1", "name.txt")).toBe(
-			"/session-files/s1other/f1-name.txt",
 		);
 	});
 });
@@ -127,24 +111,34 @@ describe("isTextFile", () => {
 });
 
 describe("buildFileNode", () => {
-	test("creates file node from entry", () => {
-		const entry = {
-			id: "f1",
-			name: "test.md",
-			size: 100,
-			mime: "text/markdown",
-			isText: true,
-			path: "/session-files/s1/f1-test.md",
-		};
-		const node = buildFileNode(entry);
+	test("sets id from path and kind to file", () => {
+		const node = buildFileNode({ name: "test.md", path: "/test.md" });
 		expect(node).toEqual({
-			id: "f1",
+			id: "/test.md",
 			name: "test.md",
-			path: "/session-files/s1/f1-test.md",
+			path: "/test.md",
 			kind: "file",
-			size: 100,
-			mime: "text/markdown",
 		});
+	});
+
+	test("includes size when provided", () => {
+		const node = buildFileNode({ name: "a.txt", path: "/a.txt", size: 42 });
+		expect(node.size).toBe(42);
+	});
+
+	test("includes mime when provided", () => {
+		const node = buildFileNode({
+			name: "a.txt",
+			path: "/a.txt",
+			mime: "text/plain",
+		});
+		expect(node.mime).toBe("text/plain");
+	});
+
+	test("omits size and mime when not provided", () => {
+		const node = buildFileNode({ name: "b.ts", path: "/b.ts" });
+		expect(node.size).toBeUndefined();
+		expect(node.mime).toBeUndefined();
 	});
 });
 
@@ -157,82 +151,34 @@ describe("FilesController.uploadFiles", () => {
 		ctrl = new FilesController(fs);
 	});
 
-	test("writes text files to OPFS and returns nodes", async () => {
+	test("writes text files to /{name}", async () => {
 		const file = new File(["hello world"], "test.md", {
 			type: "text/markdown",
 		});
-		const nodes = await ctrl.uploadFiles("s1", [file]);
+		const nodes = await ctrl.uploadFiles([file]);
 
 		expect(nodes.length).toBe(1);
 		expect(nodes[0].name).toBe("test.md");
+		expect(nodes[0].path).toBe("/test.md");
+		expect(nodes[0].id).toBe("/test.md");
 		expect(nodes[0].kind).toBe("file");
 		expect(nodes[0].size).toBe(11);
-		expect(nodes[0].mime).toBe("text/markdown");
 
-		// File content written
-		const filePath = nodes[0].path;
-		expect(fs.storage.get(filePath)).toBe("hello world");
-
-		// Index written
-		const indexText = fs.storage.get("/session-files/s1/.index.json");
-		expect(indexText).toBeDefined();
-		const index = JSON.parse(indexText!);
-		expect(index.version).toBe(1);
-		expect(index.entries.length).toBe(1);
-		expect(index.entries[0].name).toBe("test.md");
-		expect(index.entries[0].isText).toBe(true);
-	});
-
-	test("stores binary metadata only without writing blob", async () => {
-		const file = new File(["binarydata"], "image.png", {
-			type: "image/png",
-		});
-		const nodes = await ctrl.uploadFiles("s1", [file]);
-
-		expect(nodes.length).toBe(1);
-		expect(nodes[0].name).toBe("image.png");
-
-		// No file content written for binary
-		const filePath = nodes[0].path;
-		expect(fs.storage.has(filePath)).toBe(false);
-
-		// Index has metadata
-		const indexText = fs.storage.get("/session-files/s1/.index.json");
-		const index = JSON.parse(indexText!);
-		expect(index.entries[0].isText).toBe(false);
-		expect(index.entries[0].size).toBe(10);
+		expect(fs.storage.get("/test.md")).toBe("hello world");
 	});
 
 	test("handles multiple files", async () => {
 		const files = [
-			new File(["a"], "a.md", { type: "text/markdown" }),
-			new File(["b"], "b.png", { type: "image/png" }),
+			new File(["a"], "alpha.md", { type: "text/markdown" }),
+			new File(["b"], "beta.json", { type: "application/json" }),
 		];
-		const nodes = await ctrl.uploadFiles("s1", files);
+		const nodes = await ctrl.uploadFiles(files);
 
 		expect(nodes.length).toBe(2);
-		expect(nodes[0].name).toBe("a.md");
-		expect(nodes[1].name).toBe("b.png");
-
-		const indexText = fs.storage.get("/session-files/s1/.index.json");
-		const index = JSON.parse(indexText!);
-		expect(index.entries.length).toBe(2);
-	});
-
-	test("sanitizes names with slashes", async () => {
-		const file = new File(["x"], "path/to/file.md", {
-			type: "text/markdown",
-		});
-		const nodes = await ctrl.uploadFiles("s1", [file]);
-
-		const filePath = nodes[0].path;
-		expect(filePath.endsWith("-pathtofile.md")).toBe(true);
-		expect(fs.storage.has(filePath)).toBe(true);
-		expect(nodes[0].name).toBe("path/to/file.md");
-
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		expect(index.entries[0].name).toBe("path/to/file.md");
+		expect(nodes[0].name).toBe("alpha.md");
+		expect(nodes[1].name).toBe("beta.json");
+		expect(fs.storage.get("/alpha.md")).toBe("a");
+		expect(fs.storage.get("/beta.json")).toBe("b");
 	});
 
 	test("rejects text files over size cap", async () => {
@@ -240,37 +186,92 @@ describe("FilesController.uploadFiles", () => {
 		const file = new File([bigContent], "big.md", {
 			type: "text/markdown",
 		});
-		await expect(ctrl.uploadFiles("s1", [file])).rejects.toThrow(
-			"File too large",
-		);
-		// Should not have written the file or index
+		await expect(ctrl.uploadFiles([file])).rejects.toThrow("File too large");
 		expect(fs.storage.size).toBe(0);
 	});
 
-	test("rolls back partially uploaded text files on failure", async () => {
-		const file1 = new File(["a"], "a.md", { type: "text/markdown" });
-		const file2 = new File(["b"], "b.md", { type: "text/markdown" });
-
-		// Make the second write fail by pre-populating its path
-		const path2 = "/session-files/s1/" + "x".repeat(100) + "-b.md";
-		// Actually, a simpler approach: make fsWriteText throw after first call
-		let writeCount = 0;
-		const originalWriteText = fs.fsWriteText.bind(fs);
-		fs.fsWriteText = async (path: string, data: string) => {
-			writeCount++;
-			if (writeCount === 2) {
-				throw new Error("disk full");
-			}
-			return originalWriteText(path, data);
-		};
-
-		await expect(ctrl.uploadFiles("s1", [file1, file2])).rejects.toThrow(
-			"disk full",
+	test("rejects binary files", async () => {
+		const file = new File(["data"], "image.png", { type: "image/png" });
+		await expect(ctrl.uploadFiles([file])).rejects.toThrow(
+			"Binary uploads unsupported",
 		);
+		expect(fs.storage.size).toBe(0);
+	});
 
-		// First file should have been cleaned up
-		const keys = Array.from(fs.storage.keys());
-		expect(keys.some((k) => k.endsWith("-a.md"))).toBe(false);
+	test("sanitizes names with slashes", async () => {
+		const file = new File(["x"], "path/to/file.md", {
+			type: "text/markdown",
+		});
+		const nodes = await ctrl.uploadFiles([file]);
+
+		expect(nodes[0].name).toBe("pathtofile.md");
+		expect(nodes[0].path).toBe("/pathtofile.md");
+		expect(fs.storage.get("/pathtofile.md")).toBe("x");
+	});
+
+	test("throws for empty name after sanitization", async () => {
+		const file = new File(["x"], "///", { type: "text/markdown" });
+		await expect(ctrl.uploadFiles([file])).rejects.toThrow(
+			"Invalid file name",
+		);
+	});
+});
+
+describe("FilesController.listAllFiles", () => {
+	let fs: MockFs;
+	let ctrl: FilesController;
+
+	beforeEach(() => {
+		fs = createMockFs();
+		ctrl = new FilesController(fs);
+	});
+
+	test("returns flat list of files at root", async () => {
+		fs.storage.set("/a.txt", "aaa");
+		fs.storage.set("/b.md", "bbb");
+
+		const nodes = await ctrl.listAllFiles();
+		expect(nodes.length).toBe(2);
+		const names = nodes.map((n) => n.name).sort();
+		expect(names).toEqual(["a.txt", "b.md"]);
+		for (const node of nodes) {
+			expect(node.kind).toBe("file");
+			expect(node.id).toBe(node.path);
+		}
+	});
+
+	test("recurses into subdirectories", async () => {
+		fs.storage.set("/notes/draft.md", "draft");
+		fs.storage.set("/notes/final.md", "final");
+		fs.storage.set("/readme.txt", "hello");
+
+		const nodes = await ctrl.listAllFiles();
+		expect(nodes.length).toBe(4);
+		const fileNames = nodes
+			.filter((n) => n.kind === "file")
+			.map((n) => n.name)
+			.sort();
+		expect(fileNames).toEqual(["draft.md", "final.md", "readme.txt"]);
+
+		const draftNode = nodes.find((n) => n.name === "draft.md")!;
+		expect(draftNode.path).toBe("/notes/draft.md");
+		expect(draftNode.parentId).toBe("/notes");
+		expect(draftNode.kind).toBe("file");
+
+		const dirNode = nodes.find((n) => n.kind === "directory")!;
+		expect(dirNode.path).toBe("/notes");
+		expect(dirNode.parentId).toBeUndefined();
+	});
+
+	test("returns empty array when root is empty", async () => {
+		const nodes = await ctrl.listAllFiles();
+		expect(nodes).toEqual([]);
+	});
+
+	test("returns empty array when fsList throws", async () => {
+		fs.fsList = async () => { throw new Error("opfs error"); };
+		const nodes = await ctrl.listAllFiles();
+		expect(nodes).toEqual([]);
 	});
 });
 
@@ -278,57 +279,48 @@ describe("FilesController.readFileText", () => {
 	let fs: MockFs;
 	let ctrl: FilesController;
 
-	beforeEach(async () => {
+	beforeEach(() => {
 		fs = createMockFs();
 		ctrl = new FilesController(fs);
-		const file = new File(["content"], "test.md", {
-			type: "text/markdown",
-		});
-		await ctrl.uploadFiles("s1", [file]);
 	});
 
-	test("returns text content for text files", async () => {
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		const fileId = index.entries[0].id;
-
-		const text = await ctrl.readFileText("s1", fileId);
-		expect(text).toBe("content");
+	test("returns text content", async () => {
+		fs.storage.set("/hello.md", "hello world");
+		const text = await ctrl.readFileText("/hello.md");
+		expect(text).toBe("hello world");
 	});
 
-	test("throws for non-existent file", async () => {
-		await expect(ctrl.readFileText("s1", "bad-id")).rejects.toThrow(
-			"File not found",
+	test("throws for missing path", async () => {
+		await expect(ctrl.readFileText("/nope.md")).rejects.toThrow("Not found");
+	});
+});
+
+describe("FilesController.writeFile", () => {
+	let fs: MockFs;
+	let ctrl: FilesController;
+
+	beforeEach(() => {
+		fs = createMockFs();
+		ctrl = new FilesController(fs);
+	});
+
+	test("creates a new file", async () => {
+		await ctrl.writeFile("/new.txt", "fresh content");
+		expect(fs.storage.get("/new.txt")).toBe("fresh content");
+	});
+
+	test("overwrites existing file", async () => {
+		fs.storage.set("/existing.txt", "old");
+		await ctrl.writeFile("/existing.txt", "new");
+		expect(fs.storage.get("/existing.txt")).toBe("new");
+	});
+
+	test("rejects content over size cap", async () => {
+		const bigContent = "x".repeat(1_000_001);
+		await expect(ctrl.writeFile("/big.txt", bigContent)).rejects.toThrow(
+			"Content too large",
 		);
-	});
-
-	test("throws for binary files", async () => {
-		const file = new File(["bin"], "img.png", { type: "image/png" });
-		await ctrl.uploadFiles("s1", [file]);
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		const binaryId = index.entries.find((e: { name: string }) => e.name === "img.png").id;
-
-		await expect(ctrl.readFileText("s1", binaryId)).rejects.toThrow(
-			"File is not text",
-		);
-	});
-
-	test("throws when index entry path is out of session scope", async () => {
-		const file = new File(["content"], "test.md", {
-			type: "text/markdown",
-		});
-		await ctrl.uploadFiles("s1", [file]);
-
-		// Tamper with the index to point to another session
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		index.entries[0].path = "/session-files/s2/f1-test.md";
-		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
-
-		await expect(ctrl.readFileText("s1", index.entries[0].id)).rejects.toThrow(
-			"File path out of scope",
-		);
+		expect(fs.storage.has("/big.txt")).toBe(false);
 	});
 });
 
@@ -336,438 +328,86 @@ describe("FilesController.deleteFile", () => {
 	let fs: MockFs;
 	let ctrl: FilesController;
 
-	beforeEach(async () => {
+	beforeEach(() => {
 		fs = createMockFs();
 		ctrl = new FilesController(fs);
-		const file = new File(["content"], "test.md", {
-			type: "text/markdown",
-		});
-		await ctrl.uploadFiles("s1", [file]);
 	});
 
-	test("removes text file from OPFS and index", async () => {
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		const fileId = index.entries[0].id;
-		const filePath = index.entries[0].path;
+	test("removes a file", async () => {
+		fs.storage.set("/remove-me.md", "content");
+		expect(fs.storage.has("/remove-me.md")).toBe(true);
 
-		expect(fs.storage.has(filePath)).toBe(true);
-
-		await ctrl.deleteFile("s1", fileId);
-
-		expect(fs.storage.has(filePath)).toBe(false);
-		const newIndex = JSON.parse(
-			fs.storage.get("/session-files/s1/.index.json")!,
-		);
-		expect(newIndex.entries.length).toBe(0);
+		await ctrl.deleteFile("/remove-me.md");
+		expect(fs.storage.has("/remove-me.md")).toBe(false);
 	});
 
-	test("throws for non-existent file", async () => {
-		await expect(ctrl.deleteFile("s1", "bad-id")).rejects.toThrow(
-			"File not found",
-		);
-	});
-
-	test("throws when index entry path is out of session scope", async () => {
-		const file = new File(["content"], "test.md", {
-			type: "text/markdown",
-		});
-		await ctrl.uploadFiles("s1", [file]);
-
-		// Tamper with the index to point to another session
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		index.entries[0].path = "/session-files/s2/f1-test.md";
-		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
-
-		await expect(ctrl.deleteFile("s1", index.entries[0].id)).rejects.toThrow(
-			"File path out of scope",
-		);
-	});
-
-	test("removes binary file from index without deleting OPFS blob", async () => {
-		const file = new File(["bin"], "img.png", { type: "image/png" });
-		await ctrl.uploadFiles("s1", [file]);
-
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		const binaryEntry = index.entries.find(
-			(e: { name: string }) => e.name === "img.png",
-		);
-		expect(binaryEntry).toBeDefined();
-		const fileId = binaryEntry.id;
-		const filePath = binaryEntry.path;
-
-		// Binary files are not stored in OPFS
-		expect(fs.storage.has(filePath)).toBe(false);
-
-		fs.logs = [];
-		await ctrl.deleteFile("s1", fileId);
-
-		// Should not have attempted to delete the non-existent blob path
-		expect(
-			fs.logs.some((l) => l.startsWith("delete:") && l.includes(filePath)),
-		).toBe(false);
-
-		const newIndex = JSON.parse(
-			fs.storage.get("/session-files/s1/.index.json")!,
-		);
-		// The text file from beforeEach should still be present
-		expect(newIndex.entries.length).toBe(1);
-		expect(newIndex.entries[0].name).toBe("test.md");
+	test("succeeds when file does not exist (deletes no-op)", async () => {
+		// fsDelete just calls storage.delete which is a no-op for missing keys
+		await expect(ctrl.deleteFile("/ghost.txt")).resolves.toBeUndefined();
 	});
 });
 
 describe("FilesController.editFile", () => {
 	let fs: MockFs;
 	let ctrl: FilesController;
-	let fileId: string;
-	let filePath: string;
 
-	beforeEach(async () => {
+	beforeEach(() => {
 		fs = createMockFs();
 		ctrl = new FilesController(fs);
-		const file = new File(["hello world"], "test.md", {
-			type: "text/markdown",
-		});
-		const nodes = await ctrl.uploadFiles("s1", [file]);
-		fileId = nodes[0].id;
-		filePath = nodes[0].path;
+		fs.storage.set("/test.md", "hello world");
 	});
 
-	test("replaces a unique occurrence and updates index size", async () => {
-		const result = await ctrl.editFile(
-			"s1",
-			fileId,
-			"world",
-			"browser",
-			false,
-		);
+	test("replaces a unique occurrence", async () => {
+		const result = await ctrl.editFile("/test.md", "world", "browser", false);
 		expect(result.occurrences).toBe(1);
 		expect(result.bytes).toBe("hello browser".length);
-		expect(fs.storage.get(filePath)).toBe("hello browser");
-
-		const index = JSON.parse(
-			fs.storage.get("/session-files/s1/.index.json")!,
-		);
-		expect(index.entries[0].size).toBe("hello browser".length);
-	});
-
-	test("rejects when old_string matches multiple times without replace_all", async () => {
-		// Seed content with two occurrences of "x"
-		fs.storage.set(filePath, "x and x");
-		const index = JSON.parse(
-			fs.storage.get("/session-files/s1/.index.json")!,
-		);
-		index.entries[0].size = 7;
-		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
-
-		await expect(
-			ctrl.editFile("s1", fileId, "x", "y", false),
-		).rejects.toThrow("matches 2 times");
+		expect(fs.storage.get("/test.md")).toBe("hello browser");
 	});
 
 	test("replaces all occurrences when replace_all=true", async () => {
-		fs.storage.set(filePath, "x and x");
-		const index = JSON.parse(
-			fs.storage.get("/session-files/s1/.index.json")!,
-		);
-		index.entries[0].size = 7;
-		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
-
-		const result = await ctrl.editFile("s1", fileId, "x", "y", true);
+		fs.storage.set("/test.md", "x and x");
+		const result = await ctrl.editFile("/test.md", "x", "y", true);
 		expect(result.occurrences).toBe(2);
-		expect(fs.storage.get(filePath)).toBe("y and y");
+		expect(fs.storage.get("/test.md")).toBe("y and y");
 	});
 
 	test("throws when old_string not found", async () => {
 		await expect(
-			ctrl.editFile("s1", fileId, "missing", "x", false),
+			ctrl.editFile("/test.md", "missing", "x", false),
 		).rejects.toThrow("not found in file");
+	});
+
+	test("throws when old_string matches multiple times without replace_all", async () => {
+		fs.storage.set("/test.md", "x and x");
+		await expect(
+			ctrl.editFile("/test.md", "x", "y", false),
+		).rejects.toThrow("matches 2 times");
 	});
 
 	test("throws when old_string equals new_string", async () => {
 		await expect(
-			ctrl.editFile("s1", fileId, "hello", "hello", false),
+			ctrl.editFile("/test.md", "hello", "hello", false),
 		).rejects.toThrow("must differ");
 	});
 
 	test("throws when old_string is empty", async () => {
 		await expect(
-			ctrl.editFile("s1", fileId, "", "x", false),
+			ctrl.editFile("/test.md", "", "x", false),
 		).rejects.toThrow("must not be empty");
-	});
-
-	test("throws for non-existent file id", async () => {
-		await expect(
-			ctrl.editFile("s1", "bad-id", "a", "b", false),
-		).rejects.toThrow("File not found");
-	});
-
-	test("throws for binary files", async () => {
-		const binFile = new File(["bin"], "img.png", { type: "image/png" });
-		const nodes = await ctrl.uploadFiles("s1", [binFile]);
-		await expect(
-			ctrl.editFile("s1", nodes[0].id, "a", "b", false),
-		).rejects.toThrow("not text");
-	});
-
-	test("throws when index entry path is out of session scope", async () => {
-		const indexText = fs.storage.get("/session-files/s1/.index.json")!;
-		const index = JSON.parse(indexText);
-		index.entries[0].path = "/session-files/s2/f1-test.md";
-		fs.storage.set("/session-files/s1/.index.json", JSON.stringify(index));
-
-		await expect(
-			ctrl.editFile("s1", fileId, "hello", "hi", false),
-		).rejects.toThrow("out of scope");
 	});
 
 	test("rejects edit that would exceed max file size", async () => {
 		const bigReplacement = "x".repeat(1_000_002);
 		await expect(
-			ctrl.editFile("s1", fileId, "world", bigReplacement, false),
+			ctrl.editFile("/test.md", "world", bigReplacement, false),
 		).rejects.toThrow("max file size");
 	});
 
-	test("rolls back file content when index write fails", async () => {
-		const original = fs.storage.get(filePath)!;
-
-		const originalWriteText = fs.fsWriteText.bind(fs);
-		fs.fsWriteText = async (path: string, data: string) => {
-			if (path.includes(".index.json")) {
-				throw new Error("index disk full");
-			}
-			return originalWriteText(path, data);
-		};
-
-		await expect(
-			ctrl.editFile("s1", fileId, "world", "browser", false),
-		).rejects.toThrow("index disk full");
-
-		expect(fs.storage.get(filePath)).toBe(original);
-	});
-
-	test("still propagates index error when rollback restore also fails", async () => {
-		const original = fs.storage.get(filePath)!;
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-		const originalWriteText = fs.fsWriteText.bind(fs);
-		let restoreAttempted = false;
-		fs.fsWriteText = async (path: string, data: string) => {
-			if (path.includes(".index.json")) {
-				if (restoreAttempted) {
-					throw new Error("index still broken");
-				}
-				throw new Error("index disk full");
-			}
-			if (data === original && path === filePath) {
-				restoreAttempted = true;
-				throw new Error("restore disk dead");
-			}
-			return originalWriteText(path, data);
-		};
-
-		await expect(
-			ctrl.editFile("s1", fileId, "world", "browser", false),
-		).rejects.toThrow("index disk full");
-
-		expect(restoreAttempted).toBe(true);
-		expect(warnSpy).toHaveBeenCalledWith(
-			"Failed to restore original after index write failure:",
-			expect.any(Error),
-		);
-		warnSpy.mockRestore();
-	});
-});
-
-describe("FilesController.listSessionFiles", () => {
-	test("returns empty array for new session", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		const nodes = await ctrl.listSessionFiles("new-session");
-		expect(nodes).toEqual([]);
-	});
-
-	test("returns nodes for existing files", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		const file = new File(["x"], "a.md", { type: "text/markdown" });
-		await ctrl.uploadFiles("s1", [file]);
-
-		const nodes = await ctrl.listSessionFiles("s1");
-		expect(nodes.length).toBe(1);
-		expect(nodes[0].name).toBe("a.md");
-		expect(nodes[0].kind).toBe("file");
-	});
-
-	test("handles corrupt index JSON gracefully", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		fs.storage.set("/session-files/s1/.index.json", "not json");
-
-		const nodes = await ctrl.listSessionFiles("s1");
-		expect(nodes).toEqual([]);
-
-		await expect(ctrl.readFileText("s1", "any-id")).rejects.toThrow(
-			"File not found",
-		);
-	});
-});
-
-describe("FilesController.syncIndexFromSnapshot", () => {
-	test("writes OPFS index from snapshot nodes", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		const nodes = [
-			{
-				id: "f1",
-				name: "notes.md",
-				path: "/session-files/s1/f1-notes.md",
-				kind: "file" as const,
-				size: 12,
-				mime: "text/markdown",
-			},
-			{
-				id: "f2",
-				name: "photo.png",
-				path: "/session-files/s1/f2-photo.png",
-				kind: "file" as const,
-				size: 100,
-				mime: "image/png",
-			},
-		];
-
-		await ctrl.syncIndexFromSnapshot("s1", nodes);
-
-		const indexText = fs.storage.get("/session-files/s1/.index.json");
-		expect(indexText).toBeDefined();
-		const index = JSON.parse(indexText!);
-		expect(index.version).toBe(1);
-		expect(index.entries).toHaveLength(2);
-		expect(index.entries[0]).toMatchObject({
-			id: "f1",
-			name: "notes.md",
-			isText: true,
-		});
-		expect(index.entries[1]).toMatchObject({
-			id: "f2",
-			name: "photo.png",
-			isText: false,
-		});
-	});
-
-	test("replaces stale OPFS index with snapshot entries", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		const staleFile = new File(["stale"], "old.md", { type: "text/markdown" });
-		await ctrl.uploadFiles("s1", [staleFile]);
-
-		const snapshotNodes = [
-			{
-				id: "new-id",
-				name: "fresh.md",
-				path: "/session-files/s1/new-id-fresh.md",
-				kind: "file" as const,
-				size: 5,
-				mime: "text/markdown",
-			},
-		];
-		await ctrl.syncIndexFromSnapshot("s1", snapshotNodes);
-
-		const nodes = await ctrl.listSessionFiles("s1");
-		expect(nodes).toHaveLength(1);
-		expect(nodes[0]?.id).toBe("new-id");
-		expect(nodes[0]?.name).toBe("fresh.md");
-	});
-
-	test("filters out nodes whose path belongs to a different session", async () => {
-			const fs = createMockFs();
-			const ctrl = new FilesController(fs);
-			const nodes = [
-				{
-					id: "f1",
-					name: "notes.md",
-					path: "/session-files/s1/f1-notes.md",
-					kind: "file" as const,
-					size: 12,
-					mime: "text/markdown",
-				},
-				{
-					id: "f2",
-					name: "evil.png",
-					path: "/session-files/s2/f2-evil.png",
-					kind: "file" as const,
-					size: 999,
-					mime: "image/png",
-				},
-			];
-
-			await ctrl.syncIndexFromSnapshot("s1", nodes);
-
-			const indexText = fs.storage.get("/session-files/s1/.index.json");
-			const index = JSON.parse(indexText!);
-			expect(index.entries).toHaveLength(1);
-			expect(index.entries[0].id).toBe("f1");
-		});
-	});
-
-describe("FilesController.readIndex", () => {
-	test("returns empty entries for unsupported version", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		fs.storage.set(
-			"/session-files/s1/.index.json",
-			JSON.stringify({ version: 2, entries: [{ id: "x" }] }),
-		);
-
-		const nodes = await ctrl.listSessionFiles("s1");
-		expect(nodes).toEqual([]);
-	});
-
-	test("filters entries missing required string fields", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		fs.storage.set(
-			"/session-files/s1/.index.json",
-			JSON.stringify({
-				version: 1,
-				entries: [
-					{ id: "f1", name: "good.md", path: "/session-files/s1/f1-good.md", size: 5, mime: "text/plain", isText: true },
-					{ id: 123, name: "no-id.md", path: "/session-files/s1/x-no-id.md", size: 3, mime: "text/plain", isText: true },
-					{ id: "f3", name: 456, path: "/session-files/s1/f3-no-name.md", size: 7, mime: "text/plain", isText: true },
-					{ id: "f4", name: "no-path.md", size: 9, mime: "text/plain", isText: true },
-				],
-			}),
-		);
-
-		const nodes = await ctrl.listSessionFiles("s1");
-		expect(nodes).toHaveLength(1);
-		expect(nodes[0].id).toBe("f1");
-		expect(nodes[0].name).toBe("good.md");
-	});
-});
-
-describe("FilesController.cleanupSession", () => {
-	test("deletes all files and directory", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		const file = new File(["x"], "a.md", { type: "text/markdown" });
-		await ctrl.uploadFiles("s1", [file]);
-
-		expect(fs.storage.size).toBeGreaterThan(0);
-
-		await ctrl.cleanupSession("s1");
-
-		// All session files should be gone
-		for (const key of fs.storage.keys()) {
-			expect(key.startsWith("/session-files/s1/")).toBe(false);
-		}
-	});
-
-	test("succeeds when directory does not exist", async () => {
-		const fs = createMockFs();
-		const ctrl = new FilesController(fs);
-		await expect(ctrl.cleanupSession("missing")).resolves.toBeUndefined();
+	test("writes the new content and returns correct bytes", async () => {
+		fs.storage.set("/test.md", "aaa bbb aaa");
+		const result = await ctrl.editFile("/test.md", "aaa", "c", true);
+		expect(result.occurrences).toBe(2);
+		expect(result.bytes).toBe("c bbb c".length);
+		expect(fs.storage.get("/test.md")).toBe("c bbb c");
 	});
 });

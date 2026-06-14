@@ -320,7 +320,13 @@ export function isLoadSkillError(
 function isValidFileOp(op: unknown): op is FileOp {
 	if (!isObject(op)) return false;
 	const o = op as Record<string, unknown>;
-	if (o.op !== "list" && o.op !== "read" && o.op !== "edit" && o.op !== "delete")
+	if (
+		o.op !== "list" &&
+		o.op !== "read" &&
+		o.op !== "edit" &&
+		o.op !== "delete" &&
+		o.op !== "write"
+	)
 		return false;
 	if (o.op === "list") {
 		if (o.prefix !== undefined && typeof o.prefix !== "string") return false;
@@ -328,6 +334,9 @@ function isValidFileOp(op: unknown): op is FileOp {
 	}
 	if (o.op === "read" || o.op === "delete") {
 		return typeof o.path === "string";
+	}
+	if (o.op === "write") {
+		return typeof o.path === "string" && typeof o.content === "string";
 	}
 	// edit
 	return (
@@ -341,7 +350,13 @@ function isValidFileOp(op: unknown): op is FileOp {
 function isValidFileOpResult(result: unknown): result is FileOpResult {
 	if (!isObject(result)) return false;
 	const r = result as Record<string, unknown>;
-	if (r.op !== "list" && r.op !== "read" && r.op !== "edit" && r.op !== "delete")
+	if (
+		r.op !== "list" &&
+		r.op !== "read" &&
+		r.op !== "edit" &&
+		r.op !== "delete" &&
+		r.op !== "write"
+	)
 		return false;
 	if (r.op === "list") return Array.isArray(r.files);
 	if (r.op === "read") {
@@ -353,6 +368,9 @@ function isValidFileOpResult(result: unknown): result is FileOpResult {
 	}
 	if (r.op === "edit") {
 		return typeof r.occurrences === "number" && typeof r.bytes === "number";
+	}
+	if (r.op === "write") {
+		return typeof r.bytes === "number";
 	}
 	return true; // delete has no extra fields
 }
