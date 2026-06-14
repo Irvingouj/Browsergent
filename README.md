@@ -1,116 +1,112 @@
 # Browsergent
 
-AI browser agent in a Chrome side panel with two interfaces:
+**Claude Code for the browser** — an AI agent that lives in a Chrome side panel, sees web pages, and acts on them autonomously.
 
-1. **Chat** (primary): Type a task in plain English, the agent sees the page and acts.
-2. **JS Playbooks** (secondary): Write JavaScript scripts that control the browser through typed commands.
+Type a task in plain English. The agent reasons with an LLM, generates JavaScript, runs it against the current page, observes the result, and iterates until the task is done — just like Claude Code, but for browser automation.
 
-Both interfaces share the same content-script BrowserCommand executor and action trace.
+---
 
 ## Architecture
 
 ```
-Side Panel (Preact UI)
-  ├── Chat Tab (agent loop, Anthropic API)
-  ├── JS Tab (extension-js sandboxed runtime)
-  └── Shared Action Trace
-
+Side Panel (Chat UI)
+  │ postMessage
+  ▼
 Web Worker
-  ├── @pi-oxide/pi-host-web WASM (agent brain)
-  ├── Anthropic API call (LLM reasoning)
-  │     └─ LLM's only tool: run_js -> generates JS code
-  └─ relay to side panel for execution
+  ├─ @pi-oxide/pi-host-web WASM (state machine, context projection)
+  ├─ Anthropic API call (LLM reasoning)
+  │     └─ LLM's only tool: run_js → generates JS code
+  │           │
+  │           ▼
+  └─ relayExtjsExecution(code) → postMessage to side panel
 
 Side Panel Main Thread
-  └── ExtensionJsClient (singleton)
+  └─ ExtensionJsClient (singleton)
         └─ @pi-oxide/extension-js ExtensionSession
               └─ chrome.tabs.* / chrome.scripting.* / content script
 
 Background Service Worker
-  └── Side panel opening + tab tracking
-
-Content Script (in active tab, injected by extension-js)
-  ├── DOM Snapshot (ref_id generation)
-  └── Action Executor (click, fill, select, scroll, extract)
+  │ chrome.tabs.sendMessage
+  ▼
+Content Script (in active tab)
+  ├─ snapshot engine (ref_id generation)
+  ├─ action executor (click/fill/select/scroll)
+  └─ result observation
 ```
 
-## Build
+**Core principle:** the LLM reasons and generates JS. `run_js` is its only tool. All `page.*` operations flow through the sandboxed `@pi-oxide/extension-js` runtime. The LLM never touches DOM or Chrome APIs directly — it only writes JavaScript.
+
+---
+
+## Quick Start
 
 ```bash
-# Install dependencies
+git clone https://github.com/Irvingouj/Browsergent.git
+cd Browsergent
 npm install
-
-# Build extension
 npm run build
-
-# TypeScript check
-npm run typecheck
 ```
 
-## Load
+Load the extension in Chrome:
 
 1. Open `chrome://extensions`
-2. Enable Developer mode
-3. Load unpacked → select `dist/`
-4. Click the extension icon to open the side panel
+2. Enable **Developer mode**
+3. Click **Load unpacked** → select the `dist/` directory
 
-## Use
+---
 
-### Chat
+## Configuration
 
-1. Click Settings → enter your Anthropic API key → Save
-2. Navigate to any page with a form
-3. Type a task like "Fill the email field with test@example.com and submit"
-4. Click Run
-5. Watch the trace show snapshot → fill → click
-6. Click Stop to cancel at any time
+Open **Settings** in the side panel and provide:
 
-### JS Playbooks
+| Field | Example |
+|-------|---------|
+| API Key | `sk-ant-api03-...` |
+| Base URL | `https://api.anthropic.com` |
+| Model | `claude-sonnet-4-6` |
 
-1. Switch to the JS tab
-2. Write a playbook:
-```js
-const tabId = await page.active_tab();
-console.log(await page.url());
-console.log(await page.title());
-console.log(await page.snapshot());
-```
-3. Click Run JS
-4. Watch the trace show each command
+Compatible providers: **Anthropic**, **DeepSeek** (`api.deepseek.com/anthropic`), **z.ai / GLM**, or any endpoint implementing the Anthropic Messages API.
 
-## Test
+Your API key stays in the browser — never sent anywhere except the base URL you configure.
+
+---
+
+## Features
+
+- **Agent chat** — natural-language tasks, multi-turn reasoning, automatic error recovery
+- **`/skill:` activation** — compose-time skill palette with built-in and user-authored skills
+- **`@[file:...]` attachments** — reference session files in tasks
+- **Files panel** — upload, edit, and manage files backed by OPFS
+- **Trace view** — expandable per-step trace with JS code blocks, result inspection, and error details
+- **Multi-provider** — Anthropic, DeepSeek, GLM, or any compatible API
+- **BYOK by design** — no inference markup; you bring your own credentials
+
+---
+
+## Development
 
 ```bash
-# Unit tests
-npm run test:unit
-
-# E2E tests
-npm run test
-
-# All tests
-npm run test:all
-
-# TypeScript check
-npm run typecheck
+npm install        # install dependencies
+npm run dev        # dev server with hot reload
+npm run build      # production build
+npm run typecheck  # TypeScript check (tsc --noEmit)
+npm run test:unit  # unit tests (vitest)
+npm run test       # E2E tests (Playwright)
+npm run test:all   # unit + E2E
 ```
 
-## Permissions
+---
 
-- `activeTab` — see current tab
-- `scripting` — inject content script
-- `sidePanel` — show side panel
-- `storage` — store API key
+## Tech Stack
 
-No broad `host_permissions`. No arbitrary JS eval. No CSS selectors as action interface.
+- **TypeScript** — extension host, UI (Preact + Zustand + Tailwind CSS v4), message routing
+- **Rust → WASM** (`@pi-oxide/pi-host-web`) — agent state machine, context projection
+- **`@pi-oxide/extension-js`** — sandboxed JS runtime; executes `run_js` and dispatches typed `page.*` commands
+- **Chrome Manifest V3** — side panel, service worker, content script
+- **Vitest + Playwright** — unit and end-to-end tests
 
-## Type Rules
+---
 
-- No `any`
-- No `Object`
-- Discriminated unions for all tagged types
-- `unknown` at boundaries, narrow immediately
-- `Record<string, unknown>` for string-keyed bags
+## License
 
-## Historical Documents
-
-`archive/*.md` contains historical planning documents kept for reference. They describe earlier iterations of the product (including a planned Lua runtime) and do not reflect the current codebase. See `CONTEXT.md` for the current architecture.
+Browsergent Fair BYOK License — see [LICENSE](./LICENSE). MIT-style with BYOK and no-LLM-resale conditions.
