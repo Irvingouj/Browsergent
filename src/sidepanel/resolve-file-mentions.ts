@@ -1,5 +1,5 @@
-import { escapeXmlAttr, escapeXmlText } from "../skills/validate-skill-meta";
 import type { FilesController } from "../controllers/files-controller";
+import { escapeXmlAttr, escapeXmlText } from "../skills/validate-skill-meta";
 import { truncateWithMarker } from "../utils/truncate";
 
 const FILE_MENTION_RE = /@\[file:([^:\]]+):([^:\]]+)\]/g;
@@ -36,7 +36,11 @@ export function stripFileMentions(draft: string): string {
 }
 
 export function truncateFileContent(content: string): string {
-	return truncateWithMarker(content, MAX_FILE_ATTACHMENT_CHARS, "\n\n[truncated]\n\n");
+	return truncateWithMarker(
+		content,
+		MAX_FILE_ATTACHMENT_CHARS,
+		"\n\n[truncated]\n\n",
+	);
 }
 
 export function buildAttachmentXmlBlock(
@@ -51,9 +55,7 @@ export function buildAttachmentXmlBlock(
 	].join("\n");
 }
 
-export function dedupeFileMentionsById(
-	mentions: FileMention[],
-): FileMention[] {
+export function dedupeFileMentionsById(mentions: FileMention[]): FileMention[] {
 	const seen = new Set<string>();
 	const deduped: FileMention[] = [];
 	for (const mention of mentions) {
@@ -70,9 +72,7 @@ export async function resolveFileMentions(
 ): Promise<ResolvedAttachment[]> {
 	const resolved: ResolvedAttachment[] = [];
 	for (const mention of dedupeFileMentionsById(mentions)) {
-		const content = await filesController.readFileText(
-			mention.fileId,
-		);
+		const content = await filesController.readFileText(mention.fileId);
 		const truncated = truncateFileContent(content);
 		resolved.push({
 			fileId: mention.fileId,

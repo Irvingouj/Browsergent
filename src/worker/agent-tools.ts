@@ -273,7 +273,10 @@ function formatFileOpError(err: unknown): string {
 	return formatToolError("E_FILE_UNKNOWN", msg, FILE_PATH_HELP);
 }
 
-function truncateFileContent(content: string): { text: string; truncated: boolean } {
+function truncateFileContent(content: string): {
+	text: string;
+	truncated: boolean;
+} {
 	if (content.length <= MAX_FILE_READ_CHARS) {
 		return { text: content, truncated: false };
 	}
@@ -282,18 +285,21 @@ function truncateFileContent(content: string): { text: string; truncated: boolea
 	const head = Math.ceil(budget / 2);
 	const tail = budget - head;
 	return {
-		text: content.slice(0, head) + marker + (tail > 0 ? content.slice(-tail) : ""),
+		text:
+			content.slice(0, head) + marker + (tail > 0 ? content.slice(-tail) : ""),
 		truncated: true,
 	};
 }
 
-function formatFileListResult(files: {
-	id: string;
-	name: string;
-	size: number;
-	mime: string;
-	isText: boolean;
-}[]): string {
+function formatFileListResult(
+	files: {
+		id: string;
+		name: string;
+		size: number;
+		mime: string;
+		isText: boolean;
+	}[],
+): string {
 	if (files.length === 0) return "No files in session.";
 	const header = "name\tsize\tmime\tisText";
 	const rows = files.map(
@@ -302,12 +308,20 @@ function formatFileListResult(files: {
 	return [header, ...rows].join("\n");
 }
 
-function formatFileReadResult(content: string, bytes: number, truncated: boolean): string {
+function formatFileReadResult(
+	content: string,
+	bytes: number,
+	truncated: boolean,
+): string {
 	const head = truncated ? `[truncated — file is ${bytes} bytes]\n\n` : "";
 	return head + content;
 }
 
-function formatFileEditResult(occurrences: number, bytes: number, name: string): string {
+function formatFileEditResult(
+	occurrences: number,
+	bytes: number,
+	name: string,
+): string {
 	return `Edited ${name}: replaced ${occurrences} occurrence${occurrences === 1 ? "" : "s"}; file is now ${bytes} bytes.`;
 }
 
@@ -326,18 +340,21 @@ export function createAgentTools(
 				properties: {
 					code: {
 						type: "string",
-						description: "Inline JS code to execute. Mutually exclusive with 'file'.",
+						description:
+							"Inline JS code to execute. Mutually exclusive with 'file'.",
 					},
 					file: {
 						type: "object",
 						properties: {
 							name: {
 								type: "string",
-								description: 'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
+								description:
+									'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
 							},
 						},
 						required: ["name"],
-						description: "Reference to an uploaded file. Mutually exclusive with 'code'.",
+						description:
+							"Reference to an uploaded file. Mutually exclusive with 'code'.",
 					},
 				},
 			},
@@ -351,8 +368,11 @@ export function createAgentTools(
 				if (!parsed.success) {
 					return "run_js input must be an object with 'code' (string) and/or 'file' ({ name: string })";
 				}
-				const hasCode = parsed.data.code !== undefined && parsed.data.code.trim().length > 0;
-				const hasFile = parsed.data.file !== undefined && parsed.data.file.name.trim().length > 0;
+				const hasCode =
+					parsed.data.code !== undefined && parsed.data.code.trim().length > 0;
+				const hasFile =
+					parsed.data.file !== undefined &&
+					parsed.data.file.name.trim().length > 0;
 				if (hasCode && hasFile) {
 					return formatToolError(
 						"E_JS_INVALID_INPUT",
@@ -366,10 +386,17 @@ export function createAgentTools(
 
 				let code: string;
 				if (hasFile) {
-					const fileName = parsed.data.file!.name;
+					const fileName = parsed.data.file?.name;
+					if (!fileName) {
+						return "run_js requires a non-empty 'code' string or a 'file' with non-empty 'name'";
+					}
 					const pathError = validateFileToolPath(fileName);
 					if (pathError) {
-						return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+						return formatToolError(
+							"E_FILE_PATH_SCOPE",
+							pathError,
+							FILE_PATH_HELP,
+						);
 					}
 					try {
 						const readResult = await fileOp({ op: "read", path: fileName });
@@ -385,7 +412,7 @@ export function createAgentTools(
 						return formatFileOpError(err);
 					}
 				} else {
-					code = parsed.data.code!;
+					code = parsed.data.code ?? "";
 				}
 
 				if (!code.trim()) {
@@ -413,8 +440,12 @@ export function createAgentTools(
 					return truncateToolResult(formatJsRunResult(result), 50000);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
-					const stack = err instanceof Error && err.stack ? err.stack : undefined;
-					const { code: errCode, hint } = classifyError({ message: msg, stack });
+					const stack =
+						err instanceof Error && err.stack ? err.stack : undefined;
+					const { code: errCode, hint } = classifyError({
+						message: msg,
+						stack,
+					});
 					return formatToolError(errCode, msg, hint, stack);
 				}
 			},
@@ -490,7 +521,7 @@ export function createAgentTools(
 					return formatToolError(
 						"E_SKILL_INVALID",
 						"load_skill requires a non-empty skill name",
-						"Call load_skill with { skill: \"skill-name\" } from the catalog.",
+						'Call load_skill with { skill: "skill-name" } from the catalog.',
 					);
 				}
 				const { skill, path: resourcePath } = parsed.data;
@@ -562,7 +593,8 @@ export function createAgentTools(
 				properties: {
 					path: {
 						type: "string",
-						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
+						description:
+							'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
 				},
 				required: ["path"],
@@ -578,7 +610,11 @@ export function createAgentTools(
 				}
 				const pathError = validateFileToolPath(parsed.data.path);
 				if (pathError) {
-					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+					return formatToolError(
+						"E_FILE_PATH_SCOPE",
+						pathError,
+						FILE_PATH_HELP,
+					);
 				}
 				try {
 					const result = await fileOp({ op: "read", path: parsed.data.path });
@@ -604,7 +640,8 @@ export function createAgentTools(
 				properties: {
 					path: {
 						type: "string",
-						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
+						description:
+							'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
 					old_string: {
 						type: "string",
@@ -645,7 +682,11 @@ export function createAgentTools(
 				}
 				const pathError = validateFileToolPath(parsed.data.path);
 				if (pathError) {
-					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+					return formatToolError(
+						"E_FILE_PATH_SCOPE",
+						pathError,
+						FILE_PATH_HELP,
+					);
 				}
 				try {
 					const result = await fileOp({
@@ -680,7 +721,8 @@ export function createAgentTools(
 				properties: {
 					path: {
 						type: "string",
-						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
+						description:
+							'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
 				},
 				required: ["path"],
@@ -696,7 +738,11 @@ export function createAgentTools(
 				}
 				const pathError = validateFileToolPath(parsed.data.path);
 				if (pathError) {
-					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+					return formatToolError(
+						"E_FILE_PATH_SCOPE",
+						pathError,
+						FILE_PATH_HELP,
+					);
 				}
 				try {
 					const result = await fileOp({ op: "delete", path: parsed.data.path });
@@ -721,7 +767,8 @@ export function createAgentTools(
 				properties: {
 					path: {
 						type: "string",
-						description: 'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
+						description:
+							'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
 					content: {
 						type: "string",
@@ -734,7 +781,11 @@ export function createAgentTools(
 				const parsed = z
 					.object({ path: z.string(), content: z.string() })
 					.safeParse(input);
-				if (!parsed.success || !parsed.data.path.trim() || !parsed.data.content) {
+				if (
+					!parsed.success ||
+					!parsed.data.path.trim() ||
+					!parsed.data.content
+				) {
 					return formatToolError(
 						"E_FILE_INVALID",
 						"file_write requires non-empty 'path' and 'content' strings",
@@ -743,20 +794,32 @@ export function createAgentTools(
 				}
 				const pathError = validateFileToolPath(parsed.data.path);
 				if (pathError) {
-					return formatToolError("E_FILE_PATH_SCOPE", pathError, FILE_PATH_HELP);
+					return formatToolError(
+						"E_FILE_PATH_SCOPE",
+						pathError,
+						FILE_PATH_HELP,
+					);
 				}
 				try {
-					const result = await fileOp({ op: "write", path: parsed.data.path, content: parsed.data.content });
+					const result = await fileOp({
+						op: "write",
+						path: parsed.data.path,
+						content: parsed.data.content,
+					});
 					if (result.op !== "write") {
-						return formatToolError("E_FILE_UNKNOWN", "Unexpected result for file_write", "");
+						return formatToolError(
+							"E_FILE_UNKNOWN",
+							"Unexpected result for file_write",
+							"",
+						);
 					}
 					return `Wrote ${parsed.data.path}: ${result.bytes} bytes.`;
 				} catch (err) {
 					return formatFileOpError(err);
 				}
 			},
-			},
-		];
+		},
+	];
 
 	return {
 		definitions,

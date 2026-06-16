@@ -21,7 +21,9 @@ describe("agent prompt policy", () => {
 	});
 
 	test("documents binary and incomplete element-result limitations", () => {
-		expect(JS_TOOL_PROMPT).toContain("`page.find()` results may omit DOM attributes");
+		expect(JS_TOOL_PROMPT).toContain(
+			"`page.find()` results may omit DOM attributes",
+		);
 		expect(JS_TOOL_PROMPT).toContain("`page.fetch()` returns a text body");
 		expect(JS_TOOL_PROMPT).toContain("binary-safe API");
 	});

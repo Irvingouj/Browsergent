@@ -30,7 +30,10 @@ test("@ picker inserts file mention token into task input", async () => {
 		sidePanel.getByTestId("command-picker").locator("text=picker.txt").first(),
 	).toBeVisible();
 
-	await sidePanel.getByTestId(/^command-picker-item-/).first().click();
+	await sidePanel
+		.getByTestId(/^command-picker-item-/)
+		.first()
+		.click();
 
 	const value = await taskInput.inputValue();
 	expect(value).toMatch(/@\[file:[^:\]]+:picker\.txt\]/);

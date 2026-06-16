@@ -10,3 +10,7 @@ vendor/
 .opencode/
 .claude/
 browsergent-conversation-*.json
+# Smoke harness run artifacts (contain real conversation data — never commit)
+smoke/runs/
+smoke/runs*.zip
+smoke/runs*.tar.gz

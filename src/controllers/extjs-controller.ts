@@ -1,9 +1,9 @@
 import { normalizeJsError } from "../errors/normalize-error";
-import { getSkillService } from "../skills/skill-service";
 import {
 	ExtensionJsClient,
 	type ExtjsRelayResponse,
 } from "../sidepanel/extension-js-client";
+import { getSkillService } from "../skills/skill-service";
 import { browsergentStore } from "../state/store";
 import type { WorkerBridge } from "./worker-bridge";
 

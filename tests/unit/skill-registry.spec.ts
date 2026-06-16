@@ -45,6 +45,10 @@ function makeFs(files: Record<string, string>): SkillFsClient {
 		async fsWriteText() {},
 		async fsMkdir() {},
 		async fsDelete() {},
+		async fsWriteBase64() {},
+		async fsReadBase64() {
+			return "";
+		},
 	};
 }
 

@@ -15,18 +15,21 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 			properties: {
 				code: {
 					type: "string",
-					description: "Inline JS code to execute. Mutually exclusive with 'file'.",
+					description:
+						"Inline JS code to execute. Mutually exclusive with 'file'.",
 				},
 				file: {
 					type: "object",
 					properties: {
 						name: {
 							type: "string",
-							description: 'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
+							description:
+								'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
 						},
 					},
 					required: ["name"],
-					description: "Reference to an uploaded file. Mutually exclusive with 'code'.",
+					description:
+						"Reference to an uploaded file. Mutually exclusive with 'code'.",
 				},
 			},
 		},
@@ -109,8 +112,14 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 			type: "object",
 			properties: {
 				path: { type: "string", description: 'File name (e.g. "notes.md").' },
-				old_string: { type: "string", description: "The exact text to replace." },
-				new_string: { type: "string", description: "The text to replace it with." },
+				old_string: {
+					type: "string",
+					description: "The exact text to replace.",
+				},
+				new_string: {
+					type: "string",
+					description: "The text to replace it with.",
+				},
 				replace_all: {
 					type: "boolean",
 					description: "Replace every occurrence. Defaults to false.",
@@ -170,9 +179,7 @@ Use page.* for target-tab automation. Use sidepanel.* only when explicitly contr
 Do not use page.evaluate, chrome.scripting.executeScript, or tab.evaluate.`;
 
 export function composeSystemPrompt(skillCatalog: string): string {
-	const catalogBlock = skillCatalog.trim()
-		? `\n\n${skillCatalog.trim()}`
-		: "";
+	const catalogBlock = skillCatalog.trim() ? `\n\n${skillCatalog.trim()}` : "";
 	return `${SYSTEM_PROMPT}
 
 Use load_skill to load skill instructions from the available_skills catalog when relevant. Use load_skill with path when a skill references files under references/. Users may activate skills at compose time with /skill:name.${catalogBlock}`;

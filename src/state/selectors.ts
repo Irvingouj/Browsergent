@@ -30,7 +30,6 @@ export const selectSkillDiagnostics = (s: BrowsergentStore) =>
 export const selectFilesState = (s: BrowsergentStore) => s.files;
 export const selectSelectedFileId = (s: BrowsergentStore) =>
 	s.files.selectedFileId;
-export const selectFilesVersion = (s: BrowsergentStore) =>
-	s.files.filesVersion;
+export const selectFilesVersion = (s: BrowsergentStore) => s.files.filesVersion;
 export const selectExpandedFolderIds = (s: BrowsergentStore) =>
 	s.files.expandedFolderIds;

@@ -64,7 +64,7 @@ describe("parseTraceInput", () => {
 	test("js preview truncates long first line", () => {
 		const code = "x".repeat(80);
 		const result = parseTraceInput("run_js", JSON.stringify({ code }));
-		expect(result.preview).toBe("x".repeat(60) + "…");
+		expect(result.preview).toBe(`${"x".repeat(60)}…`);
 	});
 
 	test("js preview returns (empty) for comment-only code", () => {

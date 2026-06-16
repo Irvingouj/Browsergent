@@ -10,7 +10,9 @@ describe("createTraceSlice", () => {
 			const state = { trace: { entries: [] } };
 			return fn(state);
 		});
-		const slice = createTraceSlice(set as any);
+		const slice = createTraceSlice(
+			set as unknown as Parameters<typeof createTraceSlice>[0],
+		);
 		const entry: AgentTraceEntry = {
 			id: "t1",
 			step: 1,
@@ -44,7 +46,9 @@ describe("createTraceSlice", () => {
 			};
 			return fn(state);
 		});
-		const slice = createTraceSlice(set as any);
+		const slice = createTraceSlice(
+			set as unknown as Parameters<typeof createTraceSlice>[0],
+		);
 		const updated: AgentTraceEntry = {
 			id: "t1",
 			step: 1,
@@ -77,7 +81,9 @@ describe("createTraceSlice", () => {
 			"../../src/state/slices/trace-slice"
 		);
 		const set = vi.fn();
-		const slice = createTraceSlice(set as any);
+		const slice = createTraceSlice(
+			set as unknown as Parameters<typeof createTraceSlice>[0],
+		);
 		slice.clearTrace();
 		expect(set).toHaveBeenCalledWith({ trace: { entries: [] } });
 	});
@@ -87,7 +93,9 @@ describe("createTraceSlice", () => {
 			"../../src/state/slices/trace-slice"
 		);
 		const set = vi.fn();
-		const slice = createTraceSlice(set as any);
+		const slice = createTraceSlice(
+			set as unknown as Parameters<typeof createTraceSlice>[0],
+		);
 		const entries: AgentTraceEntry[] = [
 			{ id: "t1", step: 1, status: "done", toolName: "run_js", timestamp: 1 },
 		];

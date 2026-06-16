@@ -55,11 +55,7 @@ export class FileOpRelay {
 		const promise = new Promise<FileOpResult>((resolve, reject) => {
 			const timeoutId = setTimeout(() => {
 				this.pending.delete(relayId);
-				reject(
-					new Error(
-						`File op relay timed out after ${this.timeoutMs}ms`,
-					),
-				);
+				reject(new Error(`File op relay timed out after ${this.timeoutMs}ms`));
 			}, this.timeoutMs);
 
 			this.pending.set(relayId, { resolve, reject, timeoutId });

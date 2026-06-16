@@ -18,9 +18,9 @@ describe("SkillService.subscribeSkillsChanged", () => {
 		const callback = vi.fn();
 		const unsubscribe = service.subscribeSkillsChanged(callback);
 
-		(service as unknown as { emitSkillsChanged(skills: SkillMeta[]): void }).emitSkillsChanged(
-			[sampleSkill],
-		);
+		(
+			service as unknown as { emitSkillsChanged(skills: SkillMeta[]): void }
+		).emitSkillsChanged([sampleSkill]);
 
 		expect(callback).toHaveBeenCalledWith([sampleSkill]);
 		unsubscribe();

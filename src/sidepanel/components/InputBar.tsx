@@ -4,21 +4,26 @@ import { useStore } from "zustand/react";
 import type { FilesController } from "../../controllers/files-controller";
 import { getSkillService } from "../../skills/skill-service";
 import type { SkillMeta } from "../../skills/skill-types";
-import { selectChatDragOver, selectChatUpload, selectFilesState, selectTaskDraft } from "../../state/selectors";
+import {
+	selectChatDragOver,
+	selectChatUpload,
+	selectFilesState,
+	selectTaskDraft,
+} from "../../state/selectors";
 import { browsergentStore } from "../../state/store";
+import {
+	type AtState,
+	buildFileMentionToken,
+	buildPickerInsert,
+	filesToPickerItems,
+	resolvePickerState,
+	type SlashState,
+} from "../detect-mention-state";
 import {
 	CommandPicker,
 	type CommandPickerItem,
 	filterPickerItems,
 } from "./CommandPicker";
-import {
-	filesToPickerItems,
-	type AtState,
-	type SlashState,
-	resolvePickerState,
-	buildPickerInsert,
-	buildFileMentionToken,
-} from "../detect-mention-state";
 
 const MAX_INPUT_HEIGHT = 200;
 
@@ -79,8 +84,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	}, [loadSkills]);
 
 	useEffect(() => {
-		const el =
-			inputRef && "current" in inputRef ? inputRef.current : null;
+		const el = inputRef && "current" in inputRef ? inputRef.current : null;
 		if (!el) return;
 		el.style.height = "auto";
 		const next = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
@@ -89,7 +93,8 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 
 	const skillPickerItems = useMemo(() => skillsToPickerItems(skills), [skills]);
 	const filteredSkillItems = useMemo(
-		() => (slashState ? filterPickerItems(skillPickerItems, slashState.query) : []),
+		() =>
+			slashState ? filterPickerItems(skillPickerItems, slashState.query) : [],
 		[skillPickerItems, slashState],
 	);
 
@@ -109,7 +114,10 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				setAtState(null);
 				return;
 			}
-			const { atState: at, slashState: slash } = resolvePickerState(value, cursor);
+			const { atState: at, slashState: slash } = resolvePickerState(
+				value,
+				cursor,
+			);
 			setAtState(at);
 			setSlashState(slash);
 		},
@@ -149,16 +157,13 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 		async (files: File[]): Promise<void> => {
 			if (files.length === 0) return;
 			if (!filesController || !sessionId) {
-				browsergentStore
-					.getState()
-					.setChatUploadStatus({
-						kind: "error",
-						message: "File upload unavailable — try again in a moment.",
-					});
+				browsergentStore.getState().setChatUploadStatus({
+					kind: "error",
+					message: "File upload unavailable — try again in a moment.",
+				});
 				return;
 			}
-			const el =
-				inputRef && "current" in inputRef ? inputRef.current : null;
+			const el = inputRef && "current" in inputRef ? inputRef.current : null;
 			const cursor = el?.selectionStart ?? taskInput.length;
 			browsergentStore.getState().setChatUploadStatus({ kind: "uploading" });
 			try {
@@ -241,8 +246,10 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 
 	const isPickerOpen = atState !== null || slashState !== null;
 	const pickerItems = atState !== null ? filteredFileItems : filteredSkillItems;
-	const dismissPicker = atState !== null ? () => setAtState(null) : () => setSlashState(null);
-	const emptyMessage = atState !== null ? "No matching files" : "No matching skills";
+	const dismissPicker =
+		atState !== null ? () => setAtState(null) : () => setSlashState(null);
+	const emptyMessage =
+		atState !== null ? "No matching files" : "No matching skills";
 
 	return (
 		<>

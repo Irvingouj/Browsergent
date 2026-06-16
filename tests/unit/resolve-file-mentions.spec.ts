@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
+import { FilesController } from "../../src/controllers/files-controller";
 import {
 	buildAttachmentXmlBlock,
 	buildTaskWithAttachments,
@@ -8,7 +9,6 @@ import {
 	stripFileMentions,
 	truncateFileContent,
 } from "../../src/sidepanel/resolve-file-mentions";
-import { FilesController } from "../../src/controllers/files-controller";
 import type { SkillFsClient } from "../../src/skills/skill-types";
 
 interface MockFs extends SkillFsClient {
@@ -22,16 +22,19 @@ function createMockFs(): MockFs {
 		async fsExists(path: string): Promise<boolean> {
 			return storage.has(path);
 		},
-			async fsList(dir: string): Promise<{ name: string; kind: string }[]> {
-				const entries: { name: string; kind: string }[] = [];
-				for (const path of storage.keys()) {
-					const parent = path.substring(0, path.lastIndexOf("/")) || "/";
-					if (parent === dir) {
-						entries.push({ name: path.substring(path.lastIndexOf("/") + 1), kind: "file" });
-					}
+		async fsList(dir: string): Promise<{ name: string; kind: string }[]> {
+			const entries: { name: string; kind: string }[] = [];
+			for (const path of storage.keys()) {
+				const parent = path.substring(0, path.lastIndexOf("/")) || "/";
+				if (parent === dir) {
+					entries.push({
+						name: path.substring(path.lastIndexOf("/") + 1),
+						kind: "file",
+					});
 				}
-				return entries;
-			},
+			}
+			return entries;
+		},
 		async fsReadText(path: string): Promise<string> {
 			const data = storage.get(path);
 			if (data === undefined) throw new Error(`Not found: ${path}`);
@@ -42,6 +45,10 @@ function createMockFs(): MockFs {
 		},
 		async fsMkdir(): Promise<void> {},
 		async fsDelete(): Promise<void> {},
+		async fsWriteBase64(): Promise<void> {},
+		async fsReadBase64(): Promise<string> {
+			return "";
+		},
 	};
 }
 
@@ -80,24 +87,20 @@ describe("parseFileMentions", () => {
 	});
 
 	test("ignores malformed tokens", () => {
-		const mentions = parseFileMentions(
-			"@[file:missing-colon] @[file:]",
-		);
+		const mentions = parseFileMentions("@[file:missing-colon] @[file:]");
 		expect(mentions).toEqual([]);
 	});
 });
 
 describe("stripFileMentions", () => {
 	test("strips single file mention", () => {
-		expect(
-			stripFileMentions("Check @[file:abc:notes.md] please"),
-		).toBe("Check  please");
+		expect(stripFileMentions("Check @[file:abc:notes.md] please")).toBe(
+			"Check  please",
+		);
 	});
 
 	test("strips multiple file mentions", () => {
-		expect(
-			stripFileMentions("@[file:a:1.md] and @[file:b:2.md]"),
-		).toBe("and");
+		expect(stripFileMentions("@[file:a:1.md] and @[file:b:2.md]")).toBe("and");
 	});
 
 	test("returns unchanged when no mentions", () => {
@@ -137,11 +140,7 @@ describe("truncateFileContent", () => {
 
 describe("buildAttachmentXmlBlock", () => {
 	test("builds XML block with escaped attributes", () => {
-		const block = buildAttachmentXmlBlock(
-			'file"name',
-			'id<1>',
-			"content",
-		);
+		const block = buildAttachmentXmlBlock('file"name', "id<1>", "content");
 		expect(block).toContain('name="file&quot;name"');
 		expect(block).toContain('id="id&lt;1&gt;"');
 		expect(block).toContain("content");
@@ -230,9 +229,9 @@ describe("resolveFileMentions", () => {
 				raw: "@[file:/missing:x.md]",
 			},
 		];
-		await expect(
-			resolveFileMentions(mentions, ctrl),
-		).rejects.toThrow(/not found/i);
+		await expect(resolveFileMentions(mentions, ctrl)).rejects.toThrow(
+			/not found/i,
+		);
 	});
 
 	test("dedupes mentions by fileId", async () => {

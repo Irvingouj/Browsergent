@@ -61,9 +61,7 @@ describe("mergeSkillAndFileAttachments", () => {
 			'<skill name="capability-check" location="/p">Body</skill>\n\nUser task: @[file:f1:notes.md] do thing';
 		const result = mergeSkillAndFileAttachments(task, resolved, [attachment]);
 		expect(result).toContain('<skill name="capability-check"');
-		expect(result).toContain(
-			'<attachment name="notes.md" id="f1">',
-		);
+		expect(result).toContain('<attachment name="notes.md" id="f1">');
 		expect(result).toContain("User task: do thing");
 		expect(result).not.toContain("@[file:");
 	});
@@ -88,8 +86,8 @@ describe("mergeSkillAndFileAttachments", () => {
 
 	test("returns resolvedTask unchanged when attachments empty", () => {
 		const resolved = '<skill name="cap" location="/p">Body</skill>';
-		expect(
-			mergeSkillAndFileAttachments("/skill:cap", resolved, []),
-		).toBe(resolved);
+		expect(mergeSkillAndFileAttachments("/skill:cap", resolved, [])).toBe(
+			resolved,
+		);
 	});
 });

@@ -1,8 +1,8 @@
 /** Panel <-> Worker message types. */
 
 import type { BrowsergentError } from "../errors/browsergent-error";
-import type { CellResult } from "./extjs-utils";
 import type { FileOp, FileOpResult } from "../worker/file-op-relay";
+import type { CellResult } from "./extjs-utils";
 
 export type { BrowsergentError };
 

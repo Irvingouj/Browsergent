@@ -20,15 +20,21 @@ describe("scoreFzfMatch", () => {
 	});
 
 	test("matches subsequence in label", () => {
-		expect(scoreFzfMatch("cap", items[0].label, items[0].description)).not.toBeNull();
+		expect(
+			scoreFzfMatch("cap", items[0].label, items[0].description),
+		).not.toBeNull();
 	});
 
 	test("matches subsequence in description", () => {
-		expect(scoreFzfMatch("probe", items[0].label, items[0].description)).not.toBeNull();
+		expect(
+			scoreFzfMatch("probe", items[0].label, items[0].description),
+		).not.toBeNull();
 	});
 
 	test("rejects non-subsequence query", () => {
-		expect(scoreFzfMatch("zzz", items[0].label, items[0].description)).toBeNull();
+		expect(
+			scoreFzfMatch("zzz", items[0].label, items[0].description),
+		).toBeNull();
 	});
 });
 

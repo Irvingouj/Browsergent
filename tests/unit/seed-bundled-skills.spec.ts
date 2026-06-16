@@ -70,6 +70,16 @@ function makeTrackingFs(initial: Record<string, string> = {}): TrackingFs {
 				dirs.add(`/${parts.slice(0, i).join("/")}`);
 			}
 		},
+		async fsWriteBase64(path: string, base64: string) {
+			writes.push({ path, data: base64 });
+			files[path] = base64;
+		},
+		async fsReadBase64(path: string) {
+			reads.push(path);
+			const content = files[path];
+			if (content === undefined) throw new Error(`missing ${path}`);
+			return content;
+		},
 		async fsMkdir(path: string) {
 			dirs.add(path);
 		},

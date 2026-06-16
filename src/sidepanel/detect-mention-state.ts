@@ -1,13 +1,16 @@
 import { isTextFile } from "../controllers/files-utils";
-import type { CommandPickerItem } from "./components/CommandPicker";
 import type { FileNode } from "../state/slices/files-slice";
+import type { CommandPickerItem } from "./components/CommandPicker";
 
 export interface SlashState {
 	startIndex: number;
 	query: string;
 }
 
-export function detectSlashState(value: string, cursor: number): SlashState | null {
+export function detectSlashState(
+	value: string,
+	cursor: number,
+): SlashState | null {
 	const before = value.slice(0, cursor);
 	const slashIndex = before.lastIndexOf("/");
 	if (slashIndex === -1) return null;
@@ -68,14 +71,16 @@ export function buildPickerInsert(
 }
 
 export function sanitizeTokenName(name: string): string {
-	return name.replace(/[\[\]:]/g, "_");
+	return name.replace(/[[\]:]/g, "_");
 }
 
 export function buildFileMentionToken(id: string, name: string): string {
 	return `@[file:${id}:${sanitizeTokenName(name)}]`;
 }
 
-export function filesToPickerItems(files: ReadonlyArray<FileNode>): CommandPickerItem[] {
+export function filesToPickerItems(
+	files: ReadonlyArray<FileNode>,
+): CommandPickerItem[] {
 	return files
 		.filter((file) => file.kind === "file" && isTextFile(file.name))
 		.map((file) => ({

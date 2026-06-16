@@ -8,7 +8,9 @@ describe("substitute-arguments", () => {
 	});
 
 	test("replaces named arguments", () => {
-		const out = substituteArguments("Email: $email", "a@b.com", true, ["email"]);
+		const out = substituteArguments("Email: $email", "a@b.com", true, [
+			"email",
+		]);
 		expect(out).toBe("Email: a@b.com");
 	});
 

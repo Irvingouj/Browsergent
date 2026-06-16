@@ -10,9 +10,7 @@ test("stop button appears when agent would be running", async () => {
 	).not.toBeVisible();
 
 	// Type a task
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("test task");
+	await sidePanel.locator('[data-testid="task-input"]').fill("test task");
 
 	// After clicking Run, we need an API key - it should show settings
 	await sidePanel.getByRole("button", { name: "Run task" }).click();

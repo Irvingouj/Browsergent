@@ -1,8 +1,14 @@
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks";
 import { useStore } from "zustand/react";
-import { findSkillManifest, isTextFile } from "../../controllers/files-utils";
 import type { FilesController } from "../../controllers/files-controller";
+import { findSkillManifest, isTextFile } from "../../controllers/files-utils";
 import { getSkillService } from "../../skills/skill-service";
 import {
 	selectExpandedFolderIds,
@@ -10,8 +16,8 @@ import {
 	selectFilesVersion,
 	selectSelectedFileId,
 } from "../../state/selectors";
-import { browsergentStore } from "../../state/store";
 import type { FileNode, FileNodeId } from "../../state/slices/files-slice";
+import { browsergentStore } from "../../state/store";
 
 interface FilesPanelProps {
 	filesController: FilesController;
@@ -133,7 +139,9 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 					const skillService = getSkillService();
 					const result = await skillService.importUserSkill(files);
 					setError(null);
-					setSkillImportToast(`Imported skill: ${result.name} (${result.fileCount} files)`);
+					setSkillImportToast(
+						`Imported skill: ${result.name} (${result.fileCount} files)`,
+					);
 				} else {
 					const nodes = await filesController.uploadFiles(files);
 					for (const node of nodes) {
@@ -207,10 +215,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 	const hasFiles = filesState.rootIds.length > 0;
 
 	return (
-		<div
-			data-testid="files-panel"
-			class="flex flex-col h-full"
-		>
+		<div data-testid="files-panel" class="flex flex-col h-full">
 			<div class="flex items-center gap-sm p-sm border-b border-border">
 				<button
 					type="button"
@@ -309,9 +314,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 							/>
 						</svg>
 						<p class="text-sm">No files yet</p>
-						<p class="text-xs opacity-60">
-							Drag and drop or click Upload
-						</p>
+						<p class="text-xs opacity-60">Drag and drop or click Upload</p>
 					</div>
 				)}
 			</div>
@@ -362,8 +365,8 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 							)
 						) : (
 							<p class="text-sm text-text-muted">
-								{selectedNode.name} — {selectedNode.size ?? 0}{" "}
-								bytes (preview not available)
+								{selectedNode.name} — {selectedNode.size ?? 0} bytes (preview
+								not available)
 							</p>
 						)}
 					</div>
@@ -425,7 +428,9 @@ const TreeNode: FunctionalComponent<TreeNodeProps> = ({
 							viewBox="0 0 16 16"
 							fill="none"
 							class="flex-shrink-0 text-text-muted transition-transform"
-							style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+							style={{
+								transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+							}}
 						>
 							<path
 								d="M5 3l6 5-6 5"
@@ -468,7 +473,12 @@ const TreeNode: FunctionalComponent<TreeNodeProps> = ({
 							stroke-width="1.2"
 							fill="none"
 						/>
-						<path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2" fill="none" />
+						<path
+							d="M9 1v4h4"
+							stroke="currentColor"
+							stroke-width="1.2"
+							fill="none"
+						/>
 					</svg>
 				)}
 				<span class="truncate flex-1">{node.name}</span>

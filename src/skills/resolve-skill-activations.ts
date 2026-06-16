@@ -1,7 +1,7 @@
-import { substituteArguments } from "./substitute-arguments";
-import type { SkillMeta } from "./skill-types";
-import { escapeXmlAttr } from "./validate-skill-meta";
 import { truncateWithMarker } from "../utils/truncate";
+import type { SkillMeta } from "./skill-types";
+import { substituteArguments } from "./substitute-arguments";
+import { escapeXmlAttr } from "./validate-skill-meta";
 
 const SKILL_HEAD_RE = /\/skill:([a-z0-9-]+)/;
 const FILE_MENTION_TOKEN = "@[file:";
@@ -42,7 +42,11 @@ function parseSkillTokenSegment(draft: string): SkillTokenSegment | null {
 export const MAX_SKILL_INJECT_CHARS = 32_000;
 
 export function truncateSkillBody(body: string): string {
-	return truncateWithMarker(body, MAX_SKILL_INJECT_CHARS, "\n\n[skill truncated]\n\n");
+	return truncateWithMarker(
+		body,
+		MAX_SKILL_INJECT_CHARS,
+		"\n\n[skill truncated]\n\n",
+	);
 }
 
 export interface SkillActivation {
@@ -67,10 +71,7 @@ export function stripSkillToken(draft: string): string {
 	return `${before}${after}`.trim();
 }
 
-export function buildSkillXmlBlock(
-	meta: SkillMeta,
-	body: string,
-): string {
+export function buildSkillXmlBlock(meta: SkillMeta, body: string): string {
 	return [
 		`<skill name="${escapeXmlAttr(meta.name)}" location="${escapeXmlAttr(meta.skillPath)}">`,
 		`References are relative to ${escapeXmlAttr(meta.baseDir)}.`,
@@ -88,12 +89,9 @@ export function buildResolvedTask(
 ): string {
 	const parsed = activation ?? parseSkillActivation(draft);
 	const args = parsed?.args ?? "";
-	const substituted = substituteArguments(
-		rawBody,
-		args || undefined,
-		true,
-		[...meta.argumentNames],
-	);
+	const substituted = substituteArguments(rawBody, args || undefined, true, [
+		...meta.argumentNames,
+	]);
 	const truncated = truncateSkillBody(substituted);
 	const skillBlock = buildSkillXmlBlock(meta, truncated);
 	const remainder = stripSkillToken(draft);

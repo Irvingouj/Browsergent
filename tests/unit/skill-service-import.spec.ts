@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import type { SkillFsClient, SkillMeta } from "../../src/skills/skill-types";
 import { SkillService } from "../../src/skills/skill-service";
+import type { SkillFsClient, SkillMeta } from "../../src/skills/skill-types";
 
 interface MockFs extends SkillFsClient {
 	storage: Map<string, string>;
@@ -43,6 +43,10 @@ function createMockFs(): MockFs {
 		},
 		async fsDelete(path: string): Promise<void> {
 			storage.delete(path);
+		},
+		async fsWriteBase64(): Promise<void> {},
+		async fsReadBase64(): Promise<string> {
+			return "";
 		},
 	};
 }
@@ -105,7 +109,9 @@ describe("SkillService.importUserSkill / deleteUserSkill", () => {
 			service.listSkills(),
 		]);
 
-		expect(refreshResult.find((s) => s.name === "concurrent-skill")).toBeTruthy();
+		expect(
+			refreshResult.find((s) => s.name === "concurrent-skill"),
+		).toBeTruthy();
 		expect(listResult.find((s) => s.name === "concurrent-skill")).toBeTruthy();
 	});
 });

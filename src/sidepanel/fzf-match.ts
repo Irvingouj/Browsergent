@@ -17,8 +17,7 @@ function fzfScore(query: string, target: string): number | null {
 	for (let i = 0; i < t.length && queryIndex < q.length; i++) {
 		if (t[i] !== q[queryIndex]) continue;
 
-		const isWordStart =
-			i === 0 || /[\s:/_-]/.test(t[i - 1] ?? "");
+		const isWordStart = i === 0 || /[\s:/_-]/.test(t[i - 1] ?? "");
 		if (prevMatchIndex === i - 1) {
 			consecutive++;
 			score += 5 + consecutive;
@@ -71,6 +70,8 @@ export function rankFzfItems<T extends FzfMatchable>(
 	}
 
 	return ranked
-		.sort((a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label))
+		.sort(
+			(a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label),
+		)
 		.map((entry) => entry.item);
 }

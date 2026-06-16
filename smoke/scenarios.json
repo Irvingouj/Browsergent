@@ -1,0 +1,45 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"scenarios": [
+		{
+			"id": "form-login",
+			"name": "Form: sign in & report welcome",
+			"site": "sites/form-login/index.html",
+			"task": "Sign in to this Acme demo site using the credentials shown on the page. After signing in, report the exact welcome message and session token that appear.",
+			"doneHint": "SMOKE_OK",
+			"timeoutMs": 180000
+		},
+		{
+			"id": "product-table",
+			"name": "Extract: product inventory to JSON",
+			"site": "sites/product-table/index.html",
+			"task": "Read the product inventory table on this page. Return a JSON array with one object per row and fields: sku, product, category, price (number, USD), stock (number), inStock (boolean). Include every row, including out-of-stock items.",
+			"doneHint": "\"sku\"",
+			"timeoutMs": 180000
+		},
+		{
+			"id": "checkout-wizard",
+			"name": "Flow: multi-step checkout",
+			"site": "sites/checkout-wizard/index.html",
+			"task": "Complete the checkout wizard: fill the shipping address (any realistic values), continue to payment, fill the card details (any realistic test values), continue to review, then place the order. Report the exact confirmation number shown.",
+			"doneHint": "SMOKE_OK",
+			"timeoutMs": 240000
+		},
+		{
+			"id": "search-and-click",
+			"name": "Navigate: search, open an article",
+			"site": "sites/search-and-click/index.html",
+			"task": "On this knowledge-base page, type 'rust' into the search box. Click the first article in the filtered results. Report the article's author and word count as shown in its detail view.",
+			"doneHint": "SMOKE_OK",
+			"timeoutMs": 180000
+		},
+		{
+			"id": "pdf-upload",
+			"name": "Binary: upload a PDF to a form",
+			"site": "sites/pdf-upload/index.html",
+			"task": "A sample PDF is published at {BASE}/assets/sample.pdf (this page's origin). Download it, then upload it into the document-upload form on this page. Report the exact confirmation message shown after a successful upload.",
+			"doneHint": "SMOKE_OK",
+			"timeoutMs": 240000
+		}
+	]
+}

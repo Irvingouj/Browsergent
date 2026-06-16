@@ -27,9 +27,7 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("say hello");
+	await sidePanel.locator('[data-testid="task-input"]').fill("say hello");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Hello")).toBeVisible({ timeout: 5000 });
@@ -67,9 +65,7 @@ test("final streamed response is one assistant message", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("one message");
+	await sidePanel.locator('[data-testid="task-input"]').fill("one message");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Single assistant message")).toBeVisible({
@@ -118,17 +114,13 @@ test("two prompts keep all messages visible and prior transcript included in sec
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("task one");
+	await sidePanel.locator('[data-testid="task-input"]').fill("task one");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=First response")).toBeVisible({
 		timeout: 5000,
 	});
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("task two");
+	await sidePanel.locator('[data-testid="task-input"]').fill("task two");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Second response")).toBeVisible({
 		timeout: 5000,
@@ -180,9 +172,7 @@ test("stop preserves partial streamed text", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("stop me");
+	await sidePanel.locator('[data-testid="task-input"]').fill("stop me");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Partial")).toBeVisible({
@@ -287,9 +277,7 @@ test("get_doc tool returns JS API docs and continues the agent turn", async () =
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("check js docs");
+	await sidePanel.locator('[data-testid="task-input"]').fill("check js docs");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Docs loaded.")).toBeVisible({

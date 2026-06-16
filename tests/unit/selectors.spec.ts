@@ -18,6 +18,7 @@ import {
 	selectTaskDraft,
 	selectTraceEntries,
 } from "../../src/state/selectors";
+import type { BrowsergentStore } from "../../src/state/store";
 
 describe("selectors", () => {
 	const mockStore = {
@@ -66,79 +67,73 @@ describe("selectors", () => {
 			filesVersion: 0,
 			expandedFolderIds: ["/sub"],
 		},
-	};
+	} as unknown as BrowsergentStore;
 
 	test("selectMessageIds returns messageIds", () => {
-		expect(selectMessageIds(mockStore as any)).toEqual(["u1", "a1"]);
+		expect(selectMessageIds(mockStore)).toEqual(["u1", "a1"]);
 	});
 
 	test("selectMessagesById returns messagesById", () => {
-		expect(selectMessagesById(mockStore as any)).toEqual(
-			mockStore.chat.messagesById,
-		);
+		expect(selectMessagesById(mockStore)).toEqual(mockStore.chat.messagesById);
 	});
 
 	test("selectTraceEntries returns trace entries", () => {
-		expect(selectTraceEntries(mockStore as any)).toEqual(
-			mockStore.trace.entries,
-		);
+		expect(selectTraceEntries(mockStore)).toEqual(mockStore.trace.entries);
 	});
 
 	test("selectAgentStatus returns agent status", () => {
-		expect(selectAgentStatus(mockStore as any)).toBe("running");
+		expect(selectAgentStatus(mockStore)).toBe("running");
 	});
 
 	test("selectAgentStatusReason returns reason", () => {
-		expect(selectAgentStatusReason(mockStore as any)).toBe("thinking");
+		expect(selectAgentStatusReason(mockStore)).toBe("thinking");
 	});
 
 	test("selectAgentActiveRunId returns runId", () => {
-		expect(selectAgentActiveRunId(mockStore as any)).toBe("run-1");
+		expect(selectAgentActiveRunId(mockStore)).toBe("run-1");
 	});
 
 	test("selectTaskDraft returns draft", () => {
-		expect(selectTaskDraft(mockStore as any)).toBe("fill");
+		expect(selectTaskDraft(mockStore)).toBe("fill");
 	});
 
 	test("selectActiveTab returns tab", () => {
-		expect(selectActiveTab(mockStore as any)).toBe("chat");
+		expect(selectActiveTab(mockStore)).toBe("chat");
 	});
 
 	test("selectApiKey returns key", () => {
-		expect(selectApiKey(mockStore as any)).toBe("sk-test");
+		expect(selectApiKey(mockStore)).toBe("sk-test");
 	});
 
 	test("selectBaseUrl returns url", () => {
-		expect(selectBaseUrl(mockStore as any)).toBe("https://api.example.com");
+		expect(selectBaseUrl(mockStore)).toBe("https://api.example.com");
 	});
 
 	test("selectModel returns model", () => {
-		expect(selectModel(mockStore as any)).toBe("claude-test");
+		expect(selectModel(mockStore)).toBe("claude-test");
 	});
 
 	test("selectSettingsOpen returns settingsOpen", () => {
-		expect(selectSettingsOpen(mockStore as any)).toBe(false);
+		expect(selectSettingsOpen(mockStore)).toBe(false);
 	});
 
 	test("selectSessionPanelOpen returns panel state", () => {
-		expect(selectSessionPanelOpen(mockStore as any)).toBe(true);
+		expect(selectSessionPanelOpen(mockStore)).toBe(true);
 	});
 
 	test("selectSessions returns sessions", () => {
-		expect(selectSessions(mockStore as any)).toEqual([
-			{ id: "s1", title: "Test" },
-		]);
+		expect(selectSessions(mockStore)).toEqual([{ id: "s1", title: "Test" }]);
 	});
 
 	test("selectActiveSessionId returns active session id", () => {
-		expect(selectActiveSessionId(mockStore as any)).toBe("s1");
+		expect(selectActiveSessionId(mockStore)).toBe("s1");
 	});
 
 	test("selectExtjsStatus returns extjs status", () => {
-		expect(selectExtjsStatus(mockStore as any)).toBe("ready");
+		expect(selectExtjsStatus(mockStore)).toBe("ready");
 	});
 
 	test("selectExpandedFolderIds returns expanded folder ids", () => {
-		expect(selectExpandedFolderIds(mockStore as any)).toEqual(["/sub"]);
+		expect(selectExpandedFolderIds(mockStore)).toEqual(["/sub"]);
 	});
 });

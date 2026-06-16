@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Browsergent Smoke · Login</title>
+<style>
+	body { font: 14px/1.5 system-ui, sans-serif; max-width: 420px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+	h1 { font-size: 18px; }
+	.hint { background: #f4f4f5; border: 1px solid #e4e4e7; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+	code { background: #e4e4e7; padding: 1px 5px; border-radius: 4px; }
+	label { display: block; margin: 12px 0 4px; font-weight: 600; }
+	input { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+	button { margin-top: 16px; width: 100%; padding: 10px; background: #4f46e5; color: #fff; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; }
+	button:disabled { background: #a5b4fc; cursor: default; }
+	.result { margin-top: 16px; padding: 12px; border-radius: 8px; display: none; }
+	.result.ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+	.result.bad { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+</style>
+</head>
+<body>
+	<h1>Acme Demo · Sign in</h1>
+	<p class="hint">Demo credentials are shown below. Sign in to reach the dashboard.</p>
+	<p class="hint">Username: <code>admin</code> &nbsp; Password: <code>hunter2-demo</code></p>
+
+	<form id="loginForm">
+		<label for="username">Username</label>
+		<input id="username" name="username" autocomplete="username" required />
+
+		<label for="password">Password</label>
+		<input id="password" name="password" type="password" autocomplete="current-password" required />
+
+		<button type="submit">Sign in</button>
+	</form>
+
+	<div id="result" class="result" role="status" aria-live="polite"></div>
+
+	<script>
+		document.getElementById("loginForm").addEventListener("submit", (e) => {
+			e.preventDefault();
+			const u = document.getElementById("username").value;
+			const p = document.getElementById("password").value;
+			const el = document.getElementById("result");
+			if (u === "admin" && p === "hunter2-demo") {
+				el.className = "result ok";
+				el.style.display = "block";
+				el.textContent = "SMOKE_OK: Welcome, admin! Session token: acme-7f3a9c.";
+			} else {
+				el.className = "result bad";
+				el.style.display = "block";
+				el.textContent = "Sign-in failed. Check the demo credentials and try again.";
+			}
+		});
+	</script>
+</body>
+</html>

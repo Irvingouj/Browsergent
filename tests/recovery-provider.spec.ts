@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { launchExtension, startMockAnthropicServer } from "./helpers";
 
-async function configureMockSettings(sidePanel: any, mockUrl: string) {
+async function configureMockSettings(sidePanel: Page, mockUrl: string) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
@@ -34,9 +34,7 @@ test("provider bad stream", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("bad stream");
+	await sidePanel.locator('[data-testid="task-input"]').fill("bad stream");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(
@@ -108,9 +106,7 @@ test("provider weak network recovers after retry", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mockUrl);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("retry task");
+	await sidePanel.locator('[data-testid="task-input"]').fill("retry task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Recovered")).toBeVisible({

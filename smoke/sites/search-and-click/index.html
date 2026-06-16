@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Browsergent Smoke · Knowledge Base</title>
+<style>
+	body { font: 14px/1.5 system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+	h1 { font-size: 18px; }
+	.search { position: relative; margin: 16px 0; }
+	.search input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 15px; }
+	.list { list-style: none; padding: 0; margin: 0; }
+	.list li { padding: 12px; border: 1px solid #e4e4e7; border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+	.list li:hover { background: #f4f4f5; }
+	.list li h3 { margin: 0 0 4px; font-size: 15px; }
+	.list li p { margin: 0; color: #71717a; font-size: 13px; }
+	.detail { display: none; padding: 16px; border: 1px solid #a7f3d0; border-radius: 8px; background: #ecfdf5; }
+	.detail button { margin-top: 12px; padding: 6px 12px; border: 0; border-radius: 6px; background: #e4e4e7; cursor: pointer; }
+	dl.meta dt { font-weight: 600; float: left; margin-right: 6px; }
+	dl.meta dd { margin: 0 0 2px; }
+</style>
+</head>
+<body>
+	<h1>Acme · Engineering Notes</h1>
+	<div class="search">
+		<label for="q" class="sr-only">Search articles</label>
+		<input id="q" type="search" placeholder="Search articles…" aria-label="Search articles" />
+	</div>
+	<ul id="list" class="list" role="list"></ul>
+	<div id="detail" class="detail" role="region" aria-live="polite"></div>
+
+	<script>
+		const ARTICLES = [
+			{ id: "a1", title: "Why we migrated the agent core to Rust", tags: ["rust", "architecture"], author: "Ivy Chen", words: 1820, summary: "A sans-IO state machine keeps the brain portable across hosts." },
+			{ id: "a2", title: "Sandboxing LLM-generated JavaScript with QuickJS", tags: ["rust", "security"], author: "Marco Diaz", words: 1340, summary: "Fuel-limited cooperative yield/resume lets JS await host calls safely." },
+			{ id: "a3", title: "Snapshotting the DOM into stable refIds", tags: ["dom", "accessibility"], author: "Sana Khan", words: 980, summary: "An ARIA-aware walk produces e1..eN labels that survive re-renders." },
+			{ id: "a4", title: "Designing a typed browser-command protocol", tags: ["typescript", "architecture"], author: "Ivy Chen", words: 1120, summary: "Discriminated unions make invalid browser actions unrepresentable." },
+			{ id: "a5", title: "Streaming Claude responses into a WASM core", tags: ["typescript", "llm"], author: "Marco Diaz", words: 760, summary: "The host feeds SSE chunks to a reactive state oracle that never does I/O." },
+		];
+		const listEl = document.getElementById("list");
+		const detailEl = document.getElementById("detail");
+
+		function render(filter) {
+			const q = (filter || "").trim().toLowerCase();
+			const items = ARTICLES.filter((a) => !q || a.title.toLowerCase().includes(q) || a.tags.some((t) => t.includes(q)));
+			listEl.innerHTML = items.map((a) =>
+				`<li role="button" tabindex="0" data-id="${a.id}"><h3>${a.title}</h3><p>${a.tags.join(" · ")} — ${a.words} words</p></li>`
+			).join("");
+		}
+		render("");
+
+		document.getElementById("q").addEventListener("input", (e) => render(e.target.value));
+		listEl.addEventListener("click", (e) => {
+			const li = e.target.closest("[data-id]");
+			if (!li) return;
+			open(li.dataset.id);
+		});
+		listEl.addEventListener("keydown", (e) => {
+			if (e.key !== "Enter" && e.key !== " ") return;
+			const li = e.target.closest("[data-id]");
+			if (li) { e.preventDefault(); open(li.dataset.id); }
+		});
+
+		function open(id) {
+			const a = ARTICLES.find((x) => x.id === id);
+			if (!a) return;
+			detailEl.style.display = "block";
+			detailEl.innerHTML =
+				`<h2>${a.title}</h2>` +
+				`<dl class="meta"><dt>Author:</dt><dd>${a.author}</dd><dt>Words:</dt><dd>${a.words}</dd><dt>Tags:</dt><dd>${a.tags.join(", ")}</dd></dl>` +
+				`<p>${a.summary}</p>` +
+				`<p>SMOKE_OK: opened article "${a.title}".</p>` +
+				`<button onclick="document.getElementById('detail').style.display='none'">Close</button>`;
+		}
+	</script>
+</body>
+</html>

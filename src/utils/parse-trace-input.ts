@@ -35,7 +35,7 @@ export function parseTraceInput(
 }
 
 function truncate(s: string, n = 60): string {
-	return s.length > n ? s.slice(0, n) + "…" : s;
+	return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
 function firstMeaningfulLine(code: string): string {

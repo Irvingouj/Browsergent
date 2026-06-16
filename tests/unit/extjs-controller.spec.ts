@@ -103,7 +103,9 @@ describe("ExtjsController", () => {
 	test("init sets store to initializing then ready", async () => {
 		const { mockStoreState } = await getMocks();
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await ctrl.init();
 		expect(mockStoreState.extjsInitializing).toHaveBeenCalled();
 		expect(mockStoreState.extjsReady).toHaveBeenCalled();
@@ -111,7 +113,9 @@ describe("ExtjsController", () => {
 
 	test("init sets relayCallback that posts to bridge", async () => {
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await ctrl.init();
 
 		const extjsMod = await getExtjsClientModule();
@@ -128,7 +132,9 @@ describe("ExtjsController", () => {
 	test("init relayCallback does NOT bump filesVersion on run result", async () => {
 		const { mockStoreState } = await getMocks();
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await ctrl.init();
 
 		const extjsMod = await getExtjsClientModule();
@@ -146,7 +152,9 @@ describe("ExtjsController", () => {
 	test("init wires onFsMutation to bump filesVersion", async () => {
 		const { mockInstance, mockStoreState } = await getMocks();
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await ctrl.init();
 
 		expect(mockInstance.setOnFsMutation).toHaveBeenCalledTimes(1);
@@ -159,7 +167,9 @@ describe("ExtjsController", () => {
 		const { mockInstance, mockStoreState } = await getMocks();
 		mockInstance.init.mockRejectedValue(new Error("init failed"));
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await expect(ctrl.init()).rejects.toThrow("init failed");
 		expect(mockStoreState.extjsFailed).toHaveBeenCalled();
 		expect(mockStoreState.extjsFailed.mock.calls[0][0].code).toBe(
@@ -177,7 +187,9 @@ describe("ExtjsController", () => {
 		mockEnsureReady.mockRejectedValue(new Error("skill fs failed"));
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 
 		await expect(ctrl.init()).resolves.toBeUndefined();
 
@@ -200,7 +212,9 @@ describe("ExtjsController", () => {
 	test("handleRelayRequest delegates to client", async () => {
 		const { mockInstance } = await getMocks();
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await ctrl.init();
 		const msg = { type: "extjsRunRequest" as const, id: "req-1", code: "1+1" };
 		ctrl.handleRelayRequest(msg);
@@ -210,7 +224,9 @@ describe("ExtjsController", () => {
 	test("dispose sets disposed and clears relayCallback", async () => {
 		const { mockInstance, mockStoreState } = await getMocks();
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await ctrl.init();
 		await ctrl.dispose();
 		expect(mockStoreState.extjsDisposed).toHaveBeenCalled();
@@ -227,7 +243,9 @@ describe("ExtjsController", () => {
 		mockInstance.dispose.mockRejectedValue(new Error("dispose failed"));
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const bridge = makeBridge();
-		const ctrl = new ExtjsController(bridge as any);
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
 		await ctrl.init();
 		await ctrl.dispose();
 		expect(warnSpy).toHaveBeenCalledWith(

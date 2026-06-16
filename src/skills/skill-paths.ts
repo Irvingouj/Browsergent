@@ -17,7 +17,10 @@ export function isSafeSkillRelativePath(relativePath: string): boolean {
 	return !parts.some((part) => part === ".." || part === ".");
 }
 
-export function joinSkillResourcePath(baseDir: string, relativePath: string): string {
+export function joinSkillResourcePath(
+	baseDir: string,
+	relativePath: string,
+): string {
 	if (!isSafeSkillRelativePath(relativePath)) {
 		throw new Error(`Invalid skill resource path: ${relativePath}`);
 	}

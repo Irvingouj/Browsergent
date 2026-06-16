@@ -9,7 +9,8 @@ import { finalizeAllStreamingSignals } from "../../src/state/streaming-signals";
 const notifySkillsChanged = vi.fn();
 
 vi.mock("../../src/skills/skill-service", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../../src/skills/skill-service")>();
+	const actual =
+		await importOriginal<typeof import("../../src/skills/skill-service")>();
 	return {
 		...actual,
 		notifySkillsChanged: () => notifySkillsChanged(),
@@ -249,7 +250,7 @@ describe("WorkerBridge", () => {
 				},
 			}),
 		);
-		expect(browsergentStore.getState().chat.messagesById["a1"].text).toBe("");
+		expect(browsergentStore.getState().chat.messagesById.a1.text).toBe("");
 	});
 
 	test("agentMessageEnd finalizes assistant message", () => {
@@ -272,7 +273,7 @@ describe("WorkerBridge", () => {
 			}),
 		);
 		// finalizeAssistantMessage sets text to the streaming signal value (empty here)
-		expect(browsergentStore.getState().chat.messagesById["a1"].text).toBe("");
+		expect(browsergentStore.getState().chat.messagesById.a1.text).toBe("");
 	});
 
 	test("agentTrace updates trace", () => {

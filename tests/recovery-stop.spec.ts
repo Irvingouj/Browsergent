@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { launchExtension, startMockAnthropicServer } from "./helpers";
 
-async function configureMockSettings(sidePanel: any, mockUrl: string) {
+async function configureMockSettings(sidePanel: Page, mockUrl: string) {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Open settings" }).click();
 	await sidePanel.locator('input[type="password"]').fill("fake-key");
@@ -42,9 +42,7 @@ test("stop during provider stream", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("slow task");
+	await sidePanel.locator('[data-testid="task-input"]').fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Wait for stream to start (message_start + content_block_start sent quickly)
@@ -81,9 +79,7 @@ test("stop during tool", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("run tool");
+	await sidePanel.locator('[data-testid="task-input"]').fill("run tool");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Wait for tool to start (trace entry shows running)

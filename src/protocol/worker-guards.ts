@@ -1,5 +1,4 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
-import type { FileOp, FileOpResult } from "../worker/file-op-relay";
 import type {
 	AgentDiagnosticEvent,
 	AgentStatus,
@@ -7,6 +6,7 @@ import type {
 	ChatMessage,
 	WorkerToPanel,
 } from "../types/messages";
+import type { FileOp, FileOpResult } from "../worker/file-op-relay";
 
 const AGENT_STATUSES: readonly AgentStatus[] = [
 	"idle",

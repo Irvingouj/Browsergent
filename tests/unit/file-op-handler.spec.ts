@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { handleFileOp } from "../../src/sidepanel/file-op-handler";
 import type { FilesController } from "../../src/controllers/files-controller";
+import { handleFileOp } from "../../src/sidepanel/file-op-handler";
 import type { FileNode } from "../../src/state/slices/files-slice";
 
 class FakeFilesController {
@@ -63,7 +63,9 @@ class FakeFilesController {
 		return { occurrences: replaceAll ? occurrences : 1, bytes: updated.length };
 	}
 
-	private async fsList(path: string): Promise<{ name: string; kind: string }[]> {
+	private async fsList(
+		path: string,
+	): Promise<{ name: string; kind: string }[]> {
 		const prefix = path === "/" ? "/" : `${path}/`;
 		const seen = new Set<string>();
 		const entries: { name: string; kind: string }[] = [];
@@ -71,7 +73,7 @@ class FakeFilesController {
 			if (!key.startsWith(prefix)) continue;
 			const rest = key.slice(prefix.length);
 			if (rest.length === 0) continue;
-			const firstSeg = rest.split("/")[0]!;
+			const firstSeg = rest.split("/")[0] ?? "";
 			if (rest.includes("/")) {
 				if (!seen.has(firstSeg)) {
 					seen.add(firstSeg);
@@ -92,10 +94,10 @@ class FakeFilesController {
 function countOccurrences(haystack: string, needle: string): number {
 	if (needle.length === 0) return 0;
 	let count = 0;
-	let i = 0;
-	while ((i = haystack.indexOf(needle, i)) !== -1) {
+	let i = haystack.indexOf(needle);
+	while (i !== -1) {
 		count++;
-		i += needle.length;
+		i = haystack.indexOf(needle, i + needle.length);
 	}
 	return count;
 }
@@ -177,7 +179,12 @@ describe("handleFileOp", () => {
 		const result = await handleFileOp(
 			{
 				id: "r1",
-				op: { op: "edit", path: "/notes.md", oldString: "world", newString: "browser" },
+				op: {
+					op: "edit",
+					path: "/notes.md",
+					oldString: "world",
+					newString: "browser",
+				},
 			},
 			ctrl as unknown as FilesController,
 		);

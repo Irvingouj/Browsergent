@@ -82,7 +82,7 @@ describe("ExtensionJsClient", () => {
 
 	beforeEach(async () => {
 		vi.useFakeTimers();
-		ExtensionJsClient["instance"] = null;
+		ExtensionJsClient.instance = null;
 		client = ExtensionJsClient.getInstance();
 		const { mockRunCellAsync, mockStopWith, mockApiDocs, mockStoreState } =
 			await getMocks();

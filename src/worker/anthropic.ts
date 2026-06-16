@@ -8,13 +8,17 @@
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";
 import type { AgentDiagnosticEvent } from "../types/messages";
 import type { AnthropicConfig } from "./anthropic-prompts";
-import { BROWSER_TOOLS, SYSTEM_PROMPT, composeSystemPrompt } from "./anthropic-prompts";
+import {
+	BROWSER_TOOLS,
+	composeSystemPrompt,
+	SYSTEM_PROMPT,
+} from "./anthropic-prompts";
 import { createAnthropicStream } from "./anthropic-sse";
 import { toAnthropicMessages, toAnthropicTools } from "./anthropic-wire";
 import type { LlmStream } from "./llm-streamer";
 
 export type { AnthropicConfig } from "./anthropic-prompts";
-export { BROWSER_TOOLS, SYSTEM_PROMPT, composeSystemPrompt };
+export { BROWSER_TOOLS, composeSystemPrompt, SYSTEM_PROMPT };
 
 function isRetryableError(err: unknown): boolean {
 	if (err instanceof Error) {

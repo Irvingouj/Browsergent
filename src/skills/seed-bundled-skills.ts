@@ -1,6 +1,6 @@
 import { sha256Hex } from "./sha256-hex";
 import { SKILLS_BUNDLED_ROOT, SKILLS_SEED_VERSION_PATH } from "./skill-paths";
-import type { SkillFsClient, SeedManifest } from "./skill-types";
+import type { SeedManifest, SkillFsClient } from "./skill-types";
 
 async function fetchBundledAsset(relativePath: string): Promise<string> {
 	const url = chrome.runtime.getURL(`skills/bundled/${relativePath}`);
@@ -39,7 +39,10 @@ async function readSeedVersion(fs: SkillFsClient): Promise<string | null> {
 	}
 }
 
-async function ensureParentDirs(fs: SkillFsClient, filePath: string): Promise<void> {
+async function ensureParentDirs(
+	fs: SkillFsClient,
+	filePath: string,
+): Promise<void> {
 	const parts = filePath.split("/").filter(Boolean);
 	let current = "";
 	for (let i = 0; i < parts.length - 1; i++) {

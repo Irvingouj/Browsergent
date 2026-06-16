@@ -33,9 +33,7 @@ export class LoadSkillRelay {
 			const timeoutId = setTimeout(() => {
 				this.pending.delete(relayId);
 				reject(
-					new Error(
-						`Load skill relay timed out after ${this.timeoutMs}ms`,
-					),
+					new Error(`Load skill relay timed out after ${this.timeoutMs}ms`),
 				);
 			}, this.timeoutMs);
 

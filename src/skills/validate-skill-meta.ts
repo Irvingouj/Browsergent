@@ -27,7 +27,9 @@ export function validateSkillName(name: string): string[] {
 	return errors;
 }
 
-export function validateSkillDescription(description: string | undefined): string[] {
+export function validateSkillDescription(
+	description: string | undefined,
+): string[] {
 	const errors: string[] = [];
 
 	if (!description || description.trim() === "") {

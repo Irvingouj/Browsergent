@@ -225,17 +225,13 @@ test("Agent running blocks switch", async () => {
 	});
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("quick task");
+	await sidePanel.locator('[data-testid="task-input"]').fill("quick task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
 		timeout: 5000,
 	});
 	await expect(floatingNewButton(sidePanel)).toBeVisible({ timeout: 5000 });
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("slow task");
+	await sidePanel.locator('[data-testid="task-input"]').fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await sidePanel.waitForTimeout(500);
 	await sidePanel.getByRole("button", { name: "More options" }).click();
@@ -263,17 +259,13 @@ test("Floating New button hidden when running", async () => {
 	});
 	const { sidePanel, close } = await launchExtension();
 	await configureMockSettings(sidePanel, mock.url);
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("quick task");
+	await sidePanel.locator('[data-testid="task-input"]').fill("quick task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(assistantMessageLocator(sidePanel, "Done")).toBeVisible({
 		timeout: 5000,
 	});
 	await expect(floatingNewButton(sidePanel)).toBeVisible({ timeout: 5000 });
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("slow task");
+	await sidePanel.locator('[data-testid="task-input"]').fill("slow task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(floatingNewButton(sidePanel)).toBeHidden();
 	await close();

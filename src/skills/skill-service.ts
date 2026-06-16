@@ -1,3 +1,5 @@
+import { ExtensionJsClient } from "../sidepanel/extension-js-client";
+import { browsergentStore } from "../state/store";
 import { formatSkillCatalog } from "./format-skill-catalog";
 import {
 	parseSkillActivation,
@@ -5,8 +7,8 @@ import {
 } from "./resolve-skill-activations";
 import { seedBundledSkills } from "./seed-bundled-skills";
 import { assertSkillLoadAllowed } from "./skill-errors";
-import { SkillImportController } from "./skill-import-controller";
 import type { SkillImportResult } from "./skill-import-controller";
+import { SkillImportController } from "./skill-import-controller";
 import { SkillRegistry } from "./skill-registry";
 import type {
 	LoadSkillOptions,
@@ -14,8 +16,6 @@ import type {
 	SkillFsClient,
 	SkillMeta,
 } from "./skill-types";
-import { ExtensionJsClient } from "../sidepanel/extension-js-client";
-import { browsergentStore } from "../state/store";
 
 type SkillsChangedCallback = (skills: SkillMeta[]) => void;
 
@@ -126,9 +126,8 @@ export class SkillService {
 		const skillCatalog = formatSkillCatalog(skills);
 		const activation = parseSkillActivation(draft);
 		const activatedSkills = activation ? [activation.skillName] : [];
-		const { task, resolvedTask } = await resolveTaskWithSkill(
-			draft,
-			(name) => registry.loadSkillBody(name),
+		const { task, resolvedTask } = await resolveTaskWithSkill(draft, (name) =>
+			registry.loadSkillBody(name),
 		);
 		return { task, resolvedTask, skillCatalog, activatedSkills };
 	}

@@ -45,6 +45,10 @@ function makeFs(files: Record<string, string>): SkillFsClient {
 		async fsWriteText() {},
 		async fsMkdir() {},
 		async fsDelete() {},
+		async fsWriteBase64() {},
+		async fsReadBase64() {
+			return "";
+		},
 	};
 }
 
@@ -89,8 +93,7 @@ describe("skill diagnostics", () => {
 		expect(
 			diagnostics.some(
 				(d) =>
-					d.kind === "validation" &&
-					d.message.includes("invalid characters"),
+					d.kind === "validation" && d.message.includes("invalid characters"),
 			),
 		).toBe(true);
 	});

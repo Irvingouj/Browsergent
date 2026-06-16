@@ -11,7 +11,6 @@
 
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import type { CellResult } from "../types/extjs-utils";
-import { formatError } from "../types/extjs-utils";
 import type {
 	AgentTraceEntry,
 	PanelToWorker,
@@ -21,9 +20,9 @@ import type {
 import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 import { AgentLoop } from "./agent-loop";
 import type { AnthropicConfig } from "./anthropic";
-import { LoadSkillRelay } from "./load-skill-relay";
-import { FileOpRelay } from "./file-op-relay";
 import type { FileOp, FileOpResult } from "./file-op-relay";
+import { FileOpRelay } from "./file-op-relay";
+import { LoadSkillRelay } from "./load-skill-relay";
 
 enableStreamDebug();
 
@@ -97,30 +96,24 @@ function rejectAllPendingExtjsDocsRelays(reason: string): void {
 	}
 }
 
-const loadSkillRelay = new LoadSkillRelay(
-	(request) => {
-		post({
-			type: "loadSkillRequest",
-			id: request.id,
-			skill: request.skill,
-			path: request.path,
-			activatedSkills: request.activatedSkills,
-		});
-	},
-	EXTJS_RELAY_TIMEOUT_MS,
-);
+const loadSkillRelay = new LoadSkillRelay((request) => {
+	post({
+		type: "loadSkillRequest",
+		id: request.id,
+		skill: request.skill,
+		path: request.path,
+		activatedSkills: request.activatedSkills,
+	});
+}, EXTJS_RELAY_TIMEOUT_MS);
 
-const fileOpRelay = new FileOpRelay(
-	(request) => {
-		post({
-			type: "fileOpRequest",
-			id: request.id,
-			sessionId: request.sessionId,
-			op: request.op,
-		});
-	},
-	EXTJS_RELAY_TIMEOUT_MS,
-);
+const fileOpRelay = new FileOpRelay((request) => {
+	post({
+		type: "fileOpRequest",
+		id: request.id,
+		sessionId: request.sessionId,
+		op: request.op,
+	});
+}, EXTJS_RELAY_TIMEOUT_MS);
 
 function relayFileOp(op: FileOp) {
 	if (!currentSessionId) {
@@ -273,13 +266,7 @@ function handleAgentStart(
 	};
 
 	agentLoop
-		.run(
-			sessionId,
-			task,
-			resolvedTask ?? task,
-			skillCatalog ?? "",
-			config,
-			{
+		.run(sessionId, task, resolvedTask ?? task, skillCatalog ?? "", config, {
 			onStatus(status, reason) {
 				postIfCurrentRun(runId, {
 					type: "agentStatus",

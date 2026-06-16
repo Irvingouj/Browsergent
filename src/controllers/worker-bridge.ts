@@ -265,12 +265,14 @@ export class WorkerBridge {
 				break;
 			case "fileOpRequest":
 				if (isFileOpRequest(raw) && this.onFileOpRequest) {
-					this.onFileOpRequest(raw as {
-						type: "fileOpRequest";
-						id: string;
-						sessionId: string;
-						op: FileOp;
-					});
+					this.onFileOpRequest(
+						raw as {
+							type: "fileOpRequest";
+							id: string;
+							sessionId: string;
+							op: FileOp;
+						},
+					);
 				}
 				break;
 		}

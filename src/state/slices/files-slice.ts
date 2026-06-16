@@ -48,7 +48,9 @@ export interface FilesSlice {
 	toggleFolderExpanded(id: FileNodeId): void;
 }
 
-function buildFileState(nodes: FileNode[]): Pick<FilesState, "nodes" | "rootIds"> {
+function buildFileState(
+	nodes: FileNode[],
+): Pick<FilesState, "nodes" | "rootIds"> {
 	const nodesRecord: Record<FileNodeId, FileNode> = {};
 	const rootIds: FileNodeId[] = [];
 	for (const node of nodes) {

@@ -43,9 +43,7 @@ export function formatError(error: WasmCellError): string {
 			// crashes the runtime), so engine-thrown errors carry an empty message
 			// AND a 5-char garbage stack. The isStackUseful check ensures we only
 			// fall back to stacks that actually contain frame info.
-			const trimmedStack = isStackUseful(error.stack)
-				? error.stack.trim()
-				: "";
+			const trimmedStack = isStackUseful(error.stack) ? error.stack.trim() : "";
 			if (error.action || error.code) {
 				return error.message || trimmedStack;
 			}

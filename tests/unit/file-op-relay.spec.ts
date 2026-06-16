@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { FileOpRelay } from "../../src/worker/file-op-relay";
 import type { FileOpRelayRequest } from "../../src/worker/file-op-relay";
+import { FileOpRelay } from "../../src/worker/file-op-relay";
 
 describe("FileOpRelay", () => {
 	beforeEach(() => {

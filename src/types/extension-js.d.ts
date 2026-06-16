@@ -78,7 +78,9 @@ declare module "@pi-oxide/extension-js" {
 		exists(params: FsPathParams): Promise<FsExistsResult>;
 		list(params: FsPathParams): Promise<FsListResult>;
 		readText(params: FsPathParams): Promise<FsStringResult>;
+		readBase64(params: FsPathParams): Promise<FsStringResult>;
 		writeText(params: FsWriteParams): Promise<FsWriteResult>;
+		writeBase64(params: FsWriteParams): Promise<FsWriteResult>;
 		mkdir(params: FsPathParams): Promise<FsBoolResult>;
 		delete(params: FsPathParams): Promise<FsBoolResult>;
 	}

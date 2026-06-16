@@ -177,6 +177,24 @@ export class ExtensionJsClient implements SkillFsClient {
 		this.onFsMutation?.();
 	}
 
+	async fsWriteBase64(path: string, base64: string): Promise<void> {
+		await this.ensureReady();
+		await this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			await this.session.fs.writeBase64({ path, data: base64 });
+		}, "fsWriteBase64 failed");
+		this.onFsMutation?.();
+	}
+
+	async fsReadBase64(path: string): Promise<string> {
+		await this.ensureReady();
+		return this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			const result = await this.session.fs.readBase64({ path });
+			return result.data;
+		}, "fsReadBase64 failed");
+	}
+
 	async fsMkdir(path: string): Promise<void> {
 		await this.ensureReady();
 		await this.enqueue(async () => {
@@ -195,10 +213,7 @@ export class ExtensionJsClient implements SkillFsClient {
 		this.onFsMutation?.();
 	}
 
-	private enqueue<T>(
-		fn: () => Promise<T>,
-		errorLabel: string,
-	): Promise<T> {
+	private enqueue<T>(fn: () => Promise<T>, errorLabel: string): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
 			this.queue = this.queue
 				.then(async () => {
@@ -208,9 +223,7 @@ export class ExtensionJsClient implements SkillFsClient {
 						reject(
 							err instanceof Error
 								? err
-								: new Error(
-										typeof err === "string" ? err : errorLabel,
-									),
+								: new Error(typeof err === "string" ? err : errorLabel),
 						);
 					}
 				})
@@ -349,7 +362,9 @@ export class ExtensionJsClient implements SkillFsClient {
 		} catch (err) {
 			const isTimeout =
 				err instanceof Error &&
-				err.message.includes(`JS execution timed out after ${EXTJS_TIMEOUT_MS}ms`);
+				err.message.includes(
+					`JS execution timed out after ${EXTJS_TIMEOUT_MS}ms`,
+				);
 			if (!isTimeout) {
 				await this.rebuildSession();
 			}

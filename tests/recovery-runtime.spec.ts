@@ -14,9 +14,7 @@ test.skip("tool timeout — runtime rebuilds and next call succeeds", async () =
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url, "fake-key");
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("slow tool");
+	await sidePanel.locator('[data-testid="task-input"]').fill("slow tool");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=run_js")).toHaveCount(2, {
@@ -34,9 +32,7 @@ test.skip("runtime corrupted — session rebuilds and health check passes", asyn
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url, "fake-key");
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("crash runtime");
+	await sidePanel.locator('[data-testid="task-input"]').fill("crash runtime");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=run_js")).toHaveCount(1, {

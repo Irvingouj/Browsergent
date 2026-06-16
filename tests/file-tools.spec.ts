@@ -91,11 +91,7 @@ test("file_list and file_read tools return session file content", async () => {
 				stopReason: "tool_use",
 			},
 			{
-				chunks: [
-					MSG_START("msg-3"),
-					textChunk(0, "Done."),
-					BLOCK_STOP,
-				],
+				chunks: [MSG_START("msg-3"), textChunk(0, "Done."), BLOCK_STOP],
 				delays: [0, 0, 0],
 				stopReason: "end_turn",
 			},
@@ -107,18 +103,11 @@ test("file_list and file_read tools return session file content", async () => {
 
 	await sidePanel.getByRole("button", { name: "Files" }).click();
 	await expect(sidePanel.getByTestId("files-panel")).toBeVisible();
-	await uploadFileViaPanel(
-		sidePanel,
-		"notes.txt",
-		"hello world",
-		"text/plain",
-	);
+	await uploadFileViaPanel(sidePanel, "notes.txt", "hello world", "text/plain");
 	await expect(sidePanel.locator("text=notes.txt")).toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("read the file");
+	await sidePanel.locator('[data-testid="task-input"]').fill("read the file");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	const listTrace = sidePanel.locator(
@@ -161,11 +150,7 @@ test("file_edit tool modifies file content in OPFS", async () => {
 				stopReason: "tool_use",
 			},
 			{
-				chunks: [
-					MSG_START("msg-2"),
-					textChunk(0, "Edited."),
-					BLOCK_STOP,
-				],
+				chunks: [MSG_START("msg-2"), textChunk(0, "Edited."), BLOCK_STOP],
 				delays: [0, 0, 0],
 				stopReason: "end_turn",
 			},
@@ -176,18 +161,11 @@ test("file_edit tool modifies file content in OPFS", async () => {
 	await configureMockProvider(sidePanel, mock.url);
 
 	await sidePanel.getByRole("button", { name: "Files" }).click();
-	await uploadFileViaPanel(
-		sidePanel,
-		"notes.txt",
-		"hello world",
-		"text/plain",
-	);
+	await uploadFileViaPanel(sidePanel, "notes.txt", "hello world", "text/plain");
 	await expect(sidePanel.locator("text=notes.txt")).toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("edit the file");
+	await sidePanel.locator('[data-testid="task-input"]').fill("edit the file");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(
@@ -220,11 +198,7 @@ test("file_delete tool removes file from session", async () => {
 				stopReason: "tool_use",
 			},
 			{
-				chunks: [
-					MSG_START("msg-2"),
-					textChunk(0, "Deleted."),
-					BLOCK_STOP,
-				],
+				chunks: [MSG_START("msg-2"), textChunk(0, "Deleted."), BLOCK_STOP],
 				delays: [0, 0, 0],
 				stopReason: "end_turn",
 			},
@@ -235,18 +209,11 @@ test("file_delete tool removes file from session", async () => {
 	await configureMockProvider(sidePanel, mock.url);
 
 	await sidePanel.getByRole("button", { name: "Files" }).click();
-	await uploadFileViaPanel(
-		sidePanel,
-		"notes.txt",
-		"hello world",
-		"text/plain",
-	);
+	await uploadFileViaPanel(sidePanel, "notes.txt", "hello world", "text/plain");
 	await expect(sidePanel.locator("text=notes.txt")).toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("delete the file");
+	await sidePanel.locator('[data-testid="task-input"]').fill("delete the file");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(
@@ -282,11 +249,7 @@ test("file_write creates a file visible in the Files panel", async () => {
 				stopReason: "tool_use",
 			},
 			{
-				chunks: [
-					MSG_START("msg-2"),
-					textChunk(0, "Created."),
-					BLOCK_STOP,
-				],
+				chunks: [MSG_START("msg-2"), textChunk(0, "Created."), BLOCK_STOP],
 				delays: [0, 0, 0],
 				stopReason: "end_turn",
 			},
@@ -296,9 +259,7 @@ test("file_write creates a file visible in the Files panel", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("create out.md");
+	await sidePanel.locator('[data-testid="task-input"]').fill("create out.md");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(
@@ -388,11 +349,7 @@ test("panel delete on directory row removes directory and descendants", async ()
 				stopReason: "tool_use",
 			},
 			{
-				chunks: [
-					MSG_START("msg-3"),
-					textChunk(0, "Done."),
-					BLOCK_STOP,
-				],
+				chunks: [MSG_START("msg-3"), textChunk(0, "Done."), BLOCK_STOP],
 				delays: [0, 0, 0],
 				stopReason: "end_turn",
 			},
@@ -435,11 +392,7 @@ test("panel upload into non-existent subdirectory creates parent dirs", async ()
 	const mock = startMockAnthropicServer({
 		responses: [
 			{
-				chunks: [
-					MSG_START("msg-1"),
-					textChunk(0, "Done."),
-					BLOCK_STOP,
-				],
+				chunks: [MSG_START("msg-1"), textChunk(0, "Done."), BLOCK_STOP],
 				delays: [0, 0, 0],
 				stopReason: "end_turn",
 			},

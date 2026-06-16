@@ -342,8 +342,20 @@ describe("file_list tool", () => {
 		mockFileOp.mockResolvedValue({
 			op: "list",
 			files: [
-				{ id: "f1", name: "notes.md", size: 12, mime: "text/markdown", isText: true },
-				{ id: "f2", name: "image.png", size: 100, mime: "image/png", isText: false },
+				{
+					id: "f1",
+					name: "notes.md",
+					size: 12,
+					mime: "text/markdown",
+					isText: true,
+				},
+				{
+					id: "f2",
+					name: "image.png",
+					size: 100,
+					mime: "image/png",
+					isText: false,
+				},
 			],
 		});
 		const tools = makeTools();
@@ -510,7 +522,9 @@ describe("file_edit tool", () => {
 	});
 
 	test("returns E_FILE_NO_CHANGE when old_string equals new_string", async () => {
-		mockFileOp.mockRejectedValue(new Error("old_string and new_string must differ"));
+		mockFileOp.mockRejectedValue(
+			new Error("old_string and new_string must differ"),
+		);
 		const tools = makeTools();
 		const handler = tools.getHandler("file_edit");
 		const result = (await handler({
@@ -595,7 +609,6 @@ describe("file_delete tool", () => {
 		expect(mockFileOp).not.toHaveBeenCalled();
 	});
 });
-
 
 describe("file_read truncation", () => {
 	beforeEach(() => {
@@ -690,10 +703,10 @@ describe("run_js file reference", () => {
 		const runJs = vi.fn();
 		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
-		const result = await handler({
+		const result = (await handler({
 			code: "1+1",
 			file: { name: "script.js" },
-		}) as string;
+		})) as string;
 		expect(isToolErrorEnvelope(result)).toBe(true);
 		const envelope = expectErrorEnvelope(result);
 		expect(envelope.code).toBe("E_JS_INVALID_INPUT");
@@ -711,11 +724,13 @@ describe("run_js file reference", () => {
 	});
 
 	test("file not found returns E_FILE_NOT_FOUND", async () => {
-		mockFileOp.mockRejectedValue(new Error("File not found in session: missing.js"));
+		mockFileOp.mockRejectedValue(
+			new Error("File not found in session: missing.js"),
+		);
 		const runJs = vi.fn();
 		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
-		const result = await handler({ file: { name: "missing.js" } }) as string;
+		const result = (await handler({ file: { name: "missing.js" } })) as string;
 		expect(isToolErrorEnvelope(result)).toBe(true);
 		const envelope = expectErrorEnvelope(result);
 		expect(envelope.code).toBe("E_FILE_NOT_FOUND");
@@ -727,7 +742,7 @@ describe("run_js file reference", () => {
 		const runJs = vi.fn();
 		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
-		const result = await handler({ file: { name: "img.png" } }) as string;
+		const result = (await handler({ file: { name: "img.png" } })) as string;
 		expect(isToolErrorEnvelope(result)).toBe(true);
 		const envelope = expectErrorEnvelope(result);
 		expect(envelope.code).toBe("E_FILE_BINARY");
@@ -738,7 +753,9 @@ describe("run_js file reference", () => {
 		const runJs = vi.fn();
 		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
-		const result = await handler({ file: { name: "../etc/passwd" } }) as string;
+		const result = (await handler({
+			file: { name: "../etc/passwd" },
+		})) as string;
 		expect(isToolErrorEnvelope(result)).toBe(true);
 		const envelope = expectErrorEnvelope(result);
 		expect(envelope.code).toBe("E_FILE_PATH_SCOPE");
@@ -746,4 +763,3 @@ describe("run_js file reference", () => {
 		expect(runJs).not.toHaveBeenCalled();
 	});
 });
-

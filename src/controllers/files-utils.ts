@@ -16,7 +16,14 @@ const TEXT_EXTENSIONS = new Set([
 ]);
 
 export function sanitizeFileName(name: string): string {
-	return name.replace(/[\/\\\x00-\x1f\x7f]/g, "");
+	let out = "";
+	for (const ch of name) {
+		const code = ch.codePointAt(0);
+		if (code === undefined) continue;
+		if (ch === "/" || ch === "\\" || code <= 0x1f || code === 0x7f) continue;
+		out += ch;
+	}
+	return out;
 }
 
 export function isTextFile(name: string): boolean {
@@ -27,10 +34,22 @@ export function isTextFile(name: string): boolean {
 	return false;
 }
 
+/** Read a File as pure base64. Environment-agnostic (browser + node test env). */
+export async function fileToBase64(file: File): Promise<string> {
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	const CHUNK = 0x8000;
+	let binary = "";
+	for (let i = 0; i < bytes.length; i += CHUNK) {
+		binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+	}
+	return btoa(binary);
+}
+
 export function findSkillManifest(files: File[]): File | null {
 	for (const f of files) {
 		if (f.name === "SKILL.md") return f;
-		const wrp = (f as File & { webkitRelativePath?: string }).webkitRelativePath;
+		const wrp = (f as File & { webkitRelativePath?: string })
+			.webkitRelativePath;
 		if (wrp?.endsWith("/SKILL.md")) return f;
 	}
 	return null;

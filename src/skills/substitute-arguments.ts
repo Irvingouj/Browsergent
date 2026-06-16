@@ -1,7 +1,7 @@
 import { parseArgumentNames } from "./parse-skill-md";
 
 export function parseArguments(args: string): string[] {
-	if (!args || !args.trim()) return [];
+	if (!args?.trim()) return [];
 	const tokens: string[] = [];
 	let current = "";
 	let quote: "'" | '"' | null = null;
@@ -58,7 +58,7 @@ export function substituteArguments(
 		return parsedArgs[idx] ?? "";
 	});
 
-	result = result.replace(/\$(\d+)(?![\[\w])/g, (_match, index: string) => {
+	result = result.replace(/\$(\d+)(?![[\w])/g, (_match, index: string) => {
 		const idx = Number.parseInt(index, 10);
 		return parsedArgs[idx] ?? "";
 	});
@@ -66,8 +66,7 @@ export function substituteArguments(
 	result = result.replace(/\$ARGUMENTS/g, args);
 
 	const hadPlaceholder =
-		original !== result ||
-		/\$ARGUMENTS|\$\d+|\$[a-zA-Z_]/.test(original);
+		original !== result || /\$ARGUMENTS|\$\d+|\$[a-zA-Z_]/.test(original);
 
 	if (!hadPlaceholder && appendIfNoPlaceholder && args.trim()) {
 		return `${result}\n\nUser arguments: ${args}`;

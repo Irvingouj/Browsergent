@@ -73,7 +73,10 @@ function msgWithToolUse(id: string, code: string) {
 		`event: content_block_delta\ndata: ${JSON.stringify({
 			type: "content_block_delta",
 			index: 0,
-			delta: { type: "input_json_delta", partial_json: JSON.stringify({ code }) },
+			delta: {
+				type: "input_json_delta",
+				partial_json: JSON.stringify({ code }),
+			},
 		})}\n\n`,
 		`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
 		`event: message_delta\ndata: ${JSON.stringify({
@@ -159,8 +162,13 @@ test("wasm probe: tabId + error stack content", async () => {
 	// Read the trace result text via the DOM.
 	await traceEntry.click();
 	// The expanded body is a sibling of the testid'd button inside the trace card.
-	const traceCard = sidePanel.locator("[data-testid='trace-entry']").first().locator("xpath=ancestor::div[contains(@class,'rounded-md')]");
-	await expect(sidePanel.locator("text=Result")).toBeVisible({ timeout: 10_000 });
+	const traceCard = sidePanel
+		.locator("[data-testid='trace-entry']")
+		.first()
+		.locator("xpath=ancestor::div[contains(@class,'rounded-md')]");
+	await expect(sidePanel.locator("text=Result")).toBeVisible({
+		timeout: 10_000,
+	});
 	const resultText = (await traceCard.textContent()) ?? "";
 	console.log("TRACE_ENTRY_TEXT:", resultText);
 

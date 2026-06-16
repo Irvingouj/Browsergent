@@ -89,7 +89,8 @@ describe("tool-error-result", () => {
 		const { formatToolError, parseToolErrorEnvelope } = await import(
 			"../../src/worker/tool-error-result"
 		);
-		const frames = "Error: foo\n    at baz (file.js:1:7)\n    at qux (file.js:2:5)";
+		const frames =
+			"Error: foo\n    at baz (file.js:1:7)\n    at qux (file.js:2:5)";
 		const env = formatToolError("E_JS_RUNTIME", "err", "hint", frames);
 		const parsed = parseToolErrorEnvelope(env);
 		expect(parsed?.stack).toBe(frames);
@@ -104,12 +105,14 @@ describe("tool-error-result", () => {
 			formatToolError("E_JS_TIMEOUT", "timeout error", "retry", frames),
 		);
 		expect(text).toBe(
-			"[E_JS_TIMEOUT] timeout error\nRecovery: retry\nStack:\n" + frames,
+			`[E_JS_TIMEOUT] timeout error\nRecovery: retry\nStack:\n${frames}`,
 		);
 	});
 
 	test("isStackUseful rejects QuickJS wasm32 garbage stacks", async () => {
-		const { isStackUseful } = await import("../../src/worker/tool-error-result");
+		const { isStackUseful } = await import(
+			"../../src/worker/tool-error-result"
+		);
 		// Real QuickJS wasm32 backtrace barrier yields ~5 garbage bytes.
 		// The exact bytes are engine-dependent; what matters is no useful frame.
 		expect(isStackUseful(")\n")).toBe(false);
@@ -120,7 +123,9 @@ describe("tool-error-result", () => {
 	});
 
 	test("isStackUseful accepts stacks containing frame info", async () => {
-		const { isStackUseful } = await import("../../src/worker/tool-error-result");
+		const { isStackUseful } = await import(
+			"../../src/worker/tool-error-result"
+		);
 		expect(isStackUseful("Error: foo\n    at baz (file.js:1:7)")).toBe(true);
 		expect(isStackUseful("at qux (eval:3:11)")).toBe(true);
 		expect(isStackUseful("foo.js:10:5")).toBe(true);
@@ -132,7 +137,12 @@ describe("tool-error-result", () => {
 		);
 		// Pre-fix: garbage stack would be attached and the UI would render
 		// control chars in a Stack section. Post-fix: stack is dropped.
-		const env = formatToolError("E_JS_RUNTIME", "ReferenceError", "retry", ")\n");
+		const env = formatToolError(
+			"E_JS_RUNTIME",
+			"ReferenceError",
+			"retry",
+			")\n",
+		);
 		const parsed = parseToolErrorEnvelope(env);
 		expect(parsed?.stack).toBeUndefined();
 	});

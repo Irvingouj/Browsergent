@@ -50,7 +50,9 @@ async function loadSkillMetaFromDir(
 		return { meta: null, diagnostics };
 	}
 
-	let frontmatter;
+	let frontmatter:
+		| ReturnType<typeof parseFrontmatter>["frontmatter"]
+		| undefined;
 	try {
 		({ frontmatter } = parseFrontmatter(raw));
 	} catch (err) {
@@ -61,6 +63,9 @@ async function loadSkillMetaFromDir(
 					? err.message
 					: String(err);
 		diagnostics.push({ kind: "validation", path: skillPath, message });
+		return { meta: null, diagnostics };
+	}
+	if (!frontmatter) {
 		return { meta: null, diagnostics };
 	}
 

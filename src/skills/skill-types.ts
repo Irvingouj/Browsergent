@@ -25,6 +25,10 @@ export interface SkillFsClient {
 	fsList(path: string): Promise<ReadonlyArray<SkillFsListEntry>>;
 	fsReadText(path: string): Promise<string>;
 	fsWriteText(path: string, data: string): Promise<void>;
+	/** Write binary bytes (base64-encoded) to a file. The FS is type-agnostic. */
+	fsWriteBase64(path: string, base64: string): Promise<void>;
+	/** Read a file as base64. Use for binary content that fsReadText cannot represent. */
+	fsReadBase64(path: string): Promise<string>;
 	fsMkdir(path: string): Promise<void>;
 	fsDelete(path: string): Promise<void>;
 }

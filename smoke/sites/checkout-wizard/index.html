@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Browsergent Smoke · Checkout</title>
+<style>
+	body { font: 14px/1.5 system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+	h1 { font-size: 18px; }
+	.steps { display: flex; gap: 8px; margin: 16px 0; }
+	.steps span { flex: 1; text-align: center; padding: 6px; border-radius: 6px; background: #f4f4f5; font-size: 12px; color: #71717a; }
+	.steps span.active { background: #4f46e5; color: #fff; }
+	.step { display: none; }
+	.step.active { display: block; }
+	label { display: block; margin: 10px 0 4px; font-weight: 600; }
+	input, select { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+	.nav { display: flex; justify-content: space-between; margin-top: 16px; }
+	button { padding: 9px 16px; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; }
+	.btn-primary { background: #4f46e5; color: #fff; }
+	.btn-ghost { background: #e4e4e7; color: #1a1a1a; }
+	.result { margin-top: 16px; padding: 14px; border-radius: 8px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; display: none; }
+</style>
+</head>
+<body>
+	<h1>Acme Store · Checkout</h1>
+	<div class="steps">
+		<span id="dot-1" class="active">1 · Shipping</span>
+		<span id="dot-2">2 · Payment</span>
+		<span id="dot-3">3 · Review</span>
+	</div>
+
+	<form id="wizard">
+		<section class="step active" data-step="1">
+			<h2>Shipping address</h2>
+			<label for="ship-name">Full name</label>
+			<input id="ship-name" name="ship-name" required />
+			<label for="ship-addr">Address</label>
+			<input id="ship-addr" name="ship-addr" required />
+			<div class="nav">
+				<span></span>
+				<button type="button" class="btn-primary" data-next>Continue to payment</button>
+			</div>
+		</section>
+
+		<section class="step" data-step="2">
+			<h2>Payment</h2>
+			<label for="cc-name">Name on card</label>
+			<input id="cc-name" name="cc-name" required />
+			<label for="cc-number">Card number</label>
+			<input id="cc-number" name="cc-number" inputmode="numeric" required />
+			<div class="nav">
+				<button type="button" class="btn-ghost" data-back>Back</button>
+				<button type="button" class="btn-primary" data-next>Continue to review</button>
+			</div>
+		</section>
+
+		<section class="step" data-step="3">
+			<h2>Review &amp; confirm</h2>
+			<p>Order total: <strong>$129.00</strong> (Trailblaze Backpack).</p>
+			<p>Confirm to place the order.</p>
+			<div class="nav">
+				<button type="button" class="btn-ghost" data-back>Back</button>
+				<button type="submit" class="btn-primary">Place order</button>
+			</div>
+		</section>
+	</form>
+
+	<div id="result" class="result" role="status" aria-live="polite"></div>
+
+	<script>
+		let step = 1;
+		const dots = { 1: "dot-1", 2: "dot-2", 3: "dot-3" };
+		function go(n) {
+			document.querySelectorAll(".step").forEach((s) => {
+				s.classList.toggle("active", Number(s.dataset.step) === n);
+			});
+			Object.entries(dots).forEach(([k, id]) => {
+				document.getElementById(id).classList.toggle("active", Number(k) === n);
+			});
+			step = n;
+		}
+		document.querySelectorAll("[data-next]").forEach((b) => {
+			b.addEventListener("click", () => { if (step < 3) go(step + 1); });
+		});
+		document.querySelectorAll("[data-back]").forEach((b) => {
+			b.addEventListener("click", () => { if (step > 1) go(step - 1); });
+		});
+		document.getElementById("wizard").addEventListener("submit", (e) => {
+			e.preventDefault();
+			const token = `ORD-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+			const el = document.getElementById("result");
+			el.style.display = "block";
+			el.textContent = `SMOKE_OK: Order placed. Confirmation number: ${token}.`;
+		});
+	</script>
+</body>
+</html>

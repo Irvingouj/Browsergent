@@ -21,11 +21,9 @@ describe("LoadSkillRelay", () => {
 			posted.push(request);
 		}, 30_000);
 
-		const promise = relay.relay(
+		const promise = relay.relay("capability-check", "references/checklist.md", [
 			"capability-check",
-			"references/checklist.md",
-			["capability-check"],
-		);
+		]);
 		expect(posted).toHaveLength(1);
 		expect(posted[0]?.skill).toBe("capability-check");
 		expect(posted[0]?.path).toBe("references/checklist.md");

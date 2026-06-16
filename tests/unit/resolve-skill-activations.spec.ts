@@ -39,7 +39,9 @@ describe("resolve-skill-activations", () => {
 			unsafeMeta,
 			"Body line",
 		);
-		expect(resolved).toContain('location="/skills/bundled/cap&quot;check/SKILL.md"');
+		expect(resolved).toContain(
+			'location="/skills/bundled/cap&quot;check/SKILL.md"',
+		);
 		expect(resolved).toContain(
 			"References are relative to /skills/bundled/cap&lt;check&gt;.",
 		);
@@ -57,8 +59,7 @@ describe("resolve-skill-activations", () => {
 	});
 
 	test("skill args stop before @[file: token", () => {
-		const draft =
-			"/skill:capability-check focus @[file:abc:notes.md] do thing";
+		const draft = "/skill:capability-check focus @[file:abc:notes.md] do thing";
 		expect(parseSkillActivation(draft)).toEqual({
 			skillName: "capability-check",
 			args: "focus",
@@ -67,8 +68,7 @@ describe("resolve-skill-activations", () => {
 	});
 
 	test("buildResolvedTask preserves file mention and user text after skill", () => {
-		const draft =
-			"/skill:capability-check @[file:abc:notes.md] do thing";
+		const draft = "/skill:capability-check @[file:abc:notes.md] do thing";
 		expect(parseSkillActivation(draft)?.args).toBe("");
 		const resolved = buildResolvedTask(draft, meta, "Body line");
 		expect(resolved).toContain("User task: @[file:abc:notes.md] do thing");
@@ -93,9 +93,7 @@ describe("resolve-skill-activations", () => {
 		expect(resolved).toContain("[skill truncated]");
 		// XML wrapper overhead for this meta = 156 chars (calculated from buildSkillXmlBlock)
 		const XML_WRAPPER_OVERHEAD = 156;
-		expect(resolved.length).toBe(
-			XML_WRAPPER_OVERHEAD + MAX_SKILL_INJECT_CHARS,
-		);
+		expect(resolved.length).toBe(XML_WRAPPER_OVERHEAD + MAX_SKILL_INJECT_CHARS);
 	});
 
 	test("truncateSkillBody leaves short bodies unchanged", () => {

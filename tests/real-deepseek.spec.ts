@@ -28,7 +28,8 @@ function readRc(): Record<string, string> {
 }
 
 const RC = readRc();
-const DEEPSEEK_API_KEY = RC.DEEPSEEK_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? "";
+const DEEPSEEK_API_KEY =
+	RC.DEEPSEEK_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? "";
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic";
 const DEEPSEEK_MODEL = "deepseek-v4-pro[1m]";
 
@@ -66,7 +67,10 @@ test.describe("real deepseek", () => {
 		await sidePanel.getByRole("button", { name: "More options" }).click();
 		await sidePanel.getByRole("button", { name: "Open settings" }).click();
 		await sidePanel.locator('input[type="password"]').fill(DEEPSEEK_API_KEY);
-		await sidePanel.locator('input[type="text"]').nth(0).fill(DEEPSEEK_BASE_URL);
+		await sidePanel
+			.locator('input[type="text"]')
+			.nth(0)
+			.fill(DEEPSEEK_BASE_URL);
 		await sidePanel.locator('input[type="text"]').nth(1).fill(DEEPSEEK_MODEL);
 		await sidePanel.getByRole("button", { name: "Save settings" }).click();
 		await sidePanel.locator('[data-testid="close-session-panel"]').click();
@@ -85,7 +89,10 @@ test.describe("real deepseek", () => {
 			try {
 				const response = await route.fetch();
 				const respBody = await response.text();
-				apiRequests.push({ direction: "response", body: respBody.slice(0, 5000) });
+				apiRequests.push({
+					direction: "response",
+					body: respBody.slice(0, 5000),
+				});
 				await route.fulfill({ response });
 			} catch {
 				// Context closed before response returned — agent follow-up request
@@ -114,9 +121,7 @@ test.describe("real deepseek", () => {
 		const traceCard = sidePanel
 			.locator("[data-testid='trace-entry']")
 			.first()
-			.locator(
-				"xpath=ancestor::div[contains(@class,'rounded-md')]",
-			);
+			.locator("xpath=ancestor::div[contains(@class,'rounded-md')]");
 		await expect(sidePanel.getByText("Result", { exact: true })).toBeVisible({
 			timeout: 10_000,
 		});
@@ -155,7 +160,10 @@ test.describe("real deepseek", () => {
 		await sidePanel.getByRole("button", { name: "More options" }).click();
 		await sidePanel.getByRole("button", { name: "Open settings" }).click();
 		await sidePanel.locator('input[type="password"]').fill(DEEPSEEK_API_KEY);
-		await sidePanel.locator('input[type="text"]').nth(0).fill(DEEPSEEK_BASE_URL);
+		await sidePanel
+			.locator('input[type="text"]')
+			.nth(0)
+			.fill(DEEPSEEK_BASE_URL);
 		await sidePanel.locator('input[type="text"]').nth(1).fill(DEEPSEEK_MODEL);
 		await sidePanel.getByRole("button", { name: "Save settings" }).click();
 		await sidePanel.locator('[data-testid="close-session-panel"]').click();
@@ -173,7 +181,10 @@ test.describe("real deepseek", () => {
 			try {
 				const response = await route.fetch();
 				const respBody = await response.text();
-				apiRequests.push({ direction: "response", body: respBody.slice(0, 5000) });
+				apiRequests.push({
+					direction: "response",
+					body: respBody.slice(0, 5000),
+				});
 				await route.fulfill({ response });
 			} catch {
 				// Context closed before response returned — agent follow-up request
@@ -210,9 +221,7 @@ test.describe("real deepseek", () => {
 		const traceCard = sidePanel
 			.locator("[data-testid='trace-entry']")
 			.first()
-			.locator(
-				"xpath=ancestor::div[contains(@class,'rounded-md')]",
-			);
+			.locator("xpath=ancestor::div[contains(@class,'rounded-md')]");
 		await expect(sidePanel.getByText("Result", { exact: true })).toBeVisible({
 			timeout: 10_000,
 		});
@@ -225,7 +234,9 @@ test.describe("real deepseek", () => {
 			"/tmp/deepseek-referror-conversation.txt",
 			apiRequests.map((e) => `--- ${e.direction} ---\n${e.body}`).join("\n"),
 		);
-		console.log("Conversation saved to /tmp/deepseek-referror-conversation.txt");
+		console.log(
+			"Conversation saved to /tmp/deepseek-referror-conversation.txt",
+		);
 
 		// Bug 2: engine-thrown errors in QuickJS wasm32 have empty messages.
 		// The error NAME must survive (ReferenceError), and the garbage stack

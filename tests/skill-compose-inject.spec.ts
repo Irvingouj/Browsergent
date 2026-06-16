@@ -19,14 +19,52 @@ const SIMPLE_HTML = `
 
 const LOAD_SKILL_CODE = JSON.stringify({ skill: "fill-and-submit" });
 
-const M1_START = JSON.stringify({ type: "message_start", message: { id: "m1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } });
-const M1_TOOL_START = JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "tc1", name: "load_skill", input: {} } });
-const M1_TOOL_DELTA = JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: LOAD_SKILL_CODE } });
+const M1_START = JSON.stringify({
+	type: "message_start",
+	message: {
+		id: "m1",
+		type: "message",
+		role: "assistant",
+		content: [],
+		model: "test",
+		stop_reason: null,
+		usage: { input_tokens: 10, output_tokens: 0 },
+	},
+});
+const M1_TOOL_START = JSON.stringify({
+	type: "content_block_start",
+	index: 0,
+	content_block: { type: "tool_use", id: "tc1", name: "load_skill", input: {} },
+});
+const M1_TOOL_DELTA = JSON.stringify({
+	type: "content_block_delta",
+	index: 0,
+	delta: { type: "input_json_delta", partial_json: LOAD_SKILL_CODE },
+});
 const M1_TOOL_STOP = JSON.stringify({ type: "content_block_stop", index: 0 });
 
-const M2_START = JSON.stringify({ type: "message_start", message: { id: "m2", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } });
-const M2_TEXT_START = JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
-const M2_TEXT_DELTA = JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Skill loaded successfully." } });
+const M2_START = JSON.stringify({
+	type: "message_start",
+	message: {
+		id: "m2",
+		type: "message",
+		role: "assistant",
+		content: [],
+		model: "test",
+		stop_reason: null,
+		usage: { input_tokens: 10, output_tokens: 0 },
+	},
+});
+const M2_TEXT_START = JSON.stringify({
+	type: "content_block_start",
+	index: 0,
+	content_block: { type: "text", text: "" },
+});
+const M2_TEXT_DELTA = JSON.stringify({
+	type: "content_block_delta",
+	index: 0,
+	delta: { type: "text_delta", text: "Skill loaded successfully." },
+});
 const M2_TEXT_STOP = JSON.stringify({ type: "content_block_stop", index: 0 });
 
 function startTestServer(): Promise<{
@@ -107,7 +145,9 @@ test("compose /skill: injects skill body and agent can load_skill mid-run", asyn
 	expect(Array.isArray(messages)).toBe(true);
 
 	function isUserMessage(m: unknown): m is Record<string, unknown> {
-		return typeof m === "object" && m !== null && "role" in m && m.role === "user";
+		return (
+			typeof m === "object" && m !== null && "role" in m && m.role === "user"
+		);
 	}
 	const userMessages = (messages as unknown[]).filter(isUserMessage);
 	expect(userMessages.length).toBeGreaterThanOrEqual(1);

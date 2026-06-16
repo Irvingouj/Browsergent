@@ -102,7 +102,8 @@ describe("TraceEntryCompact", () => {
 			code: "E_JS_RUNTIME",
 			message: "TypeError: foo is undefined",
 			hint: "Check the variable before access",
-			stack: "TypeError: foo is undefined\n    at baz (file.js:1:7)\n    at qux (file.js:2:5)",
+			stack:
+				"TypeError: foo is undefined\n    at baz (file.js:1:7)\n    at qux (file.js:2:5)",
 		});
 		const html = render(<ResultBody text={text} />);
 		expect(html).toContain("[E_JS_RUNTIME] TypeError: foo is undefined");

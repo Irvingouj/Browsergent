@@ -4,13 +4,13 @@ import { FilesController } from "../../controllers/files-controller";
 import { SessionController } from "../../controllers/session-controller";
 import { SettingsController } from "../../controllers/settings-controller";
 import { WorkerBridge } from "../../controllers/worker-bridge";
-import { ExtensionJsClient } from "../extension-js-client";
-import { handleFileOp } from "../file-op-handler";
 import { browsergentStore } from "../../state/store";
 import { IndexedDBStorage } from "../../storage/indexeddb-storage";
 import { MemoryStorage } from "../../storage/memory-storage";
 import { migrateFromChromeStorage } from "../../storage/migrate";
 import type { StorageBackend } from "../../storage/storage-backend";
+import { ExtensionJsClient } from "../extension-js-client";
+import { handleFileOp } from "../file-op-handler";
 
 export interface AppInitResult {
 	initialized: boolean;
@@ -89,8 +89,7 @@ export function useAppInit(): AppInitResult {
 							});
 						})
 						.catch((err: unknown) => {
-							const message =
-								err instanceof Error ? err.message : String(err);
+							const message = err instanceof Error ? err.message : String(err);
 							bridgeRef.current?.post({
 								type: "fileOpError",
 								id: msg.id,
@@ -128,7 +127,7 @@ export function useAppInit(): AppInitResult {
 				.load()
 				.then(async (session) => {
 					if (session) {
-						const activeSessionId = sessionCtrl.getActiveSessionId() ?? "";
+						const _activeSessionId = sessionCtrl.getActiveSessionId() ?? "";
 						browsergentStore.getState().hydrateChat(session.messages);
 						browsergentStore.getState().hydrateTrace(session.trace);
 						browsergentStore.getState().hydrateDiagnostics(session.diagnostics);
@@ -136,8 +135,7 @@ export function useAppInit(): AppInitResult {
 						browsergentStore.getState().setFileNodes(nodes);
 					}
 					sessionCtrl.hydrated = true;
-					const { sessions: sessionList, prunedIds } =
-						await sessionCtrl.listSessions();
+					const { sessions: sessionList } = await sessionCtrl.listSessions();
 					browsergentStore.getState().sessionListLoaded(sessionList);
 					browsergentStore
 						.getState()
@@ -149,8 +147,7 @@ export function useAppInit(): AppInitResult {
 					const activeSessionId = sessionCtrl.getActiveSessionId() ?? "";
 					const nodes = await filesCtrl.listAllFiles();
 					browsergentStore.getState().setFileNodes(nodes);
-					const { sessions: sessionList, prunedIds } =
-						await sessionCtrl.listSessions();
+					const { sessions: sessionList } = await sessionCtrl.listSessions();
 					browsergentStore.getState().sessionListLoaded(sessionList);
 					browsergentStore.getState().activeSessionChanged(activeSessionId);
 				});

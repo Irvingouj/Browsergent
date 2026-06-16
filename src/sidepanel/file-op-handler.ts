@@ -1,6 +1,10 @@
-import { isTextFile } from "../controllers/files-utils";
 import type { FilesController } from "../controllers/files-controller";
-import type { FileOpListEntry, FileOp, FileOpResult } from "../worker/file-op-relay";
+import { isTextFile } from "../controllers/files-utils";
+import type {
+	FileOp,
+	FileOpListEntry,
+	FileOpResult,
+} from "../worker/file-op-relay";
 
 const FILE_NOT_FOUND = "File not found: ";
 const FILE_BINARY = "File is binary, cannot read/edit as text: ";
@@ -24,7 +28,9 @@ export async function handleFileOp(
 			const nodes = await filesController.listAllFiles();
 			const prefix = op.prefix ?? "";
 			const filtered = prefix
-				? nodes.filter((n) => n.path.startsWith(prefix) || n.name.startsWith(prefix))
+				? nodes.filter(
+						(n) => n.path.startsWith(prefix) || n.name.startsWith(prefix),
+					)
 				: nodes;
 			const files: FileOpListEntry[] = filtered.map((n) => ({
 				id: n.id,
@@ -36,7 +42,8 @@ export async function handleFileOp(
 			return { op: "list", files };
 		}
 		case "read": {
-			if (isUnsafePath(op.path)) throw new Error(`File path out of scope: ${op.path}`);
+			if (isUnsafePath(op.path))
+				throw new Error(`File path out of scope: ${op.path}`);
 			if (!isTextFile(op.path)) throw new Error(FILE_BINARY + op.path);
 			try {
 				const content = await filesController.readFileText(op.path);
@@ -46,12 +53,14 @@ export async function handleFileOp(
 			}
 		}
 		case "write": {
-			if (isUnsafePath(op.path)) throw new Error(`File path out of scope: ${op.path}`);
+			if (isUnsafePath(op.path))
+				throw new Error(`File path out of scope: ${op.path}`);
 			await filesController.writeFile(op.path, op.content);
 			return { op: "write", bytes: op.content.length };
 		}
 		case "edit": {
-			if (isUnsafePath(op.path)) throw new Error(`File path out of scope: ${op.path}`);
+			if (isUnsafePath(op.path))
+				throw new Error(`File path out of scope: ${op.path}`);
 			if (!isTextFile(op.path)) throw new Error(FILE_BINARY + op.path);
 			const result = await filesController.editFile(
 				op.path,
@@ -59,10 +68,15 @@ export async function handleFileOp(
 				op.newString,
 				op.replaceAll ?? false,
 			);
-			return { op: "edit", occurrences: result.occurrences, bytes: result.bytes };
+			return {
+				op: "edit",
+				occurrences: result.occurrences,
+				bytes: result.bytes,
+			};
 		}
 		case "delete": {
-			if (isUnsafePath(op.path)) throw new Error(`File path out of scope: ${op.path}`);
+			if (isUnsafePath(op.path))
+				throw new Error(`File path out of scope: ${op.path}`);
 			await filesController.deleteFile(op.path);
 			return { op: "delete" };
 		}

@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";

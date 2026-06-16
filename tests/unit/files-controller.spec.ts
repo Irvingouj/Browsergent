@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { SkillFsClient } from "../../src/skills/skill-types";
+import { beforeEach, describe, expect, test } from "vitest";
 import {
 	buildFileNode,
 	FilesController,
 	isTextFile,
 	sanitizeFileName,
 } from "../../src/controllers/files-controller";
+import type { SkillFsClient } from "../../src/skills/skill-types";
 
 interface MockFs extends SkillFsClient {
 	storage: Map<string, string>;
@@ -36,7 +36,7 @@ function createMockFs(): MockFs {
 				if (!key.startsWith(prefix)) continue;
 				const rest = key.slice(prefix.length);
 				if (rest.length === 0) continue;
-				const firstSeg = rest.split("/")[0]!;
+				const firstSeg = rest.split("/")[0] ?? "";
 				if (rest.includes("/")) {
 					if (!seen.has(firstSeg)) {
 						seen.add(firstSeg);
@@ -57,6 +57,16 @@ function createMockFs(): MockFs {
 		async fsWriteText(path: string, data: string): Promise<void> {
 			logs.push(`write:${path}`);
 			storage.set(path, data);
+		},
+		async fsWriteBase64(path: string, base64: string): Promise<void> {
+			logs.push(`writeBase64:${path}`);
+			storage.set(path, base64);
+		},
+		async fsReadBase64(path: string): Promise<string> {
+			logs.push(`readBase64:${path}`);
+			const data = storage.get(path);
+			if (data === undefined) throw new Error(`Not found: ${path}`);
+			return data;
 		},
 		async fsMkdir(path: string): Promise<void> {
 			logs.push(`mkdir:${path}`);
@@ -186,21 +196,16 @@ describe("FilesController.uploadFiles", () => {
 		expect(fs.storage.get("/beta.json")).toBe("b");
 	});
 
-	test("rejects text files over size cap", async () => {
-		const bigContent = "x".repeat(1_000_001);
-		const file = new File([bigContent], "big.md", {
-			type: "text/markdown",
-		});
-		await expect(ctrl.uploadFiles([file])).rejects.toThrow("File too large");
-		expect(fs.storage.size).toBe(0);
-	});
+	test("writes binary files (e.g. PDF) as base64 with no size limit", async () => {
+		const file = new File(["data"], "report.pdf", { type: "application/pdf" });
+		const nodes = await ctrl.uploadFiles([file]);
 
-	test("rejects binary files", async () => {
-		const file = new File(["data"], "image.png", { type: "image/png" });
-		await expect(ctrl.uploadFiles([file])).rejects.toThrow(
-			"Binary uploads unsupported",
-		);
-		expect(fs.storage.size).toBe(0);
+		expect(nodes.length).toBe(1);
+		expect(nodes[0].name).toBe("report.pdf");
+		expect(nodes[0].path).toBe("/report.pdf");
+		expect(nodes[0].size).toBe(4); // file.size in bytes
+		expect(fs.logs).toContain("writeBase64:/report.pdf");
+		expect(fs.storage.get("/report.pdf")).toBe("ZGF0YQ=="); // base64("data")
 	});
 
 	test("interprets slashes in name as subdirectory path", async () => {
@@ -221,9 +226,7 @@ describe("FilesController.uploadFiles", () => {
 		const file = new File(["x"], "../etc/passwd.md", {
 			type: "text/markdown",
 		});
-		await expect(ctrl.uploadFiles([file])).rejects.toThrow(
-			"Invalid file name",
-		);
+		await expect(ctrl.uploadFiles([file])).rejects.toThrow("Invalid file name");
 	});
 
 	test("does not call mkdir for already-existing parent directories", async () => {
@@ -239,9 +242,7 @@ describe("FilesController.uploadFiles", () => {
 
 	test("throws for empty name after sanitization", async () => {
 		const file = new File(["x"], "///", { type: "text/markdown" });
-		await expect(ctrl.uploadFiles([file])).rejects.toThrow(
-			"Invalid file name",
-		);
+		await expect(ctrl.uploadFiles([file])).rejects.toThrow("Invalid file name");
 	});
 });
 
@@ -281,14 +282,14 @@ describe("FilesController.listAllFiles", () => {
 			.sort();
 		expect(fileNames).toEqual(["draft.md", "final.md", "readme.txt"]);
 
-		const draftNode = nodes.find((n) => n.name === "draft.md")!;
-		expect(draftNode.path).toBe("/notes/draft.md");
-		expect(draftNode.parentId).toBe("/notes");
-		expect(draftNode.kind).toBe("file");
+		const draftNode = nodes.find((n) => n.name === "draft.md");
+		expect(draftNode?.path).toBe("/notes/draft.md");
+		expect(draftNode?.parentId).toBe("/notes");
+		expect(draftNode?.kind).toBe("file");
 
-		const dirNode = nodes.find((n) => n.kind === "directory")!;
-		expect(dirNode.path).toBe("/notes");
-		expect(dirNode.parentId).toBeUndefined();
+		const dirNode = nodes.find((n) => n.kind === "directory");
+		expect(dirNode?.path).toBe("/notes");
+		expect(dirNode?.parentId).toBeUndefined();
 	});
 
 	test("returns empty array when root is empty", async () => {
@@ -297,7 +298,9 @@ describe("FilesController.listAllFiles", () => {
 	});
 
 	test("returns empty array when fsList throws", async () => {
-		fs.fsList = async () => { throw new Error("opfs error"); };
+		fs.fsList = async () => {
+			throw new Error("opfs error");
+		};
 		const nodes = await ctrl.listAllFiles();
 		expect(nodes).toEqual([]);
 	});
@@ -341,14 +344,6 @@ describe("FilesController.writeFile", () => {
 		fs.storage.set("/existing.txt", "old");
 		await ctrl.writeFile("/existing.txt", "new");
 		expect(fs.storage.get("/existing.txt")).toBe("new");
-	});
-
-	test("rejects content over size cap", async () => {
-		const bigContent = "x".repeat(1_000_001);
-		await expect(ctrl.writeFile("/big.txt", bigContent)).rejects.toThrow(
-			"Content too large",
-		);
-		expect(fs.storage.has("/big.txt")).toBe(false);
 	});
 });
 
@@ -419,9 +414,9 @@ describe("FilesController.editFile", () => {
 
 	test("throws when old_string matches multiple times without replace_all", async () => {
 		fs.storage.set("/test.md", "x and x");
-		await expect(
-			ctrl.editFile("/test.md", "x", "y", false),
-		).rejects.toThrow("matches 2 times");
+		await expect(ctrl.editFile("/test.md", "x", "y", false)).rejects.toThrow(
+			"matches 2 times",
+		);
 	});
 
 	test("throws when old_string equals new_string", async () => {
@@ -431,16 +426,9 @@ describe("FilesController.editFile", () => {
 	});
 
 	test("throws when old_string is empty", async () => {
-		await expect(
-			ctrl.editFile("/test.md", "", "x", false),
-		).rejects.toThrow("must not be empty");
-	});
-
-	test("rejects edit that would exceed max file size", async () => {
-		const bigReplacement = "x".repeat(1_000_002);
-		await expect(
-			ctrl.editFile("/test.md", "world", bigReplacement, false),
-		).rejects.toThrow("max file size");
+		await expect(ctrl.editFile("/test.md", "", "x", false)).rejects.toThrow(
+			"must not be empty",
+		);
 	});
 
 	test("writes the new content and returns correct bytes", async () => {

@@ -268,7 +268,11 @@ describe("isLoadSkillResult", () => {
 describe("isLoadSkillError", () => {
 	test("accepts valid error", () => {
 		expect(
-			isLoadSkillError({ type: "loadSkillError", id: "s1", error: "not found" }),
+			isLoadSkillError({
+				type: "loadSkillError",
+				id: "s1",
+				error: "not found",
+			}),
 		).toBe(true);
 	});
 
@@ -371,7 +375,13 @@ describe("isFileOpRequest", () => {
 				type: "fileOpRequest",
 				id: "f1",
 				sessionId: "s1",
-				op: { op: "edit", path: "x.md", oldString: "a", newString: "b", replaceAll: true },
+				op: {
+					op: "edit",
+					path: "x.md",
+					oldString: "a",
+					newString: "b",
+					replaceAll: true,
+				},
 			}),
 		).toBe(true);
 	});
@@ -470,7 +480,13 @@ describe("isFileOpRequest", () => {
 				type: "fileOpRequest",
 				id: "f1",
 				sessionId: "s1",
-				op: { op: "edit", path: "x.md", oldString: "a", newString: "b", replaceAll: "yes" },
+				op: {
+					op: "edit",
+					path: "x.md",
+					oldString: "a",
+					newString: "b",
+					replaceAll: "yes",
+				},
 			}),
 		).toBe(false);
 	});
@@ -655,9 +671,9 @@ describe("isFileOpError", () => {
 	});
 
 	test("rejects non-string error", () => {
-		expect(
-			isFileOpError({ type: "fileOpError", id: "f1", error: 42 }),
-		).toBe(false);
+		expect(isFileOpError({ type: "fileOpError", id: "f1", error: 42 })).toBe(
+			false,
+		);
 	});
 });
 
@@ -748,15 +764,15 @@ describe("isValidFileOp — direct variant coverage", () => {
 	});
 
 	test("edit: rejects missing oldString", () => {
-		expect(
-			isValidFileOp({ op: "edit", path: "x.md", newString: "b" }),
-		).toBe(false);
+		expect(isValidFileOp({ op: "edit", path: "x.md", newString: "b" })).toBe(
+			false,
+		);
 	});
 
 	test("edit: rejects missing newString", () => {
-		expect(
-			isValidFileOp({ op: "edit", path: "x.md", oldString: "a" }),
-		).toBe(false);
+		expect(isValidFileOp({ op: "edit", path: "x.md", oldString: "a" })).toBe(
+			false,
+		);
 	});
 
 	test("edit: rejects non-boolean replaceAll", () => {
@@ -823,9 +839,9 @@ describe("isValidFileOpResult — direct variant coverage", () => {
 		expect(
 			isValidFileOpResult({ op: "read", content: "x", truncated: false }),
 		).toBe(false);
-		expect(
-			isValidFileOpResult({ op: "read", content: "x", bytes: 1 }),
-		).toBe(false);
+		expect(isValidFileOpResult({ op: "read", content: "x", bytes: 1 })).toBe(
+			false,
+		);
 	});
 
 	test("write: accepts with bytes", () => {
@@ -841,9 +857,9 @@ describe("isValidFileOpResult — direct variant coverage", () => {
 	});
 
 	test("edit: accepts with occurrences and bytes", () => {
-		expect(
-			isValidFileOpResult({ op: "edit", occurrences: 1, bytes: 10 }),
-		).toBe(true);
+		expect(isValidFileOpResult({ op: "edit", occurrences: 1, bytes: 10 })).toBe(
+			true,
+		);
 	});
 
 	test("edit: rejects missing either field", () => {
@@ -882,18 +898,21 @@ describe("isValidFileOp — drift detector", () => {
 });
 
 describe("isValidFileOpResult — drift detector", () => {
-	const VALID_RESULT_BUILDERS: Record<FileOpResult["op"], () => FileOpResult> = {
-		list: () => ({ op: "list", files: [] }),
-		read: () => ({ op: "read", content: "x", bytes: 1, truncated: false }),
-		write: () => ({ op: "write", bytes: 5 }),
-		edit: () => ({ op: "edit", occurrences: 1, bytes: 10 }),
-		delete: () => ({ op: "delete" }),
-	};
+	const VALID_RESULT_BUILDERS: Record<FileOpResult["op"], () => FileOpResult> =
+		{
+			list: () => ({ op: "list", files: [] }),
+			read: () => ({ op: "read", content: "x", bytes: 1, truncated: false }),
+			write: () => ({ op: "write", bytes: 5 }),
+			edit: () => ({ op: "edit", occurrences: 1, bytes: 10 }),
+			delete: () => ({ op: "delete" }),
+		};
 
 	test("every FileOpResult variant has a valid builder that the guard accepts", () => {
 		const tags = Object.keys(VALID_RESULT_BUILDERS) as FileOpResult["op"][];
 		expect(tags.sort()).toEqual(
-			(["delete", "edit", "list", "read", "write"] as FileOpResult["op"][]).sort(),
+			(
+				["delete", "edit", "list", "read", "write"] as FileOpResult["op"][]
+			).sort(),
 		);
 		for (const build of Object.values(VALID_RESULT_BUILDERS)) {
 			expect(isValidFileOpResult(build())).toBe(true);

@@ -4,7 +4,10 @@ import { findSkillManifest } from "../../src/controllers/files-utils";
 function makeFile(name: string, wrp?: string): File {
 	const f = new File(["content"], name, { type: "text/plain" });
 	if (wrp !== undefined) {
-		Object.defineProperty(f, "webkitRelativePath", { value: wrp, writable: false });
+		Object.defineProperty(f, "webkitRelativePath", {
+			value: wrp,
+			writable: false,
+		});
 	}
 	return f;
 }

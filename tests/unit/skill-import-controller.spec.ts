@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import type { SkillFsClient } from "../../src/skills/skill-types";
 import { SkillImportController } from "../../src/skills/skill-import-controller";
+import type { SkillFsClient } from "../../src/skills/skill-types";
 
 interface MockFs extends SkillFsClient {
 	storage: Map<string, string>;
@@ -44,6 +44,10 @@ function createMockFs(): MockFs {
 		async fsDelete(path: string): Promise<void> {
 			storage.delete(path);
 		},
+		async fsWriteBase64(): Promise<void> {},
+		async fsReadBase64(): Promise<string> {
+			return "";
+		},
 	};
 }
 
@@ -55,7 +59,10 @@ function makeSkillMd(name: string, description: string = "A test skill"): File {
 function makeFile(name: string, content: string, wrp?: string): File {
 	const f = new File([content], name, { type: "text/plain" });
 	if (wrp !== undefined) {
-		Object.defineProperty(f, "webkitRelativePath", { value: wrp, writable: false });
+		Object.defineProperty(f, "webkitRelativePath", {
+			value: wrp,
+			writable: false,
+		});
 	}
 	return f;
 }
@@ -75,11 +82,14 @@ describe("SkillImportController", () => {
 
 		expect(result.name).toBe("my-skill");
 		expect(result.fileCount).toBe(1);
-		expect(fs.storage.get("/skills/user/my-skill/SKILL.md")).toContain("name: my-skill");
+		expect(fs.storage.get("/skills/user/my-skill/SKILL.md")).toContain(
+			"name: my-skill",
+		);
 	});
 
 	test("parses name from frontmatter and sanitizes", async () => {
-		const content = "---\nname:   my-skill  \ndescription: A skill\n---\nbody\n";
+		const content =
+			"---\nname:   my-skill  \ndescription: A skill\n---\nbody\n";
 		const skillMd = new File([content], "SKILL.md", { type: "text/markdown" });
 		const result = await ctrl.importSkill([skillMd]);
 
@@ -109,14 +119,26 @@ describe("SkillImportController", () => {
 	});
 
 	test("preserves folder structure from webkitRelativePath", async () => {
-		const skillMd = makeFile("SKILL.md", "---\nname: ref-skill\ndescription: has refs\n---\nbody\n", "ref-skill/SKILL.md");
-		const ref = makeFile("foo.md", "reference content", "ref-skill/references/foo.md");
+		const skillMd = makeFile(
+			"SKILL.md",
+			"---\nname: ref-skill\ndescription: has refs\n---\nbody\n",
+			"ref-skill/SKILL.md",
+		);
+		const ref = makeFile(
+			"foo.md",
+			"reference content",
+			"ref-skill/references/foo.md",
+		);
 		const result = await ctrl.importSkill([skillMd, ref]);
 
 		expect(result.name).toBe("ref-skill");
 		expect(result.fileCount).toBe(2);
-		expect(fs.storage.get("/skills/user/ref-skill/SKILL.md")).toContain("name: ref-skill");
-		expect(fs.storage.get("/skills/user/ref-skill/references/foo.md")).toBe("reference content");
+		expect(fs.storage.get("/skills/user/ref-skill/SKILL.md")).toContain(
+			"name: ref-skill",
+		);
+		expect(fs.storage.get("/skills/user/ref-skill/references/foo.md")).toBe(
+			"reference content",
+		);
 	});
 
 	test("flat fallback uses bare filename for non-folder upload", async () => {
@@ -125,15 +147,23 @@ describe("SkillImportController", () => {
 		const result = await ctrl.importSkill([skillMd, extra]);
 
 		expect(result.fileCount).toBe(2);
-		expect(fs.storage.get("/skills/user/flat-skill/extra.md")).toBe("extra content");
+		expect(fs.storage.get("/skills/user/flat-skill/extra.md")).toBe(
+			"extra content",
+		);
 	});
 
 	test("rejects path traversal in webkitRelativePath", async () => {
 		const skillMd = makeSkillMd("traverse-skill");
-		const evil = makeFile("passwd", "root:x:0:0", "traverse-skill/../../etc/passwd");
+		const evil = makeFile(
+			"passwd",
+			"root:x:0:0",
+			"traverse-skill/../../etc/passwd",
+		);
 		const result = await ctrl.importSkill([skillMd, evil]);
 
-		expect(result.warnings).toContainEqual(expect.stringContaining("skipped file with unsafe path"));
+		expect(result.warnings).toContainEqual(
+			expect.stringContaining("skipped file with unsafe path"),
+		);
 		expect(result.fileCount).toBe(1);
 	});
 
@@ -142,7 +172,9 @@ describe("SkillImportController", () => {
 		const png = makeFile("evil.png", "fakepng", "bin-skill/evil.png");
 		const result = await ctrl.importSkill([skillMd, png]);
 
-		expect(result.warnings).toContainEqual(expect.stringContaining("skipped binary file: evil.png"));
+		expect(result.warnings).toContainEqual(
+			expect.stringContaining("skipped binary file: evil.png"),
+		);
 		expect(result.fileCount).toBe(1);
 	});
 
@@ -152,12 +184,19 @@ describe("SkillImportController", () => {
 		const result = await ctrl.importSkill([skillMd]);
 
 		expect(result.fileCount).toBe(1);
-		expect(fs.storage.get("/skills/user/overwrite-me/SKILL.md")).toContain("name: overwrite-me");
-		expect(fs.storage.get("/skills/user/overwrite-me/SKILL.md")).not.toContain("old content");
+		expect(fs.storage.get("/skills/user/overwrite-me/SKILL.md")).toContain(
+			"name: overwrite-me",
+		);
+		expect(fs.storage.get("/skills/user/overwrite-me/SKILL.md")).not.toContain(
+			"old content",
+		);
 	});
 
 	test("deleteSkill removes the directory", async () => {
-		fs.storage.set("/skills/user/del-me/SKILL.md", "---\nname: del-me\n---\nbody\n");
+		fs.storage.set(
+			"/skills/user/del-me/SKILL.md",
+			"---\nname: del-me\n---\nbody\n",
+		);
 		fs.storage.set("/skills/user/del-me/refs.md", "reference");
 
 		await ctrl.deleteSkill("del-me");
@@ -167,7 +206,10 @@ describe("SkillImportController", () => {
 	});
 
 	test("deleteSkill recursively removes nested files", async () => {
-		fs.storage.set("/skills/user/nested/SKILL.md", "---\nname: nested\n---\nbody\n");
+		fs.storage.set(
+			"/skills/user/nested/SKILL.md",
+			"---\nname: nested\n---\nbody\n",
+		);
 		fs.storage.set("/skills/user/nested/references/bar.md", "ref content");
 		fs.storage.set("/skills/user/nested/scripts/baz.sh", "echo hi");
 
@@ -190,6 +232,8 @@ describe("SkillImportController", () => {
 		const result = await ctrl.importSkill([skillMd, dup1, dup2]);
 
 		expect(result.fileCount).toBe(2);
-		expect(fs.storage.get("/skills/user/dedupe-skill/extra.md")).toBe("second content");
+		expect(fs.storage.get("/skills/user/dedupe-skill/extra.md")).toBe(
+			"second content",
+		);
 	});
 });

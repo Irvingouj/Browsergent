@@ -6,8 +6,8 @@ import {
 	buildAttachmentXmlBlock,
 	buildTaskWithAttachments,
 	parseFileMentions,
-	stripFileMentions,
 	type ResolvedAttachment,
+	stripFileMentions,
 } from "./resolve-file-mentions";
 
 const USER_TASK_PREFIX = "\n\nUser task: ";
@@ -60,9 +60,7 @@ export function mergeSkillAndFileAttachments(
 
 	const { skillBlock } = extractSkillBlock(resolvedTask);
 	const attachmentBlocks = attachments
-		.map((a) =>
-			buildAttachmentXmlBlock(a.displayName, a.fileId, a.content),
-		)
+		.map((a) => buildAttachmentXmlBlock(a.displayName, a.fileId, a.content))
 		.join("\n\n");
 	const userRemainder = stripFileMentions(stripSkillToken(task)).trim();
 

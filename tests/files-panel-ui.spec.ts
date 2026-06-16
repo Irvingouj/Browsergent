@@ -28,12 +28,7 @@ test("files panel shows tabs, previews, and preserves selection across tab switc
 		"preview not available",
 	);
 
-	await uploadFileViaPanel(
-		sidePanel,
-		"notes.md",
-		MD_CONTENT,
-		"text/markdown",
-	);
+	await uploadFileViaPanel(sidePanel, "notes.md", MD_CONTENT, "text/markdown");
 	await expect(sidePanel.locator("text=notes.md")).toBeVisible({
 		timeout: 10000,
 	});

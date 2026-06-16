@@ -20,12 +20,7 @@ test("file mention injects attachment block into first provider request", async 
 	await expect(sidePanel.getByTestId("files-panel")).toBeVisible({
 		timeout: 10000,
 	});
-	await uploadFileViaPanel(
-		sidePanel,
-		"notes.txt",
-		FILE_CONTENT,
-		"text/plain",
-	);
+	await uploadFileViaPanel(sidePanel, "notes.txt", FILE_CONTENT, "text/plain");
 	await expect(sidePanel.locator("text=notes.txt")).toBeVisible({
 		timeout: 10000,
 	});
@@ -37,7 +32,10 @@ test("file mention injects attachment block into first provider request", async 
 	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({
 		timeout: 5000,
 	});
-	await sidePanel.getByTestId(/^command-picker-item-/).first().click();
+	await sidePanel
+		.getByTestId(/^command-picker-item-/)
+		.first()
+		.click();
 	await taskInput.pressSequentially(" summarize this file");
 
 	await sidePanel.getByRole("button", { name: "Run task" }).click();

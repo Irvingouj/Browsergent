@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Browsergent Smoke · Document Upload</title>
+<style>
+	body { font: 14px/1.5 system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+	h1 { font-size: 18px; }
+	section { margin-top: 20px; padding: 16px; border: 1px solid #e4e4e7; border-radius: 10px; }
+	h2 { font-size: 15px; margin: 0 0 8px; }
+	.dropzone { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 24px; text-align: center; color: #71717a; }
+	.dropzone input { display: none; }
+	.dropzone label { cursor: pointer; color: #4f46e5; font-weight: 600; }
+	.result { margin-top: 14px; padding: 12px; border-radius: 8px; display: none; }
+	.result.ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+	.result.bad { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+	.meta { font-size: 13px; color: #52525b; }
+</style>
+</head>
+<body>
+	<h1>Acme Claims · Submit a document</h1>
+	<p class="meta">Upload a PDF report (invoice, receipt, or claim form). PDF only.</p>
+
+	<section aria-labelledby="upload-h">
+		<h2 id="upload-h">PDF upload</h2>
+		<div class="dropzone">
+			<p>Drag a PDF here, or <label for="file">browse</label></p>
+			<input id="file" type="file" accept="application/pdf,.pdf" aria-label="Choose a PDF file" />
+		</div>
+		<div id="result" class="result" role="status" aria-live="polite"></div>
+	</section>
+
+	<script>
+		const input = document.getElementById("file");
+		const result = document.getElementById("result");
+
+		input.addEventListener("change", async () => {
+			const file = input.files?.[0];
+			const el = result;
+			if (!file) return;
+			const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+			if (!isPdf) {
+				el.className = "result bad";
+				el.style.display = "block";
+				el.textContent = `Rejected: only PDF documents are accepted (got ${file.name}).`;
+				return;
+			}
+			const buf = await file.arrayBuffer();
+			// %PDF magic header check — proves real bytes arrived, not an empty stub.
+			const magic = new TextDecoder().decode(new Uint8Array(buf).slice(0, 4));
+			if (magic !== "%PDF") {
+				el.className = "result bad";
+				el.style.display = "block";
+				el.textContent = "Rejected: file does not start with the %PDF signature.";
+				return;
+			}
+			el.className = "result ok";
+			el.style.display = "block";
+			el.textContent = `SMOKE_OK: Uploaded ${file.name} (${buf.byteLength} bytes). Claim draft created: CLM-${Math.random().toString(36).slice(2, 8).toUpperCase()}.`;
+		});
+	</script>
+</body>
+</html>

@@ -53,9 +53,7 @@ test("agent shows error when API returns 401", async () => {
 	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("test error");
+	await sidePanel.locator('[data-testid="task-input"]').fill("test error");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Status should show error

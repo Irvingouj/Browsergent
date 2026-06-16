@@ -66,8 +66,6 @@ export function isToolErrorEnvelope(text: string): boolean {
 export function renderToolOutput(text: string): string {
 	const envelope = parseToolErrorEnvelope(text);
 	if (!envelope) return text;
-	const stackSection = envelope.stack
-		? `\nStack:\n${envelope.stack}`
-		: "";
+	const stackSection = envelope.stack ? `\nStack:\n${envelope.stack}` : "";
 	return `[${envelope.code}] ${envelope.message}\nRecovery: ${envelope.hint}${stackSection}`;
 }

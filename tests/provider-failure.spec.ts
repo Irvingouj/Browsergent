@@ -45,9 +45,7 @@ test("agent shows error on 503 and UI remains usable", async () => {
 	await sidePanel.locator('[data-testid="close-session-panel"]').click();
 
 	// Start a run
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("test 503");
+	await sidePanel.locator('[data-testid="task-input"]').fill("test 503");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Should show error status (hard stop)

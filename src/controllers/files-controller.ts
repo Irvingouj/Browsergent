@@ -1,20 +1,19 @@
-import type { FileNode } from "../state/slices/files-slice";
 import type { SkillFsClient } from "../skills/skill-types";
+import type { FileNode } from "../state/slices/files-slice";
 import {
 	buildDirectoryNode,
 	buildFileNode,
+	fileToBase64,
 	isTextFile,
 	sanitizeFileName,
 } from "./files-utils";
 
 export {
+	buildDirectoryNode,
+	buildFileNode,
 	isTextFile,
 	sanitizeFileName,
-	buildFileNode,
-	buildDirectoryNode,
 } from "./files-utils";
-
-const MAX_TEXT_FILE_SIZE = 1_000_000; // 1 MB
 
 export class FilesController {
 	private chain: Promise<void> = Promise.resolve();
@@ -52,19 +51,11 @@ export class FilesController {
 				}
 				segments.push(seg);
 			}
-			if (segments.length === 0) {
+			const name = segments.at(-1);
+			if (name === undefined) {
 				throw new Error(`Invalid file name: ${file.name}`);
 			}
-			const name = segments[segments.length - 1]!;
-			if (!isTextFile(name)) {
-				throw new Error(`Binary uploads unsupported: ${file.name}`);
-			}
-			if (file.size > MAX_TEXT_FILE_SIZE) {
-				throw new Error(
-					`File too large: ${file.name} (${file.size} bytes, max ${MAX_TEXT_FILE_SIZE})`,
-				);
-			}
-			const text = await file.text();
+			const isText = isTextFile(name);
 			const dirSegments = segments.slice(0, -1);
 			let dirPath = "";
 			for (const seg of dirSegments) {
@@ -73,11 +64,27 @@ export class FilesController {
 					await this.fs.fsMkdir(dirPath);
 				}
 			}
-			const path = "/" + segments.join("/");
-			await this.fs.fsWriteText(path, text);
-			const parentId = dirSegments.length > 0 ? "/" + dirSegments.join("/") : undefined;
+			const path = `/${segments.join("/")}`;
+			// fs is type-agnostic: text decodes to UTF-8, everything else is stored as base64 bytes.
+			let bytes: number;
+			if (isText) {
+				const text = await file.text();
+				await this.fs.fsWriteText(path, text);
+				bytes = text.length;
+			} else {
+				const base64 = await fileToBase64(file);
+				await this.fs.fsWriteBase64(path, base64);
+				bytes = file.size;
+			}
+			const parentId =
+				dirSegments.length > 0 ? `/${dirSegments.join("/")}` : undefined;
 			nodes.push(
-				buildFileNode({ name, path, ...(parentId !== undefined ? { parentId } : {}), size: text.length }),
+				buildFileNode({
+					name,
+					path,
+					...(parentId !== undefined ? { parentId } : {}),
+					size: bytes,
+				}),
 			);
 		}
 		return nodes;
@@ -124,11 +131,6 @@ export class FilesController {
 	}
 
 	async writeFile(path: string, content: string): Promise<void> {
-		if (content.length > MAX_TEXT_FILE_SIZE) {
-			throw new Error(
-				`Content too large (${content.length} bytes, max ${MAX_TEXT_FILE_SIZE})`,
-			);
-		}
 		return this.runSerialized(() => this.fs.fsWriteText(path, content));
 	}
 
@@ -174,11 +176,6 @@ export class FilesController {
 		const updated = replaceAll
 			? original.split(oldString).join(newString)
 			: original.replace(oldString, newString);
-		if (updated.length > MAX_TEXT_FILE_SIZE) {
-			throw new Error(
-				`Edit would exceed max file size (${MAX_TEXT_FILE_SIZE} bytes)`,
-			);
-		}
 
 		await this.fs.fsWriteText(path, updated);
 		return { occurrences: replaceAll ? occurrences : 1, bytes: updated.length };
@@ -188,10 +185,10 @@ export class FilesController {
 function countOccurrences(haystack: string, needle: string): number {
 	if (needle.length === 0) return 0;
 	let count = 0;
-	let i = 0;
-	while ((i = haystack.indexOf(needle, i)) !== -1) {
+	let i = haystack.indexOf(needle);
+	while (i !== -1) {
 		count++;
-		i += needle.length;
+		i = haystack.indexOf(needle, i + needle.length);
 	}
 	return count;
 }

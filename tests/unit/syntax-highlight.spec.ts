@@ -3,9 +3,7 @@ import { escapeHtml, highlightCode } from "../../src/utils/syntax-highlight";
 
 describe("escapeHtml", () => {
 	test("escapes < > &", () => {
-		expect(escapeHtml("<div> & </div>")).toBe(
-			"&lt;div&gt; &amp; &lt;/div&gt;",
-		);
+		expect(escapeHtml("<div> & </div>")).toBe("&lt;div&gt; &amp; &lt;/div&gt;");
 	});
 
 	test("no-op for plain text", () => {

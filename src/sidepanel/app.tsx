@@ -5,6 +5,9 @@ import {
 	buildExportSnapshot,
 	exportConversation,
 } from "../controllers/export-controller";
+import { parseSkillActivation } from "../skills/resolve-skill-activations";
+import { getSkillService } from "../skills/skill-service";
+import type { SkillDiagnostic } from "../skills/skill-types";
 import {
 	selectActiveSessionId,
 	selectActiveTab,
@@ -23,10 +26,7 @@ import {
 	selectTaskDraft,
 	selectTraceEntries,
 } from "../state/selectors";
-import type { SkillDiagnostic } from "../skills/skill-types";
 import { browsergentStore } from "../state/store";
-import { getSkillService } from "../skills/skill-service";
-import { parseSkillActivation } from "../skills/resolve-skill-activations";
 import type { ChatMessage } from "../types/messages";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/FilesPanel";
@@ -38,7 +38,10 @@ import {
 	buildDisplayTask,
 	mergeSkillAndFileAttachments,
 } from "./merge-run-task";
-import { parseFileMentions, resolveFileMentions } from "./resolve-file-mentions";
+import {
+	parseFileMentions,
+	resolveFileMentions,
+} from "./resolve-file-mentions";
 import { SessionPanel } from "./session-panel";
 
 function formatSkillDiagnostic(diagnostic: SkillDiagnostic): string {
@@ -88,7 +91,9 @@ const App: FunctionalComponent = () => {
 	const _activeSessionId = useStore(browsergentStore, selectActiveSessionId);
 	const activeTab = useStore(browsergentStore, selectActiveTab);
 	const skillDiagnostics = useStore(browsergentStore, selectSkillDiagnostics);
-	const skillIssueTitle = skillDiagnostics.map(formatSkillDiagnostic).join("\n");
+	const skillIssueTitle = skillDiagnostics
+		.map(formatSkillDiagnostic)
+		.join("\n");
 
 	const {
 		initialized,
@@ -348,7 +353,8 @@ const App: FunctionalComponent = () => {
 
 	useEffect(() => {
 		const stopped = prevIsRunning.current && !isRunning;
-		const canFocus = !isRunning && !showSettings && !sessionPanelOpen && activeTab === "chat";
+		const canFocus =
+			!isRunning && !showSettings && !sessionPanelOpen && activeTab === "chat";
 
 		if (stopped && canFocus) {
 			inputRef.current?.focus();
