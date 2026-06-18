@@ -33,6 +33,7 @@
 		"windows"
 	],
 	"host_permissions": ["http://*/*", "https://*/*"],
+	"update_url": "https://irvingouj.github.io/Browsergent/update.xml",
 	"background": { "service_worker": "background.js" },
 	"side_panel": { "default_path": "sidepanel.html" },
 	"action": { "default_title": "Open Browsergent" },

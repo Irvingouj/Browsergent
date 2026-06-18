@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Verify tag matches package version
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag ($tag) does not match package.json version ($pkg)"
+            exit 1
+          fi
+
+      - name: Typecheck, lint, unit tests
+        run: |
+          npm run typecheck
+          npx biome check .
+          npm run test:unit
+
+      - name: Package CRX3 + ZIP
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          node scripts/package-crx.mjs \
+            --crx-url "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/browsergent-$(node -p "require('./package.json').version").crx"
+
+      - name: Upload artifacts to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/browsergent-*.crx
+            release/browsergent-*.zip
+
+      # Publish update.xml to the gh-pages branch. Chrome reads update_url from
+      # the installed extension's manifest and polls this URL every few hours;
+      # if the version here is higher, it downloads the .crx from the codebase
+      # URL and replaces the install. Requires GH_PAGES_DEPLOY_KEY secret.
+      - name: Publish update.xml to gh-pages (auto-update)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
+          publish_dir: release
+          publish_branch: gh-pages
+          keep_files: false
+          destination_dir: ./

@@ -14,3 +14,8 @@ browsergent-conversation-*.json
 smoke/runs/
 smoke/runs*.zip
 smoke/runs*.tar.gz
+# CRX signing key — pins the extension ID, never commit
+*.pem
+# Release packaging output
+*.crx
+release/
