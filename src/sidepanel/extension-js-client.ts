@@ -118,7 +118,7 @@ export class ExtensionJsClient implements SkillFsClient {
 		this.initPromise = (async () => {
 			const { ExtensionSession } = await import("@pi-oxide/extension-js");
 			const [session, runner] = await ExtensionSession.init();
-			session.setFuelLimit(1_000_000);
+		session.setFuelLimit(Number.MAX_SAFE_INTEGER);
 			this.session = session;
 			this.runnerPromise = runner;
 			this.initialized = true;

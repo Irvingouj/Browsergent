@@ -61,7 +61,9 @@ function post(message: WorkerToPanel): void {
 // --- Extension-js relay ---
 
 let extjsRelayCounter = 0;
-const EXTJS_RELAY_TIMEOUT_MS = 30_000;
+// Must accommodate page_goto's compound timeout (waitForTabLoad + ping + grace ≈ 95s)
+// plus the multi-hop relay (agent-worker → side-panel → extjs-worker → main-thread).
+const EXTJS_RELAY_TIMEOUT_MS = 120_000;
 const pendingExtjsRelays = new Map<
 	string,
 	{

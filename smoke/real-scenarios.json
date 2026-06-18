@@ -1,0 +1,25 @@
+{
+	"scenarios": [
+		{
+			"id": "flights-google",
+			"name": "Live: Google Flights cheapest 10 (YYZ→HKG, Jul 1)",
+			"url": "https://www.google.com/travel/flights?q=flights&curr=CAD",
+			"task": "Find one-way flights from Toronto (YYZ) to Hong Kong (HKG) on July 1st, 2026. Search Google Flights. From the results, list the TOP 10 CHEAPEST flights. For each, report: airline, departure time, arrival time, number of stops, duration, and price in CAD. Sort by price ascending (cheapest first). Present the final answer as a clear numbered list. If you cannot access or read the results page after reasonable attempts, say so explicitly and report what you observed.",
+		"timeoutMs": 600000
+		},
+		{
+			"id": "flights-skyscanner",
+			"name": "Live: Skyscanner cheapest 10 (YYZ→HKG, Jul 1)",
+			"url": "https://www.skyscanner.com",
+			"task": "Find one-way flights from Toronto (YYZ) to Hong Kong (HKG) on July 1st, 2026. Search Skyscanner. From the results, list the TOP 10 CHEAPEST flights. For each, report: airline, departure time, arrival time, number of stops, duration, and price in CAD. Sort by price ascending (cheapest first). Present the final answer as a clear numbered list. If you cannot access or read the results page after reasonable attempts, say so explicitly and report what you observed.",
+		"timeoutMs": 600000
+		},
+		{
+			"id": "flights-kayak",
+			"name": "Live: Kayak cheapest 10 (YYZ→HKG, Jul 1)",
+			"url": "https://www.kayak.com",
+			"task": "Find one-way flights from Toronto (YYZ) to Hong Kong (HKG) on July 1st, 2026. Search Kayak. From the results, list the TOP 10 CHEAPEST flights. For each, report: airline, departure time, arrival time, number of stops, duration, and price in CAD. Sort by price ascending (cheapest first). Present the final answer as a clear numbered list. If you cannot access or read the results page after reasonable attempts, say so explicitly and report what you observed.",
+		"timeoutMs": 600000
+		}
+	]
+}

@@ -20,6 +20,11 @@ Architecture:
 - **Platform**: Chrome Manifest V3 extension
 
 Core principle: **LLM does reasoning, JS does acting.** The LLM's only browser tool is `run_js`. All `page.*` operations go through the sandboxed `@pi-oxide/extension-js` runtime.
+## Testing Invariant
+
+**Browsergent is ALWAYS tested as a real Chrome extension.** The side panel (`chrome-extension://<id>/sidepanel.html`) is the extension's own page; it is NEVER the target of `page.*` operations. The "active tab" for `page.goto` / `page.snapshot` / `page.click` is always an http(s) page tab — the site under test.
+
+Any code that resolves "the active tab" MUST reject `chrome-extension://` and `chrome://` URLs. Navigating the side panel (e.g. `page.goto` when the side panel is active) destroys the extension UI and permanently breaks the worker↔main-thread relay. The smoke harness (`scripts/smoke.mjs`) and the `page_goto` handler in `@pi-oxide/extension-js` both enforce this.
 
 ## Project Boundaries
 

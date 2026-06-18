@@ -130,23 +130,31 @@ function truncateToolResult(text: string, maxChars: number): string {
 	return `${text.slice(0, head)}\n\n... [truncated ${text.length - maxChars} chars] ...\n\n${text.slice(-tail)}`;
 }
 
-function classifyError(source: {
-	kind?: string;
-	message?: string;
-	action?: string | null;
-	code?: string | null;
-	stack?: string | null;
-}): { code: string; hint: string; stack?: string } {
+function classifyError(
+	source: {
+		kind?: string;
+		message?: string;
+		action?: string | null;
+		code?: string | null;
+		stack?: string | null;
+		name?: string | null;
+	},
+	cellCode?: string,
+): { code: string; hint: string; stack?: string } {
 	const stack = isStackUseful(source.stack) ? source.stack : undefined;
-	const base = classifyErrorBase(source);
+	const base = classifyErrorBase(source, cellCode);
 	return stack ? { ...base, stack } : base;
 }
 
-function classifyErrorBase(source: {
-	kind?: string;
-	message?: string;
-	code?: string | null;
-}): { code: string; hint: string } {
+function classifyErrorBase(
+	source: {
+		kind?: string;
+		message?: string;
+		code?: string | null;
+		name?: string | null;
+	},
+	jsSource?: string,
+): { code: string; hint: string } {
 	if (source.kind === "compile" || source.message?.includes("compile error"))
 		return { code: "E_JS_COMPILE", hint: "Fix the syntax error and retry." };
 	if (source.kind === "fuel_exhausted" || source.message?.includes("timed out"))
@@ -156,41 +164,80 @@ function classifyErrorBase(source: {
 		};
 	// Use the structured code from the CellError when available (e.g. E_CONTENT_SCRIPT,
 	// E_PERMISSION, E_STALE) so the hint matches the actual failure mode.
-	const cellCode = source.code;
-	if (cellCode === "E_CONTENT_SCRIPT")
+	const errCode = source.code;
+	if (errCode === "E_CONTENT_SCRIPT")
 		return {
-			code: cellCode,
+			code: errCode,
 			hint: "The content script is not connected. Navigate to the tab or ask the user to refresh it.",
 		};
-	if (cellCode === "E_PERMISSION")
+	if (errCode === "E_PERMISSION")
 		return {
-			code: cellCode,
+			code: errCode,
 			hint: "A permission error occurred. Check that the target is a normal http(s) page tab.",
 		};
-	if (cellCode === "E_STALE")
+	if (errCode === "E_STALE")
 		return {
-			code: cellCode,
+			code: errCode,
 			hint: "The element refId is stale. Take a fresh snapshot and use the new refIds.",
 		};
-	if (cellCode === "E_NOT_FOUND")
+	if (errCode === "E_NOT_FOUND")
 		return {
-			code: cellCode,
+			code: errCode,
 			hint: "No matching element found. Take a fresh snapshot and verify the label or refId.",
 		};
-	if (cellCode === "E_NO_TAB")
+	if (errCode === "E_NO_TAB")
 		return {
-			code: cellCode,
+			code: errCode,
 			hint: "No active tab resolved. Ensure the user is focused on an http(s) page, not chrome://.",
 		};
-	if (cellCode === "E_TIMEOUT")
+	if (errCode === "E_TIMEOUT")
 		return {
-			code: cellCode,
+			code: errCode,
 			hint: "The operation timed out. The page may be slow or the selector may not appear.",
 		};
+	// QuickJS strips the message from engine-thrown TypeErrors, so an empty-message
+	// runtime error is opaque. When the failing cell used page.* (which targets the
+	// runner's notion of the active tab — often the side panel after web.tab.activate),
+	// steer the agent toward web.tab.* with an explicit tabId, which is unambiguous.
+	const isOpaqueRuntimeError =
+		(source.kind === "runtime" || source.kind === undefined) &&
+		(errCode === "E_JS_RUNTIME" || errCode === undefined || errCode === null) &&
+		(!source.message || source.message.trim() === "");
+	if (isOpaqueRuntimeError && callsSetTimeout(jsSource)) {
+		return {
+			code: errCode ?? "E_JS_RUNTIME",
+			hint: "A TypeError occurred in a cell using setTimeout/setInterval. The sandbox has NO setTimeout — use `await web.sleep(ms)` to wait. Replace `await new Promise(r => setTimeout(r, N))` with `await web.sleep(N)`.",
+		};
+	}
+	if (isOpaqueRuntimeError && callsPageStar(jsSource)) {
+		return {
+			code: errCode ?? "E_JS_RUNTIME",
+			hint: "A TypeError occurred in a page.* call. page.* targets the runner's active tab, which is often the Browsergent side panel (a chrome-extension:// page) after web.tab.activate races. Use web.tab.* with an explicit tabId instead — e.g. web.tab.snapshot(tabId), web.tab.click({ tabId, refId }).",
+		};
+	}
+	if (isOpaqueRuntimeError && callsWebTabStar(jsSource)) {
+		return {
+			code: errCode ?? "E_JS_RUNTIME",
+			hint: "A TypeError occurred in a web.tab.* call. This usually happens when a click triggers a navigation or SPA re-render and the follow-up snapshot runs before the content script reconnects, OR the cell used setTimeout (use `await web.sleep(ms)` instead). Split click and snapshot into separate run_js cells with `await web.sleep(800)` between them, or navigate directly via page.goto with a parameterised search URL.",
+		};
+	}
 	return {
-		code: cellCode ?? "E_JS_RUNTIME",
+		code: errCode ?? "E_JS_RUNTIME",
 		hint: "Check the error details and try a different approach.",
 	};
+}
+
+function callsWebTabStar(jsSource?: string): boolean {
+	if (!jsSource) return false;
+	return /\bweb\.tab\./.test(jsSource);
+}
+function callsPageStar(jsSource?: string): boolean {
+	if (!jsSource) return false;
+	return /\bpage\./.test(jsSource);
+}
+function callsSetTimeout(jsSource?: string): boolean {
+	if (!jsSource) return false;
+	return /\bsetTimeout\b|\bsetInterval\b/.test(jsSource);
 }
 
 const RUN_JS_DESCRIPTION = JS_TOOL_PROMPT;
@@ -401,11 +448,11 @@ export function createAgentTools(
 					try {
 						const readResult = await fileOp({ op: "read", path: fileName });
 						if (readResult.op !== "read") {
-							return formatToolError(
-								"E_FILE_UNKNOWN",
-								`Unexpected result op for file_read: ${readResult.op}`,
-								"",
-							);
+						return formatToolError(
+							"E_FILE_UNKNOWN",
+							`Unexpected result op for file_read: ${readResult.op}`,
+							"",
+						);
 						}
 						code = readResult.content;
 					} catch (err) {
@@ -429,7 +476,7 @@ export function createAgentTools(
 							code?: string | null;
 							stack?: string | null;
 						};
-						const { code: errCode, hint, stack } = classifyError(err);
+					const { code: errCode, hint, stack } = classifyError(err, code);
 						return formatToolError(
 							errCode,
 							formatJsRunResult(result),

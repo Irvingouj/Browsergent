@@ -74,4 +74,30 @@ await page.click({ refId: button.refId });
 // await page.select({ refId: input.refId, value: "option1" });
 // await page.check({ refId: input.refId, checked: true });
 // await page.scroll({ direction: "down", amount: 300 });
-\`\`\``;
+\`\`\`
+
+Targeting a specific tab:
+- \`page.*\` operates on the runner's active tab. After \`web.tab.activate(tabId)\`, the active tab may briefly still resolve to the Browsergent side panel (a \`chrome-extension://\` page) — any \`page.*\` call then throws an opaque TypeError.
+- When you have switched tabs explicitly, act on that tab via \`web.tab.*\` with its \`tabId\` in the SAME cell instead of \`page.*\`.
+\`\`\`js
+const t = (await web.tab.list()).find((x) => x.url?.startsWith("http"));
+if (!t) throw new Error("no http tab open");
+await web.tab.snapshot(t.id);
+await web.tab.click({ tabId: t.id, refId: "e3" });
+await web.tab.fill({ tabId: t.id, refId: "e4", value: "Toronto" });
+\`\`\`
+- Prefer \`web.tab.*\` whenever the task names a specific page or you just called \`web.tab.activate\`.
+
+Opaque TypeError after a click / from setTimeout:
+- CRITICAL: the sandbox has NO \`setTimeout\`, \`setInterval\`, or \`queueMicrotask\`. Any cell using \`new Promise(r => setTimeout(r, N))\` throws an opaque empty \`TypeError:\`. To wait, use \`await web.sleep(N)\` (milliseconds) — it is the only timer API available.
+- A \`web.tab.click\` that opens a dropdown, navigates, or triggers a SPA re-render commonly causes the NEXT \`web.tab.snapshot\` in the same cell to throw an empty \`TypeError:\` (the runtime strips the message). This does NOT mean your click failed — it means the page is mid-update.
+- Recovery: split click and snapshot into SEPARATE \`run_js\` cells. Cell A: \`await web.tab.click({ tabId, refId });\`. Cell B (new call): \`await web.sleep(800); console.log(await web.tab.snapshot(tabId));\`. Never chain a click and a snapshot of the same region in one cell.
+- If you still see the empty TypeError after splitting, the refId is likely stale — take a fresh \`web.tab.snapshot\` and use the new refIds.
+
+Search forms — prefer URL navigation:
+- For sites that support URL-parameterised search (Google Flights, Kayak, Skyscanner, etc.), build the search URL directly and navigate to it rather than filling the form element-by-element. This skips fragile dropdown/date-picker interactions entirely.
+- To navigate a specific tab by URL: first \`await web.tab.activate(tabId)\`, then in a SEPARATE cell \`await page.goto("https://...search-url...")\` (page.goto targets the now-active tab), then snapshot. There is no \`web.tab.goto\` — \`page.goto\` is the navigation API and follows the active tab set by \`web.tab.activate\`.
+- Example for Google Flights one-way: \`https://www.google.com/travel/flights?q=Flights+from+YYZ+to+HKG+on+2026-07-01&curr=CAD\`. Snapshots of the results page are far more stable than form interactions.
+
+Anti-loop discipline:
+- After 2 failed attempts at the SAME action (same refId or same API call shape), STOP attempting it. Take a fresh snapshot, reconsider your approach, or report what you observed. Do not retry the identical call a 3rd time.`;

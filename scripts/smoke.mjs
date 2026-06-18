@@ -8,6 +8,12 @@
 //   4. drives each scenario against REAL DeepSeek (key from ~/rc.deepseek.rc)
 //   5. archives everything (conversation, chat, trace, screenshots, logs) per run
 //
+// TESTING PHILOSOPHY — this harness ALWAYS tests Browsergent as a real extension.
+// The side panel is the extension's own chrome-extension:// page; it is NEVER the
+// "active tab" for page.* operations. The target tab (the site under test) is the
+// active tab. Any code that resolves "the active tab" must reject chrome-extension://
+// and chrome:// URLs — navigating the side panel destroys the UI and kills the
+// worker relay permanently. See the page_goto guard in extension-js page.ts.
 // Usage:
 //   npm run smoke              # run every scenario
 //   npm run smoke -- form-login # run one scenario
@@ -36,8 +42,9 @@ const HEADED = process.env.SMOKE_HEADED === "1";
 
 // ---------- 1. args + manifest ----------
 const only = process.argv[2];
+const scenariosFile = process.env.SMOKE_SCENARIOS || "scenarios.json";
 const manifest = JSON.parse(
-	readFileSync(path.join(SMOKE, "scenarios.json"), "utf8"),
+	readFileSync(path.join(SMOKE, scenariosFile), "utf8"),
 );
 let scenarios = manifest.scenarios;
 if (only) {
@@ -129,15 +136,33 @@ const runsDir = path.join(SMOKE, "runs", stamp);
 mkdirSync(runsDir, { recursive: true });
 
 let context;
+const summary = [];
 try {
 	context = await chromium.launchPersistentContext(userDataDir, {
 		channel: "chromium",
 		headless: !HEADED,
 		args: [`--disable-extensions-except=${DIST}`, `--load-extension=${DIST}`],
 	});
+	// Service-worker registration timing varies between bundled Chromium and real
+	// Chrome (especially headless). Poll up to ~60s instead of a single 30s wait.
 	let serviceWorker = context.serviceWorkers()[0];
-	if (!serviceWorker)
-		serviceWorker = await context.waitForEvent("serviceworker");
+	const swDeadline = Date.now() + 60000;
+	while (!serviceWorker && Date.now() < swDeadline) {
+		try {
+			serviceWorker = await context.waitForEvent("serviceworker", {
+				timeout: Math.max(1000, swDeadline - Date.now()),
+			});
+		} catch {
+			// nudge: open a benign page to keep the context alive and let the SW register
+			await context
+				.newPage()
+				.then((p) => p.goto("about:blank").catch(() => {}).then(() => p.close().catch(() => {})))
+				.catch(() => {});
+		}
+	}
+	if (!serviceWorker) {
+		throw new Error("Extension service worker never registered within 60s");
+	}
 	const extensionId = serviceWorker.url().split("/")[2];
 
 	const sidePanel = await context.newPage();
@@ -251,16 +276,20 @@ try {
 			target.on("console", (m) =>
 				targetConsole.push(`[${m.type()}] ${m.text()}`),
 			);
-			await target.goto(`${BASE}/${sc.site}`, {
-				waitUntil: "domcontentloaded",
+			const targetUrl = sc.url ? sc.url : `${BASE}/${sc.site}`;
+			await target.goto(targetUrl, {
+				waitUntil: sc.url ? "load" : "domcontentloaded",
 			});
 			await target.bringToFront();
-			await sidePanel.bringToFront();
+			// Do NOT call sidePanel.bringToFront() — that makes the side panel the
+			// Chrome "active tab", causing page.* to target chrome-extension:// and
+			// destroying the extension. The target tab must stay active for page.*.
+			// The side panel is a separate surface; Playwright can interact with it
+			// without it being the active tab.
 
-			const targetUrl = `${BASE}/${sc.site}`;
 			const task =
 				`The target web page is already open in the active browser tab at:\n${targetUrl}\n` +
-				`Do NOT navigate to a different URL — snapshot the current page and act on it.\n\n` +
+				`You MAY navigate to search-result URLs on the same site (e.g. build a parameterised search URL and use page.goto) if it helps complete the task — form interactions on dynamic SPAs are fragile.\n\n` +
 				sc.task.replaceAll("{BASE}", BASE);
 			await sidePanel.locator('[data-testid="task-input"]').fill(task);
 			const startedAt = Date.now();
@@ -272,73 +301,96 @@ try {
 			} catch {
 				finalStatus = "timeout";
 			}
-			finalStatus = (
-				(await sidePanel
-					.locator('[data-testid="agent-status"]')
-					.textContent()) || ""
-			).trim();
+		finalStatus =
+			(await sidePanel
+				.locator('[data-testid="agent-status"]')
+				.textContent({ timeout: 5000 })
+				.catch(() => null)) || finalStatus;
 
 			const durationMs = Date.now() - startedAt;
 
-			// Capture everything.
-			const chat = await captureChat();
-			const trace = await captureTrace();
-			const targetText = (await target.content())
-				.replace(/\s+/g, " ")
-				.slice(0, 50000);
-			const doneHintFound =
-				sc.doneHint &&
-				([...chat, ...trace, targetText].some((t) => t.includes(sc.doneHint)) ||
-					apiCalls.some((c) => c.body.includes(sc.doneHint)));
+		// Capture everything. Each step is best-effort so one failure doesn't lose the rest.
+		// Save the most diagnostic artifacts (API conversation, console) first.
+		const captureErr = [];
+		let chat = [];
+		let trace = [];
+		let targetText = "";
+		try {
+			chat = await captureChat();
+		} catch (e) { captureErr.push(`chat: ${e.message}`); }
+		try {
+			trace = await captureTrace();
+		} catch (e) { captureErr.push(`trace: ${e.message}`); }
+		try {
+			targetText = (await target.content()).replace(/\s+/g, " ").slice(0, 50000);
+		} catch (e) { captureErr.push(`targetContent: ${e.message}`); }
+		const doneHintFound =
+			sc.doneHint &&
+			([...chat, ...trace, targetText].some((t) => t.includes(sc.doneHint)) ||
+				apiCalls.some((c) => c.body.includes(sc.doneHint)));
 
-			await sidePanel.screenshot({
-				path: path.join(scenarioDir, "sidepanel.png"),
-				fullPage: true,
-			});
-			await target.screenshot({
-				path: path.join(scenarioDir, "target.png"),
-				fullPage: true,
-			});
-
+		try {
 			writeFileSync(
 				path.join(scenarioDir, "conversation.json"),
 				JSON.stringify(apiCalls, null, 2),
 			);
+		} catch (e) { captureErr.push(`conversation: ${e.message}`); }
+		try {
 			writeFileSync(
 				path.join(scenarioDir, "chat.txt"),
 				chat.join("\n\n---\n\n"),
 			);
+		} catch (e) { captureErr.push(`chatWrite: ${e.message}`); }
+		try {
 			writeFileSync(
 				path.join(scenarioDir, "trace.txt"),
 				trace.join("\n\n---\n\n"),
 			);
-			writeFileSync(path.join(scenarioDir, "target.html.txt"), targetText);
+		} catch (e) { captureErr.push(`traceWrite: ${e.message}`); }
+		try { writeFileSync(path.join(scenarioDir, "target.html.txt"), targetText); } catch (e) { captureErr.push(`targetWrite: ${e.message}`); }
+		try {
 			writeFileSync(
 				path.join(scenarioDir, "sidepanel-console.log"),
 				panelConsole.splice(0).join("\n"),
 			);
+		} catch (e) { captureErr.push(`panelConsole: ${e.message}`); }
+		try {
 			writeFileSync(
 				path.join(scenarioDir, "target-console.log"),
 				targetConsole.join("\n"),
 			);
-			writeFileSync(
-				path.join(scenarioDir, "result.json"),
-				JSON.stringify(
-					{
-						id: sc.id,
-						name: sc.name,
-						task,
-						model: DEEPSEEK_MODEL,
-						baseUrl: DEEPSEEK_BASE_URL,
-						finalStatus,
-						durationMs,
-						doneHint: sc.doneHint,
-						doneHintFound: Boolean(doneHintFound),
-					},
-					null,
-					2,
-				),
-			);
+		} catch (e) { captureErr.push(`targetConsole: ${e.message}`); }
+		try {
+			await sidePanel.screenshot({
+				path: path.join(scenarioDir, "sidepanel.png"),
+				fullPage: true,
+			});
+		} catch (e) { captureErr.push(`sidepanelScreenshot: ${e.message}`); }
+		try {
+			await target.screenshot({
+				path: path.join(scenarioDir, "target.png"),
+				fullPage: true,
+			});
+		} catch (e) { captureErr.push(`targetScreenshot: ${e.message}`); }
+		writeFileSync(
+			path.join(scenarioDir, "result.json"),
+			JSON.stringify(
+				{
+					id: sc.id,
+					name: sc.name,
+					task,
+					model: DEEPSEEK_MODEL,
+					baseUrl: DEEPSEEK_BASE_URL,
+					finalStatus,
+					durationMs,
+					doneHint: sc.doneHint,
+					doneHintFound: Boolean(doneHintFound),
+					captureErrors: captureErr.length ? captureErr : undefined,
+				},
+				null,
+				2,
+			),
+		);
 
 			return {
 				id: sc.id,
@@ -352,7 +404,6 @@ try {
 		}
 	}
 
-	const summary = [];
 	for (const sc of scenarios) {
 		console.log(`\n▶ scenario: ${sc.id} — ${sc.name}`);
 		try {

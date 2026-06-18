@@ -209,6 +209,106 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const envelope = expectErrorEnvelope(result as string);
 		expect(envelope.stack).toBeUndefined();
 	});
+	test("empty-message TypeError on page.* code yields tab-targeting hint", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "await page.snapshot();",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_JS_RUNTIME");
+		expect(envelope.hint.toLowerCase()).toContain("web.tab");
+		expect(envelope.hint.toLowerCase()).toContain("tabid");
+	});
+
+	test("empty-message TypeError on web.tab.* code yields no tab hint", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "await web.tab.snapshot(123);",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_JS_RUNTIME");
+		expect(envelope.hint.toLowerCase()).not.toContain("use web.tab");
+	});
+	test("empty-message TypeError on web.tab.* code yields split-cells hint", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "await web.tab.click({ tabId: 1, refId: 'e2' }); await web.tab.snapshot(1);",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_JS_RUNTIME");
+		expect(envelope.hint.toLowerCase()).toContain("split");
+		expect(envelope.hint.toLowerCase()).toContain("separate");
+	});
+	test("empty-message TypeError on setTimeout code yields web.sleep hint", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "await new Promise(r => setTimeout(r, 500));",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_JS_RUNTIME");
+		expect(envelope.hint.toLowerCase()).toContain("web.sleep");
+		expect(envelope.hint.toLowerCase()).toContain("settimeout");
+	});
 });
 
 describe("load_skill tool", () => {
