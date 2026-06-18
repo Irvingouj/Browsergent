@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
-import type { ChatMessage } from "../types/messages";
 import {
 	selectMessageIds,
 	selectMessagesById,
 	selectTaskDraft,
 } from "../state/selectors";
 import { browsergentStore } from "../state/store";
+import type { ChatMessage } from "../types/messages";
 
 export interface InputHistory {
 	/** Call in onKeyDown for ArrowUp and ArrowDown events. Returns true if the event was handled. */
@@ -42,7 +42,11 @@ export function useInputHistory(): InputHistory {
 		(e: KeyboardEvent): boolean => {
 			const el = e.target as HTMLTextAreaElement;
 
-			if (e.key === "ArrowUp" && userHistory.length > 0 && el.selectionStart === 0) {
+			if (
+				e.key === "ArrowUp" &&
+				userHistory.length > 0 &&
+				el.selectionStart === 0
+			) {
 				e.preventDefault();
 				if (historyIndex === -1) {
 					historyDraftRef.current = taskInput;
@@ -57,7 +61,11 @@ export function useInputHistory(): InputHistory {
 				return true;
 			}
 
-			if (e.key === "ArrowDown" && historyIndex >= 0 && el.selectionStart === el.value.length) {
+			if (
+				e.key === "ArrowDown" &&
+				historyIndex >= 0 &&
+				el.selectionStart === el.value.length
+			) {
 				e.preventDefault();
 				if (historyIndex < userHistory.length - 1) {
 					const next = historyIndex + 1;

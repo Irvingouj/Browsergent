@@ -19,13 +19,12 @@ import {
 	resolvePickerState,
 	type SlashState,
 } from "../detect-mention-state";
+import { useInputHistory } from "../use-input-history";
 import {
 	CommandPicker,
 	type CommandPickerItem,
 	filterPickerItems,
 } from "./CommandPicker";
-
-import { useInputHistory } from "../use-input-history";
 
 const MAX_INPUT_HEIGHT = 200;
 

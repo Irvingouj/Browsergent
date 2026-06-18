@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // Packages the built extension in dist/ into a signed CRX3 and an unpacked ZIP.
 //
 // Usage:
@@ -16,9 +17,15 @@
 // The private key pins the extension ID. If the key changes, every user must
 // reinstall. See docs/releases.md.
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import path from "node:path";
 import { execSync } from "node:child_process";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
 const ROOT = path.resolve(new URL("..", import.meta.url).pathname);
