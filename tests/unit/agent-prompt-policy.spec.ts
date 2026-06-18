@@ -32,4 +32,14 @@ describe("agent prompt policy", () => {
 		expect(JS_TOOL_PROMPT).toContain("@[file:");
 		expect(JS_TOOL_PROMPT).toContain("<attachment");
 	});
+
+	test("encourages combining navigation with observation in one call", () => {
+		expect(SYSTEM_PROMPT).toContain("Combine navigation with observation");
+		expect(SYSTEM_PROMPT).toContain(
+			"always snapshot in the same run_js call",
+		);
+		expect(JS_TOOL_PROMPT).toContain(
+			"always call `page.snapshot()` in the same `run_js` block",
+		);
+	});
 });

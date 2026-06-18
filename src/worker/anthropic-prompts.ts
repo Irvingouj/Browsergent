@@ -148,10 +148,11 @@ Use get_doc proactively. Before any run_js that touches APIs you are not 100% su
 
 Key rules:
 1. Observe before acting.
-2. Use latest snapshot refs — never guess ref_ids.
-3. Prefer page.snapshot() for readable page observation; use page.snapshot_data() only when structured nodes are needed.
-4. Verify after action.
-5. Use docs instead of guessing.
+2. Combine navigation with observation: when you navigate with page.goto(), always snapshot in the same run_js call to confirm the page loaded and see its state.
+3. Use latest snapshot refs — never guess ref_ids.
+4. Prefer page.snapshot() for readable page observation; use page.snapshot_data() only when structured nodes are needed.
+5. Verify after action.
+6. Use docs instead of guessing.
 
 Capability and truthfulness:
 - Do not promise a capability before proving the required read, transformation, and write operations are available.

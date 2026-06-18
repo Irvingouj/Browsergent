@@ -8,6 +8,7 @@ import { detectSlashState } from "../../src/sidepanel/detect-mention-state";
 import type { SkillMeta } from "../../src/skills/skill-types";
 
 const mockState = {
+	chat: { messageIds: [], messagesById: {} },
 	ui: {
 		taskDraft: "test task",
 		chatUpload: { kind: "idle" as const },

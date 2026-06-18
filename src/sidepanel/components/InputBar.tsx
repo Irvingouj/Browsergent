@@ -25,6 +25,8 @@ import {
 	filterPickerItems,
 } from "./CommandPicker";
 
+import { useInputHistory } from "../use-input-history";
+
 const MAX_INPUT_HEIGHT = 200;
 
 interface InputBarProps {
@@ -67,6 +69,8 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const [slashState, setSlashState] = useState<SlashState | null>(null);
 	const [atState, setAtState] = useState<AtState | null>(null);
 	const [activeIndex, setActiveIndex] = useState(0);
+
+	const inputHistory = useInputHistory();
 
 	const loadSkills = useCallback(() => {
 		getSkillService()
@@ -317,6 +321,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 							browsergentStore.getState().setTaskDraft(el.value);
 							refreshPickerState(el.value, el.selectionStart);
 							setActiveIndex(0);
+							inputHistory.onInput();
 						}}
 						onFocus={() => {
 							loadSkills();
@@ -356,9 +361,13 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 									return;
 								}
 							}
+
+							if (inputHistory.handleKeyDown(e)) return;
+
 							if (e.key === "Enter" && !e.shiftKey && !isRunning) {
 								e.preventDefault();
 								onRun();
+								inputHistory.onSubmit();
 							}
 						}}
 						placeholder="Type a task... (/ for skills, @ for files, Shift+Enter for newline)"

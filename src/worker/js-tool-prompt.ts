@@ -12,6 +12,7 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - Use \`await page.snapshot_data()\` only when you need structured element nodes with ref_ids.
 - Use \`await page.url()\` and \`await page.title()\` for page metadata.
 - Use \`await page.goto(url)\` to navigate/open a URL when the user asks to go somewhere.
+- When navigating with \`page.goto()\`, always call \`page.snapshot()\` in the same \`run_js\` block to confirm the page loaded.
 - Ref_ids from snapshot_data are snapshot-scoped. Never guess them, and refresh the snapshot_data before acting if the page changed.
 - You can combine multiple page.* calls in one async function block when the sequence is clear.
 - Use \`console.log(...)\` or \`web.log(...)\` to return concise observations to the trace.
@@ -54,9 +55,11 @@ console.log("Title:", await page.title());
 console.log(await page.snapshot());
 \`\`\`
 
-Navigate:
+Navigate (always snapshot in the same call):
 \`\`\`js
 await page.goto("https://www.linkedin.com");
+console.log("URL:", await page.url());
+console.log(await page.snapshot());
 \`\`\`
 
 Inspect and interact (structured):
