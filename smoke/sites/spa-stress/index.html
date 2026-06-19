@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Browsergent Smoke · SPA Stress</title>
+<style>
+	* { box-sizing: border-box; }
+	body { font: 14px/1.5 system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+	h1 { font-size: 18px; }
+	h2 { font-size: 15px; margin-top: 24px; border-bottom: 1px solid #e4e4e7; padding-bottom: 4px; }
+	.hint { background: #f4f4f5; border: 1px solid #e4e4e7; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+	code { background: #e4e4e7; padding: 1px 5px; border-radius: 4px; }
+	label { display: block; margin: 10px 0 4px; font-weight: 600; }
+	input, select { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+	button { padding: 8px 14px; background: #4f46e5; color: #fff; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; margin: 4px 4px 0 0; }
+	button.secondary { background: #475569; }
+	.chip { display: inline-block; background: #ede9fe; color: #4c1d95; border-radius: 999px; padding: 2px 10px; margin: 2px; font-size: 12px; }
+	.autocomplete-list { border: 1px solid #cbd5e1; border-radius: 6px; margin-top: 4px; max-height: 160px; overflow: auto; display: none; }
+	.autocomplete-list.open { display: block; }
+	.autocomplete-item { padding: 8px 12px; cursor: pointer; }
+	.autocomplete-item:hover, .autocomplete-item.active { background: #e0e7ff; }
+	.status { margin-top: 8px; font-size: 13px; color: #475569; }
+	.result { margin-top: 16px; padding: 12px; border-radius: 8px; display: none; }
+	.result.ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; display: block; }
+	.result.bad { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; display: block; }
+	.rerender-section { border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+	<h1>Acme Demo · SPA Stress</h1>
+	<p class="hint">A deliberately dynamic single-page app to stress the observation lease: structural mutations on click, autocomplete injection, and full-section re-renders.</p>
+
+	<!-- TRAP 1: chip-adding button (Google Flights pattern).
+	     Clicking adds a DOM node → lease must invalidate → a subsequent click
+	     on a DIFFERENT observed element against the same snapshot must fail. -->
+	<h2>1. Add a tag</h2>
+	<p class="status">Tags added: <span id="tag-count">0</span></p>
+	<div>
+		<button id="add-tag">Add tag</button>
+		<button id="other-action" class="secondary">Other action</button>
+	</div>
+	<div id="tags" role="list" aria-label="Added tags"></div>
+
+	<!-- TRAP 2: long form with safe fills. The model should be able to fill
+	     all four inputs from ONE snapshot (fills don't change structure). -->
+	<h2>2. Profile form</h2>
+	<form id="profile-form">
+		<label for="full-name">Full name</label>
+		<input id="full-name" name="fullName" autocomplete="name" />
+
+		<label for="email">Email</label>
+		<input id="email" name="email" type="email" autocomplete="email" />
+
+		<label for="phone">Phone</label>
+		<input id="phone" name="phone" autocomplete="tel" />
+
+		<label for="company">Company</label>
+		<input id="company" name="company" autocomplete="organization" />
+
+		<button type="button" id="save-profile">Save profile</button>
+	</form>
+	<div id="profile-status" class="status"></div>
+
+	<!-- TRAP 3: autocomplete. Typing injects new option nodes. The model must
+	     re-snapshot before clicking a suggestion that wasn't in the original
+	     observation (membership check). -->
+	<h2>3. Country picker (autocomplete)</h2>
+	<label for="country-input">Country</label>
+	<input id="country-input" name="country" autocomplete="off" placeholder="Type a country name…" />
+	<div id="country-list" class="autocomplete-list" role="listbox" aria-label="Country suggestions"></div>
+	<div id="country-status" class="status"></div>
+
+	<!-- TRAP 4: full-section re-render. Clicking the refresh button replaces
+	     the section's innerHTML, so any refId observed before becomes stale. -->
+	<h2>4. Live feed</h2>
+	<div>
+		<button id="refresh-feed" class="secondary">Refresh feed</button>
+	</div>
+	<div id="feed" class="rerender-section" aria-live="polite">
+		<!-- initial feed items; these get wholesale replaced on refresh -->
+		<div class="feed-item" data-id="initial-1">Loading feed…</div>
+	</div>
+
+	<div id="result" class="result" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+	"use strict";
+
+	// ── Trap 1: chip-adding ──────────────────────────────────────
+	var tagCount = 0;
+	var tagsEl = document.getElementById("tags");
+	var countEl = document.getElementById("tag-count");
+	document.getElementById("add-tag").addEventListener("click", function () {
+		tagCount += 1;
+		countEl.textContent = String(tagCount);
+		var chip = document.createElement("span");
+		chip.className = "chip";
+		chip.setAttribute("role", "listitem");
+		chip.textContent = "tag-" + tagCount;
+		// STRUCTURAL MUTATION: appending a child node invalidates the lease.
+		tagsEl.appendChild(chip);
+	});
+	document.getElementById("other-action").addEventListener("click", function () {
+		showResult("ok", "Other action fired. tag count = " + tagCount);
+	});
+
+	// ── Trap 2: profile form ─────────────────────────────────────
+	document.getElementById("save-profile").addEventListener("click", function () {
+		var name = document.getElementById("full-name").value.trim();
+		var email = document.getElementById("email").value.trim();
+		var phone = document.getElementById("phone").value.trim();
+		var company = document.getElementById("company").value.trim();
+		var status = document.getElementById("profile-status");
+		if (!name || !email || !phone || !company) {
+			status.textContent = "All four fields are required.";
+			return;
+		}
+		status.textContent = "Profile saved for " + name + " (" + email + ").";
+	});
+
+	// ── Trap 3: autocomplete ─────────────────────────────────────
+	var COUNTRIES = [
+		"Canada", "United States", "United Kingdom", "Australia", "Germany",
+		"France", "Japan", "Singapore", "Hong Kong", "Brazil", "India",
+		"Mexico", "Netherlands", "Spain", "Italy", "Sweden", "Norway",
+		"New Zealand", "South Africa", "South Korea"
+	];
+	var countryInput = document.getElementById("country-input");
+	var countryList = document.getElementById("country-list");
+	var countryStatus = document.getElementById("country-status");
+	function renderCountrySuggestions(query) {
+		// STRUCTURAL MUTATION: rebuild the listbox children on every keystroke.
+		countryList.innerHTML = "";
+		var q = query.trim().toLowerCase();
+		if (!q) { countryList.classList.remove("open"); return; }
+		var matches = COUNTRIES.filter(function (c) { return c.toLowerCase().indexOf(q) !== -1; });
+		if (matches.length === 0) {
+			countryList.classList.remove("open");
+			return;
+		}
+		matches.forEach(function (name) {
+			var item = document.createElement("div");
+			item.className = "autocomplete-item";
+			item.setAttribute("role", "option");
+			item.setAttribute("aria-label", name);
+			item.textContent = name;
+			item.addEventListener("click", function () {
+				countryInput.value = name;
+				countryList.classList.remove("open");
+				countryStatus.textContent = "Selected: " + name;
+			});
+			countryList.appendChild(item);
+		});
+		countryList.classList.add("open");
+	}
+	countryInput.addEventListener("input", function () {
+		renderCountrySuggestions(countryInput.value);
+	});
+
+	// ── Trap 4: feed re-render ───────────────────────────────────
+	var feedEl = document.getElementById("feed");
+	var feedSeq = 0;
+	document.getElementById("refresh-feed").addEventListener("click", function () {
+		feedSeq += 1;
+		// STRUCTURAL MUTATION: wholesale innerHTML replacement.
+		// Any refId observed before this point is now disconnected/replaced.
+		var items = [];
+		for (var i = 1; i <= 3; i++) {
+			items.push('<div class="feed-item" data-id="feed-' + feedSeq + '-' + i + '">Feed item ' + feedSeq + '.' + i + ': updated at refresh #' + feedSeq + '</div>');
+		}
+		feedEl.innerHTML = items.join("");
+	});
+
+	// ── result banner ────────────────────────────────────────────
+	function showResult(kind, msg) {
+		var el = document.getElementById("result");
+		el.className = "result " + kind;
+		el.textContent = msg;
+	}
+})();
+</script>
+</body>
+</html>

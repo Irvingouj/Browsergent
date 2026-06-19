@@ -34,6 +34,14 @@
 			"timeoutMs": 180000
 		},
 		{
+			"id": "spa-stress",
+			"name": "SPA stress: dynamic mutations vs observation lease",
+			"site": "sites/spa-stress/index.html",
+			"task": "On this demo SPA, complete all four sections in order and report what you observed at each step:\n\n1. Click \"Add tag\" once, then click \"Other action\". Report what the Other action banner says.\n2. Fill in all four profile fields (any realistic values), then click \"Save profile\". Report the profile status message.\n3. In the country picker, type \"United\" and then select \"United States\" from the suggestions. Report the country status message.\n4. Click \"Refresh feed\" once, then report the text of the first feed item shown.\n\nIf any action fails with an error, do NOT retry the identical action. Take a fresh snapshot, explain what you observed, and continue. At the end, summarize which steps required re-observation and why.",
+			"doneHint": "SMOKE_OK",
+			"timeoutMs": 300000
+		},
+		{
 			"id": "pdf-upload",
 			"name": "Binary: upload a PDF to a form",
 			"site": "sites/pdf-upload/index.html",
