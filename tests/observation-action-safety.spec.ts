@@ -114,3 +114,69 @@ test("observation-action safety: branching click invalidates lease (E2E)", async
 	await close();
 	mock.server.close();
 });
+
+// Regression guard for the form-safe lease design: multiple fills on a single
+// observation MUST all succeed. This is the core promise — fills don't change
+// DOM structure, so they must NOT invalidate the lease. If a future change
+// makes fills invalidate (e.g. someone widens the MutationObserver to attributes,
+// or adds a consume-on-every-action rule), this test catches it.
+const FORM_HTML = `
+<!DOCTYPE html>
+<html>
+<body>
+  <form id="form">
+    <input id="email" name="email" aria-label="Email" />
+    <input id="name" name="name" aria-label="Name" />
+    <input id="phone" name="phone" aria-label="Phone" />
+  </form>
+</body>
+</html>
+`;
+
+// One snapshot, three fills in a single run_js cell. Under the lease design
+// fills do not trigger childList mutations, so all three must succeed.
+const MULTI_FILL_CODE = `const d = await page.snapshot_data();
+const email = d.nodes.find(n => n.name === "Email");
+const name = d.nodes.find(n => n.name === "Name");
+const phone = d.nodes.find(n => n.name === "Phone");
+await page.fill({ refId: email.refId, value: "a@b.com" });
+await page.fill({ refId: name.refId, value: "Alice" });
+await page.fill({ refId: phone.refId, value: "5551234" });`;
+
+test("observation-action safety: multiple fills on one observation succeed (form-safe regression guard)", async () => {
+	test.setTimeout(90000);
+	const formServer = createServer((_req, res) => {
+		res.writeHead(200, { "Content-Type": "text/html" });
+		res.end(FORM_HTML);
+	});
+	await new Promise<void>((resolve) => formServer.listen(0, "127.0.0.1", resolve));
+	const addr = formServer.address();
+	const formUrl = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}/`;
+
+	const mock = startMockAnthropicServer({
+		responses: [
+			{ chunks: toolUseChunks("fc1", "fm1", SNAPSHOT_CODE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
+			{ chunks: toolUseChunks("fc2", "fm2", MULTI_FILL_CODE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
+		],
+	});
+
+	const { context, sidePanel, close } = await launchExtension();
+	const testPage = await context.newPage();
+	await testPage.goto(formUrl);
+	await focusTargetTab(testPage);
+	await configureMockProvider(sidePanel, mock.url);
+	await focusTargetTab(testPage);
+
+	await sidePanel.locator('[data-testid="task-input"]').fill("fill all three fields");
+	await focusTargetTab(testPage);
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+
+	// All three inputs must be filled — proves fills do not invalidate the lease.
+	await expect(testPage.locator("#email")).toHaveValue("a@b.com", { timeout: 30000 });
+	await expect(testPage.locator("#name")).toHaveValue("Alice", { timeout: 5000 });
+	await expect(testPage.locator("#phone")).toHaveValue("5551234", { timeout: 5000 });
+
+	formServer.close();
+	await close();
+	mock.server.close();
+});
