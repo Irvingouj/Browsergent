@@ -40,4 +40,12 @@ describe("agent prompt policy", () => {
 			"always call `page.snapshot()` in the same `run_js` block",
 		);
 	});
+
+	test("documents single-use observation lease and receipt truthfulness", () => {
+		expect(JS_TOOL_PROMPT).toContain("single-use");
+		expect(JS_TOOL_PROMPT).toContain("dispatched: true");
+		expect(JS_TOOL_PROMPT).toContain("E_OBSERVATION_REQUIRED");
+		expect(SYSTEM_PROMPT).toContain("dispatch confirmations only");
+		expect(SYSTEM_PROMPT).toContain("observation lease is invalidated");
+	});
 });

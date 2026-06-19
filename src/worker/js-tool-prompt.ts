@@ -13,9 +13,10 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - Use \`await page.url()\` and \`await page.title()\` for page metadata.
 - Use \`await page.goto(url)\` to navigate/open a URL when the user asks to go somewhere.
 - When navigating with \`page.goto()\`, always call \`page.snapshot()\` in the same \`run_js\` block to confirm the page loaded.
-- Ref_ids from snapshot_data are snapshot-scoped. Never guess them, and refresh the snapshot_data before acting if the page changed.
-- You can combine multiple page.* calls in one async function block when the sequence is clear.
-- Use \`console.log(...)\` or \`web.log(...)\` to return concise observations to the trace.
+- Ref_ids are single-use: they authorize exactly the actions that follow a \`page.snapshot_data()\`. After any click, press, navigation, or DOM structure change, the lease is invalidated and refIds require a fresh \`page.snapshot_data()\` to be usable again. Multiple fills on observed inputs are safe (fills don't change structure); clicks and structural changes are not.
+- An action receipt with \`ok: true\` and \`dispatched: true\` proves the event was dispatched to an observed target — NOT that the application accepted it. Verify task-level effects (URL, dialog state, results) with a new \`page.snapshot()\` or \`page.snapshot_data()\` before claiming success.
+- You can chain \`page.snapshot_data()\` → multiple \`page.fill()\` in one cell (fills don't invalidate), but a \`page.click()\` that triggers a DOM structure change invalidates the lease. After a click, re-snapshot in a SEPARATE cell before the next target action.
+- \`page.find()\` returns discovery refs that CANNOT be used directly for \`page.click/fill/...\` — always follow \`page.find()\` with \`page.snapshot_data()\` to get actionable refIds before acting.
 - Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
 - Do not use \`page.evaluate\`, \`chrome.scripting.executeScript\`, or \`tab.evaluate\`; Browsergent forbids arbitrary JS execution outside the sandboxed runtime.
 - \`page.find()\` results may omit DOM attributes such as \`src\`, \`href\`, and \`alt\`, and may have a null \`refId\`. Inspect the returned shape before relying on those fields.
@@ -69,11 +70,8 @@ const input = data.nodes.find((n) => n.tag === "input");
 await page.fill({ refId: input.refId, value: "search text" });
 const button = data.nodes.find((n) => n.tag === "button");
 await page.click({ refId: button.refId });
-// await page.type({ refId: input.refId, text: "..." });
-// await page.press("Enter");
-// await page.select({ refId: input.refId, value: "option1" });
-// await page.check({ refId: input.refId, checked: true });
-// await page.scroll({ direction: "down", amount: 300 });
+// After this click: if the page structure changed (dropdown opened, navigation, SPA re-render),
+// the next target action requires a fresh page.snapshot_data() in a NEW cell.
 \`\`\`
 
 Targeting a specific tab:
@@ -98,6 +96,11 @@ Search forms — prefer URL navigation:
 - For sites that support URL-parameterised search (Google Flights, Kayak, Skyscanner, etc.), build the search URL directly and navigate to it rather than filling the form element-by-element. This skips fragile dropdown/date-picker interactions entirely.
 - To navigate a specific tab by URL: first \`await web.tab.activate(tabId)\`, then in a SEPARATE cell \`await page.goto("https://...search-url...")\` (page.goto targets the now-active tab), then snapshot. There is no \`web.tab.goto\` — \`page.goto\` is the navigation API and follows the active tab set by \`web.tab.activate\`.
 - Example for Google Flights one-way: \`https://www.google.com/travel/flights?q=Flights+from+YYZ+to+HKG+on+2026-07-01&curr=CAD\`. Snapshots of the results page are far more stable than form interactions.
+
+Observation lease errors (recovery is always the same):
+- \`E_OBSERVATION_REQUIRED\`: you acted without a fresh \`page.snapshot_data()\`, or the lease was invalidated by a click/navigation/scroll. Fix: take a new \`page.snapshot_data()\` and use its refIds.
+- \`E_STALE\` (\`reason: not_in_latest_observation | disconnected | fingerprint_changed\`): the refId is from an older observation or the element changed. Fix: re-snapshot and pick a fresh refId.
+- \`E_AMBIGUOUS_TARGET\`: the label matched multiple observed elements. Fix: use a refId instead of a label.
 
 Anti-loop discipline:
 - After 2 failed attempts at the SAME action (same refId or same API call shape), STOP attempting it. Take a fresh snapshot, reconsider your approach, or report what you observed. Do not retry the identical call a 3rd time.`;

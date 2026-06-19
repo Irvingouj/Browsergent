@@ -185,6 +185,16 @@ function classifyErrorBase(
 			code: errCode,
 			hint: "No matching element found. Take a fresh snapshot and verify the label or refId.",
 		};
+	if (errCode === "E_OBSERVATION_REQUIRED")
+		return {
+			code: errCode,
+			hint: "The action requires a fresh observation. Call `await page.snapshot_data()` and use a refId from the returned nodes.",
+		};
+	if (errCode === "E_AMBIGUOUS_TARGET")
+		return {
+			code: errCode,
+			hint: "The label matched multiple observed elements. Use a refId from `page.snapshot_data()` instead of a label.",
+		};
 	if (errCode === "E_NO_TAB")
 		return {
 			code: errCode,
