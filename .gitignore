@@ -19,3 +19,7 @@ smoke/runs*.tar.gz
 # Release packaging output
 *.crx
 release/
+# Local agent working artifacts — never project files
+reasonix.toml
+OBSERVATION_ACTION_SAFETY_PLAN.md
+*-PLAN.md

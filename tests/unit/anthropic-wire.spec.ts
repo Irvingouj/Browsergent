@@ -112,6 +112,36 @@ describe("toAnthropicMessages", () => {
 		]);
 	});
 
+	test("merges consecutive user messages into one", () => {
+		// Strict Anthropic-compatible endpoints reject consecutive same-role
+		// messages ("roles must alternate"). When the core drops an empty
+		// assistant between two user turns, the wire layer must merge them.
+		const messages = [
+			{
+				role: "user" as const,
+				content: [{ type: "text" as const, text: "first" }],
+				timestamp: 1,
+			},
+			{
+				role: "user" as const,
+				content: [{ type: "text" as const, text: "second" }],
+				timestamp: 2,
+			},
+			{
+				role: "assistant" as const,
+				content: [{ type: "text" as const, text: "reply" }],
+				timestamp: 3,
+			},
+		];
+		const result = toAnthropicMessages(messages);
+		expect(result).toHaveLength(2);
+		expect(result[0]).toEqual({ role: "user", content: "first\nsecond" });
+		expect(result[1]).toEqual({
+			role: "assistant",
+			content: [{ type: "text", text: "reply" }],
+		});
+	});
+
 	test("converts assistant message to array content", () => {
 		const messages = [
 			{
@@ -149,6 +179,73 @@ describe("toAnthropicMessages", () => {
 				],
 			},
 		]);
+	});
+
+	test("coalesces consecutive tool_results into a single user message", () => {
+		// Reproduces the failed LLM request: an assistant turn emits multiple
+		// parallel tool_use blocks, and the core returns one tool_result message
+		// per call. Anthropic requires all tool_results for a single assistant
+		// turn to be in ONE user message — sending two consecutive user messages
+		// triggers: "tool_use ids were found without tool_result blocks
+		// immediately after".
+		const messages = [
+			{
+				role: "user" as const,
+				content: [{ type: "text" as const, text: "go" }],
+				timestamp: 1,
+			},
+			{
+				role: "assistant" as const,
+				content: [
+					{ type: "text" as const, text: "calling two tools" },
+					{
+						type: "tool_call" as const,
+						id: "tc1",
+						name: "snapshot",
+						arguments: {},
+					},
+					{
+						type: "tool_call" as const,
+						id: "tc2",
+						name: "file_list",
+						arguments: {},
+					},
+				],
+				timestamp: 2,
+			},
+			{
+				role: "tool_result" as const,
+				content: [{ type: "text" as const, text: "snap result" }],
+				tool_call_id: "tc1",
+				timestamp: 3,
+			},
+			{
+				role: "tool_result" as const,
+				content: [{ type: "text" as const, text: "files" }],
+				tool_call_id: "tc2",
+				timestamp: 4,
+			},
+		];
+		const result = toAnthropicMessages(messages);
+		// Expected: user, assistant, then ONE user with both tool_results.
+		expect(result).toHaveLength(3);
+		expect(result[2]).toEqual({
+			role: "user",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "tc1",
+					content: "snap result",
+					is_error: undefined,
+				},
+				{
+					type: "tool_result",
+					tool_use_id: "tc2",
+					content: "files",
+					is_error: undefined,
+				},
+			],
+		});
 	});
 });
 
