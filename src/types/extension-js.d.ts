@@ -89,7 +89,7 @@ declare module "@pi-oxide/extension-js" {
 		static init(): Promise<[ExtensionSession, Promise<void>]>;
 		readonly fs: ExtensionSessionFs;
 		apiDocs(format: string): Promise<unknown>;
-		runCellAsync(code: string, stdin?: string): Promise<CellResult>;
+		runCellAsync(code: string, stdin?: string, traceId?: string): Promise<CellResult>;
 		setFuelLimit(limit: number): void;
 		stopWith(runnerPromise?: Promise<void>): Promise<void>;
 		reset(): Promise<unknown>;

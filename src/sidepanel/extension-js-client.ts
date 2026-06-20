@@ -25,6 +25,7 @@ interface ExtjsRelayRequest {
 	type: "extjsRunRequest";
 	id: string;
 	code: string;
+	traceId?: string;
 }
 
 interface ExtjsRelayResult {
@@ -122,16 +123,16 @@ export class ExtensionJsClient implements SkillFsClient {
 			this.session = session;
 			this.runnerPromise = runner;
 			this.initialized = true;
-			setLogLevel("error");
+		setLogLevel("error");
 		})();
 		await this.initPromise;
 	}
 
-	async runJs(code: string): Promise<CellResult> {
+	async runJs(code: string, traceId?: string): Promise<CellResult> {
 		await this.ensureReady();
 
 		return this.enqueue(
-			() => this.executeWithTimeout(code),
+			() => this.executeWithTimeout(code, traceId),
 			"JS execution failed",
 		);
 	}
@@ -233,9 +234,9 @@ export class ExtensionJsClient implements SkillFsClient {
 
 	/** Handle a run relay request from the worker. */
 	handleRelayRequest(request: ExtjsRelayRequest): void {
-		const { id, code } = request;
+		const { id, code, traceId } = request;
 
-		this.runJs(code)
+		this.runJs(code, traceId)
 			.then((result) => {
 				this.dispatchRelayResponse({ type: "extjsRunResult", id, result });
 			})
@@ -339,14 +340,14 @@ export class ExtensionJsClient implements SkillFsClient {
 		}
 	}
 
-	private async executeWithTimeout(code: string): Promise<CellResult> {
+	private async executeWithTimeout(code: string, traceId?: string): Promise<CellResult> {
 		if (!this.session) {
 			throw new Error("ExtensionSession not available");
 		}
 
 		try {
 			const result = await Promise.race([
-				this.session.runCellAsync(code),
+				this.session.runCellAsync(code, undefined, traceId),
 				new Promise<never>((_resolve, reject) => {
 					setTimeout(
 						() =>

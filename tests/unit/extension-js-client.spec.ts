@@ -179,8 +179,8 @@ describe("ExtensionJsClient", () => {
 		const run2 = client.runJs("2+2");
 		await Promise.all([run1, run2]);
 		expect(mockRunCellAsync).toHaveBeenCalledTimes(2);
-		expect(mockRunCellAsync).toHaveBeenNthCalledWith(1, "1+1");
-		expect(mockRunCellAsync).toHaveBeenNthCalledWith(2, "2+2");
+		expect(mockRunCellAsync).toHaveBeenNthCalledWith(1, "1+1", undefined, undefined);
+		expect(mockRunCellAsync).toHaveBeenNthCalledWith(2, "2+2", undefined, undefined);
 	});
 
 	test("runJs times out but does NOT trigger rebuild", async () => {

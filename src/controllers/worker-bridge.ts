@@ -22,6 +22,7 @@ type ExtjsRunRequestHandler = (msg: {
 	type: "extjsRunRequest";
 	id: string;
 	code: string;
+	traceId?: string;
 }) => void;
 
 type ExtjsDocsRequestHandler = (msg: {

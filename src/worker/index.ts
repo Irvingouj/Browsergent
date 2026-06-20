@@ -23,6 +23,7 @@ import type { AnthropicConfig } from "./anthropic";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { FileOpRelay } from "./file-op-relay";
 import { LoadSkillRelay } from "./load-skill-relay";
+import { getCurrentTraceId, setCurrentTraceId } from "./current-trace";
 
 enableStreamDebug();
 
@@ -136,20 +137,21 @@ function handleFileOpRelayError(id: string, error: string): void {
 
 /** Send JS code to the side panel for execution via ExtensionSession. */
 function relayExtjsExecution(code: string): Promise<CellResult> {
-	const relayId = `extjs-${++extjsRelayCounter}`;
+	const traceId = `tx-${(currentRunId ?? "norun").slice(0, 8)}-${++extjsRelayCounter}`;
+	setCurrentTraceId(traceId);
 
 	const promise = new Promise<CellResult>((resolve, reject) => {
 		const timeoutId = setTimeout(() => {
-			pendingExtjsRelays.delete(relayId);
+			pendingExtjsRelays.delete(traceId);
 			reject(
 				new Error(`Extjs relay timed out after ${EXTJS_RELAY_TIMEOUT_MS}ms`),
 			);
 		}, EXTJS_RELAY_TIMEOUT_MS);
 
-		pendingExtjsRelays.set(relayId, { resolve, reject, timeoutId });
+		pendingExtjsRelays.set(traceId, { resolve, reject, timeoutId });
 	});
 
-	post({ type: "extjsRunRequest", id: relayId, code });
+	post({ type: "extjsRunRequest", id: traceId, code, traceId });
 	return promise;
 }
 

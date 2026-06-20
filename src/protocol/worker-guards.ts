@@ -230,7 +230,7 @@ export function isExtjsError(
 
 export function isExtjsRunRequest(
 	msg: unknown,
-): msg is { type: "extjsRunRequest"; id: string; code: string } {
+): msg is { type: "extjsRunRequest"; id: string; code: string; traceId?: string } {
 	if (!isObject(msg)) return false;
 	if (msg.type !== "extjsRunRequest") return false;
 	if (!isString(msg.id)) return false;

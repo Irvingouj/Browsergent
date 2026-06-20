@@ -5,6 +5,7 @@ import { formatJsRunResult } from "../types/extjs-utils";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { JS_TOOL_PROMPT } from "./js-tool-prompt";
 import { formatToolError, isStackUseful } from "./tool-error-result";
+import { getCurrentTraceId } from "./current-trace";
 
 interface ExtensionJsApiEntry {
 	namespace: string;
@@ -478,6 +479,8 @@ export function createAgentTools(
 
 				try {
 					const result = await runJs(code);
+					const traceId = getCurrentTraceId();
+					const tracePrefix = traceId ? `[${traceId}] ` : "";
 					if (result.status === "err") {
 						const err = result.error as {
 							kind: string;
@@ -489,21 +492,30 @@ export function createAgentTools(
 					const { code: errCode, hint, stack } = classifyError(err, code);
 						return formatToolError(
 							errCode,
-							formatJsRunResult(result),
+							`${tracePrefix}${formatJsRunResult(result)}`,
 							hint,
 							stack,
 						);
 					}
-					return truncateToolResult(formatJsRunResult(result), 50000);
+					const formatted = formatJsRunResult(result);
+					const prefixed = tracePrefix
+						? formatted
+								.split("\n")
+								.map((line) => `${tracePrefix}${line}`)
+								.join("\n")
+						: formatted;
+					return truncateToolResult(prefixed, 50000);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
+					const traceId = getCurrentTraceId();
+					const tracePrefix = traceId ? `[${traceId}] ` : "";
 					const stack =
 						err instanceof Error && err.stack ? err.stack : undefined;
 					const { code: errCode, hint } = classifyError({
 						message: msg,
 						stack,
 					});
-					return formatToolError(errCode, msg, hint, stack);
+					return formatToolError(errCode, `${tracePrefix}${msg}`, hint, stack);
 				}
 			},
 		},

@@ -51,7 +51,7 @@ export type WorkerToPanel =
 	| { type: "agentError"; runId: string; error: BrowsergentError }
 	| { type: "extjsOutput"; id: string; output: string }
 	| { type: "extjsError"; id: string; error: string }
-	| { type: "extjsRunRequest"; id: string; code: string }
+	| { type: "extjsRunRequest"; id: string; code: string; traceId?: string }
 	| { type: "extjsDocsRequest"; id: string; format: "json" | "markdown" }
 	| {
 			type: "loadSkillRequest";
@@ -91,6 +91,7 @@ export interface AgentTraceEntry {
 	toolInput?: string;
 	result?: string;
 	timestamp: number;
+	traceId?: string;
 }
 
 export type DiagnosticContentBlock =

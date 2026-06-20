@@ -13,6 +13,7 @@ import { composeSystemPrompt } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { isToolErrorEnvelope } from "./tool-error-result";
+import { getCurrentTraceId } from "./current-trace";
 
 function isTextContentBlock(c: {
 	type: string;
@@ -142,6 +143,9 @@ export class AgentLoop {
 					toolName: t.name,
 					toolInput: JSON.stringify(t.input).slice(0, 2000),
 					timestamp: Date.now(),
+					...(t.name === "run_js" && getCurrentTraceId()
+						? { traceId: getCurrentTraceId() ?? undefined }
+						: {}),
 				});
 			},
 		);
@@ -173,6 +177,9 @@ export class AgentLoop {
 					toolName: t.name,
 					result: resultText,
 					timestamp: Date.now(),
+					...(t.name === "run_js" && getCurrentTraceId()
+						? { traceId: getCurrentTraceId() ?? undefined }
+						: {}),
 				});
 				callbacks.onStatus("running");
 			},
