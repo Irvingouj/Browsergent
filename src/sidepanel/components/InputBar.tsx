@@ -335,6 +335,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						}}
 						onPaste={handlePaste}
 						onKeyDown={(e) => {
+							// --- Picker: navigation and completion ---
 							if (isPickerOpen && pickerItems.length > 0) {
 								if (e.key === "ArrowDown") {
 									e.preventDefault();
@@ -348,10 +349,15 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 									setActiveIndex((i) => Math.max(i - 1, 0));
 									return;
 								}
-								if (e.key === "Enter") {
+								if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
 									e.preventDefault();
 									const item = pickerItems[activeIndex];
 									if (item) applyPickerSelection(item);
+									return;
+								}
+								if (e.key === "Tab" && e.shiftKey) {
+									e.preventDefault();
+									setActiveIndex((i) => Math.max(i - 1, 0));
 									return;
 								}
 								if (e.key === "Escape") {
@@ -361,12 +367,124 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 								}
 							}
 
+							// --- Input history navigation ---
 							if (inputHistory.handleKeyDown(e)) return;
 
+							// --- Ctrl+Enter / Cmd+Enter: submit ---
+							if (
+								e.key === "Enter" &&
+								(e.ctrlKey || e.metaKey) &&
+								!isRunning
+							) {
+								e.preventDefault();
+								onRun();
+								inputHistory.onSubmit();
+								return;
+							}
+
+							// --- Enter: submit (no Shift) ---
 							if (e.key === "Enter" && !e.shiftKey && !isRunning) {
 								e.preventDefault();
 								onRun();
 								inputHistory.onSubmit();
+								return;
+							}
+
+							// --- Escape: blur textarea (picker already closed) ---
+							if (e.key === "Escape" && !isPickerOpen) {
+								e.preventDefault();
+								(e.target as HTMLTextAreaElement).blur();
+								return;
+							}
+
+							// --- Ctrl+Backspace / Alt+Backspace: delete previous word ---
+							if (
+								e.key === "Backspace" &&
+								(e.ctrlKey || e.altKey || e.metaKey)
+							) {
+								e.preventDefault();
+								const el = e.target as HTMLTextAreaElement;
+								const val = el.value;
+								const selStart = el.selectionStart;
+								const selEnd = el.selectionEnd;
+								let nextText: string;
+								let cursor: number;
+								if (selStart !== selEnd) {
+									nextText = val.slice(0, selStart) + val.slice(selEnd);
+									cursor = selStart;
+								} else {
+									let i = selStart - 1;
+									while (i >= 0 && val[i] === " ") i--;
+									while (i >= 0 && val[i] !== " ") i--;
+									const wordStart = i + 1;
+									nextText = val.slice(0, wordStart) + val.slice(selStart);
+									cursor = wordStart;
+								}
+								browsergentStore.getState().setTaskDraft(nextText);
+								requestAnimationFrame(() => {
+									el.setSelectionRange(cursor, cursor);
+								});
+								refreshPickerState(nextText, cursor);
+								setActiveIndex(0);
+								inputHistory.onInput();
+								return;
+							}
+
+							// --- Ctrl+K: delete to end of line ---
+							if (
+								e.key === "k" &&
+								(e.ctrlKey || e.metaKey) &&
+								!e.shiftKey
+							) {
+								e.preventDefault();
+								const el = e.target as HTMLTextAreaElement;
+								const pos = el.selectionStart;
+								const val = el.value;
+								const nextNewline = val.indexOf("\n", pos);
+								const end =
+									nextNewline === -1 ? val.length : nextNewline;
+								const nextText = val.slice(0, pos) + val.slice(end);
+								browsergentStore.getState().setTaskDraft(nextText);
+								requestAnimationFrame(() => {
+									el.setSelectionRange(pos, pos);
+								});
+								refreshPickerState(nextText, pos);
+								setActiveIndex(0);
+								inputHistory.onInput();
+								return;
+							}
+
+							// --- Ctrl+Shift+K: delete entire line ---
+							if (
+								e.key === "k" &&
+								(e.ctrlKey || e.metaKey) &&
+								e.shiftKey
+							) {
+								e.preventDefault();
+								const el = e.target as HTMLTextAreaElement;
+								const pos = el.selectionStart;
+								const val = el.value;
+								const lineStart =
+									val.lastIndexOf("\n", pos - 1) + 1;
+								const nextNewline = val.indexOf("\n", pos);
+								const lineEnd =
+									nextNewline === -1
+										? val.length
+										: nextNewline + 1;
+								const nextText =
+									val.slice(0, lineStart) + val.slice(lineEnd);
+								const nextCursor = Math.min(
+									lineStart,
+									nextText.length,
+								);
+								browsergentStore.getState().setTaskDraft(nextText);
+								requestAnimationFrame(() => {
+									el.setSelectionRange(nextCursor, nextCursor);
+								});
+								refreshPickerState(nextText, nextCursor);
+								setActiveIndex(0);
+								inputHistory.onInput();
+								return;
 							}
 						}}
 						placeholder="Type a task... (/ for skills, @ for files, Shift+Enter for newline)"

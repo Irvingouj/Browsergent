@@ -10,6 +10,17 @@ Most of the original list is **done** as of 2026-06-13. What's left:
 4. **§6 closure** — Playwright E2E for compose → inject → `load_skill` mid-run; verify inject size cap holds under oversized skills.
 5. **Delete JS tab scaffolding** (§2 leftover) — `JsPlaybookPanel.tsx`, `UiTab="js"`, `tests/js-playbook-fill-form.spec.ts` are still in the tree per the original §2 plan.
 
+## Candidate features (investigated 2026-06-20 — not started)
+
+Four ideas explored for feasibility. Full analysis in §12–§15 below.
+
+| § | Feature | Verdict | Work location |
+|---|---------|---------|---------------|
+| 12 | Right-click page element → reference it in chat | ✅ Feasible — must capture a **durable locator**, not a raw refId (refIds are lease-bound) | Browsergent content-script overlay + new `@[element:…]` mention |
+| 13 | Real file explorer (create/delete/rename/move) | ✅ Feasible — runtime already supports `rename`/`mkdir`/`delete`; panel/controller don't expose them | Browsergent-only (no upstream change) |
+| 14 | `@` mention for open tabs | ✅ Feasible — `tabs` perm present; extend existing `@` pipeline | Browsergent-only |
+| 15 | Snapshot: full HTML + richer table/list view | ⚠️ Partial — table/list/item **roles already exist**; gaps are flat presentation + no HTML export | Presentation = Browsergent; HTML export = upstream `web-js` |
+
 Recently shipped:
 - **§11 File API ergonomics** — `file_write` tool + unified OPFS root (panel and agent share `/`, no session-scope, no IndexedDB index). web-js 0.8.3 made `fs.*` accept relative paths.
 - **§10 `run_js` file reference** — `run_js({ file: { name } })` resolves path through `fileOp` relay.
@@ -678,3 +689,298 @@ Original problem statement (preserved for context):
 - `js-tool-prompt.ts` documents shared-FS semantics
 
 **Follow-ups (see Priority list):** nested-dir tree view in panel, auto-refresh on agent writes, E2E for `file_write`.
+
+---
+
+## 12. 右键页面元素 → 在聊天中引用（context-menu）
+
+**问题：** 用户无法把 agent「指向」页面上的某个具体元素（「*这个*按钮」「*那一行*」），只能用自然语言描述。目标：在活动标签页上右键一个元素，把它的引用插入到聊天输入框，并能在现有的 snapshot 系统里被 agent 使用。
+
+### 可行性结论：✅ 可行 —— 但**不能直接抓 refId**，必须抓「持久锚点」
+
+这是整个设计里最关键的一点，下面展开说明为什么。
+
+#### 为什么不能直接把右键时的 refId 塞进聊天？
+
+调查发现（源码在 `../web-js`）：
+
+- refId 的解析靠 `document.querySelector('[data-ref-id="eN"]')`（`crates/extension-js/js/dist/content-script/dom-utils.js`）。
+- 而 `data-ref-id` 这个属性**只在 `page.snapshot_data()` 执行时**才会被采集器盖到元素上（`crates/dom-semantic-tree/src/collect.rs:438`，`element.set_attribute("data-ref-id", &ref_id)`）。
+- **更要命的约束 —— observation lease（观察租约）：** refId 不是「永久指向某个元素」的 ID，而是一张「短期许可证」。采集之后，只要发生**任何 DOM 结构变化**（点击、跳转、SPA 重渲染、甚至下拉框展开），租约就作废（`content-script/observation-lease.js`，会抛 `E_STALE: disconnected | fingerprint_changed`）。这在 `js-tool-prompt.ts` 第 16–18 行对 agent 也是强调过的铁律。
+
+把这条约束放到真实使用场景里看：
+
+```mermaid
+flowchart LR
+  A[用户右键元素] --> B[此刻 data-ref-id=e3]
+  B --> C[用户回到侧栏打字 / 滚动 / 切换标签]
+  C --> D{期间页面变了?}
+  D -- 是 --> E[租约失效 e3 已作废]
+  D -- 否 --> F[点击 Run]
+  E --> G[agent 拿到的 e3 是脏的 → E_STALE]
+  F --> G
+```
+
+也就是说：用户右键之后，几乎一定会先打字、再点 Run；只要中间页面有任何动静（SPA 很常见），那个 refId 就是脏的。所以「直接捕获 refId」作为引用载体 **不可行**。
+
+#### 目标设计：抓「持久锚点」，让 agent 在 Run 时自己重新解析
+
+右键时，不存 refId，而是存一组**能跨 DOM 变化存活、可被语义匹配**的锚点；agent 在 Run 时先做一次新的 `page.snapshot_data()`，再用这组锚点在新快照里找到对应元素，拿到**新鲜的、合法的** refId 再操作。
+
+### 锚点（anchor）长什么样、怎么算
+
+按稳定性从高到低，组合使用（参考 `dom-utils.js` 里已有的 `findElementByLabel` / `findSemanticCandidates`）：
+
+| 字段 | 来源 | 为什么稳 |
+|---|---|---|
+| `role` | `infer_role()`（`role.rs`） | 语义角色，结构变了也不变（按钮还是按钮） |
+| `name` | 可访问名（`aria-label` / `label[for]` / 文本，见 `name.rs`） | 人类可读、最不容易重复 |
+| `tag` | 元素标签名 | 兜底 |
+| `text` | 裁剪后的文本片段 | 二次校验 |
+| `selector` | 短 CSS 选择器（如 `nav button.primary`） | role+name 歧义时的兜底定位 |
+
+**刻意不选 XPath**：XPath 对结构变化极敏感（任何一层 div 增减都会断），违背「持久」初衷。优先 `role + name`，selector 仅作 fallback。
+
+解析侧（agent）逻辑：新快照的 `nodes` 里，先按 `role + name` 唯一匹配 → 命中就用它的 `refId`；若歧义（多个匹配），用 `selector`/`text` 收窄；仍找不到 → 返回结构化错误，提示用户「元素已不在页面上」。
+
+### 端到端数据流
+
+```mermaid
+sequenceDiagram
+  participant U as 用户
+  participant CS as Browsergent 内容脚本(覆盖层)
+  participant BG as background SW
+  participant SP as 侧栏(side panel)
+  participant W as Worker / Agent
+
+  U->>CS: 右键元素 (contextmenu 事件)
+  CS->>CS: 记下 e.target，算出 anchor
+  U->>BG: 点击菜单项「引用到 Browsergent」
+  BG->>CS: 取最近一次右键的 anchor
+  CS-->>BG: {role,name,selector,text,url}
+  BG->>SP: 转发 anchor
+  SP->>SP: 存入 anchorMap，插入 @[element:e1]
+  U->>SP: 继续打字… 点 Run
+  SP->>W: agentStart (带 element 引用)
+  W->>W: page.snapshot_data() 拿新鲜 refId
+  W->>W: 按 anchor 在新快照里定位 → 操作
+```
+
+### contextMenus API 的一个坑（决定了为什么要两步）
+
+`chrome.contextMenus.onClicked` 回调给你的是 `info` + `tab`，**但不包含被右键的那个 DOM 元素**。所以不能在 background 里直接拿到目标。必须：
+
+1. 内容脚本侧注册 `contextmenu` 监听器，在用户右键的**那一刻**就把 `e.target` + 算好的 anchor 缓存住；
+2. 用户点菜单项时，`onClicked` 给内容脚本发消息，内容脚本把**刚才缓存的** anchor 回传。
+
+（替代方案：完全不用 `chrome.contextMenus`，在内容脚本里自己画一个自定义右键菜单。控制力更强但等于重造轮子；**推荐用原生 `chrome.contextMenus`**，原生体验、代码更少。）
+
+### 实现拆解
+
+#### 1. 内容脚本覆盖层（不动上游）
+
+- [ ] **单独注册一个 Browsergent 自己的内容脚本**（`public/manifest.json` 里加第二个 `content_scripts` 条目，或运行时用 `chrome.scripting.registerContentScripts`），监听 `contextmenu`、缓存 `e.target`、算 anchor。**绝不修改**上游 `extension-js` 的 `content-script.js`。
+- [ ] 匹配范围 `http://*/*`、`https://*/*`（和上游一致）；**排除** `chrome-extension://`、`chrome://`（守 AGENTS.md 的测试不变式 —— 侧栏永远不是操作目标）。
+- [ ] iframe：初版可只管顶层（`all_frames: false`，和现状一致）；后续若要支持 iframe 内元素再开 `all_frames`。
+- [ ] shadow DOM：open 的能到，closed 的够不到 —— 文档里写明这个限制即可。
+
+#### 2. background 接线（`src/background/index.ts`）
+
+- [ ] `chrome.runtime.onInstalled` 里 `chrome.contextMenus.create({ id, title: "引用到 Browsergent", contexts: ["all"] })`（或收窄 `contexts` 到可交互元素）。
+- [ ] `chrome.contextMenus.onClicked` → 向活动标签页内容脚本发消息取 anchor → 转发给侧栏。
+
+#### 3. 新引用类型 `@[element:…]`
+
+- [ ] token 只装一个短 id（如 `@[element:e1]`），真正的 anchor 存在侧栏的 `anchorMap`（`id → {role,name,tag,selector,text,url,capturedAt}`）。这和 `@[file:id:name]` 只装 id、内容延迟解析是同一个思路，保持草稿文本干净。
+- [ ] 在 `detect-mention-state.ts` 里识别该 token（可考虑渲染成 chip）。
+
+#### 4. Run 时解析（新 `resolve-element-mentions.ts`）
+
+- [ ] 把 anchor 转成 XML 注入任务上下文，**不在这一步产生 refId**：
+  ```xml
+  <element_reference role="button" name="Sign in" tag="button"
+                     selector="header button[data-test='signin']"
+                     text="Sign in" capturedUrl="https://app.example.com/home"/>
+  ```
+- [ ] anchor 缺失（比如页面关了）→ 明确报错，不静默失败。
+
+#### 5. Agent 提示词（`js-tool-prompt.ts`）
+
+- [ ] 告诉模型：`@[element:…]` = 「用户指着这个元素；请先 `page.snapshot_data()`，按 role+name（必要时用 selector）在新快照里定位，拿到**新鲜 refId** 后再操作；找不到就如实报告。」
+
+### 被否决的替代方案（保留说明）
+
+**快照钉扎（snapshot-pin）：** 右键时立刻跑一次 `page.snapshot_data()`，把当时活的 refId 插进去。**否决为首选机制** —— 租约会随下一次 DOM 变化失效，只有在「用户右键后立刻 Run、中间完全不碰页面」时才有效。可作为持久锚点之上的一个快捷小糖：命中时直接给 agent 一个「可信 refId」，省一次匹配；不命中就回退到锚点。
+
+### 边界情况与风险
+
+- **元素已消失**（页面刷新/SPA 路由变了）→ anchor 匹配失败 → 友好报错，别让 agent 瞎猜。
+- **歧义元素**（role+name 命中多个）→ 用 selector/text 收窄；仍歧义就让 agent 列出候选项问用户，或选最接近视口顶部的。
+- **动态内容**（元素在右键后才渲染）→ 这是锚点设计天然支持的：agent 在 Run 时重新快照，只要元素那时还在就能找到。
+- **侧栏自身页面** → 内容脚本不注入 `chrome-extension://`，天然满足测试不变式。
+
+### 大概率会动的文件
+
+- `public/manifest.json` —— 第二个 `content_scripts` 条目（或改用 `scripting` 注册）
+- `src/content/element-context.ts`（新）—— `contextmenu` 监听 + anchor 构造器
+- `src/background/index.ts` —— `contextMenus.create` + `onClicked` 中转
+- `src/sidepanel/detect-mention-state.ts` —— `@[element:…]` 识别
+- `src/sidepanel/resolve-element-mentions.ts`（新）—— XML 注入
+- `src/worker/js-tool-prompt.ts` —— 给模型的语义说明
+
+### 验收标准
+
+1. 在 http(s) 标签页右键一个按钮 → 出现「引用到 Browsergent」菜单项。
+2. 选中后，聊天输入框插入 `@[element:…]` token。
+3. 点 Run：agent 重新快照，**按锚点**定位到那个元素并操作它（而不是猜一个差不多的）。
+4. 用户在右键之后、Run 之前**滚动过 / 切换过标签**，仍然能正确解析（锚点持久，refId 不持久）。
+5. 在侧栏（`chrome-extension://`）里右键 → 无操作（守测试不变式）。
+6. 元素已从页面消失 → 明确报错，不静默失败、不乱猜。
+
+---
+
+## 13. Real file explorer (create / delete / edit / move)
+
+**Problem:** The Files panel is upload + delete + preview only. No create-folder, create-file, rename, or move. The user wants a real file-system manager.
+
+**Feasibility: YES — entirely Browsergent-side. The runtime already supports every operation.**
+
+Investigation findings (in `../web-js`):
+- `web-fs` (`crates/web-fs/src/lib.rs`) exposes: `exists`, `stat`, `list`, `mkdir`, `delete`, `copy`, **`rename`** (OPFS `moveEntry`, `opfs.rs:318`), `read`/`write`/`append`/`update`/`hash`.
+- `extension-js` exposes `fsMove` (`crates/extension-js/src/fs.rs:237`, registered in `session.rs:722`), `fsMkdir`, `fsDelete`, etc.
+- **Gap:** Browsergent's `SkillFsClient` (`src/skills/skill-types.ts`) exposes only `exists/list/readText/writeText/writeBase64/readBase64/mkdir/delete` — **no move/rename, no copy**.
+- **Gap:** `FilesController` (`src/controllers/files-controller.ts`) has `uploadFiles/listAllFiles/readFileText/writeFile/deleteFile/editFile` — **no createFolder, createFile, move, rename**.
+- **Gap:** `FilesPanel` (`src/sidepanel/components/FilesPanel.tsx`) renders a nested tree (`childrenByParent`, `TreeNode` recursion already supports depth) but only offers Upload + Delete + Preview + drag-to-upload.
+
+**Goal:** Full file-manager UX over the unified OPFS root (`/`), consistent with AGENTS.md §"one file system, everything exposed".
+
+### Controller / FS layer
+
+- [ ] Add `fsMove(from, to)` and `fsCopy(from, to)` to `SkillFsClient`; implement in `ExtensionJsClient` (`session.fs.move` / `session.fs.copy`).
+- [ ] Add to `FilesController`: `createFolder(path)`, `createFile(path, content="")`, `move(from, to)`, `rename(path, newName)`, `deleteFolder(path)` (recursive walk — OPFS dir remove fails if non-empty).
+- [ ] Reuse existing serialized chain (`runSerialized`) so all mutations stay ordered.
+
+### Panel UX
+
+- [ ] **Toolbar**: New Folder, New File buttons alongside Upload.
+- [ ] **Context menu** (right-click a node): New (folder/file here), Rename, Move…, Delete, Download.
+- [ ] **Inline rename**: double-click label → editable text → commit on Enter / blur.
+- [ ] **Move via drag-and-drop** in the tree (HTML5 DnD between `TreeNode`s) — calls `FilesController.move`.
+- [ ] **New-file inline editor**: entering a name creates the file/folder at the selected dir (root if none selected).
+- [ ] **Recursive delete confirm** for directories.
+- [ ] Auto-refresh after every mutation (bump `filesVersion` — already wired in `files-slice.ts`).
+
+### State
+
+- [ ] `files-slice.ts`: add `createFolder`/`createFile`/`moveNode`/`renameNode` actions mirroring `addFileNode`/`removeFileNode`; keep `id === path` invariant (already true).
+
+### Files likely touched
+
+- `src/skills/skill-types.ts`, `src/sidepanel/extension-js-client.ts` — `fsMove`/`fsCopy`
+- `src/controllers/files-controller.ts`, `src/controllers/files-utils.ts` — new ops
+- `src/state/slices/files-slice.ts` — tree-mutation actions
+- `src/sidepanel/components/FilesPanel.tsx` — toolbar, context menu, DnD, inline editor
+
+### Acceptance criteria
+
+1. Create a folder, then a file inside it — both appear in the tree and persist after reload.
+2. Rename a file — node `path`/`id` update; preview follows.
+3. Drag a file into a folder — it moves (OPFS `rename` across dirs); tree re-renders.
+4. Delete a non-empty folder — recursive delete with a confirm dialog.
+5. Agent `file_list` reflects every panel mutation (shared OPFS root).
+
+### Note
+
+This supersedes priority items #1 (nested-dir tree view) and partially #2 (auto-refresh) — the tree already nests; auto-refresh via `filesVersion` is included here.
+
+---
+
+## 14. `@` mention for open tabs
+
+**Problem:** `@` in the input only references files. The user wants to reference an open browser tab ("act on *this* tab") the same way.
+
+**Feasibility: YES — straightforward extension of the existing mention pipeline.**
+
+Investigation findings:
+- `tabs` permission already in `public/manifest.json`; `chrome.tabs.query({})` lists tabs (`{id, title, url, active}`).
+- The `@` pipeline (`src/sidepanel/detect-mention-state.ts` → `filesToPickerItems` → `CommandPicker` → `buildFileMentionToken` → `resolveFileMentions`) is generic and already shared with the `/` skill picker. Adding a second source is low-risk.
+- Runtime supports multi-tab acting: `web.tab.list/activate/snapshot/click/fill` (documented in `js-tool-prompt.ts` lines 77–87). So a resolved tab reference maps directly to `web.tab.*`.
+
+**Goal:** Typing `@` lists open tabs alongside files; selecting one inserts `@[tab:{tabId}:{title}]`; at Run the tab's url/title/tabId are injected so the agent can act on that specific tab.
+
+### UI behavior
+
+- [ ] **Merge tabs into the `@` picker**: `tabsToPickerItems()` producing `{ id: tabId, label: title, description: url, insertText: '@[tab:...]' }`, shown with a type badge vs files. (Decision: one merged `@` picker with a kind badge — matches "the `@` not only for files".)
+- [ ] Refresh tab list on picker open (`chrome.tabs.query`) + on `chrome.tabs.onUpdated` while open.
+- [ ] Filter out `chrome-extension://` and `chrome://` tabs (testing invariant).
+- [ ] Keyboard navigation already handled by `CommandPicker`.
+
+### Resolution / plumbing
+
+- [ ] `parseTabMentions(draft)` → `@[tab:id:title]` regex (mirror `resolve-file-mentions.ts`).
+- [ ] `resolveTabMentions` → `<tab tabId=".." url=".." title=".."/>` XML block in task context.
+- [ ] Agent prompt note in `js-tool-prompt.ts`: `@[tab:…]` → use `web.tab.activate(tabId)` then `web.tab.*`; or just use the url.
+
+### Open question (UX)
+
+Single merged `@` picker (files + tabs, badge-distinguished) **vs** dedicated triggers (`@file:` / `@tab:`). Recommend merged picker for discoverability; revisit if the list gets noisy.
+
+### Files likely touched
+
+- `src/sidepanel/detect-mention-state.ts` — tab item source
+- `src/sidepanel/components/InputBar.tsx` — merge tab items into `pickerItems`
+- `src/sidepanel/resolve-tab-mentions.ts` (new)
+- `src/worker/js-tool-prompt.ts` — agent semantics
+
+### Acceptance criteria
+
+1. Type `@` → picker shows open http(s) tabs (title + url) alongside files.
+2. Select a tab → `@[tab:…]` token inserted.
+3. Run → agent receives tabId/url/title; uses `web.tab.activate` + `web.tab.snapshot` on the right tab.
+4. `chrome://` / side-panel tabs never appear in the picker.
+
+---
+
+## 15. Snapshot improvements (full HTML, table/list/item presentation)
+
+**Problem:** User suspects tables/lists/items aren't shown "properly" in the semantic tree, and wants optional full-HTML access.
+
+**Feasibility verdict (corrected by investigation):**
+
+| Sub-ask | Status |
+|---|---|
+| Table / row / cell roles | ✅ **Already done** — `role.rs` maps `table`, `row`, `cell`, `rowgroup`, `th`→`columnheader`/`rowheader`. |
+| List / listitem roles | ✅ **Already done** — `ul`/`ol`→`list`, `li`→`listitem`. |
+| Heading outline | ✅ **Already done** — `heading` nodes populate `TreeSnapshot.outline`. |
+| Rich/nested **presentation** | ❌ **Gap** — `format_compact` (`format.rs`) emits a **flat** `[refId] role name …` line per node. Tables/lists are correct but unreadable as structure. |
+| Full HTML export | ❌ **Gap** — no `page.html()` / `outerHTML` API in `extension-js` `browser_api.rs`/`session.rs`. |
+
+So the real work is **(a) presentation** and **(b) an upstream HTML API**. Roles need no change.
+
+### (a) Presentation — Browsergent-side, no upstream dependency
+
+- [ ] **Indented tree view** of `page.snapshot_data()` JSON in the trace UI (`TraceEntryCompact.tsx` / new `SnapshotView.tsx`): use each node's `role`/`tag`/`name` and parent relationships (reconstruct from DOM order / `path` field) to render a collapsible tree.
+- [ ] **Markdown rendering** option: tables → GitHub-flavoured markdown table; lists → bullets; headings → `#`. Either a new `SnapshotFormat` upstream (see b) or a Browsergent transform over the JSON nodes.
+- [ ] Keep the raw compact-text as a fallback (agents + power users).
+
+### (b) Full HTML — upstream change in `../web-js`
+
+- [ ] Add `page.html({ refId? })` to `extension-js` `browser_api.rs`: no arg → `document.documentElement.outerHTML`; with `refId` → that element's `outerHTML`. Register in `session.rs` tool list + api-docs.
+- [ ] Size-cap the output (HTML can be huge) with a `[html truncated]` marker, same policy as file attachments.
+- [ ] Document in `js-tool-prompt.ts`; agent should prefer `page.snapshot()` and reach for `page.html()` only when exact markup/attributes are needed.
+
+### Design note
+
+Prefer improving the semantic presentation over shipping raw HTML — the semantic tree is what the agent reasons on, and HTML bloats context. Treat full HTML as an occasional escalation path, not the default observation.
+
+### Files likely touched
+
+- Browsergent: `src/sidepanel/components/TraceEntryCompact.tsx`, new `src/sidepanel/components/SnapshotView.tsx`
+- Upstream (`../web-js`): `crates/dom-semantic-tree/src/format.rs` (optional nested/markdown format), `crates/extension-js/src/browser_api.rs` + `session.rs` (`page.html`)
+
+### Acceptance criteria
+
+1. A page with a table renders as a structured (nested or markdown-table) view in the trace, not a flat list of `cell` lines.
+2. Lists render with visible hierarchy.
+3. Agent can call `page.html()` and receive capped `outerHTML` when it needs exact markup.
+4. Default `page.snapshot()` output is unchanged (no regression for existing prompts).
