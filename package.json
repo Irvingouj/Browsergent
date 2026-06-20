@@ -15,7 +15,7 @@
 		"smoke": "node scripts/smoke.mjs"
 	},
 	"dependencies": {
-		"@pi-oxide/extension-js": "^0.10.1",
+		"@pi-oxide/extension-js": "^0.10.2",
 		"@pi-oxide/pi-host-web": "^0.9.3",
 		"@preact/signals": "^1.3.0",
 		"marked": "^18.0.4",
