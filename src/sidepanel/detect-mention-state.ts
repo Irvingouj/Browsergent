@@ -80,14 +80,12 @@ export function buildFileMentionToken(id: string, name: string): string {
 export function filesToPickerItems(
 	files: ReadonlyArray<FileNode>,
 ): CommandPickerItem[] {
-	return files
-		.filter((file) => file.kind === "file")
-		.map((file) => ({
-			id: file.id,
-			label: file.name,
-			description: file.path,
-			insertText: buildFileMentionToken(file.id, file.name),
-		}));
+	return files.map((file) => ({
+		id: file.id,
+		label: file.name,
+		description: file.path,
+		insertText: buildFileMentionToken(file.id, file.name),
+	}));
 }
 
 export function buildTabMentionToken(tabId: string | number, title: string): string {

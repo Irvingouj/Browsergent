@@ -40,6 +40,109 @@ test("@ picker inserts file mention token into task input", async () => {
 	await close();
 });
 
+test("@ picker ArrowDown moves highlight to second row and stays there", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible({
+		timeout: 10000,
+	});
+	await uploadFileViaPanel(
+		sidePanel,
+		"alpha.txt",
+		"alpha content",
+		"text/plain",
+	);
+	await uploadFileViaPanel(
+		sidePanel,
+		"beta.txt",
+		"beta content",
+		"text/plain",
+	);
+	await expect(sidePanel.locator("text=alpha.txt")).toBeVisible({
+		timeout: 10000,
+	});
+	await expect(sidePanel.locator("text=beta.txt")).toBeVisible({
+		timeout: 10000,
+	});
+
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	const taskInput = sidePanel.locator('[data-testid="task-input"]');
+	await taskInput.click();
+	await taskInput.fill("@");
+	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({
+		timeout: 5000,
+	});
+
+	// Move to second row with ArrowDown
+	await taskInput.press("ArrowDown");
+	// Second row should now be active
+	await expect(
+		sidePanel.locator('[data-picker-index="1"]'),
+	).toHaveClass(/bg-accent-soft/);
+	// First row should NOT be active
+	await expect(
+		sidePanel.locator('[data-picker-index="0"]'),
+	).not.toHaveClass(/bg-accent-soft/);
+
+	await close();
+});
+
+test("@ picker typing query resets active row to 0", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible({
+		timeout: 10000,
+	});
+	await uploadFileViaPanel(
+		sidePanel,
+		"doc-1.txt",
+		"doc-1 content",
+		"text/plain",
+	);
+	await uploadFileViaPanel(
+		sidePanel,
+		"doc-2.txt",
+		"doc-2 content",
+		"text/plain",
+	);
+	await uploadFileViaPanel(
+		sidePanel,
+		"doc-3.txt",
+		"doc-3 content",
+		"text/plain",
+	);
+	await expect(sidePanel.locator("text=doc-1.txt")).toBeVisible({
+		timeout: 10000,
+	});
+
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	const taskInput = sidePanel.locator('[data-testid="task-input"]');
+	await taskInput.click();
+	await taskInput.fill("@doc");
+	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({
+		timeout: 5000,
+	});
+
+	// Move to second row (index 1)
+	await taskInput.press("ArrowDown");
+	await expect(
+		sidePanel.locator('[data-picker-index="1"]'),
+	).toHaveClass(/bg-accent-soft/);
+
+	// Type an extra char to narrow the query — active row must reset to 0
+	await taskInput.press("1");
+	// After query narrows to "doc1", the filter changes; activeIndex must be back at 0
+	await expect(
+		sidePanel.locator('[data-picker-index="0"]'),
+	).toHaveClass(/bg-accent-soft/);
+
+	await close();
+});
+
 test("@ picker shows non-text files (pdf, png) — exclude nothing", async () => {
 	test.setTimeout(60000);
 	const { sidePanel, close } = await launchExtension();

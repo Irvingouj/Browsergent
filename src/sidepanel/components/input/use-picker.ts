@@ -3,10 +3,7 @@ import type { Ref } from "preact";
 import { useStore } from "zustand/react";
 import { browsergentStore } from "../../../state/store";
 import {
-	selectAtPicker,
 	selectOpenTabs,
-	selectPickerActiveIndex,
-	selectSlashPicker,
 	selectSkillCatalog,
 } from "../../../state/selectors";
 import type { FilesController } from "../../../controllers/files-controller";
@@ -34,6 +31,24 @@ export function skillsToPickerItems(
 	}));
 }
 
+type PickerMode = "none" | "at" | "slash";
+
+interface PickerState {
+	mode: PickerMode;
+	query: string;
+	startIndex: number;
+	endIndex: number;
+	activeIndex: number;
+}
+
+const CLOSED_STATE: PickerState = {
+	mode: "none",
+	query: "",
+	startIndex: 0,
+	endIndex: 0,
+	activeIndex: 0,
+};
+
 export interface PickerApi {
 	isPickerOpen: boolean;
 	pickerItems: CommandPickerItem[];
@@ -42,6 +57,7 @@ export interface PickerApi {
 	refreshPickerState(value: string, cursor: number | null): void;
 	applyPickerSelection(item: CommandPickerItem): void;
 	dismissPicker(): void;
+	setActiveIndex(index: number): void;
 	loadSkills(): void;
 	handlePickerKeyDown(e: KeyboardEvent): boolean;
 }
@@ -55,14 +71,15 @@ export function usePicker(
 	filesController: FilesController | null,
 ): PickerApi {
 	const skills = useStore(browsergentStore, selectSkillCatalog);
-	const atState = useStore(browsergentStore, selectAtPicker);
-	const slashState = useStore(browsergentStore, selectSlashPicker);
-	const activeIndex = useStore(browsergentStore, selectPickerActiveIndex);
 	const openTabs = useStore(browsergentStore, selectOpenTabs);
 
 	const [filePickerItems, setFilePickerItems] = useState<CommandPickerItem[]>(
 		[],
 	);
+
+	const [pickerState, setPickerState] = useState<PickerState>(CLOSED_STATE);
+	const pickerStateRef = useRef<PickerState>(pickerState);
+	pickerStateRef.current = pickerState;
 
 	const store = browsergentStore;
 	const pickerItemsRef = useRef<CommandPickerItem[]>([]);
@@ -87,7 +104,7 @@ export function usePicker(
 
 	// Load open tabs (lazy) while the @ picker is open, and keep them fresh.
 	useEffect(() => {
-		if (atState === null) return;
+		if (pickerState.mode !== "at") return;
 		const refresh = (): void => {
 			chrome.tabs
 				.query({})
@@ -105,11 +122,11 @@ export function usePicker(
 			chrome.tabs.onUpdated?.removeListener(onUpdated);
 			chrome.tabs.onRemoved?.removeListener(onRemoved);
 		};
-	}, [atState, store]);
+	}, [pickerState.mode, store]);
 
 	// Fetch file entries live from the filesystem every time the @ picker opens.
 	useEffect(() => {
-		if (atState === null) return;
+		if (pickerState.mode !== "at") return;
 		let cancelled = false;
 		filesController
 			?.listAllFiles()
@@ -122,7 +139,7 @@ export function usePicker(
 		return () => {
 			cancelled = true;
 		};
-	}, [atState, filesController]);
+	}, [pickerState.mode, filesController]);
 
 	const skillPickerItems = useMemo(
 		() => skillsToPickerItems(skills),
@@ -130,96 +147,124 @@ export function usePicker(
 	);
 	const filteredSkillItems = useMemo(
 		() =>
-			slashState ? filterPickerItems(skillPickerItems, slashState.query) : [],
-		[skillPickerItems, slashState],
+			pickerState.mode === "slash" ? filterPickerItems(skillPickerItems, pickerState.query) : [],
+		[skillPickerItems, pickerState.mode, pickerState.query],
 	);
 	const filteredFileItems = useMemo(
-		() => (atState ? filterPickerItems(filePickerItems, atState.query) : []),
-		[filePickerItems, atState],
+		() => pickerState.mode === "at" ? filterPickerItems(filePickerItems, pickerState.query) : [],
+		[filePickerItems, pickerState.mode, pickerState.query],
 	);
 	const tabPickerItems = useMemo(
 		() => tabsToPickerItems(openTabs),
 		[openTabs],
 	);
 	const filteredTabItems = useMemo(
-		() => (atState ? filterPickerItems(tabPickerItems, atState.query) : []),
-		[tabPickerItems, atState],
+		() => pickerState.mode === "at" ? filterPickerItems(tabPickerItems, pickerState.query) : [],
+		[tabPickerItems, pickerState.mode, pickerState.query],
 	);
 
-	const isPickerOpen = atState !== null || slashState !== null;
+	const isPickerOpen = pickerState.mode !== "none";
 	const pickerItems =
-		atState !== null
+		pickerState.mode === "at"
 			? [...filteredFileItems, ...filteredTabItems]
 			: filteredSkillItems;
 	pickerItemsRef.current = pickerItems;
 	const emptyMessage =
-		atState !== null ? "No matching files or tabs" : "No matching skills";
+		pickerState.mode === "at" ? "No matching files or tabs" : "No matching skills";
 
 	const refreshPickerState = useCallback(
 		(value: string, cursor: number | null): void => {
 			if (cursor === null) {
-				store.getState().closePicker();
+				setPickerState(CLOSED_STATE);
 				return;
 			}
 			const resolved = resolvePickerState(value, cursor);
-			store.getState().setAtPicker(resolved.atState);
-			store.getState().setSlashPicker(resolved.slashState);
+			const pickerInfo = resolved.atState ?? resolved.slashState;
+
+			if (!pickerInfo) {
+				setPickerState(CLOSED_STATE);
+				return;
+			}
+
+			const nextMode: PickerMode = resolved.atState ? "at" : "slash";
+			const endIndex = resolved.atState
+				? resolved.atState.endIndex
+				: pickerInfo.startIndex + 1 + pickerInfo.query.length;
+
+			setPickerState((prev) => {
+				const modeChanged = prev.mode !== nextMode;
+				const queryChanged = prev.query !== pickerInfo.query;
+				const resetActive = modeChanged || queryChanged;
+				return {
+					mode: nextMode,
+					query: pickerInfo.query,
+					startIndex: pickerInfo.startIndex,
+					endIndex,
+					activeIndex: resetActive ? 0 : prev.activeIndex,
+				};
+			});
 		},
-		[store],
+		[],
 	);
 
 	const applyPickerSelection = useCallback(
 		(item: CommandPickerItem): void => {
-			const pickerState = atState ?? slashState;
-			if (!pickerState) return;
 			const el =
 				inputRef && "current" in inputRef ? inputRef.current : null;
 			const draft = store.getState().ui.taskDraft;
 			const cursor = el?.selectionStart ?? draft.length;
+			const currentState = pickerStateRef.current;
 			const { nextText, cursorPos } = buildPickerInsert(
 				draft,
 				cursor,
-				pickerState.startIndex,
+				currentState.startIndex,
 				item.insertText,
-				atState?.endIndex,
+				currentState.mode === "at" ? currentState.endIndex : undefined,
 			);
 			store.getState().setTaskDraft(nextText);
-			store.getState().closePicker();
-			store.getState().setPickerActiveIndex(0);
+			setPickerState(CLOSED_STATE);
 			requestAnimationFrame(() => {
 				if (!el) return;
 				el.focus();
 				el.setSelectionRange(cursorPos, cursorPos);
 			});
 		},
-		[atState, slashState, inputRef, store],
+		[inputRef, store],
 	);
 
 	const dismissPicker = useCallback((): void => {
-		store.getState().closePicker();
-	}, [store]);
+		setPickerState(CLOSED_STATE);
+	}, []);
+
+	const setActiveIndex = useCallback((index: number): void => {
+		setPickerState((prev) => ({ ...prev, activeIndex: index }));
+	}, []);
 
 	const handlePickerKeyDown = useCallback(
 		(e: KeyboardEvent): boolean => {
 			if (!isPickerOpen) return false;
 			const items = pickerItemsRef.current;
+			const currentState = pickerStateRef.current;
 			if (e.key === "ArrowDown" || (e.key === "Tab" && e.shiftKey)) {
 				if (items.length === 0) return false;
 				e.preventDefault();
-				const next = Math.min(activeIndex + 1, items.length - 1);
-				store.getState().setPickerActiveIndex(next);
+				const next = Math.min(currentState.activeIndex + 1, items.length - 1);
+				setPickerState((prev) => ({ ...prev, activeIndex: next }));
 				return true;
 			}
 			if (e.key === "ArrowUp") {
 				if (items.length === 0) return false;
 				e.preventDefault();
-				store.getState().setPickerActiveIndex(Math.max(activeIndex - 1, 0));
+				setPickerState((prev) => ({
+					...prev,
+					activeIndex: Math.max(prev.activeIndex - 1, 0),
+				}));
 				return true;
 			}
 			if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
 				if (items.length === 0) return false;
 				e.preventDefault();
-				const item = items[activeIndex];
+				const item = items[currentState.activeIndex];
 				if (item) applyPickerSelection(item);
 				return true;
 			}
@@ -230,17 +275,18 @@ export function usePicker(
 			}
 			return false;
 		},
-		[isPickerOpen, activeIndex, applyPickerSelection, dismissPicker, store],
+		[isPickerOpen, applyPickerSelection, dismissPicker],
 	);
 
 	return {
 		isPickerOpen,
 		pickerItems,
-		activeIndex,
+		activeIndex: pickerState.activeIndex,
 		emptyMessage,
 		refreshPickerState,
 		applyPickerSelection,
 		dismissPicker,
+		setActiveIndex,
 		loadSkills,
 		handlePickerKeyDown,
 	};

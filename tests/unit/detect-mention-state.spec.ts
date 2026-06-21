@@ -310,14 +310,15 @@ describe("filesToPickerItems token insertion", () => {
 		expect(items.map((i) => i.id)).toEqual(["f1", "f2", "f3", "f4"]);
 	});
 
-	test("excludes only directories, never files", () => {
+	test("includes directories alongside files", () => {
 		const files = [
 			{ id: "f1", name: "readme.md", path: "/readme.md", kind: "file" as const },
 			{ id: "d1", name: "subdir", path: "/subdir", kind: "directory" as const },
 		];
 		const items = filesToPickerItems(files);
-		expect(items).toHaveLength(1);
+		expect(items).toHaveLength(2);
 		expect(items[0]?.id).toBe("f1");
+		expect(items[1]?.id).toBe("d1");
 	});
 });
 

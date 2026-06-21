@@ -13,9 +13,6 @@ const mockState = {
 		activeTab: "chat",
 		chatUpload: { kind: "idle" as const },
 		chatDragOver: false,
-		atPicker: null,
-		slashPicker: null,
-		pickerActiveIndex: 0,
 		openTabs: [],
 	},
 	files: {

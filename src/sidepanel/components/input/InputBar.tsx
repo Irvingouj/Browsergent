@@ -206,7 +206,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 							activeIndex={picker.activeIndex}
 							onSelect={picker.applyPickerSelection}
 							onActiveIndexChange={(i) =>
-								browsergentStore.getState().setPickerActiveIndex(i)
+								picker.setActiveIndex(i)
 							}
 							onDismiss={picker.dismissPicker}
 							emptyMessage={picker.emptyMessage}

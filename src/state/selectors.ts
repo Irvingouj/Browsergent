@@ -45,8 +45,4 @@ export const selectMovePromptValue = (s: BrowsergentStore) =>
 	s.files.movePromptValue;
 export const selectRenamingNodeId = (s: BrowsergentStore) =>
 	s.files.renamingNodeId;
-export const selectAtPicker = (s: BrowsergentStore) => s.ui.atPicker;
-export const selectSlashPicker = (s: BrowsergentStore) => s.ui.slashPicker;
-export const selectPickerActiveIndex = (s: BrowsergentStore) =>
-	s.ui.pickerActiveIndex;
 export const selectOpenTabs = (s: BrowsergentStore) => s.ui.openTabs;
