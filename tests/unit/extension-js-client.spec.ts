@@ -31,12 +31,14 @@ vi.mock("@pi-oxide/extension-js", () => {
 		fs: mockFs,
 	};
 	const mockRunnerPromise = Promise.resolve();
+	const mockInit = vi.fn().mockResolvedValue([mockSession, mockRunnerPromise]);
 	return {
 		ExtensionSession: {
-			init: vi.fn().mockResolvedValue([mockSession, mockRunnerPromise]),
+			init: mockInit,
 		},
 		setLogLevel: vi.fn(),
 		// Expose mocks so tests can access them
+		__mockInit: mockInit,
 		__mockStopWith: mockStopWith,
 		__mockRunCellAsync: mockRunCellAsync,
 		__mockApiDocs: mockApiDocs,
@@ -66,6 +68,8 @@ async function getMocks() {
 	const extjsMod = await import("@pi-oxide/extension-js");
 	const storeMod = await import("../../src/state/store");
 	return {
+		mockInit: (extjsMod as unknown as Record<string, unknown>)
+			.__mockInit as ReturnType<typeof vi.fn>,
 		mockRunCellAsync: (extjsMod as unknown as Record<string, unknown>)
 			.__mockRunCellAsync as ReturnType<typeof vi.fn>,
 		mockStopWith: (extjsMod as unknown as Record<string, unknown>)
@@ -84,8 +88,10 @@ describe("ExtensionJsClient", () => {
 		vi.useFakeTimers();
 		ExtensionJsClient.instance = null;
 		client = ExtensionJsClient.getInstance();
-		const { mockRunCellAsync, mockStopWith, mockApiDocs, mockStoreState } =
+		const { mockInit, mockRunCellAsync, mockStopWith, mockApiDocs, mockStoreState } =
 			await getMocks();
+		mockInit.mockClear();
+		mockRunCellAsync.mockClear();
 		mockRunCellAsync.mockResolvedValue({ status: "ok", value: 42 });
 		mockStopWith.mockResolvedValue(undefined);
 		mockApiDocs.mockResolvedValue('[{"namespace":"page","name":"snapshot"}]');
@@ -356,6 +362,71 @@ describe("ExtensionJsClient", () => {
 			type: "extjsDocsError",
 			id: "docs-2",
 			error: "docs failed",
+		});
+	});
+
+	describe("session rebuild after non-timeout runtime failure", () => {
+		test("non-timeout runCellAsync rejection triggers exactly one rebuild", async () => {
+			await client.init();
+			const { mockRunCellAsync, mockInit, mockStoreState } = await getMocks();
+			mockRunCellAsync.mockRejectedValueOnce(new Error("unsafe aliasing"));
+			mockRunCellAsync.mockResolvedValue({ status: "ok", value: 42 });
+
+			await expect(client.runJs("bad")).rejects.toThrow("unsafe aliasing");
+			expect(mockStoreState.extjsRestarting).toHaveBeenCalledWith("rebuild");
+			expect(mockInit).toHaveBeenCalledTimes(2); // initial + rebuild
+			expect(mockStoreState.extjsReady).toHaveBeenCalled();
+			const res = await client.runJs("1+1");
+			expect(res).toEqual({ status: "ok", value: 42 });
+		});
+
+		test("concurrent callers share the rebuild", async () => {
+			await client.init();
+			const { mockRunCellAsync, mockInit, mockStoreState } = await getMocks();
+			mockRunCellAsync.mockRejectedValueOnce(new Error("unsafe aliasing"));
+			mockRunCellAsync.mockResolvedValue({ status: "ok", value: 42 });
+
+			const results = await Promise.allSettled([client.runJs("a"), client.runJs("b")]);
+			expect(mockInit).toHaveBeenCalledTimes(2); // NOT 3 — concurrent callers share one rebuild
+			const rejected = results.filter((r) => r.status === "rejected");
+			const fulfilled = results.filter((r) => r.status === "fulfilled");
+			expect(rejected).toHaveLength(1);
+			expect(fulfilled).toHaveLength(1);
+			expect(mockStoreState.extjsReady).toHaveBeenCalled();
+		});
+
+		test("failed rebuild leaves retryable state and no false ready", async () => {
+			await client.init();
+			const { mockRunCellAsync, mockInit, mockStoreState } = await getMocks();
+			mockRunCellAsync.mockRejectedValueOnce(new Error("unsafe aliasing"));
+			mockInit.mockRejectedValueOnce(new Error("init failed"));
+
+			await expect(client.runJs("x")).rejects.toThrow("unsafe aliasing");
+			expect(mockStoreState.extjsFailed).toHaveBeenCalledWith(
+				expect.objectContaining({ code: "E_JS_RUNTIME" }),
+			);
+			expect(mockStoreState.extjsReady).not.toHaveBeenCalled(); // no false ready
+			expect(client.isReady).toBe(false);
+
+			// Retry: initPromise was cleared — init() succeeds again
+			await client.init();
+			const res = await client.runJs("y");
+			expect(res).toEqual({ status: "ok", value: 42 });
+		});
+
+		test("timeout does NOT trigger rebuild", async () => {
+			await client.init();
+			const { mockRunCellAsync, mockInit } = await getMocks();
+			mockRunCellAsync.mockRejectedValueOnce(
+				new Error("JS execution timed out after 30000ms"),
+			);
+
+			await expect(client.runJs("slow")).rejects.toThrow("timed out");
+			expect(mockInit).toHaveBeenCalledTimes(1); // initial only, no rebuild
+			expect(client.isReady).toBe(true);
+
+			// Only the original runCellAsync call, not a 2nd health-check call
+			expect(mockRunCellAsync).toHaveBeenCalledTimes(1);
 		});
 	});
 });

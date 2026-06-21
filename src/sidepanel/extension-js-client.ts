@@ -111,7 +111,7 @@ export class ExtensionJsClient implements SkillFsClient {
 	}
 
 	async init(): Promise<void> {
-		if (this.initialized) return;
+		if (this.initialized && this.session) return;
 		if (this.initPromise) {
 			await this.initPromise;
 			return;
@@ -119,13 +119,20 @@ export class ExtensionJsClient implements SkillFsClient {
 		this.initPromise = (async () => {
 			const { ExtensionSession } = await import("@pi-oxide/extension-js");
 			const [session, runner] = await ExtensionSession.init();
-		session.setFuelLimit(Number.MAX_SAFE_INTEGER);
+			session.setFuelLimit(Number.MAX_SAFE_INTEGER);
+			// Atomic publish: only set session + initialized after BOTH creation and runner start succeed.
 			this.session = session;
 			this.runnerPromise = runner;
 			this.initialized = true;
 		setLogLevel("error");
 		})();
-		await this.initPromise;
+		try {
+			await this.initPromise;
+		} catch (err) {
+			// Publishing failed: clear the promise so the next init() retries fresh.
+			this.initPromise = null;
+			throw err;
+		}
 	}
 
 	async runJs(code: string, traceId?: string): Promise<CellResult> {
@@ -431,27 +438,29 @@ export class ExtensionJsClient implements SkillFsClient {
 		this.session = null;
 		this.runnerPromise = null;
 		this.initialized = false;
+		this.initPromise = null; // CRITICAL: force init() to build a new session
 
 		try {
 			await this.init();
 			const session = this.session as ExtensionSessionType | null;
-			if (session) {
-				await Promise.race([
-					session.runCellAsync("1+1"),
-					new Promise<never>((_, reject) =>
-						setTimeout(
-							() => reject(new Error("Runtime health check timed out")),
-							5_000,
-						),
-					),
-				]);
+			if (!session) {
+				throw new Error("Rebuilt session is null");
 			}
+			await Promise.race([
+				session.runCellAsync("1+1"),
+				new Promise<never>((_, reject) =>
+					setTimeout(
+						() => reject(new Error("Runtime health check timed out")),
+						5_000,
+					),
+				),
+			]);
 			store.extjsReady();
 		} catch {
 			this.session = null;
 			this.runnerPromise = null;
 			this.initialized = false;
-			this.initPromise = null;
+			this.initPromise = null; // leave retryable
 			store.extjsFailed({
 				code: "E_JS_RUNTIME",
 				message: "Runtime rebuild failed",

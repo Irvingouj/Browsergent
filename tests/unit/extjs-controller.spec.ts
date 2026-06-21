@@ -182,6 +182,18 @@ describe("ExtjsController", () => {
 		).toBeNull();
 	});
 
+	test("controller init does not mark extjsReady when client.init throws", async () => {
+		const { mockInstance, mockStoreState } = await getMocks();
+		mockInstance.init.mockRejectedValue(new Error("init failed"));
+		const bridge = makeBridge();
+		const ctrl = new ExtjsController(
+			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
+		);
+		await expect(ctrl.init()).rejects.toThrow("init failed");
+		expect(mockStoreState.extjsFailed).toHaveBeenCalled();
+		expect(mockStoreState.extjsReady).not.toHaveBeenCalled();
+	});
+
 	test("skill init failure still marks extjs ready and installs relay callback", async () => {
 		const { mockEnsureReady, mockStoreState } = await getMocks();
 		mockEnsureReady.mockRejectedValue(new Error("skill fs failed"));

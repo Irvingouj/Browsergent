@@ -201,6 +201,15 @@ function classifyErrorBase(
 			code: errCode,
 			hint: "No active tab resolved. Ensure the user is focused on an http(s) page, not chrome://.",
 		};
+	if (
+		errCode === "E_JS_RUNTIME" &&
+		source.message?.includes("recursive use of an object")
+	) {
+		return {
+			code: "E_JS_RUNTIME",
+			hint: "The JS runtime was re-entered mid-cell and has been rebuilt. Retry the same code in a new run_js cell; do not refresh the target tab — the acting runtime, not the content script, failed.",
+		};
+	}
 	if (errCode === "E_TIMEOUT")
 		return {
 			code: errCode,

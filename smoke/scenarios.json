@@ -48,6 +48,14 @@
 			"task": "A sample PDF is published at {BASE}/assets/sample.pdf (this page's origin). Download it, then upload it into the document-upload form on this page. Report the exact confirmation message shown after a successful upload.",
 			"doneHint": "SMOKE_OK",
 			"timeoutMs": 240000
+		},
+		{
+			"id": "set-files-preexisting",
+			"name": "Binary: cross-cell setFiles from pre-existing VFS path",
+			"site": "sites/pdf-upload/index.html",
+			"task": "A sample PDF is published at {BASE}/assets/sample.pdf (this page's origin).\n\nFirst, download it and save it to the VFS at path /user/sample.pdf using `await fs.writeBase64({ path: '/user/sample.pdf', data: <base64> })`. Use page.fetch to get the bytes and pass fetchResult.body as the base64 data.\n\nThen, in a SEPARATE run_js step, upload that file at /user/sample.pdf into the document-upload form on this page using `await page.setFiles({ refId, files: [{ path: '/user/sample.pdf', name: 'sample.pdf' }] })` where refId is the file input's refId from a fresh snapshot.\n\nReport the exact confirmation message shown after a successful upload.",
+			"doneHint": "SMOKE_OK",
+			"timeoutMs": 240000
 		}
 	]
 }
