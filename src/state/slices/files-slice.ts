@@ -154,7 +154,7 @@ export function createFilesSlice(
 					node.parentId === undefined
 						? [...state.files.rootIds, node.id]
 						: state.files.rootIds;
-				return { files: { ...state.files, nodes, rootIds } };
+				return { files: { ...state.files, nodes, rootIds, filesVersion: state.files.filesVersion + 1 } };
 			});
 		},
 		removeFileNode(id) {
@@ -170,6 +170,7 @@ export function createFilesSlice(
 						nodes,
 						rootIds,
 						selectedFileId,
+						filesVersion: state.files.filesVersion + 1,
 					},
 				};
 			});
@@ -182,6 +183,7 @@ export function createFilesSlice(
 					rootIds: [],
 					selectedFileId: null,
 					expandedFolderIds: [],
+					filesVersion: state.files.filesVersion + 1,
 				},
 			}));
 		},
@@ -191,6 +193,7 @@ export function createFilesSlice(
 					...state.files,
 					...buildFileState(nodes),
 					selectedFileId: null,
+					filesVersion: state.files.filesVersion + 1,
 				},
 			}));
 		},

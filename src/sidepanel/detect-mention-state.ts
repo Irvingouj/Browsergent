@@ -1,4 +1,3 @@
-import { isTextFile } from "../controllers/files-utils";
 import type { FileNode } from "../state/slices/files-slice";
 import type { CommandPickerItem } from "./components/CommandPicker";
 
@@ -82,7 +81,7 @@ export function filesToPickerItems(
 	files: ReadonlyArray<FileNode>,
 ): CommandPickerItem[] {
 	return files
-		.filter((file) => file.kind === "file" && isTextFile(file.name))
+		.filter((file) => file.kind === "file")
 		.map((file) => ({
 			id: file.id,
 			label: file.name,

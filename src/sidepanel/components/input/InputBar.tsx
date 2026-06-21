@@ -42,7 +42,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const uploadError = chatUpload.kind === "error" ? chatUpload.message : null;
 
 	const inputHistory = useInputHistory();
-	const picker = usePicker(inputRef);
+	const picker = usePicker(inputRef, filesController);
 	const handleEditCommands = useTextAreaCommands({
 		isRunning,
 		onSubmit: () => {

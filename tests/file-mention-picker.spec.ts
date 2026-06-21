@@ -31,12 +31,60 @@ test("@ picker inserts file mention token into task input", async () => {
 	).toBeVisible();
 
 	await sidePanel
-		.getByTestId(/^command-picker-item-/)
-		.first()
+		.getByTestId("command-picker-item-/picker.txt")
 		.click();
 
 	const value = await taskInput.inputValue();
 	expect(value).toMatch(/@\[file:[^:\]]+:picker\.txt\]/);
+
+	await close();
+});
+
+test("@ picker shows non-text files (pdf, png) — exclude nothing", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible({
+		timeout: 10000,
+	});
+
+	const pdfBytes = "%PDF-1.4 fake binary content";
+	await uploadFileViaPanel(
+		sidePanel,
+		"report.pdf",
+		pdfBytes,
+		"application/pdf",
+	);
+	await expect(sidePanel.locator("text=report.pdf")).toBeVisible({
+		timeout: 10000,
+	});
+
+	await uploadFileViaPanel(
+		sidePanel,
+		"image.png",
+		"\x89PNG\r\n\x1a\n",
+		"image/png",
+	);
+	await expect(sidePanel.locator("text=image.png")).toBeVisible({
+		timeout: 10000,
+	});
+
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	const taskInput = sidePanel.locator('[data-testid="task-input"]');
+	await taskInput.click();
+	await taskInput.fill("@");
+	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({
+		timeout: 5000,
+	});
+
+	const picker = sidePanel.getByTestId("command-picker");
+	await expect(picker.locator("text=report.pdf").first()).toBeVisible({
+		timeout: 5000,
+	});
+	await expect(picker.locator("text=image.png").first()).toBeVisible({
+		timeout: 5000,
+	});
 
 	await close();
 });

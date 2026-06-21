@@ -298,15 +298,22 @@ describe("filesToPickerItems token insertion", () => {
 		expect(items[1]?.id).toBe("f2");
 	});
 
-	test("excludes binary files from picker items", () => {
+	test("includes non-text files (pdf, png, etc.) — exclude nothing", () => {
 		const files = [
 			{ id: "f1", name: "notes.md", path: "/notes.md", kind: "file" as const },
-			{
-				id: "f2",
-				name: "photo.png",
-				path: "/photo.png",
-				kind: "file" as const,
-			},
+			{ id: "f2", name: "photo.png", path: "/photo.png", kind: "file" as const },
+			{ id: "f3", name: "doc.pdf", path: "/doc.pdf", kind: "file" as const },
+			{ id: "f4", name: "data.csv", path: "/data.csv", kind: "file" as const },
+		];
+		const items = filesToPickerItems(files);
+		expect(items).toHaveLength(4);
+		expect(items.map((i) => i.id)).toEqual(["f1", "f2", "f3", "f4"]);
+	});
+
+	test("excludes only directories, never files", () => {
+		const files = [
+			{ id: "f1", name: "readme.md", path: "/readme.md", kind: "file" as const },
+			{ id: "d1", name: "subdir", path: "/subdir", kind: "directory" as const },
 		];
 		const items = filesToPickerItems(files);
 		expect(items).toHaveLength(1);

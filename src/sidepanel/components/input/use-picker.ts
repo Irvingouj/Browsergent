@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Ref } from "preact";
 import { useStore } from "zustand/react";
 import { browsergentStore } from "../../../state/store";
 import {
 	selectAtPicker,
-	selectFilesState,
 	selectOpenTabs,
 	selectPickerActiveIndex,
 	selectSlashPicker,
 	selectSkillCatalog,
 } from "../../../state/selectors";
+import type { FilesController } from "../../../controllers/files-controller";
 import type { SkillMeta } from "../../../skills/skill-types";
 import { getSkillService } from "../../../skills/skill-service";
 import {
@@ -47,16 +47,22 @@ export interface PickerApi {
 }
 
 /**
- * Owns the compose picker (skill `/`, file/tab `@`) state. All state lives in
- * ui-slice / skills-slice / files-slice so it stays out of component-local useState.
+ * Owns the compose picker (skill `/`, file/tab `@`) state. File entries are
+ * fetched live from the filesystem when the @ picker opens — no slice cache.
  */
-export function usePicker(inputRef: Ref<HTMLTextAreaElement> | undefined): PickerApi {
-	const filesState = useStore(browsergentStore, selectFilesState);
+export function usePicker(
+	inputRef: Ref<HTMLTextAreaElement> | undefined,
+	filesController: FilesController | null,
+): PickerApi {
 	const skills = useStore(browsergentStore, selectSkillCatalog);
 	const atState = useStore(browsergentStore, selectAtPicker);
 	const slashState = useStore(browsergentStore, selectSlashPicker);
 	const activeIndex = useStore(browsergentStore, selectPickerActiveIndex);
 	const openTabs = useStore(browsergentStore, selectOpenTabs);
+
+	const [filePickerItems, setFilePickerItems] = useState<CommandPickerItem[]>(
+		[],
+	);
 
 	const store = browsergentStore;
 	const pickerItemsRef = useRef<CommandPickerItem[]>([]);
@@ -101,6 +107,23 @@ export function usePicker(inputRef: Ref<HTMLTextAreaElement> | undefined): Picke
 		};
 	}, [atState, store]);
 
+	// Fetch file entries live from the filesystem every time the @ picker opens.
+	useEffect(() => {
+		if (atState === null) return;
+		let cancelled = false;
+		filesController
+			?.listAllFiles()
+			.then((nodes) => {
+				if (!cancelled) setFilePickerItems(filesToPickerItems(nodes));
+			})
+			.catch((err: unknown) => {
+				console.warn("Failed to load files for picker:", err);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [atState, filesController]);
+
 	const skillPickerItems = useMemo(
 		() => skillsToPickerItems(skills),
 		[skills],
@@ -109,10 +132,6 @@ export function usePicker(inputRef: Ref<HTMLTextAreaElement> | undefined): Picke
 		() =>
 			slashState ? filterPickerItems(skillPickerItems, slashState.query) : [],
 		[skillPickerItems, slashState],
-	);
-	const filePickerItems = useMemo(
-		() => filesToPickerItems(Object.values(filesState.nodes)),
-		[filesState.nodes],
 	);
 	const filteredFileItems = useMemo(
 		() => (atState ? filterPickerItems(filePickerItems, atState.query) : []),
