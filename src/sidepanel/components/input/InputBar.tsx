@@ -9,10 +9,8 @@ import {
 } from "../../../state/selectors";
 import { browsergentStore } from "../../../state/store";
 import { buildFileMentionToken } from "../../detect-mention-state";
-import { useInputHistory } from "./use-input-history";
 import { CommandPicker } from "../CommandPicker";
-import { usePicker } from "./use-picker";
-import { useTextAreaCommands } from "./use-textarea-commands";
+import { useInputMode } from "./use-input-mode";
 
 const MAX_INPUT_HEIGHT = 200;
 
@@ -41,18 +39,11 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const isUploading = chatUpload.kind === "uploading";
 	const uploadError = chatUpload.kind === "error" ? chatUpload.message : null;
 
-	const inputHistory = useInputHistory();
-	const picker = usePicker(inputRef, filesController);
-	const handleEditCommands = useTextAreaCommands({
+	const mode = useInputMode({
+		inputRef,
+		filesController,
 		isRunning,
-		onSubmit: () => {
-			onRun();
-			inputHistory.onSubmit();
-		},
-		onAfterEdit: (nextText, cursor) => {
-			picker.refreshPickerState(nextText, cursor);
-			inputHistory.onInput();
-		},
+		onSubmit: onRun,
 	});
 
 	useEffect(() => {
@@ -200,16 +191,18 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				onDrop={handleDrop}
 			>
 				<div class="relative flex-1">
-					{picker.isPickerOpen ? (
+					{mode.isPickerOpen ? (
 						<CommandPicker
-							items={picker.pickerItems}
-							activeIndex={picker.activeIndex}
-							onSelect={picker.applyPickerSelection}
-							onActiveIndexChange={(i) =>
-								picker.setActiveIndex(i)
-							}
-							onDismiss={picker.dismissPicker}
-							emptyMessage={picker.emptyMessage}
+							items={mode.pickerItems}
+							activeIndex={mode.activeIndex}
+							onSelect={mode.applySelection}
+							onActiveIndexChange={(i) => mode.setActiveIndex(i)}
+							onDismiss={() => {
+								// Dismiss via key is handled by interpretKey; this
+								// callback is only for the window-level Escape fallback
+								// (which we removed) and external dismiss.
+							}}
+							emptyMessage={mode.emptyMessage}
 						/>
 					) : null}
 					<textarea
@@ -218,26 +211,22 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						data-testid="task-input"
 						value={taskInput}
 						onInput={(e) => {
-							const el = e.target as HTMLTextAreaElement;
+							const el = e.currentTarget;
 							browsergentStore.getState().setTaskDraft(el.value);
-							picker.refreshPickerState(el.value, el.selectionStart);
-							inputHistory.onInput();
+							mode.onTextareaInput(el.value, el.selectionStart);
 						}}
-						onFocus={() => picker.loadSkills()}
 						onClick={(e) => {
-							const el = e.target as HTMLTextAreaElement;
-							picker.refreshPickerState(el.value, el.selectionStart);
+							const el = e.currentTarget;
+							mode.onTextareaInput(el.value, el.selectionStart);
 						}}
 						onKeyUp={(e) => {
-							const el = e.target as HTMLTextAreaElement;
-							picker.refreshPickerState(el.value, el.selectionStart);
+							const el = e.currentTarget;
+							mode.onTextareaInput(el.value, el.selectionStart);
 						}}
+						onKeyDown={mode.onTextareaKeyDown}
+						onFocus={() => mode.loadSkills()}
+						onBlur={mode.onTextareaBlur}
 						onPaste={handlePaste}
-						onKeyDown={(e) => {
-							if (picker.handlePickerKeyDown(e)) return;
-							if (inputHistory.handleKeyDown(e)) return;
-							if (handleEditCommands(e)) return;
-						}}
 						placeholder="Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"
 						disabled={isRunning || isUploading}
 						class="w-full bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] max-h-[200px] overflow-y-auto resize-none leading-normal focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"

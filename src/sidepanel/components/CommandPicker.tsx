@@ -42,17 +42,6 @@ export const CommandPicker: FunctionalComponent<CommandPickerProps> = ({
 		el?.scrollIntoView({ block: "nearest" });
 	}, [activeIndex]);
 
-	useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") {
-				e.preventDefault();
-				onDismiss();
-			}
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [onDismiss]);
-
 	if (items.length === 0) {
 		if (!emptyMessage) return null;
 		return (
@@ -82,6 +71,7 @@ export const CommandPicker: FunctionalComponent<CommandPickerProps> = ({
 							? "bg-accent-soft text-text-primary"
 							: "bg-transparent text-text-primary hover:bg-bg-base"
 					}`}
+					onMouseDown={(e) => e.preventDefault()}
 					onClick={() => onSelect(item)}
 					onMouseEnter={() => onActiveIndexChange(index)}
 				>

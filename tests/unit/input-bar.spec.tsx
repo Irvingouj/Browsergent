@@ -1,7 +1,7 @@
 import { render } from "preact-render-to-string";
 import { describe, expect, test, vi } from "vitest";
 import { InputBar } from "../../src/sidepanel/components/input/InputBar";
-import { skillsToPickerItems } from "../../src/sidepanel/components/input/use-picker";
+import { skillsToPickerItems } from "../../src/sidepanel/components/input/use-input-mode";
 import { detectSlashState } from "../../src/sidepanel/detect-mention-state";
 import type { SkillMeta } from "../../src/skills/skill-types";
 

@@ -191,3 +191,38 @@ test("@ picker shows non-text files (pdf, png) — exclude nothing", async () =>
 
 	await close();
 });
+
+test("blur hides the @ picker", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible({
+		timeout: 10000,
+	});
+	await uploadFileViaPanel(
+		sidePanel,
+		"picker.txt",
+		"picker test content",
+		"text/plain",
+	);
+	await expect(sidePanel.locator("text=picker.txt")).toBeVisible({
+		timeout: 10000,
+	});
+
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	const taskInput = sidePanel.locator('[data-testid="task-input"]');
+	await taskInput.click();
+	await taskInput.fill("@");
+	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({
+		timeout: 5000,
+	});
+
+	// Blur the textarea by clicking elsewhere in the panel
+	await sidePanel.locator('[data-testid="run-button"]').click();
+	await expect(sidePanel.getByTestId("command-picker")).not.toBeVisible({
+		timeout: 3000,
+	});
+
+	await close();
+});
