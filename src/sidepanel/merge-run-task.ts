@@ -9,6 +9,7 @@ import {
 	type ResolvedAttachment,
 	stripFileMentions,
 } from "./resolve-file-mentions";
+import { stripTabMentions } from "./resolve-tab-mentions";
 
 const USER_TASK_PREFIX = "\n\nUser task: ";
 
@@ -27,7 +28,7 @@ export function extractSkillBlock(resolvedTask: string): {
 }
 
 export function buildDisplayTask(task: string): string {
-	const cleaned = stripFileMentions(stripSkillToken(task)).trim();
+	const cleaned = stripTabMentions(stripFileMentions(stripSkillToken(task))).trim();
 	if (cleaned) return cleaned;
 
 	const skill = parseSkillActivation(task);
@@ -62,7 +63,7 @@ export function mergeSkillAndFileAttachments(
 	const attachmentBlocks = attachments
 		.map((a) => buildAttachmentXmlBlock(a.displayName, a.fileId, a.content))
 		.join("\n\n");
-	const userRemainder = stripFileMentions(stripSkillToken(task)).trim();
+	const userRemainder = stripTabMentions(stripFileMentions(stripSkillToken(task))).trim();
 
 	const parts: string[] = [skillBlock];
 	if (attachmentBlocks) {

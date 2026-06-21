@@ -1,4 +1,5 @@
 import type { FilesController } from "../controllers/files-controller";
+import { stripTabMentions } from "./resolve-tab-mentions";
 import { escapeXmlAttr, escapeXmlText } from "../skills/validate-skill-meta";
 import { truncateWithMarker } from "../utils/truncate";
 
@@ -87,7 +88,7 @@ export function buildTaskWithAttachments(
 	userText: string,
 	attachments: ResolvedAttachment[],
 ): string {
-	const remainder = stripFileMentions(userText);
+	const remainder = stripTabMentions(stripFileMentions(userText));
 	const blocks = attachments.map((a) =>
 		buildAttachmentXmlBlock(a.displayName, a.fileId, a.content),
 	);

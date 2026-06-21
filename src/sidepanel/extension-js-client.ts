@@ -214,6 +214,24 @@ export class ExtensionJsClient implements SkillFsClient {
 		this.onFsMutation?.();
 	}
 
+	async fsMove(from: string, to: string): Promise<void> {
+		await this.ensureReady();
+		await this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			await this.session.fs.move({ from, to });
+		}, "fsMove failed");
+		this.onFsMutation?.();
+	}
+
+	async fsCopy(from: string, to: string): Promise<void> {
+		await this.ensureReady();
+		await this.enqueue(async () => {
+			if (!this.session) throw new Error("ExtensionSession not available");
+			await this.session.fs.copy({ from, to });
+		}, "fsCopy failed");
+		this.onFsMutation?.();
+	}
+
 	private enqueue<T>(fn: () => Promise<T>, errorLabel: string): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
 			this.queue = this.queue

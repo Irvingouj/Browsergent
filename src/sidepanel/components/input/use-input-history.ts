@@ -4,9 +4,9 @@ import {
 	selectMessageIds,
 	selectMessagesById,
 	selectTaskDraft,
-} from "../state/selectors";
-import { browsergentStore } from "../state/store";
-import type { ChatMessage } from "../types/messages";
+} from "../../../state/selectors";
+import { browsergentStore } from "../../../state/store";
+import type { ChatMessage } from "../../../types/messages";
 
 export interface InputHistory {
 	/** Call in onKeyDown for ArrowUp and ArrowDown events. Returns true if the event was handled. */

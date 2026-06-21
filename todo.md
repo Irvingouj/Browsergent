@@ -1,14 +1,6 @@
 # Browsergent TODO
 
-## Priority (suggested order)
-
-Most of the original list is **done** as of 2026-06-13. What's left:
-
-1. **Files panel UX for nested dirs** (§2 follow-up) — panel currently renders a flat list; with the unified FS, agent-written files in subdirs (e.g. `/sub/foo.md`) need a tree view.
-2. **Auto-refresh panel on agent writes** — `file_write` / `fs.writeText` mutate OPFS but the panel doesn't re-scan; user must toggle tabs to see new files.
-3. **E2E for `file_write`** — extend `tests/file-tools.spec.ts` to cover the new tool end-to-end.
-4. **§6 closure** — Playwright E2E for compose → inject → `load_skill` mid-run; verify inject size cap holds under oversized skills.
-5. **Delete JS tab scaffolding** (§2 leftover) — `JsPlaybookPanel.tsx`, `UiTab="js"`, `tests/js-playbook-fill-form.spec.ts` are still in the tree per the original §2 plan.
+> **优先级列表已全部完成 (2026-06-21 核查)** — 原列表 5 项（嵌套目录树视图、agent 写后自动刷新、JS tab 脚手架删除、`file_write` E2E、§6 closure E2E）均已落地。剩余工作见下方 §13 / §14 / §15。
 
 ## Candidate features (investigated 2026-06-20 — not started)
 
@@ -17,9 +9,9 @@ Four ideas explored for feasibility. Full analysis in §12–§15 below.
 | § | Feature | Verdict | Work location |
 |---|---------|---------|---------------|
 | 12 | Right-click page element → reference it in chat | ✅ Feasible — must capture a **durable locator**, not a raw refId (refIds are lease-bound) | Browsergent content-script overlay + new `@[element:…]` mention |
-| 13 | Real file explorer (create/delete/rename/move) | ✅ Feasible — runtime already supports `rename`/`mkdir`/`delete`; panel/controller don't expose them | Browsergent-only (no upstream change) |
-| 14 | `@` mention for open tabs | ✅ Feasible — `tabs` perm present; extend existing `@` pipeline | Browsergent-only |
-| 15 | Snapshot: full HTML + richer table/list view | ⚠️ Partial — table/list/item **roles already exist**; gaps are flat presentation + no HTML export | Presentation = Browsergent; HTML export = upstream `web-js` |
+| 13 | Real file explorer (create/delete/rename/move) | 🔄 In progress (2026-06-21) — runtime supports rename/mkdir/delete; implementing Browsergent panel/controller/slice layer | Browsergent-only (no upstream change) |
+| 14 | `@` mention for open tabs | 🔄 In progress (2026-06-21) — extending the `@` mention pipeline | Browsergent-only |
+| 15 | Snapshot: full HTML + richer table/list view | ⚠️ Partial — table/list/item **roles already exist**; gaps are flat presentation + no HTML export. ⚠️ **(a) 延后 — 需改 trace 数据模型（`AgentTraceEntry.result` 只存扁平字符串，上游 `SemanticNode` 无 parent/children/depth），属 hardcore（2026-06-21）** | Presentation = Browsergent; HTML export = upstream `web-js` |
 
 Recently shipped:
 - **§11 File API ergonomics** — `file_write` tool + unified OPFS root (panel and agent share `/`, no session-scope, no IndexedDB index). web-js 0.8.3 made `fs.*` accept relative paths.

@@ -31,6 +31,8 @@ export interface SkillFsClient {
 	fsReadBase64(path: string): Promise<string>;
 	fsMkdir(path: string): Promise<void>;
 	fsDelete(path: string): Promise<void>;
+	fsMove(from: string, to: string): Promise<void>;
+	fsCopy(from: string, to: string): Promise<void>;
 }
 
 export interface SeedManifest {

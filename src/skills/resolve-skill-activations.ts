@@ -4,7 +4,7 @@ import { substituteArguments } from "./substitute-arguments";
 import { escapeXmlAttr } from "./validate-skill-meta";
 
 const SKILL_HEAD_RE = /\/skill:([a-z0-9-]+)/;
-const FILE_MENTION_TOKEN = "@[file:";
+const MENTION_TOKENS = ["@[file:", "@[tab:"] as const;
 
 interface SkillTokenSegment {
 	skillName: string;
@@ -26,13 +26,19 @@ function parseSkillTokenSegment(draft: string): SkillTokenSegment | null {
 	if (rest.startsWith(" ")) {
 		tokenEnd += 1;
 		const afterSpace = draft.slice(tokenEnd);
-		const fileIdx = afterSpace.indexOf(FILE_MENTION_TOKEN);
-		if (fileIdx === -1) {
+		let earliest = -1;
+		for (const token of MENTION_TOKENS) {
+			const idx = afterSpace.indexOf(token);
+			if (idx !== -1 && (earliest === -1 || idx < earliest)) {
+				earliest = idx;
+			}
+		}
+		if (earliest === -1) {
 			args = afterSpace.trim();
 			tokenEnd = draft.length;
 		} else {
-			args = afterSpace.slice(0, fileIdx).trimEnd();
-			tokenEnd += fileIdx;
+			args = afterSpace.slice(0, earliest).trimEnd();
+			tokenEnd += earliest;
 		}
 	}
 

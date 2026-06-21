@@ -29,8 +29,8 @@ import {
 import { browsergentStore } from "../state/store";
 import type { ChatMessage } from "../types/messages";
 import { ChatPanel } from "./components/ChatPanel";
-import { FilesPanel } from "./components/FilesPanel";
-import { InputBar } from "./components/InputBar";
+import { FilesPanel } from "./components/files/FilesPanel";
+import { InputBar } from "./components/input/InputBar";
 import { SettingsForm } from "./components/SettingsForm";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
@@ -42,6 +42,11 @@ import {
 	parseFileMentions,
 	resolveFileMentions,
 } from "./resolve-file-mentions";
+import {
+	buildTabContextXmlBlock,
+	parseTabMentions,
+	resolveTabMentions,
+} from "./resolve-tab-mentions";
 import { SessionPanel } from "./session-panel";
 
 function formatSkillDiagnostic(diagnostic: SkillDiagnostic): string {
@@ -186,6 +191,47 @@ const App: FunctionalComponent = () => {
 					kind: "system",
 					id: crypto.randomUUID(),
 					text: `File attachment failed: ${message}`,
+					timestamp: Date.now(),
+				});
+				return;
+			}
+		}
+
+		// Resolve @-mentioned open tabs: inject tabId/url/title so the agent can act on a specific tab.
+		const tabMentions = parseTabMentions(task);
+		if (tabMentions.length > 0) {
+			try {
+				const resolved = await resolveTabMentions(tabMentions);
+				const missing = resolved.filter(
+					(r): r is { ok: false; missing: { tabId: string; displayName: string } } =>
+						!r.ok,
+				);
+				if (missing.length > 0) {
+					const labels = missing
+						.map((m) => `@[tab:${m.missing.tabId}:${m.missing.displayName}]`)
+						.join(", ");
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: `Tab reference failed: no open tab for ${labels}`,
+						timestamp: Date.now(),
+					});
+					return;
+				}
+				const tabBlock = resolved
+					.map((r) => (r.ok ? r.tab : null))
+					.filter((t): t is NonNullable<typeof t> => t !== null)
+					.map((t) => buildTabContextXmlBlock(t))
+					.join("\n");
+				if (tabBlock) {
+					resolvedTask = `${resolvedTask}\n${tabBlock}`;
+				}
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: `Tab reference failed: ${message}`,
 					timestamp: Date.now(),
 				});
 				return;

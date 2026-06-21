@@ -1,20 +1,31 @@
 import { render } from "preact-render-to-string";
 import { describe, expect, test, vi } from "vitest";
-import {
-	InputBar,
-	skillsToPickerItems,
-} from "../../src/sidepanel/components/InputBar";
+import { InputBar } from "../../src/sidepanel/components/input/InputBar";
+import { skillsToPickerItems } from "../../src/sidepanel/components/input/use-picker";
 import { detectSlashState } from "../../src/sidepanel/detect-mention-state";
 import type { SkillMeta } from "../../src/skills/skill-types";
 
 const mockState = {
 	chat: { messageIds: [], messagesById: {} },
 	ui: {
+		settingsOpen: false,
 		taskDraft: "test task",
+		activeTab: "chat",
 		chatUpload: { kind: "idle" as const },
 		chatDragOver: false,
+		atPicker: null,
+		slashPicker: null,
+		pickerActiveIndex: 0,
+		openTabs: [],
 	},
-	files: { nodes: {}, rootIds: [], selectedFileId: null, filesSessionId: null },
+	files: {
+		nodes: {},
+		rootIds: [],
+		selectedFileId: null,
+		filesVersion: 0,
+		expandedFolderIds: [],
+	},
+	skills: { diagnostics: [], catalog: [] },
 };
 
 vi.mock("zustand/react", () => ({

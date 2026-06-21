@@ -138,6 +138,34 @@ export class FilesController {
 		return this.runSerialized(() => this.fs.fsDelete(path));
 	}
 
+	async createFolder(path: string): Promise<void> {
+		return this.runSerialized(() => this.fs.fsMkdir(path));
+	}
+
+	async createFile(path: string, content = ""): Promise<void> {
+		return this.runSerialized(() => this.fs.fsWriteText(path, content));
+	}
+
+	async move(from: string, to: string): Promise<void> {
+		return this.runSerialized(() => this.fs.fsMove(from, to));
+	}
+
+	async rename(path: string, newName: string): Promise<string> {
+		const lastSlash = path.lastIndexOf("/");
+		const dir = lastSlash <= 0 ? "" : path.slice(0, lastSlash);
+		const newPath = dir === "" ? `/${newName}` : `${dir}/${newName}`;
+		await this.move(path, newPath);
+		return newPath;
+	}
+
+	async copy(from: string, to: string): Promise<void> {
+		return this.runSerialized(() => this.fs.fsCopy(from, to));
+	}
+
+	async deleteFolder(path: string): Promise<void> {
+		return this.runSerialized(() => this.fs.fsDelete(path));
+	}
+
 	async editFile(
 		path: string,
 		oldString: string,

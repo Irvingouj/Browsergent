@@ -26,6 +26,7 @@ export const selectActiveSessionId = (s: BrowsergentStore) =>
 export const selectExtjsStatus = (s: BrowsergentStore) => s.extjs.status;
 export const selectSkillDiagnostics = (s: BrowsergentStore) =>
 	s.skills.diagnostics;
+export const selectSkillCatalog = (s: BrowsergentStore) => s.skills.catalog;
 
 export const selectFilesState = (s: BrowsergentStore) => s.files;
 export const selectSelectedFileId = (s: BrowsergentStore) =>
@@ -33,3 +34,19 @@ export const selectSelectedFileId = (s: BrowsergentStore) =>
 export const selectFilesVersion = (s: BrowsergentStore) => s.files.filesVersion;
 export const selectExpandedFolderIds = (s: BrowsergentStore) =>
 	s.files.expandedFolderIds;
+export const selectCreatingKind = (s: BrowsergentStore) => s.files.creatingKind;
+export const selectCreatingName = (s: BrowsergentStore) => s.files.creatingName;
+export const selectCreatingParentPath = (s: BrowsergentStore) =>
+	s.files.creatingParentPath;
+export const selectContextMenu = (s: BrowsergentStore) => s.files.contextMenu;
+export const selectMovePromptTarget = (s: BrowsergentStore) =>
+	s.files.movePromptTarget;
+export const selectMovePromptValue = (s: BrowsergentStore) =>
+	s.files.movePromptValue;
+export const selectRenamingNodeId = (s: BrowsergentStore) =>
+	s.files.renamingNodeId;
+export const selectAtPicker = (s: BrowsergentStore) => s.ui.atPicker;
+export const selectSlashPicker = (s: BrowsergentStore) => s.ui.slashPicker;
+export const selectPickerActiveIndex = (s: BrowsergentStore) =>
+	s.ui.pickerActiveIndex;
+export const selectOpenTabs = (s: BrowsergentStore) => s.ui.openTabs;

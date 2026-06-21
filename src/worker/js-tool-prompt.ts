@@ -38,6 +38,7 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - The user may attach files using \`@[file:{path}:{displayName}]\` tokens at compose time. Attached contents appear as \`<attachment name="..." id="...">\` XML blocks in the task context. Treat them as part of the user's request.
 - \`file_read\`, \`file_edit\`, \`file_delete\`, \`file_write\` take a \`path\` argument — absolute (\`/foo.md\`) or relative (\`foo.md\` resolves to \`/foo.md\`).
 - If an attached file is too large, it may be truncated with a \`[truncated]\` marker.
+- The user may reference an open browser tab using \`@[tab:{tabId}:{title}]\` at compose time. The resolved tab appears in the task context as \`<tab tabId="..." url="..." title="..."/>\`. To act on that specific tab, call \`await web.tab.activate(tabId)\` then use \`web.tab.*\` (\`web.tab.snapshot\`, \`web.tab.click\`, \`web.tab.fill\`, etc.) with that \`tabId\` in the SAME cell — do NOT use \`page.*\` after activating, since the active tab may briefly resolve to the side panel and throw an opaque TypeError. Prefer \`web.tab.*\` whenever the task names that tab.
 
 ## Running uploaded scripts
 - \`run_js\` accepts either \`code\` (inline string) OR \`file: { name: "script.js" }\` (path to a text file in the shared OPFS filesystem). They are mutually exclusive — providing both returns E_JS_INVALID_INPUT.

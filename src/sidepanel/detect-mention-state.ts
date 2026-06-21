@@ -90,3 +90,27 @@ export function filesToPickerItems(
 			insertText: buildFileMentionToken(file.id, file.name),
 		}));
 }
+
+export function buildTabMentionToken(tabId: string | number, title: string): string {
+	return `@[tab:${tabId}:${sanitizeTokenName(title)}]`;
+}
+
+function isReferenceableTabUrl(url: string | undefined): boolean {
+	if (!url) return false;
+	// Testing invariant (AGENTS.md): the side panel and chrome:// pages are never
+	// targets, so they must not be referenceable either.
+	return url.startsWith("http://") || url.startsWith("https://");
+}
+
+export function tabsToPickerItems(
+	tabs: ReadonlyArray<chrome.tabs.Tab>,
+): CommandPickerItem[] {
+	return tabs
+		.filter((tab) => typeof tab.id === "number" && isReferenceableTabUrl(tab.url))
+		.map((tab) => ({
+			id: `tab:${tab.id}`,
+			label: tab.title?.trim() || tab.url || `Tab ${tab.id}`,
+			description: tab.url ?? "",
+			insertText: buildTabMentionToken(tab.id as number, tab.title ?? tab.url ?? ""),
+		}));
+}

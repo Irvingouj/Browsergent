@@ -69,6 +69,11 @@ declare module "@pi-oxide/extension-js" {
 		entries: FsListEntry[];
 	}
 
+	export interface FsCopyParams {
+		from: string;
+		to: string;
+	}
+
 	export interface FsWriteResult {
 		path: string;
 		bytes_written: number;
@@ -83,6 +88,8 @@ declare module "@pi-oxide/extension-js" {
 		writeBase64(params: FsWriteParams): Promise<FsWriteResult>;
 		mkdir(params: FsPathParams): Promise<FsBoolResult>;
 		delete(params: FsPathParams): Promise<FsBoolResult>;
+		copy(params: FsCopyParams): Promise<FsBoolResult>;
+		move(params: FsCopyParams): Promise<FsBoolResult>;
 	}
 
 	export class ExtensionSession {
