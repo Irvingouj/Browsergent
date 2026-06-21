@@ -182,8 +182,11 @@ Use page.* for target-tab automation. Use sidepanel.* only when explicitly contr
 Do not use page.evaluate, chrome.scripting.executeScript, or tab.evaluate.`;
 
 export function composeSystemPrompt(skillCatalog: string): string {
+	const now = new Date().toISOString();
 	const catalogBlock = skillCatalog.trim() ? `\n\n${skillCatalog.trim()}` : "";
-	return `${SYSTEM_PROMPT}
+	return `Current date and time: ${now}
+
+${SYSTEM_PROMPT}
 
 Use load_skill to load skill instructions from the available_skills catalog when relevant. Use load_skill with path when a skill references files under references/. Users may activate skills at compose time with /skill:name.${catalogBlock}`;
 }
