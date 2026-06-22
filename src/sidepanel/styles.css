@@ -449,3 +449,19 @@ body,
 	font-size: 12px;
 	color: var(--color-text-muted);
 }
+
+/* ChipInput (contentEditable task input) */
+.task-input-chip {
+	/* selection highlight stays visible over chips */
+	caret-color: var(--color-text-primary, currentColor);
+}
+.task-input-chip--empty::before {
+	content: attr(data-placeholder);
+	color: var(--color-text-dim, #999);
+	pointer-events: none;
+}
+/* Tight bordered pill, sits inline like a word — no extra spacing. */
+.mention-chip {
+	margin: 0 1px;
+	line-height: 1.4;
+}

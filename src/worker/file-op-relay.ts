@@ -3,6 +3,7 @@ export const FILE_OP_RELAY_TIMEOUT_MS = 30_000;
 export interface FileOpListEntry {
 	id: string;
 	name: string;
+	path: string;
 	size: number;
 	mime: string;
 	isText: boolean;

@@ -70,7 +70,9 @@ describe("InputBar", () => {
 		);
 		expect(html).toContain("Run");
 		expect(html).not.toContain("Stop");
-		expect(html).toContain("test task");
+		// ChipInput is a contentEditable div; the draft text is populated by an
+		// effect (not reflected as an attribute in SSR), so assert the textbox role.
+		expect(html).toContain('role="textbox"');
 	});
 
 	test("shows Stop button when running", () => {
@@ -97,7 +99,7 @@ describe("InputBar", () => {
 				sessionId="session-1"
 			/>,
 		);
-		expect(html).toMatch(/disabled[ >]/);
+		expect(html).not.toMatch(/contenteditable/);
 	});
 
 	test("does not disable input when not running", () => {
@@ -110,7 +112,7 @@ describe("InputBar", () => {
 				sessionId="session-1"
 			/>,
 		);
-		expect(html).not.toMatch(/disabled[ >]/);
+		expect(html).toMatch(/contenteditable/);
 	});
 });
 

@@ -171,15 +171,15 @@ describe("resolvePickerState", () => {
 });
 
 describe("buildPickerInsert", () => {
-	test("inserts token at startIndex and repositions cursor", () => {
+	test("inserts token at startIndex with trailing space, cursor after space", () => {
 		const result = buildPickerInsert(
 			"hello @file",
 			11,
 			6,
 			"@[file:f1:readme.md]",
 		);
-		expect(result.nextText).toBe("hello @[file:f1:readme.md]");
-		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md]".length);
+		expect(result.nextText).toBe("hello @[file:f1:readme.md] ");
+		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md] ".length);
 	});
 
 	test("inserts skill token at startIndex", () => {
@@ -193,15 +193,15 @@ describe("buildPickerInsert", () => {
 		expect(result.cursorPos).toBe("/skill:capability-check ".length);
 	});
 
-	test("preserves text after cursor", () => {
+	test("preserves text after cursor and adds trailing space", () => {
 		const result = buildPickerInsert(
 			"hello @file world",
 			11,
 			6,
 			"@[file:f1:readme.md]",
 		);
-		expect(result.nextText).toBe("hello @[file:f1:readme.md] world");
-		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md]".length);
+		expect(result.nextText).toBe("hello @[file:f1:readme.md]  world");
+		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md] ".length);
 	});
 
 	test("uses endIndex to slice after instead of cursor", () => {
@@ -212,8 +212,8 @@ describe("buildPickerInsert", () => {
 			"@[file:f1:readme.md]",
 			11,
 		);
-		expect(result.nextText).toBe("hello @[file:f1:readme.md] world");
-		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md]".length);
+		expect(result.nextText).toBe("hello @[file:f1:readme.md]  world");
+		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md] ".length);
 	});
 
 	test("endIndex different from cursor slices from endIndex", () => {
@@ -224,8 +224,8 @@ describe("buildPickerInsert", () => {
 			"@[file:f1:readme.md]",
 			11,
 		);
-		expect(result.nextText).toBe("hello @[file:f1:readme.md] world");
-		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md]".length);
+		expect(result.nextText).toBe("hello @[file:f1:readme.md]  world");
+		expect(result.cursorPos).toBe(6 + "@[file:f1:readme.md] ".length);
 	});
 });
 
@@ -319,6 +319,19 @@ describe("filesToPickerItems token insertion", () => {
 		expect(items).toHaveLength(2);
 		expect(items[0]?.id).toBe("f1");
 		expect(items[1]?.id).toBe("d1");
+	});
+
+	test("directory nodes emit @[dir:...] tokens, not file tokens", () => {
+		const files = [
+			{
+				id: "/project/src",
+				name: "src",
+				path: "/project/src",
+				kind: "directory" as const,
+			},
+		];
+		const items = filesToPickerItems(files);
+		expect(items[0]?.insertText).toBe("@[dir:/project/src:src]");
 	});
 });
 

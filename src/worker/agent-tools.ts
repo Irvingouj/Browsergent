@@ -262,9 +262,10 @@ function callsSetTimeout(jsSource?: string): boolean {
 
 const RUN_JS_DESCRIPTION = JS_TOOL_PROMPT;
 
-const FILE_LIST_DESCRIPTION = `List all files in the shared OPFS filesystem (rooted at /).
-Returns each file's path, name, size, mime, and isText flag. Binary files (isText=false)
-cannot be read with file_read.`;
+const FILE_LIST_DESCRIPTION = `List files in the shared OPFS filesystem (rooted at /).
+Returns each file's path, name, size, mime, and isText flag. Use a prefix directory
+path (e.g. "/user") to list only direct children of that directory. Binary files
+(isText=false) cannot be read with file_read.`;
 
 const FILE_READ_DESCRIPTION = `Read text content from a file.
 - \`path\` is the file path (e.g. "/foo.md" or "sub/bar.md"). Relative paths resolve against root "/".
@@ -362,15 +363,16 @@ function formatFileListResult(
 	files: {
 		id: string;
 		name: string;
+		path: string;
 		size: number;
 		mime: string;
 		isText: boolean;
 	}[],
 ): string {
 	if (files.length === 0) return "No files in session.";
-	const header = "name\tsize\tmime\tisText";
+	const header = "path\tname\tsize\tmime\tisText";
 	const rows = files.map(
-		(f) => `${f.name}\t${f.size}\t${f.mime}\t${f.isText ? "yes" : "no"}`,
+		(f) => `${f.path}\t${f.name}\t${f.size}\t${f.mime}\t${f.isText ? "yes" : "no"}`,
 	);
 	return [header, ...rows].join("\n");
 }

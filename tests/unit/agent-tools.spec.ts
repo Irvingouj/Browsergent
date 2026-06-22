@@ -445,6 +445,7 @@ describe("file_list tool", () => {
 				{
 					id: "f1",
 					name: "notes.md",
+					path: "/notes.md",
 					size: 12,
 					mime: "text/markdown",
 					isText: true,
@@ -452,6 +453,7 @@ describe("file_list tool", () => {
 				{
 					id: "f2",
 					name: "image.png",
+					path: "/image.png",
 					size: 100,
 					mime: "image/png",
 					isText: false,
@@ -462,9 +464,9 @@ describe("file_list tool", () => {
 		const handler = tools.getHandler("file_list");
 		if (!handler) throw new Error("file_list handler not found");
 		const result = (await handler({})) as string;
-		expect(result).toContain("name\tsize\tmime\tisText");
-		expect(result).toContain("notes.md\t12\ttext/markdown\tyes");
-		expect(result).toContain("image.png\t100\timage/png\tno");
+		expect(result).toContain("path\tname\tsize\tmime\tisText");
+		expect(result).toContain("/notes.md\tnotes.md\t12\ttext/markdown\tyes");
+		expect(result).toContain("/image.png\timage.png\t100\timage/png\tno");
 	});
 
 	test("returns 'No files in session' when empty", async () => {

@@ -77,7 +77,7 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 	{
 		name: "file_list",
 		description:
-			"List files the user uploaded to this session. Returns id, name, size, mime, and isText. Use prefix to filter. Use this BEFORE file_read/file_edit/file_delete to discover available file names.",
+			"List files the user uploaded to this session. Returns path, id, name, size, mime, and isText. Use prefix to filter by directory. Use this BEFORE file_read/file_edit/file_delete to discover available file paths.",
 		input_schema: {
 			type: "object",
 			properties: {

@@ -1,5 +1,5 @@
 import type { FunctionalComponent, Ref } from "preact";
-import { useCallback, useEffect } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { FilesController } from "../../../controllers/files-controller";
 import {
@@ -11,14 +11,18 @@ import { browsergentStore } from "../../../state/store";
 import { buildFileMentionToken } from "../../detect-mention-state";
 import { CommandPicker } from "../CommandPicker";
 import { useInputMode } from "./use-input-mode";
+import { ChipInput } from "./ChipInput";
 
 const MAX_INPUT_HEIGHT = 200;
+
+const INPUT_CLASS =
+	"w-full bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] max-h-[200px] overflow-y-auto leading-normal focus:border-accent focus:ring-[3px] focus:ring-accent-soft disabled:opacity-50 disabled:cursor-not-allowed";
 
 interface InputBarProps {
 	isRunning: boolean;
 	onRun: () => void;
 	onStop: () => void;
-	inputRef?: Ref<HTMLTextAreaElement>;
+	inputRef?: Ref<HTMLDivElement>;
 	filesController: FilesController | null;
 	sessionId: string;
 	onFilesChanged?: () => void;
@@ -40,19 +44,44 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const uploadError = chatUpload.kind === "error" ? chatUpload.message : null;
 
 	const mode = useInputMode({
-		inputRef,
 		filesController,
 		isRunning,
 		onSubmit: onRun,
 	});
 
+	// Caret offset tracked from ChipInput onChange; replaces reading
+	// textarea.selectionStart directly. pendingCaret restores the caret after
+	// external value changes (file drag-drop insert, picker, history).
+	const cursorRef = useRef(0);
+	const [pendingFileCaret, setPendingFileCaret] = useState<number | undefined>(
+		undefined,
+	);
+	const pendingCaret = mode.pendingCaret ?? pendingFileCaret;
+
+	// Track the contentEditable element so we can auto-resize it. The external
+	// inputRef is forwarded through ChipInput's callback ref.
+	const internalRef = useRef<HTMLDivElement | null>(null);
+	const setInputRef = useCallback(
+		(node: HTMLDivElement | null): void => {
+			internalRef.current = node;
+			if (!inputRef) return;
+			if (typeof inputRef === "object") {
+				inputRef.current = node;
+			} else {
+				inputRef(node);
+			}
+		},
+		[inputRef],
+	);
+
+	// Auto-grow the contentEditable to fit content, capped at MAX_INPUT_HEIGHT.
 	useEffect(() => {
-		const el = inputRef && "current" in inputRef ? inputRef.current : null;
+		const el = internalRef.current;
 		if (!el) return;
 		el.style.height = "auto";
 		const next = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
 		el.style.height = `${next}px`;
-	}, [taskInput, inputRef]);
+	}, [taskInput]);
 
 	const uploadAndInsertMentions = useCallback(
 		async (files: File[]): Promise<void> => {
@@ -64,8 +93,8 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				});
 				return;
 			}
-			const el = inputRef && "current" in inputRef ? inputRef.current : null;
-			const cursor = el?.selectionStart ?? taskInput.length;
+			// Caret offset tracked from ChipInput onChange (no textarea API).
+			const cursor = cursorRef.current;
 			browsergentStore.getState().setChatUploadStatus({ kind: "uploading" });
 			try {
 				const nodes = await filesController.uploadFiles(files);
@@ -82,10 +111,10 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						taskInput.slice(0, cursor) + insertText + taskInput.slice(cursor);
 					const nextCursor = cursor + insertText.length;
 					browsergentStore.getState().setTaskDraft(nextText);
+					cursorRef.current = nextCursor;
+					setPendingFileCaret(nextCursor);
 					requestAnimationFrame(() => {
-						if (!el) return;
-						el.focus();
-						el.setSelectionRange(nextCursor, nextCursor);
+						internalRef.current?.focus();
 					});
 				}
 				browsergentStore.getState().setChatUploadStatus({ kind: "idle" });
@@ -97,7 +126,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 					.setChatUploadStatus({ kind: "error", message });
 			}
 		},
-		[filesController, sessionId, taskInput, inputRef, onFilesChanged],
+		[filesController, sessionId, taskInput, onFilesChanged],
 	);
 
 	const handleDragOver = useCallback((e: DragEvent) => {
@@ -190,7 +219,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
 			>
-				<div class="relative flex-1">
+			<div class="relative flex-1">
 					{mode.isPickerOpen ? (
 						<CommandPicker
 							items={mode.pickerItems}
@@ -205,31 +234,23 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 							emptyMessage={mode.emptyMessage}
 						/>
 					) : null}
-					<textarea
-						ref={inputRef}
-						rows={1}
-						data-testid="task-input"
+					<ChipInput
+						inputRef={setInputRef}
 						value={taskInput}
-						onInput={(e) => {
-							const el = e.currentTarget;
-							browsergentStore.getState().setTaskDraft(el.value);
-							mode.onTextareaInput(el.value, el.selectionStart);
-						}}
-						onClick={(e) => {
-							const el = e.currentTarget;
-							mode.onTextareaInput(el.value, el.selectionStart);
-						}}
-						onKeyUp={(e) => {
-							const el = e.currentTarget;
-							mode.onTextareaInput(el.value, el.selectionStart);
-						}}
-						onKeyDown={mode.onTextareaKeyDown}
+						caretOffset={pendingCaret}
+					onChange={(canonical, cursor) => {
+						cursorRef.current = cursor;
+						setPendingFileCaret(undefined);
+						browsergentStore.getState().setTaskDraft(canonical);
+						mode.onInput(canonical, cursor);
+					}}
+						onKeyDown={mode.onKeyDown}
 						onFocus={() => mode.loadSkills()}
-						onBlur={mode.onTextareaBlur}
+						onBlur={mode.onBlur}
 						onPaste={handlePaste}
 						placeholder="Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"
 						disabled={isRunning || isUploading}
-						class="w-full bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] max-h-[200px] overflow-y-auto resize-none leading-normal focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim disabled:opacity-50 disabled:cursor-not-allowed"
+						class={INPUT_CLASS}
 					/>
 				</div>
 				{isRunning ? (

@@ -1,18 +1,65 @@
 import type { FileNode } from "../state/slices/files-slice";
 
-const TEXT_EXTENSIONS = new Set([
-	".md",
-	".txt",
-	".json",
-	".js",
-	".ts",
-	".jsx",
-	".tsx",
-	".css",
-	".html",
-	".xml",
-	".yaml",
-	".yml",
+const BINARY_EXTENSIONS = new Set([
+	".png",
+	".jpg",
+	".jpeg",
+	".gif",
+	".webp",
+	".ico",
+	".bmp",
+	".pdf",
+	".zip",
+	".gz",
+	".tar",
+	".tgz",
+	".rar",
+	".7z",
+	".exe",
+	".dll",
+	".so",
+	".dylib",
+	".class",
+	".jar",
+	".war",
+	".wav",
+	".mp3",
+	".mp4",
+	".avi",
+	".mov",
+	".webm",
+	".ogg",
+	".flac",
+	".woff",
+	".woff2",
+	".ttf",
+	".otf",
+	".eot",
+	".sqlite",
+	".db",
+	".pak",
+	// Office formats (ZIP containers that decode as garbled text, not real text).
+	".doc",
+	".docx",
+	".xls",
+	".xlsx",
+	".ppt",
+	".pptx",
+	// Modern image formats.
+	".heic",
+	".avif",
+	// Other common binary formats.
+	".wasm",
+	".bz2",
+	".xz",
+	".zst",
+	".iso",
+	".dmg",
+	".apk",
+	".msi",
+	".svgz",
+	".psd",
+	".o",
 ]);
 
 export function sanitizeFileName(name: string): string {
@@ -28,10 +75,10 @@ export function sanitizeFileName(name: string): string {
 
 export function isTextFile(name: string): boolean {
 	const lower = name.toLowerCase();
-	for (const ext of TEXT_EXTENSIONS) {
-		if (lower.endsWith(ext)) return true;
+	for (const ext of BINARY_EXTENSIONS) {
+		if (lower.endsWith(ext)) return false;
 	}
-	return false;
+	return true;
 }
 
 /** Read a File as pure base64. Environment-agnostic (browser + node test env). */

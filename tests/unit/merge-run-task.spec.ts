@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-	buildDisplayTask,
 	extractSkillBlock,
 	mergeSkillAndFileAttachments,
 } from "../../src/sidepanel/merge-run-task";
@@ -28,29 +27,6 @@ describe("extractSkillBlock", () => {
 			skillBlock: resolved,
 			userTaskRemainder: null,
 		});
-	});
-});
-
-describe("buildDisplayTask", () => {
-	test("strips skill token and file mentions for chat display", () => {
-		const task = "/skill:capability-check @[file:f1:notes.md] do thing";
-		expect(buildDisplayTask(task)).toBe("do thing");
-	});
-
-	test("falls back to skill label when cleaned text is empty", () => {
-		expect(buildDisplayTask("/skill:capability-check")).toBe(
-			"Using skill: capability-check",
-		);
-	});
-
-	test("falls back to attachment label when only file mentions remain", () => {
-		expect(buildDisplayTask("@[file:f1:notes.md]")).toBe("Attached: notes.md");
-	});
-
-	test("combines skill and attachment labels when both present", () => {
-		expect(
-			buildDisplayTask("/skill:capability-check @[file:f1:notes.md]"),
-		).toBe("Using skill: capability-check · Attached: notes.md");
 	});
 });
 

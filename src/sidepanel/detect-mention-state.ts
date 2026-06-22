@@ -64,8 +64,11 @@ export function buildPickerInsert(
 ): { nextText: string; cursorPos: number } {
 	const before = text.slice(0, startIndex);
 	const after = text.slice(endIndex ?? cursor);
-	const nextText = `${before}${insertText}${after}`;
-	const cursorPos = before.length + insertText.length;
+	// Always land the cursor after a trailing space so the picker does not
+	// immediately re-trigger on the just-inserted @ or / token.
+	const suffix = insertText.endsWith(" ") ? "" : " ";
+	const nextText = `${before}${insertText}${suffix}${after}`;
+	const cursorPos = before.length + insertText.length + suffix.length;
 	return { nextText, cursorPos };
 }
 
@@ -77,6 +80,10 @@ export function buildFileMentionToken(id: string, name: string): string {
 	return `@[file:${id}:${sanitizeTokenName(name)}]`;
 }
 
+export function buildDirMentionToken(id: string, name: string): string {
+	return `@[dir:${id}:${sanitizeTokenName(name)}]`;
+}
+
 export function filesToPickerItems(
 	files: ReadonlyArray<FileNode>,
 ): CommandPickerItem[] {
@@ -84,7 +91,12 @@ export function filesToPickerItems(
 		id: file.id,
 		label: file.name,
 		description: file.path,
-		insertText: buildFileMentionToken(file.id, file.name),
+		// Directories are referenced by path, not read as file content —
+		// the agent explores them with file tools at run time.
+		insertText:
+			file.kind === "directory"
+				? buildDirMentionToken(file.id, file.name)
+				: buildFileMentionToken(file.id, file.name),
 	}));
 }
 

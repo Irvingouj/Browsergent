@@ -99,6 +99,69 @@ describe("sanitizeFileName", () => {
 });
 
 describe("isTextFile", () => {
+	test("returns false for known binary extensions", () => {
+		expect(isTextFile("image.png")).toBe(false);
+		expect(isTextFile("photo.jpg")).toBe(false);
+		expect(isTextFile("photo.jpeg")).toBe(false);
+		expect(isTextFile("anim.gif")).toBe(false);
+		expect(isTextFile("icon.webp")).toBe(false);
+		expect(isTextFile("favicon.ico")).toBe(false);
+		expect(isTextFile("bitmap.bmp")).toBe(false);
+		expect(isTextFile("document.pdf")).toBe(false);
+		expect(isTextFile("archive.zip")).toBe(false);
+		expect(isTextFile("archive.gz")).toBe(false);
+		expect(isTextFile("archive.tar")).toBe(false);
+		expect(isTextFile("archive.tar.gz")).toBe(false);
+		expect(isTextFile("archive.tgz")).toBe(false);
+		expect(isTextFile("archive.rar")).toBe(false);
+		expect(isTextFile("archive.7z")).toBe(false);
+		expect(isTextFile("app.exe")).toBe(false);
+		expect(isTextFile("lib.dll")).toBe(false);
+		expect(isTextFile("lib.so")).toBe(false);
+		expect(isTextFile("lib.dylib")).toBe(false);
+		expect(isTextFile("Main.class")).toBe(false);
+		expect(isTextFile("app.jar")).toBe(false);
+		expect(isTextFile("app.war")).toBe(false);
+		expect(isTextFile("sound.wav")).toBe(false);
+		expect(isTextFile("song.mp3")).toBe(false);
+		expect(isTextFile("video.mp4")).toBe(false);
+		expect(isTextFile("video.avi")).toBe(false);
+		expect(isTextFile("video.mov")).toBe(false);
+		expect(isTextFile("video.webm")).toBe(false);
+		expect(isTextFile("audio.ogg")).toBe(false);
+		expect(isTextFile("audio.flac")).toBe(false);
+		expect(isTextFile("font.woff")).toBe(false);
+		expect(isTextFile("font.woff2")).toBe(false);
+		expect(isTextFile("font.ttf")).toBe(false);
+		expect(isTextFile("font.otf")).toBe(false);
+		expect(isTextFile("font.eot")).toBe(false);
+		expect(isTextFile("data.sqlite")).toBe(false);
+		expect(isTextFile("data.db")).toBe(false);
+		expect(isTextFile("data.pak")).toBe(false);
+		// Office formats (ZIP containers that decode as garbled text).
+		expect(isTextFile("report.doc")).toBe(false);
+		expect(isTextFile("report.docx")).toBe(false);
+		expect(isTextFile("sheet.xls")).toBe(false);
+		expect(isTextFile("sheet.xlsx")).toBe(false);
+		expect(isTextFile("deck.ppt")).toBe(false);
+		expect(isTextFile("deck.pptx")).toBe(false);
+		// Modern phone image formats.
+		expect(isTextFile("photo.heic")).toBe(false);
+		expect(isTextFile("photo.avif")).toBe(false);
+		// Other common binary formats.
+		expect(isTextFile("module.wasm")).toBe(false);
+		expect(isTextFile("archive.bz2")).toBe(false);
+		expect(isTextFile("archive.xz")).toBe(false);
+		expect(isTextFile("archive.zst")).toBe(false);
+		expect(isTextFile("disk.iso")).toBe(false);
+		expect(isTextFile("app.dmg")).toBe(false);
+		expect(isTextFile("app.apk")).toBe(false);
+		expect(isTextFile("app.msi")).toBe(false);
+		expect(isTextFile("compressed.svgz")).toBe(false);
+		expect(isTextFile("design.psd")).toBe(false);
+		expect(isTextFile("object.o")).toBe(false);
+	});
+
 	test("returns true for known text extensions", () => {
 		expect(isTextFile("readme.md")).toBe(true);
 		expect(isTextFile("data.txt")).toBe(true);
@@ -109,19 +172,50 @@ describe("isTextFile", () => {
 		expect(isTextFile("page.tsx")).toBe(true);
 		expect(isTextFile("style.css")).toBe(true);
 		expect(isTextFile("index.html")).toBe(true);
+		expect(isTextFile("config.xml")).toBe(true);
+		expect(isTextFile("config.yaml")).toBe(true);
+		expect(isTextFile("config.yml")).toBe(true);
+		expect(isTextFile("data.csv")).toBe(true);
+		expect(isTextFile("config.toml")).toBe(true);
+		expect(isTextFile("config.ini")).toBe(true);
+		expect(isTextFile("config.conf")).toBe(true);
+		expect(isTextFile(".env")).toBe(true);
+		expect(isTextFile("setup.sh")).toBe(true);
+		expect(isTextFile("setup.bash")).toBe(true);
+		expect(isTextFile("setup.zsh")).toBe(true);
+		expect(isTextFile("setup.fish")).toBe(true);
+		expect(isTextFile("script.py")).toBe(true);
+		expect(isTextFile("lib.rs")).toBe(true);
+		expect(isTextFile("main.go")).toBe(true);
+		expect(isTextFile("Main.java")).toBe(true);
+		expect(isTextFile("main.c")).toBe(true);
+		expect(isTextFile("main.cpp")).toBe(true);
+		expect(isTextFile("main.cc")).toBe(true);
+		expect(isTextFile("header.h")).toBe(true);
+		expect(isTextFile("header.hpp")).toBe(true);
+		expect(isTextFile("query.sql")).toBe(true);
+		expect(isTextFile("app.log")).toBe(true);
+		expect(isTextFile("page.mdx")).toBe(true);
+		expect(isTextFile("schema.graphql")).toBe(true);
+		expect(isTextFile("schema.proto")).toBe(true);
+		expect(isTextFile("Dockerfile")).toBe(true);
 	});
 
-	test("returns false for binary extensions", () => {
-		expect(isTextFile("image.png")).toBe(false);
-		expect(isTextFile("archive.zip")).toBe(false);
-		expect(isTextFile("document.pdf")).toBe(false);
-		expect(isTextFile("app.exe")).toBe(false);
+	test("returns true for files with no extension", () => {
+		expect(isTextFile("Makefile")).toBe(true);
+		expect(isTextFile("README")).toBe(true);
+		expect(isTextFile("Dockerfile")).toBe(true);
+		expect(isTextFile("LICENSE")).toBe(true);
 	});
 
 	test("is case-insensitive", () => {
 		expect(isTextFile("README.MD")).toBe(true);
 		expect(isTextFile("README.md")).toBe(true);
 		expect(isTextFile("IMAGE.PNG")).toBe(false);
+		expect(isTextFile("IMAGE.png")).toBe(false);
+		expect(isTextFile("script.CSV")).toBe(true);
+		expect(isTextFile("script.csv")).toBe(true);
+		expect(isTextFile("archive.ZIP")).toBe(false);
 	});
 });
 

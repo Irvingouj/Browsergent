@@ -1,11 +1,9 @@
 import {
-	parseSkillActivation,
 	stripSkillToken,
 } from "../skills/resolve-skill-activations";
 import {
 	buildAttachmentXmlBlock,
 	buildTaskWithAttachments,
-	parseFileMentions,
 	type ResolvedAttachment,
 	stripFileMentions,
 } from "./resolve-file-mentions";
@@ -25,25 +23,6 @@ export function extractSkillBlock(resolvedTask: string): {
 		skillBlock: resolvedTask.slice(0, idx),
 		userTaskRemainder: resolvedTask.slice(idx + USER_TASK_PREFIX.length),
 	};
-}
-
-export function buildDisplayTask(task: string): string {
-	const cleaned = stripTabMentions(stripFileMentions(stripSkillToken(task))).trim();
-	if (cleaned) return cleaned;
-
-	const skill = parseSkillActivation(task);
-	const mentions = parseFileMentions(task);
-	const parts: string[] = [];
-	if (skill) {
-		parts.push(`Using skill: ${skill.skillName}`);
-	}
-	if (mentions.length > 0) {
-		parts.push(`Attached: ${mentions.map((m) => m.displayName).join(", ")}`);
-	}
-	if (parts.length > 0) {
-		return parts.join(" · ");
-	}
-	return task;
 }
 
 export function mergeSkillAndFileAttachments(

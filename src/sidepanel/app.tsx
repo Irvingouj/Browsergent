@@ -35,9 +35,15 @@ import { SettingsForm } from "./components/SettingsForm";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
 import {
-	buildDisplayTask,
 	mergeSkillAndFileAttachments,
 } from "./merge-run-task";
+import { isTextFile } from "../controllers/files-controller";
+import {
+	buildDirContextXmlBlock,
+	dedupeDirMentionsById,
+	parseDirMentions,
+} from "./resolve-dir-mentions";
+import type { DirContextChild } from "./resolve-dir-mentions";
 import {
 	parseFileMentions,
 	resolveFileMentions,
@@ -110,7 +116,7 @@ const App: FunctionalComponent = () => {
 		filesControllerRef,
 	} = useAppInit();
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
-	const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	const inputRef = useRef<HTMLDivElement | null>(null);
 	const prevIsRunning = useRef<boolean>(false);
 	const shouldFocusRef = useRef<boolean>(false);
 	useTitleGeneration(sessionControllerRef, messages);
@@ -197,6 +203,37 @@ const App: FunctionalComponent = () => {
 			}
 		}
 
+	// Resolve @[dir:...] mentions: list their immediate children so the agent
+	// knows what's inside without wasting turns on file_list.
+	const dirMentions = parseDirMentions(task);
+	if (dirMentions.length > 0) {
+		const filesController = filesControllerRef.current;
+		const deduped = dedupeDirMentionsById(dirMentions);
+		if (filesController) {
+			const blocks: string[] = [];
+			for (const mention of deduped) {
+				let children: DirContextChild[] = [];
+				try {
+					const nodes = await filesController.listDirectChildren(mention.path);
+					children = nodes.map((node): DirContextChild => ({
+						name: node.name,
+						path: node.path,
+						kind: node.kind,
+						size: node.size ?? 0,
+						isText: isTextFile(node.name),
+					}));
+				} catch {
+					// degrade gracefully: emit note form on failure
+				}
+				blocks.push(buildDirContextXmlBlock(mention, children));
+			}
+			const dirBlock = blocks.join("\n");
+			if (dirBlock) {
+				resolvedTask = `${resolvedTask}\n${dirBlock}`;
+			}
+		}
+	}
+
 		// Resolve @-mentioned open tabs: inject tabId/url/title so the agent can act on a specific tab.
 		const tabMentions = parseTabMentions(task);
 		if (tabMentions.length > 0) {
@@ -247,7 +284,7 @@ const App: FunctionalComponent = () => {
 			type: "agentStart",
 			runId,
 			sessionId,
-			task: buildDisplayTask(task),
+			task,
 			resolvedTask,
 			skillCatalog,
 			activatedSkills,

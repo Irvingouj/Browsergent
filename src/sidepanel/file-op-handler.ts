@@ -25,16 +25,20 @@ export async function handleFileOp(
 
 	switch (op.op) {
 		case "list": {
-			const nodes = await filesController.listAllFiles();
-			const prefix = op.prefix ?? "";
-			const filtered = prefix
-				? nodes.filter(
-						(n) => n.path.startsWith(prefix) || n.name.startsWith(prefix),
-					)
-				: nodes;
-			const files: FileOpListEntry[] = filtered.map((n) => ({
+			// Normalize: strip trailing slashes (except root) so "/user/" becomes
+			// "/user" and produces clean "/user/a.md" paths, not "/user//a.md".
+			const rawPrefix = op.prefix || undefined;
+			const prefix =
+				rawPrefix && rawPrefix !== "/" && rawPrefix.endsWith("/")
+					? rawPrefix.replace(/\/+$/, "")
+					: rawPrefix;
+			const nodes = prefix
+				? await filesController.listDirectChildren(prefix)
+				: await filesController.listAllFiles();
+			const files: FileOpListEntry[] = nodes.map((n) => ({
 				id: n.id,
 				name: n.name,
+				path: n.path,
 				size: n.size ?? 0,
 				mime: n.mime ?? "application/octet-stream",
 				isText: isTextFile(n.name),

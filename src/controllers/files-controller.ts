@@ -94,6 +94,30 @@ export class FilesController {
 		return this.scanRecursive("/", undefined);
 	}
 
+	async listDirectChildren(dirPath: string): Promise<FileNode[]> {
+		let entries: ReadonlyArray<{ name: string; kind: string }>;
+		try {
+			entries = await this.fs.fsList(dirPath);
+		} catch {
+			return [];
+		}
+		const out: FileNode[] = [];
+		for (const entry of entries) {
+			const childPath =
+				dirPath === "/" ? `/${entry.name}` : `${dirPath}/${entry.name}`;
+			if (entry.kind === "directory") {
+				out.push(
+					buildDirectoryNode({ name: entry.name, path: childPath }),
+				);
+			} else {
+				out.push(
+					buildFileNode({ name: entry.name, path: childPath }),
+				);
+			}
+		}
+		return out;
+	}
+
 	private async scanRecursive(
 		root: string,
 		parentId: string | undefined,
