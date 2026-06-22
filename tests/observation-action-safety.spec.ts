@@ -105,6 +105,54 @@ test("observation-action safety: branching click does NOT invalidate lease (E2E)
 	await close();
 	mock.server.close();
 });
+
+test("navigation click can read the destination title in the same run_js cell", async () => {
+	test.setTimeout(90000);
+	const server = createServer((req, res) => {
+		res.writeHead(200, { "Content-Type": "text/html" });
+		res.end(
+			req.url === "/destination"
+				? "<title>Destination</title>"
+				: '<a href="/destination">More information...</a>',
+		);
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const address = server.address();
+	const url = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}/`;
+	const code = `const d = await page.snapshot_data();
+const link = d.nodes.find(n => n.name === "More information...");
+await page.click({ refId: link.refId });
+console.log("DESTINATION_TITLE:" + await page.title());`;
+	const mock = startMockAnthropicServer({
+		responses: [
+			{
+				chunks: toolUseChunks("nc1", "nm1", code),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+		],
+	});
+	const { context, sidePanel, close } = await launchExtension();
+	const testPage = await context.newPage();
+	await testPage.goto(url);
+	await focusTargetTab(testPage);
+	await configureMockProvider(sidePanel, mock.url);
+	await focusTargetTab(testPage);
+	await sidePanel
+		.locator('[data-testid="task-input"]')
+		.fill("open the link and read the title");
+	await focusTargetTab(testPage);
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+
+	await sidePanel.getByRole("button", { name: /#1 run_js/ }).click();
+	await expect(
+		sidePanel.getByText(/DESTINATION_TITLE:Destination/),
+	).toBeVisible({ timeout: 30000 });
+
+	server.close();
+	await close();
+	mock.server.close();
+});
 // Regression guard for the form-safe lease design: multiple fills on a single
 // observation MUST all succeed. This is the core promise — fills don't change
 // DOM structure, so they must NOT invalidate the lease. If a future change

@@ -235,6 +235,32 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		expect(envelope.hint.toLowerCase()).toContain("tabid");
 	});
 
+	test("empty-message TypeError after a snapshot lookup tells the agent to verify the match", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const handler = getRunJsHandler(makeTools(runJs));
+		const result = await handler({
+			code: `const d = await page.snapshot_data();
+const link = d.nodes.find(n => n.name.includes("More information"));
+await page.click({ refId: link.refId });`,
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.hint).toContain("find(...) returned undefined");
+		expect(envelope.hint).not.toContain("Use web.tab.*");
+	});
+
 	test("empty-message TypeError on web.tab.* code yields no tab hint", async () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",

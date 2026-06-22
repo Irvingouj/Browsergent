@@ -236,6 +236,16 @@ function classifyErrorBase(
 			hint: "A TypeError occurred in a cell using setTimeout/setInterval. The sandbox has NO setTimeout — use `await web.sleep(ms)` to wait. Replace `await new Promise(r => setTimeout(r, N))` with `await web.sleep(N)`.",
 		};
 	}
+	if (
+		isOpaqueRuntimeError &&
+		jsSource?.includes(".find(") &&
+		jsSource.includes(".refId")
+	) {
+		return {
+			code: errCode ?? "E_JS_RUNTIME",
+			hint: "A snapshot lookup likely failed: find(...) returned undefined before its refId was used. Inspect the snapshot's actual nodes and verify the match before acting.",
+		};
+	}
 	if (isOpaqueRuntimeError && callsPageStar(jsSource)) {
 		return {
 			code: errCode ?? "E_JS_RUNTIME",
