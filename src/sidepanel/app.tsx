@@ -345,7 +345,13 @@ const App: FunctionalComponent = () => {
 			snapshot.trace,
 			snapshot.diagnostics,
 		);
-	}, [sessionControllerRef]);
+		// Create/delete/rename/move mutate OPFS then call onFilesChanged; re-list
+		// the tree so the new node appears. FilesPanel's mount-load effect no
+		// longer re-lists on filesVersion (that caused a feedback loop that
+		// wiped the selection and broke the preview), so mutations must refresh
+		// explicitly.
+		void refreshFiles();
+	}, [sessionControllerRef, refreshFiles]);
 
 	const handleSwitchSession = useCallback(
 		async (id: string) => {

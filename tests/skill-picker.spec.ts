@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension } from "./helpers";
+import { launchExtension, readTaskInput } from "./helpers";
 
 test("/ picker inserts skill token into task input", async () => {
 	test.setTimeout(60000);
@@ -20,7 +20,7 @@ test("/ picker inserts skill token into task input", async () => {
 
 	await sidePanel.getByTestId("command-picker-item-capability-check").click();
 
-	const value = await taskInput.inputValue();
+	const value = await readTaskInput(sidePanel);
 	expect(value).toBe("/skill:capability-check ");
 
 	await close();

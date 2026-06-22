@@ -73,7 +73,17 @@ export async function resolveFileMentions(
 ): Promise<ResolvedAttachment[]> {
 	const resolved: ResolvedAttachment[] = [];
 	for (const mention of dedupeFileMentionsById(mentions)) {
-		const content = await filesController.readFileText(mention.fileId);
+		let content: string;
+		try {
+			content = await filesController.readFileText(mention.fileId);
+		} catch (err: unknown) {
+			const code =
+				err instanceof Error ? err.message : String(err);
+			if (code.includes("E_NOT_FOUND")) {
+				throw new Error(`File not found: ${mention.fileId}`);
+			}
+			throw err;
+		}
 		const truncated = truncateFileContent(content);
 		resolved.push({
 			fileId: mention.fileId,

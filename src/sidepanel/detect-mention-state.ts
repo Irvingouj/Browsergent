@@ -87,17 +87,24 @@ export function buildDirMentionToken(id: string, name: string): string {
 export function filesToPickerItems(
 	files: ReadonlyArray<FileNode>,
 ): CommandPickerItem[] {
-	return files.map((file) => ({
-		id: file.id,
-		label: file.name,
-		description: file.path,
-		// Directories are referenced by path, not read as file content —
-		// the agent explores them with file tools at run time.
-		insertText:
-			file.kind === "directory"
-				? buildDirMentionToken(file.id, file.name)
-				: buildFileMentionToken(file.id, file.name),
-	}));
+	// Skills live in /skills/ and are managed by the skill system; the @-mention
+	// picker is for user files only, so exclude them (and /skills/.seed-version).
+	return files
+		.filter(
+			(file) =>
+				file.path !== "/skills" && !file.path.startsWith("/skills/"),
+		)
+		.map((file) => ({
+			id: file.id,
+			label: file.name,
+			description: file.path,
+			// Directories are referenced by path, not read as file content —
+			// the agent explores them with file tools at run time.
+			insertText:
+				file.kind === "directory"
+					? buildDirMentionToken(file.id, file.name)
+					: buildFileMentionToken(file.id, file.name),
+		}));
 }
 
 export function buildTabMentionToken(tabId: string | number, title: string): string {

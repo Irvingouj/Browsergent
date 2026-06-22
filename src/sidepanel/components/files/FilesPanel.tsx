@@ -62,6 +62,11 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		[expandedFolderIds],
 	);
 
+	// Mount-load the file tree. Mutations (upload, agent file_write, delete,
+	// session switch via refreshFiles) update the store directly through
+	// addFileNode/setFileNodes, so we must NOT re-list on filesVersion — that
+	// would loop: setFileNodes bumps filesVersion → effect re-fires →
+	// setFileNodes again, clearing selection and never letting the preview load.
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			filesController
@@ -72,7 +77,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 				});
 		}, 0);
 		return () => clearTimeout(timer);
-	}, [filesController, filesState.filesVersion]);
+	}, [filesController]);
 
 	useEffect(() => {
 		if (!error) return;

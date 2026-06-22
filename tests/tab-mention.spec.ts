@@ -3,6 +3,7 @@ import {
 	configureMockProvider,
 	extractFirstUserMessageText,
 	launchExtension,
+	readTaskInput,
 	startMockAnthropicServer,
 } from "./helpers";
 
@@ -117,7 +118,7 @@ test("selecting a tab inserts the @[tab:...] token", async () => {
 		.first()
 		.click();
 
-	const value = await taskInput.inputValue();
+	const value = await readTaskInput(sidePanel);
 	expect(value).toContain("@[tab:");
 	expect(value).toContain("Page A");
 
@@ -161,7 +162,12 @@ test("run with a tab mention injects <tab .../> XML into the model request", asy
 		.getByTestId(/^command-picker-item-/)
 		.first()
 		.click();
-
+	// Wait for the tab-mention chip to render in the contentEditable before
+	// typing more text — the picker click dispatches setTaskDraft and ChipInput
+	// reconciles async; typing into the stale DOM would overwrite the token.
+	await expect(
+		sidePanel.locator('[data-testid="task-input"]'),
+	).toContainText("Target Page", { timeout: 5000 });
 	await taskInput.pressSequentially(" describe this tab");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

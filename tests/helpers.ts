@@ -179,6 +179,49 @@ export async function configureMockProvider(
 	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
 }
 
+/**
+ * Read the canonical value of the contenteditable task-input. Chip spans
+ * contribute their `data-raw` token (@[file:…], @[tab:…], /skill:…); text
+ * nodes contribute their text. Replaces `inputValue()`, which only worked
+ * when task-input was a <textarea>.
+ *
+ * The contentEditable DOM is updated by an async (useEffect) reconciliation
+ * one render after setTaskDraft, so we poll until the DOM settles (two
+ * consecutive identical reads) before returning — picker-insert tests read
+ * immediately after a click that dispatched setTaskDraft.
+ */
+export async function readTaskInput(sidePanel: Page): Promise<string> {
+	const readOnce = async (): Promise<string> => {
+		return sidePanel.evaluate(() => {
+			const el = document.querySelector('[data-testid="task-input"]');
+			if (!el) return "";
+			let out = "";
+			const walk = (parent: Node): void => {
+				parent.childNodes.forEach((child) => {
+					if (child.nodeType === Node.TEXT_NODE) {
+						out += child.textContent ?? "";
+					} else if (child.nodeType === Node.ELEMENT_NODE) {
+						const span = child as HTMLElement;
+						const raw = span.getAttribute("data-raw");
+						if (raw) out += raw;
+						else walk(child);
+					}
+				});
+			};
+			walk(el);
+			return out;
+		});
+	};
+	let prev = await readOnce();
+	for (let i = 0; i < 20; i++) {
+		await sidePanel.waitForTimeout(50);
+		const next = await readOnce();
+		if (next === prev) return next;
+		prev = next;
+	}
+	return prev;
+}
+
 import { createServer } from "node:http";
 
 export interface MockAnthropicServer {

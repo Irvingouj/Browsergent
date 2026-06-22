@@ -187,16 +187,31 @@ export function createFilesSlice(
 				},
 			}));
 		},
-		setFileNodes(nodes) {
-			set((state) => ({
+	setFileNodes(nodes) {
+		const next = buildFileState(nodes);
+		set((state) => {
+			// Only clear selection if its node is gone; otherwise preserve it so
+			// the preview keeps its content while FilesPanel's listAllFiles effect
+			// refreshes the tree. This breaks the loop: effect fires → setFileNodes
+			// → selectedFileId cleared → selection lost → preview unloadable.
+			const selectedFileId =
+				state.files.selectedFileId &&
+				Object.prototype.hasOwnProperty.call(
+					next.nodes,
+					state.files.selectedFileId,
+				)
+					? state.files.selectedFileId
+					: null;
+			return {
 				files: {
 					...state.files,
-					...buildFileState(nodes),
-					selectedFileId: null,
+					...next,
+					selectedFileId,
 					filesVersion: state.files.filesVersion + 1,
 				},
-			}));
-		},
+			};
+		});
+	},
 		incrementFilesVersion() {
 			set((state) => ({
 				files: { ...state.files, filesVersion: state.files.filesVersion + 1 },

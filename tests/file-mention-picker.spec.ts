@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension, uploadFileViaPanel } from "./helpers";
+import { launchExtension, readTaskInput, uploadFileViaPanel } from "./helpers";
 
 test("@ picker inserts file mention token into task input", async () => {
 	test.setTimeout(60000);
@@ -34,7 +34,7 @@ test("@ picker inserts file mention token into task input", async () => {
 		.getByTestId("command-picker-item-/picker.txt")
 		.click();
 
-	const value = await taskInput.inputValue();
+	const value = await readTaskInput(sidePanel);
 	expect(value).toMatch(/@\[file:[^:\]]+:picker\.txt\]/);
 
 	await close();
