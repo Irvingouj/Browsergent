@@ -48,4 +48,9 @@ describe("agent prompt policy", () => {
 		expect(SYSTEM_PROMPT).toContain("dispatch confirmations only");
 		expect(SYSTEM_PROMPT).toContain("observation lease is invalidated");
 	});
+
+	test("documents select_option for comboboxes", () => {
+		expect(JS_TOOL_PROMPT).toContain("select_option");
+		expect(JS_TOOL_PROMPT).toContain("combobox");
+	});
 });

@@ -8,9 +8,10 @@ import {
 	startMockAnthropicServer,
 } from "./helpers";
 
-// Fixture: a button that, when clicked, inserts a child node (childList mutation).
-// Under the observation lease, the first click invalidates the lease, so a
-// second click against the SAME observation must return E_OBSERVATION_REQUIRED.
+// Fixture: clicking the Branch button inserts an unrelated child node
+// (childList mutation). Under the lazy observation lease, only the target
+// element's disconnect/fingerprint-change invalidates its refId — a mutation
+// elsewhere on the page does NOT. Both clicks must succeed back-to-back.
 const HTML = `
 <!DOCTYPE html>
 <html>
@@ -35,20 +36,14 @@ const HTML = `
 
 const SNAPSHOT_CODE = "await page.snapshot_data();";
 
-// snapshot → click Branch (adds a child → lease invalidated) → click Other.
-// The second click MUST fail with E_OBSERVATION_REQUIRED.
+// snapshot → click Branch (adds a child → under lazy lease this does NOT
+// invalidate other's refId) → click Other. The second click MUST succeed.
 const DOUBLE_CLICK_CODE = `const d = await page.snapshot_data();
 const branch = d.nodes.find(n => n.name === "Branch");
 const other = d.nodes.find(n => n.name === "Other");
 await page.click({ refId: branch.refId });
-let secondResult;
-try {
-  await page.click({ refId: other.refId });
-  secondResult = "SECOND_CLICK_SUCCEEDED";
-} catch (e) {
-  secondResult = String((e && e.message) || e);
-}
-console.log("SECOND_CLICK_RESULT:" + secondResult);`;
+await page.click({ refId: other.refId });
+console.log("SECOND_CLICK_OK");`;
 
 function startServer(): Promise<{ url: string; server: Server }> {
 	return new Promise((resolve) => {
@@ -73,7 +68,7 @@ function toolUseChunks(id: string, messageId: string, code: string): string[] {
 	];
 }
 
-test("observation-action safety: branching click invalidates lease (E2E)", async () => {
+test("observation-action safety: branching click does NOT invalidate lease (E2E)", async () => {
 	test.setTimeout(120000);
 	const { url, server } = await startServer();
 
@@ -94,27 +89,22 @@ test("observation-action safety: branching click invalidates lease (E2E)", async
 	await sidePanel.locator('[data-testid="task-input"]').fill("click branch then other");
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	// Both clicks fire in one run_js cell. The Branch click sets "chipped"
+	// then the Other click sets "other_clicked" — the final state proves both succeeded.
 
-	// Both run_js cells should complete and the agent reports done.
-	await expect(sidePanel.locator("text=done").first()).toBeVisible({
-		timeout: 60000,
-	});
-
-	// The Branch button fired (chip added → status = "chipped").
-	await expect(testPage.locator("#status")).toHaveText("chipped", { timeout: 5000 });
-
-	// The Other button must NOT have fired. If the lease failed to invalidate,
-	// the second click would have dispatched and set status = "other_clicked".
-	// Give the page a brief window for any late dispatch, then assert unchanged.
-	await testPage.waitForTimeout(500);
-	const statusAfter = await testPage.locator("#status").textContent();
-	expect(statusAfter).toBe("chipped");
+	// …then the Other button fired too, setting status = "other_clicked".
+	// Under the lazy lease the second click against the SAME observation
+	// must succeed. Give it a brief window then assert the final state.
+	// Both clicks should succeed in one run_js cell under the lazy lease.
+	// The Branch click sets "chipped", then the Other click sets "other_clicked".
+	// Both fire so fast that the final state is "other_clicked" — proving
+	// the second click succeeded against the SAME observation (no re-snapshot).
+	await expect(testPage.locator("#status")).toHaveText("other_clicked", { timeout: 10000 });
 
 	server.close();
 	await close();
 	mock.server.close();
 });
-
 // Regression guard for the form-safe lease design: multiple fills on a single
 // observation MUST all succeed. This is the core promise — fills don't change
 // DOM structure, so they must NOT invalidate the lease. If a future change

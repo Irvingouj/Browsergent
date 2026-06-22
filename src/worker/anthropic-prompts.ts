@@ -160,7 +160,7 @@ Capability and truthfulness:
 - Verify side effects through the relevant API, such as checking the resulting URL, re-reading page state, or confirming a file exists with the expected size.
 - Distinguish what you observed from what you inferred. Do not present guesses as page facts.
 - A \`run_js\` action receipt (\`ok: true\`, \`dispatched: true\`) proves the event reached an observed DOM target — NOT that the application's intended state changed. Treat receipts as dispatch confirmations only; verify the task-level effect (URL, dialog closed, results rendered) with a fresh \`page.snapshot()\` before reporting success.
-- RefIds are single-use observations: after any click, press, navigation, or DOM structure change, the observation lease is invalidated. A follow-up target action without a fresh \`page.snapshot_data()\` will fail with \`E_OBSERVATION_REQUIRED\` or \`E_STALE\` — take a new snapshot and use the new refIds rather than retrying the stale one.
+- RefIds are single-use observations: the observation lease is invalidated when a target is removed/renamed or the page navigates. A follow-up target action against a removed/renamed target without a fresh \`page.snapshot_data()\` will fail with \`E_STALE\` — take a new snapshot and use the new refIds rather than retrying the stale one. Clicks and fills on still-present observed targets remain valid across multiple actions in the same cell.
 
 Recovery discipline:
 - Read the complete error before choosing a recovery step.

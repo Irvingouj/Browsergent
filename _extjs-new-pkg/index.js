@@ -1,8 +1,8 @@
-var Zt = Object.defineProperty;
-var Vt = (e, r, n) => r in e ? Zt(e, r, { enumerable: !0, configurable: !0, writable: !0, value: n }) : e[r] = n;
-var M = (e, r, n) => Vt(e, typeof r != "symbol" ? r + "" : r, n);
+var Vt = Object.defineProperty;
+var Zt = (e, r, n) => r in e ? Vt(e, r, { enumerable: !0, configurable: !0, writable: !0, value: n }) : e[r] = n;
+var M = (e, r, n) => Zt(e, typeof r != "symbol" ? r + "" : r, n);
 import { z as t } from "zod";
-import { collectDocument as zt, formatSnapshot as Ve, init as Qt } from "@pi-oxide/dom-semantic-tree";
+import { collectDocument as zt, formatSnapshot as Ze, init as Qt } from "@pi-oxide/dom-semantic-tree";
 const Ce = {
   trace: 0,
   debug: 1,
@@ -866,19 +866,19 @@ function d(e, r, n, a, o, i, s, c = [], l, u) {
       try {
         const q = await pt(E, A);
         x.debug("chrome_passthrough_ok", { action: e });
-        const G = he(q);
-        return G === void 0 ? null : G;
+        const B = he(q);
+        return B === void 0 ? null : B;
       } catch (q) {
         if (typeof q == "object" && q !== null && "code" in q && q.code === "E_INVALID_ARGUMENT_TRANSPORT")
           throw q;
-        const G = we(q);
+        const B = we(q);
         throw x.debug("chrome_passthrough_err", {
           action: e,
-          error: G.error.message
+          error: B.error.message
         }), I(
-          G.error.message,
-          G.error.code,
-          G.error.category
+          B.error.message,
+          B.error.code,
+          B.error.category
         );
       }
     },
@@ -896,10 +896,10 @@ function Ir(e) {
   return r;
 }
 const ke = {};
-function go(e, r) {
+function _o(e, r) {
   ke[e] = r;
 }
-function yo(e) {
+function wo(e) {
   Object.assign(ke, e);
 }
 function ht(e) {
@@ -1223,7 +1223,7 @@ async function Ee(e) {
       };
     const n = {};
     e && (e.max_nodes != null && (n.maxNodes = Number(e.max_nodes)), e.interactive_only != null && (n.interactiveOnly = e.interactive_only));
-    const a = zt(n), o = Ve(a, "compact-text");
+    const a = zt(n), o = Ze(a, "compact-text");
     return r.debug("handleDomSnapshot_result", { status: "ok" }), {
       ok: !0,
       value: { data: a, text: o }
@@ -1244,7 +1244,7 @@ async function Wr(e) {
   r.debug("handleDomFormat_start", { format: e.format });
   try {
     await Et();
-    const { snapshot: n, format: a } = e, o = Ve(n, a);
+    const { snapshot: n, format: a } = e, o = Ze(n, a);
     return r.debug("handleDomFormat_result", { status: "ok" }), { ok: !0, value: o };
   } catch (n) {
     const a = n instanceof Error ? n.message : String(n);
@@ -1293,7 +1293,7 @@ function Ke(e, r, n) {
     finalUrl: e.url
   };
 }
-function Ze(e, r, n) {
+function Ve(e, r, n) {
   return {
     status: e.status,
     ok: e.ok,
@@ -1305,7 +1305,7 @@ function Ze(e, r, n) {
     finalUrl: e.url
   };
 }
-async function Zr(e) {
+async function Vr(e) {
   const r = e.headers.get("content-type") || "", n = Br(r);
   if ($r(n)) {
     const o = new Uint8Array(await e.arrayBuffer());
@@ -1316,12 +1316,12 @@ async function Zr(e) {
     if (Kr(o))
       return Ke(e, o, r);
     const i = new TextDecoder().decode(o);
-    return Ze(e, i, r);
+    return Ve(e, i, r);
   }
   const a = await e.text();
-  return Ze(e, a, r);
+  return Ve(e, a, r);
 }
-async function Vr(e) {
+async function Zr(e) {
   X();
   const { url: r, method: n, headers: a, body: o, timeout: i } = e;
   try {
@@ -1335,7 +1335,7 @@ async function Vr(e) {
     };
     o != null && (l.body = typeof o == "string" ? o : String(o));
     const u = await fetch(r, l);
-    return clearTimeout(c), { ok: !0, value: await Zr(u) };
+    return clearTimeout(c), { ok: !0, value: await Vr(u) };
   } catch (s) {
     return s instanceof Error && s.name === "AbortError" ? {
       ok: !1,
@@ -1413,7 +1413,7 @@ const j = () => t.union([t.bigint(), t.number().finite()]).transform((e) => BigI
   }).superRefine(He)
 ), ce = {
   tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID")
-}, V = (e) => t.preprocess(
+}, G = (e) => t.preprocess(
   (r) => typeof r == "string" || typeof r == "number" ? { __invalidPositional: r } : r,
   t.object({
     __invalidPositional: t.union([t.string(), t.number()]).optional().describe("Internal flag for positional argument rejection"),
@@ -1473,11 +1473,13 @@ const In = R({
 }), xn = R({
   value: t.string().describe("Value to select in the dropdown")
 }), Cn = R({
+  value: t.string().describe("Visible text of the option to select (matched case-insensitively)")
+}), Tn = R({
   checked: t.boolean().optional().describe("Desired checked state (true to check, false to uncheck)")
-}), Tn = R(), Rn = t.object({}), An = t.object({
+}), Rn = R(), An = t.object({}), Dn = t.object({
   direction: t.string().default("down").describe("Scroll direction: up, down, left, or right"),
   amount: t.number().default(300).describe("Pixels to scroll")
-}), Dn = t.preprocess(
+}), Nn = t.preprocess(
   (e) => typeof e == "string" || typeof e == "number" ? { __invalidPositional: e } : e,
   t.object({
     __invalidPositional: t.union([t.string(), t.number()]).optional().describe("Internal flag for positional argument rejection"),
@@ -1486,31 +1488,31 @@ const In = R({
     x: t.number().optional().describe("X coordinate to scroll to"),
     y: t.number().optional().describe("Y coordinate to scroll to")
   }).superRefine(vt)
-), Nn = R(), On = t.object({
+), On = R(), qn = t.object({
   selector: t.string().describe("CSS selector to find elements")
-}), qn = t.object({
+}), Mn = t.object({
   selector: t.string().describe("CSS selector for the root element(s) to introspect"),
   depth: t.number().int().min(0).max(10).default(2).describe("How many descendant levels to include (0 = root only)"),
   includeHidden: t.boolean().default(!0).describe(
     "Include elements hidden by CSS/aria (default true — this tool's purpose is to see what the curated snapshot filters out)"
   )
-}), Mn = t.object({
+}), Pn = t.object({
   selector: t.string().describe("CSS selector to wait for"),
   timeout: j().default(30000n).describe("Timeout in milliseconds")
-}), Pn = t.object({
+}), jn = t.object({
   fields: t.array(t.string()).describe("Array of field names to extract")
-}), jn = t.preprocess(
+}), Hn = t.preprocess(
   (e) => Array.isArray(e) ? { fields: e } : e,
-  Pn
-), Hn = t.union([
+  jn
+), Un = t.union([
   t.number(),
   t.array(t.object({}).passthrough()),
   t.object({}).passthrough()
-]), Un = t.object({}), Ln = t.object({
+]), Ln = t.object({}), Fn = t.object({
   active: t.boolean().optional().describe("Whether the tabs are active"),
   currentWindow: t.boolean().optional().describe("Whether the tabs are in the current window"),
   url: t.string().optional().describe("URL pattern to match tabs against")
-}).passthrough(), Ue = Ln, Tt = t.preprocess(
+}).passthrough(), Ue = Fn, Tt = t.preprocess(
   (e) => typeof e == "string" ? { url: e } : e,
   t.object({
     url: t.string().optional().describe("URL to open in the new tab"),
@@ -1530,15 +1532,15 @@ const In = R({
     tabId: t.number().optional(),
     tab_id: t.number().optional()
   }).passthrough()
-]), At = Rt, Fn = Rt, Wn = V(), Gn = V({
+]), At = Rt, Wn = Rt, Gn = G(), Bn = G({
   value: t.string().describe("Value to fill into the element")
-}), Bn = V({
+}), $n = G({
   files: t.array(xt).min(1).describe("Files to attach to the input")
 });
-V({
+G({
   files: t.array(Ct).min(1).describe("Resolved files for content-script application")
 });
-const $n = t.preprocess(
+const Kn = t.preprocess(
   (e) => typeof e == "string" || typeof e == "number" ? { __invalidPositional: e } : e,
   t.object({
     __invalidPositional: t.union([t.string(), t.number()]).optional().describe("Internal flag for positional argument rejection"),
@@ -1548,72 +1550,68 @@ const $n = t.preprocess(
     x: t.number().optional().describe("X coordinate to scroll to"),
     y: t.number().optional().describe("Y coordinate to scroll to")
   }).superRefine(vt)
-), Kn = V({
+), Vn = G({
   text: t.string().describe("Text to type into the element")
 }), Zn = t.object({
   ...ce,
   key: t.string().describe("Key to press (e.g. Enter, Escape, ArrowDown)")
-}), Vn = V({
+}), zn = G({
   value: t.string().describe("Value to select in the dropdown")
-}), zn = V({
+}), Qn = G({
+  value: t.string().describe("Visible text of the option to select (matched case-insensitively)")
+}), Xn = G({
   checked: t.boolean().optional().describe("Desired checked state (true to check, false to uncheck)")
-}), Qn = V(), Xn = t.object({
+}), Jn = G(), Yn = t.object({
   ...ce
-}), Jn = t.object({
+}), ea = t.object({
   ...ce,
   direction: t.string().default("down").describe("Scroll direction: up, down, left, or right"),
   amount: t.number().default(300).describe("Pixels to scroll")
-}), Yn = V(), ea = t.object({
+}), ta = G(), ra = t.object({
   tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
   script: t.string().optional().describe("Script to evaluate"),
   code: t.string().optional().describe("Alternative script code"),
   js: t.string().optional().describe("Alternative JS code")
-}).passthrough(), ta = t.object({
-  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID")
-}).passthrough(), ra = t.object({
-  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID")
 }).passthrough(), na = t.object({
+  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID")
+}).passthrough(), aa = t.object({
+  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID")
+}).passthrough(), oa = t.object({
   tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
   timeout: t.number().optional().describe("Timeout in milliseconds")
-}).passthrough(), aa = t.object({
+}).passthrough(), ia = t.object({
   tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
   url: t.string().optional().describe("URL to fetch"),
   options: t.object({}).passthrough().optional().describe("Fetch options")
-}).passthrough(), oa = t.object({
-  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
-  max_nodes: t.number().optional().describe("Maximum nodes to include"),
-  options: t.object({}).passthrough().optional().describe("Snapshot options")
-}).passthrough(), ia = t.object({
-  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
-  max_nodes: t.number().optional().describe("Maximum nodes to include"),
-  options: t.object({}).passthrough().optional().describe("Snapshot options")
 }).passthrough(), sa = t.object({
   tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
   max_nodes: t.number().optional().describe("Maximum nodes to include"),
   options: t.object({}).passthrough().optional().describe("Snapshot options")
-}).passthrough(), ca = R(), la = R(), da = R({
+}).passthrough(), ca = t.object({
+  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
+  max_nodes: t.number().optional().describe("Maximum nodes to include"),
+  options: t.object({}).passthrough().optional().describe("Snapshot options")
+}).passthrough(), la = t.object({
+  tabId: t.union([t.number(), t.bigint()]).optional().describe("Target tab ID"),
+  max_nodes: t.number().optional().describe("Maximum nodes to include"),
+  options: t.object({}).passthrough().optional().describe("Snapshot options")
+}).passthrough(), da = R(), ua = R(), ma = R({
   value: t.string().optional().describe("Value to fill into the element")
-}), ua = R({
-  text: t.string().optional().describe("Text to type into the element")
-}), ma = t.object({
-  key: t.string().optional().describe("Key to press (e.g. Enter, Escape, ArrowDown)")
 }), pa = R({
+  text: t.string().optional().describe("Text to type into the element")
+}), ba = t.object({
+  key: t.string().optional().describe("Key to press (e.g. Enter, Escape, ArrowDown)")
+}), ha = R({
   value: t.string().optional().describe("Value to select in the dropdown")
-}), ba = R({
+}), fa = R({
   checked: t.boolean().optional().describe("Desired checked state (true to check, false to uncheck)")
-}), ha = R(), fa = t.object({}), ga = t.object({
+}), ga = R(), ya = t.object({}), _a = t.object({
   direction: t.string().optional().describe("Scroll direction: up, down, left, or right"),
   amount: t.number().optional().describe("Pixels to scroll")
-}), ya = R(), _a = R({
+}), wa = R(), ka = R({
   text: t.string().optional().describe("Text to append into the element")
-}), wa = t.object({}), ka = t.object({}), Ea = t.object({
+}), Ea = t.object({}), Ia = t.object({}), Sa = t.object({
   duration: j().default(1000n).describe("Duration to wait in milliseconds")
-}), Ia = t.object({
-  interactive_only: t.boolean().default(!1).describe("Only include interactive elements"),
-  max_nodes: j().default(500n).describe("Maximum number of nodes to include in snapshot")
-}), Sa = t.object({
-  interactive_only: t.boolean().default(!1).describe("Only include interactive elements"),
-  max_nodes: j().default(500n).describe("Maximum number of nodes to include in snapshot")
 }), va = t.object({
   interactive_only: t.boolean().default(!1).describe("Only include interactive elements"),
   max_nodes: j().default(500n).describe("Maximum number of nodes to include in snapshot")
@@ -1621,18 +1619,24 @@ const $n = t.preprocess(
   interactive_only: t.boolean().default(!1).describe("Only include interactive elements"),
   max_nodes: j().default(500n).describe("Maximum number of nodes to include in snapshot")
 }), Ca = t.object({
+  interactive_only: t.boolean().default(!1).describe("Only include interactive elements"),
+  max_nodes: j().default(500n).describe("Maximum number of nodes to include in snapshot")
+}), Ta = t.object({
+  interactive_only: t.boolean().default(!1).describe("Only include interactive elements"),
+  max_nodes: j().default(500n).describe("Maximum number of nodes to include in snapshot")
+}), Ra = t.object({
   snapshot: t.object({}).passthrough().describe("Raw DOM snapshot data to format"),
   format: t.string().optional().describe("Output format (e.g. markdown, html)")
-}), Ta = t.object({
-  max_nodes: t.number().optional().describe("Maximum nodes to include"),
-  options: t.object({}).passthrough().optional().describe("Snapshot options")
-}).passthrough(), Ra = t.object({
-  max_nodes: t.number().optional().describe("Maximum nodes to include"),
-  options: t.object({}).passthrough().optional().describe("Snapshot options")
-}).passthrough(), Aa = t.object({
+}), Aa = t.object({
   max_nodes: t.number().optional().describe("Maximum nodes to include"),
   options: t.object({}).passthrough().optional().describe("Snapshot options")
 }).passthrough(), Da = t.object({
+  max_nodes: t.number().optional().describe("Maximum nodes to include"),
+  options: t.object({}).passthrough().optional().describe("Snapshot options")
+}).passthrough(), Na = t.object({
+  max_nodes: t.number().optional().describe("Maximum nodes to include"),
+  options: t.object({}).passthrough().optional().describe("Snapshot options")
+}).passthrough(), Oa = t.object({
   role: t.union([t.string(), t.array(t.string())]).optional().describe("Filter by ARIA role"),
   tag: t.union([t.string(), t.array(t.string())]).optional().describe("Filter by HTML tag"),
   text: t.string().optional().describe("Filter by text content (case-insensitive substring)"),
@@ -1642,11 +1646,11 @@ const $n = t.preprocess(
   src: t.string().optional().describe("Filter by src pattern (case-insensitive substring)"),
   limit: t.number().positive().optional().describe("Maximum filtered nodes to return")
 }).passthrough(), Dt = t.object({
-  filter: Da.optional().describe(
+  filter: Oa.optional().describe(
     "Semantic filter criteria"
   ),
   max_nodes: t.number().optional().describe("Maximum nodes to collect before filtering")
-}).passthrough(), Na = Dt.extend({
+}).passthrough(), qa = Dt.extend({
   tabId: t.number().describe("Tab ID")
 });
 t.object({
@@ -1682,7 +1686,7 @@ t.union([
   t.number(),
   t.record(t.unknown())
 ]);
-const Oa = t.union([
+const Ma = t.union([
   t.number(),
   t.record(t.unknown())
 ]);
@@ -1784,7 +1788,7 @@ t.union([
 t.record(t.unknown());
 t.record(t.unknown());
 t.record(t.unknown());
-const qa = t.object({
+const Pa = t.object({
   action: t.string().describe("Host action name"),
   params: t.object({}).passthrough().optional().describe("Parameters for the host action")
 }).passthrough(), Nt = t.union([
@@ -1794,7 +1798,7 @@ const qa = t.object({
   t.null(),
   t.array(t.unknown()),
   t.record(t.unknown())
-]), Ma = Nt, _ = t.object({
+]), ja = Nt, y = t.object({
   ok: t.literal(!0).describe("Whether the action succeeded"),
   action: t.string().describe("Action identifier (e.g. 'page_fill')"),
   refId: P().optional().describe("Element reference ID that was acted upon (e.g. e2)"),
@@ -1821,7 +1825,7 @@ const qa = t.object({
     "Always 'required': a fresh observation is required to verify the effect."
   )
 });
-t.union([_, t.null()]);
+t.union([y, t.null()]);
 const Re = t.object({
   status: t.number().describe("HTTP response status code"),
   ok: t.boolean().describe("Whether the response status is 2xx"),
@@ -1835,7 +1839,7 @@ const Re = t.object({
 }), Ot = t.object({
   data: t.object({}).passthrough().describe("Structured snapshot data"),
   text: t.string().describe("Plain text representation of the snapshot")
-}), Pa = t.object({}), ja = t.object({
+}), Ha = t.object({}), Ua = t.object({
   tabId: t.number(),
   url: t.string(),
   title: t.string(),
@@ -1844,7 +1848,7 @@ const Re = t.object({
   mutationsReady: t.boolean(),
   hint: t.string().optional(),
   recovery: t.array(t.string()).optional()
-}), Ha = Nt, Ua = t.object({
+}), La = Nt, Fa = t.object({
   refId: P().describe("Element reference ID (e.g. e2)"),
   role: t.string().describe("ARIA role of the element"),
   tag: t.string().describe("HTML tag name"),
@@ -1864,7 +1868,7 @@ const Re = t.object({
   imageUrls: t.array(t.string()).optional().describe("Image URLs contained within this element")
 }), me = t.object({
   text: t.string().describe("Plain text representation of the page"),
-  nodes: t.array(Ua).describe("Array of interactive nodes"),
+  nodes: t.array(Fa).describe("Array of interactive nodes"),
   url: t.string().describe("Current page URL"),
   title: t.string().describe("Current page title"),
   viewport: t.object({
@@ -1900,7 +1904,7 @@ const Re = t.object({
   accept: t.string().optional().describe("For input[type=file]: accepted MIME/extensions"),
   filesCount: t.number().optional().describe("For input[type=file]: selected file count"),
   children: t.array(t.lazy(() => qt)).optional().describe("Nested descendants up to `depth`")
-}), La = t.object({
+}), Wa = t.object({
   nodes: t.array(qt),
   url: t.string(),
   title: t.string()
@@ -1940,7 +1944,7 @@ const Re = t.object({
   state: t.string().optional().describe("Window state"),
   alwaysOnTop: t.boolean().optional().describe("Whether the window is always on top"),
   sessionId: t.string().optional().describe("Session ID")
-}).passthrough(), Fa = t.array(le), de = t.object({
+}).passthrough(), Ga = t.array(le), de = t.object({
   name: t.string().describe("Cookie name"),
   value: t.string().describe("Cookie value"),
   domain: t.string().optional().describe("Cookie domain"),
@@ -1954,7 +1958,7 @@ const Re = t.object({
   storeId: t.string().optional().describe("Store ID")
 }).nullable(), Mt = t.array(
   de.nullable().unwrap()
-), Wa = t.object({
+), Ba = t.object({
   id: t.string().describe("Bookmark ID"),
   parentId: t.string().optional().describe("Parent folder ID"),
   index: t.number().optional().describe("Bookmark index"),
@@ -1963,30 +1967,30 @@ const Re = t.object({
   dateAdded: t.number().optional().describe("Date added"),
   dateGroupModified: t.number().optional().describe("Date group modified"),
   children: t.array(t.object({ id: t.string() }).passthrough()).optional().describe("Child bookmarks")
-}).passthrough(), ue = t.array(Wa), Ga = t.object({
+}).passthrough(), ue = t.array(Ba), $a = t.object({
   id: t.string().describe("History item ID"),
   url: t.string().optional().describe("URL"),
   title: t.string().optional().describe("Title"),
   lastVisitTime: t.number().optional().describe("Last visit time"),
   visitCount: t.number().optional().describe("Visit count"),
   typedCount: t.number().optional().describe("Typed count")
-}).passthrough(), Le = t.array(Ga), Ba = t.object({
+}).passthrough(), Le = t.array($a), Ka = t.object({
   frameId: t.number().describe("Frame ID"),
   result: t.unknown().optional().describe("Script result")
-}), $a = t.array(Ba), Pt = t.string(), jt = t.boolean(), Ka = t.union([t.string(), t.number()]), Za = t.boolean(), Ie = t.object({
+}), Va = t.array(Ka), Pt = t.string(), jt = t.boolean(), Za = t.union([t.string(), t.number()]), za = t.boolean(), Ie = t.object({
   id: t.number().optional().describe("Group ID"),
   collapsed: t.boolean().optional().describe("Whether the group is collapsed"),
   color: t.string().optional().describe("Group color"),
   title: t.string().optional().describe("Group title"),
   windowId: t.number().optional().describe("Window ID")
-}).passthrough(), Va = t.array(Ie), za = t.object({
+}).passthrough(), Qa = t.array(Ie), Xa = t.object({
   lastModified: t.number().optional().describe("Last modified time"),
   tab: O.optional().describe("Tab info"),
   window: le.optional().describe("Window info")
-}).passthrough(), Fe = t.array(za), Qa = t.object({
+}).passthrough(), Fe = t.array(Xa), Ja = t.object({
   deviceName: t.string().optional().describe("Device name"),
   sessions: Fe.optional().describe("Sessions")
-}).passthrough(), Xa = t.array(Qa), Ja = t.object({
+}).passthrough(), Ya = t.array(Ja), eo = t.object({
   id: t.number().optional().describe("Download ID"),
   url: t.string().optional().describe("Download URL"),
   filename: t.string().optional().describe("Filename"),
@@ -2004,15 +2008,15 @@ const Re = t.object({
   referrer: t.string().optional().describe("Referrer URL"),
   byExtensionId: t.string().optional().describe("Extension ID"),
   byExtensionName: t.string().optional().describe("Extension name")
-}).passthrough(), Ht = t.array(Ja), Ya = t.number(), eo = t.object({
+}).passthrough(), Ht = t.array(eo), to = t.number(), ro = t.object({
   archName: t.string().describe("CPU architecture"),
   modelName: t.string().describe("CPU model"),
   numOfProcessors: t.number().describe("Number of processors"),
   features: t.array(t.string()).describe("CPU features")
-}), to = t.object({
+}), no = t.object({
   capacity: t.number().describe("Total memory capacity"),
   availableCapacity: t.number().describe("Available memory capacity")
-}), ro = t.array(
+}), ao = t.array(
   t.object({
     id: t.string().describe("Storage ID"),
     name: t.string().describe("Storage name"),
@@ -2020,22 +2024,22 @@ const Re = t.object({
     capacity: t.number().describe("Storage capacity")
   })
 );
-function B(e) {
+function $(e) {
   return document.querySelector(`[data-ref-id='${CSS.escape(e)}']`);
 }
-function no(e) {
+function oo(e) {
   if (typeof e == "string")
     return P().safeParse(e).success ? e : void 0;
   const r = W(e), n = typeof r.refId == "string" ? r.refId : typeof r.ref_id == "string" ? r.ref_id : void 0;
   if (!(n && !P().safeParse(n).success))
     return n;
 }
-const ao = {
+const io = {
   message: "Content script error",
   code: "E_CONTENT_SCRIPT",
   category: "resource"
 };
-function oo(e, r = ao) {
+function so(e, r = io) {
   if (typeof e == "string")
     return {
       message: e || r.message,
@@ -2058,10 +2062,10 @@ function oo(e, r = ao) {
 function Ut(e) {
   return e && typeof e == "object" && e.ok === !1 ? {
     ok: !1,
-    error: oo(e.error)
+    error: so(e.error)
   } : { ok: !0, value: e && typeof e == "object" && "value" in e ? e.value : e };
 }
-function io(e) {
+function co(e) {
   return new Promise((r) => setTimeout(r, e));
 }
 async function Lt(e) {
@@ -2121,7 +2125,7 @@ async function We(e, r = 3e3) {
     } catch (u) {
       const m = (u instanceof Error ? u.message : String(u)) || "";
       if (i = m, n.debug("pingTabContentScript_retry", { tabId: e, error: m }), m.includes("Could not establish connection") || m.includes("Receiving end does not exist") || m.includes("message port closed before a response was received")) {
-        await io(Math.min(Sr, o - Date.now()));
+        await co(Math.min(Sr, o - Date.now()));
         continue;
       }
       if (m.includes("Timeout waiting for content-script ping"))
@@ -2196,7 +2200,7 @@ async function Ft(e, r = 3e4, n) {
             runId: n == null ? void 0 : n.runId
           }), E(b);
         }, m));
-      }, G = () => {
+      }, B = () => {
         re(), c.tabs.get(o).then((D) => {
           l(D, x) ? E(b) : q(D.url);
         }).catch(() => {
@@ -2210,7 +2214,7 @@ async function Ft(e, r = 3e4, n) {
           tabId: o,
           url: ne.url,
           runId: n == null ? void 0 : n.runId
-        }), q(ne.url)), ne.status === "complete" && G());
+        }), q(ne.url)), ne.status === "complete" && B());
       };
       c.tabs.onUpdated.addListener(Ge), c.tabs.get(o).then((D) => {
         re(), D.status === "loading" && (x = !0), a.debug("waitForTabLoad_initial_status", {
@@ -2655,7 +2659,7 @@ p({
   aliases: [{ namespace: "web", name: "fetch", fields: ["url"] }],
   owner: "main-thread",
   handler: async (e, r) => {
-    const n = await Vr(e);
+    const n = await Zr(e);
     return S(n);
   },
   paramTypes: [
@@ -2751,7 +2755,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "back",
     description: "Go back in the active tab",
     params: hn,
-    returns: _,
+    returns: y,
     paramTypes: [],
     returnDoc: "Navigation result",
     errorCode: "E_NO_TAB",
@@ -2764,7 +2768,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "click",
     description: "Click an element in the active tab",
     params: _n,
-    returns: _,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -2802,7 +2806,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "fill",
     description: "Fill an element in the active tab",
     params: kn,
-    returns: _,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -2846,7 +2850,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "setFiles",
     description: "Attach files to a file input in the active tab",
     params: En,
-    returns: _,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -2892,7 +2896,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "type",
     description: "Type into an element in the active tab",
     params: In,
-    returns: _,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -2936,7 +2940,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "append",
     description: "Append text to an element in the active tab",
     params: Sn,
-    returns: _,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -2978,7 +2982,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "press",
     description: "Press a key in the active tab",
     params: vn,
-    returns: _,
+    returns: y,
     fields: ["key"],
     paramTypes: [
       {
@@ -3010,7 +3014,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "select",
     description: "Select an option in the active tab",
     params: xn,
-    returns: _,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -3048,12 +3052,56 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     handlerKey: "select"
   },
   {
+    action: "page_select_option",
+    namespace: "page",
+    name: "select_option",
+    description: "Open a combobox (react-select/listbox) and click the option whose text matches value",
+    params: Cn,
+    returns: y,
+    paramTypes: [
+      {
+        name: "refId",
+        type: "string",
+        required: !1,
+        description: "Element reference ID (refId)"
+      },
+      {
+        name: "label",
+        type: "string",
+        required: !1,
+        description: "Element label (label)"
+      },
+      {
+        name: "value",
+        type: "string",
+        required: !1,
+        description: "Visible text of the option to select (matched case-insensitively)"
+      }
+    ],
+    returnDoc: "{ ok: true, action: 'select_option', refId?, value? }",
+    errorCode: "E_NOT_FOUND",
+    example: 'page.select_option({ refId: "e2", value: "Canada" })',
+    agentMeta: {
+      prerequisites: [
+        "Ensure the target tab is active and the content script is ready before mutating"
+      ],
+      notes: [
+        "Same content-script path as web.tab.*",
+        "Always operates on the active tab; use web.tab.* if you need to target a specific tabId",
+        "Drives react-select and other ARIA combobox patterns: clicks the control to open, then clicks the matching [role='option']"
+      ],
+      tags: ["mutation", "write"],
+      relatedApis: ["web.tab.select_option"]
+    },
+    handlerKey: "select_option"
+  },
+  {
     action: "page_check",
     namespace: "page",
     name: "check",
     description: "Check/uncheck an element in the active tab",
-    params: Cn,
-    returns: _,
+    params: Tn,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -3095,8 +3143,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "hover",
     description: "Hover over an element in the active tab",
-    params: Tn,
-    returns: _,
+    params: Rn,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -3132,8 +3180,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "unhover",
     description: "Unhover in the active tab",
-    params: Rn,
-    returns: _,
+    params: An,
+    returns: y,
     paramTypes: [],
     returnDoc: "{ ok: true, action: 'unhover' }",
     errorCode: "E_NO_TAB",
@@ -3156,8 +3204,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "scroll",
     description: "Scroll the active tab",
-    params: An,
-    returns: _,
+    params: Dn,
+    returns: y,
     fields: ["direction", "amount"],
     paramTypes: [
       {
@@ -3183,8 +3231,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "scroll_to",
     description: "Scroll to an element in the active tab",
-    params: Dn,
-    returns: _,
+    params: Nn,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -3209,8 +3257,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "dblclick",
     description: "Double-click an element in the active tab",
-    params: Nn,
-    returns: _,
+    params: On,
+    returns: y,
     paramTypes: [
       {
         name: "refId",
@@ -3246,8 +3294,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "click",
     description: "Click in a tab",
-    params: Wn,
-    returns: _,
+    params: Gn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3286,8 +3334,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "fill",
     description: "Fill in a tab",
-    params: Gn,
-    returns: _,
+    params: Bn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3332,8 +3380,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "setFiles",
     description: "Attach files to a file input in a tab",
-    params: Bn,
-    returns: _,
+    params: $n,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3378,8 +3426,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "scroll_to",
     description: "Scroll to position in a tab",
-    params: $n,
-    returns: _,
+    params: Kn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3422,8 +3470,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "type",
     description: "Type in a tab",
-    params: Kn,
-    returns: _,
+    params: Vn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3469,7 +3517,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "press",
     description: "Press a key in a tab",
     params: Zn,
-    returns: _,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3502,8 +3550,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "select",
     description: "Select an option in a tab",
-    params: Vn,
-    returns: _,
+    params: zn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3544,12 +3592,61 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     handlerKey: "select"
   },
   {
+    action: "tab_select_option",
+    namespace: "web.tab",
+    name: "select_option",
+    description: "Open a combobox (react-select/listbox) in a tab and click the option whose text matches value",
+    params: Qn,
+    returns: y,
+    paramTypes: [
+      {
+        name: "tabId",
+        type: "number",
+        required: !0,
+        description: "Tab ID (literal)"
+      },
+      {
+        name: "refId",
+        type: "string",
+        required: !1,
+        description: "Element reference ID (refId)"
+      },
+      {
+        name: "label",
+        type: "string",
+        required: !1,
+        description: "Element label (label)"
+      },
+      {
+        name: "value",
+        type: "string",
+        required: !1,
+        description: "Visible text of the option to select (matched case-insensitively)"
+      }
+    ],
+    returnDoc: "{ ok: true, action: 'select_option', refId?, value? }",
+    errorCode: "E_NO_TAB",
+    example: 'web.tab.select_option({ tabId: 123, refId: "e2", value: "Canada" })',
+    agentMeta: {
+      prerequisites: [
+        "Ensure the target tab exists and the content script is ready before mutating"
+      ],
+      notes: [
+        "Explicit tabId required; same handlers as page.*",
+        "Drives react-select and other ARIA combobox patterns: clicks the control to open, then clicks the matching [role='option']"
+      ],
+      tags: ["mutation", "write"],
+      relatedApis: ["page.select_option"]
+    },
+    handlerKey: "select_option"
+  },
+  {
     action: "tab_check",
     namespace: "web.tab",
     name: "check",
     description: "Check/uncheck in a tab",
-    params: zn,
-    returns: _,
+    params: Xn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3594,8 +3691,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "hover",
     description: "Hover in a tab",
-    params: Qn,
-    returns: _,
+    params: Jn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3634,8 +3731,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "unhover",
     description: "Unhover in a tab",
-    params: Xn,
-    returns: _,
+    params: Yn,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3662,8 +3759,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "scroll",
     description: "Scroll in a tab",
-    params: Jn,
-    returns: _,
+    params: ea,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3694,8 +3791,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "dblclick",
     description: "Double-click in a tab",
-    params: Yn,
-    returns: _,
+    params: ta,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3734,8 +3831,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "back",
     description: "Go back in a tab",
-    params: ta,
-    returns: _,
+    params: na,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -3755,7 +3852,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     name: "forward",
     description: "Go forward in the active tab",
     params: fn,
-    returns: _,
+    returns: y,
     paramTypes: [],
     returnDoc: "Navigation result",
     errorCode: "E_NO_TAB",
@@ -3767,7 +3864,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "snapshot",
     description: "Capture full DOM snapshot",
-    params: Ta,
+    params: Aa,
     returns: t.string(),
     paramTypes: [
       {
@@ -3801,7 +3898,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "snapshot_text",
     description: "Capture DOM snapshot and return text representation",
-    params: Ra,
+    params: Da,
     returns: t.string(),
     paramTypes: [
       {
@@ -3821,7 +3918,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "snapshot_data",
     description: "Get page snapshot data",
-    params: Aa,
+    params: Na,
     returns: me,
     paramTypes: [
       {
@@ -3885,7 +3982,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "find",
     description: "Find elements in the active tab using a CSS selector",
-    params: On,
+    params: qn,
     returns: t.array(
       t.object({
         refId: P(),
@@ -3930,8 +4027,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "dom",
     description: "Introspect raw DOM subtree by CSS selector — bypasses the curated snapshot's visibility filter. Read-only. Use when page.snapshot/find hide the element you need (e.g. hidden file inputs, shadowed widgets, aria-hidden regions).",
-    params: qn,
-    returns: La,
+    params: Mn,
+    returns: Wa,
     paramTypes: [
       {
         name: "selector",
@@ -3974,7 +4071,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "wait_for",
     description: "Wait for a selector in the active tab",
-    params: Mn,
+    params: Pn,
     returns: t.boolean(),
     fields: ["selector", "timeout"],
     paramTypes: [
@@ -4006,7 +4103,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "page",
     name: "extract",
     description: "Extract data from the active tab",
-    params: jn,
+    params: Hn,
     returns: t.object({
       title: t.string().optional(),
       url: t.string().optional(),
@@ -4072,8 +4169,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "forward",
     description: "Go forward in a tab",
-    params: ra,
-    returns: _,
+    params: aa,
+    returns: y,
     paramTypes: [
       {
         name: "tabId",
@@ -4092,7 +4189,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "snapshot",
     description: "Get tab snapshot",
-    params: oa,
+    params: sa,
     returns: t.string(),
     fields: ["tabId"],
     paramTypes: [
@@ -4119,7 +4216,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "snapshot_text",
     description: "Get tab snapshot text",
-    params: ia,
+    params: ca,
     returns: t.string(),
     fields: ["tabId"],
     paramTypes: [
@@ -4140,7 +4237,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "snapshot_data",
     description: "Get tab snapshot data",
-    params: sa,
+    params: la,
     returns: me,
     fields: ["tabId"],
     paramTypes: [
@@ -4161,7 +4258,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "snapshot_query",
     description: "Query tab snapshot with semantic filtering by role, tag, text, name, etc.",
-    params: Na,
+    params: qa,
     returns: me,
     fields: ["tabId"],
     paramTypes: [
@@ -4202,7 +4299,7 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "fetch",
     description: "Fetch in a tab",
-    params: aa,
+    params: ia,
     returns: Re,
     fields: ["tabId", "url", "options"],
     paramTypes: [
@@ -4229,8 +4326,8 @@ const U = "Returns a Promise; await before reading the result. For a cell's last
     namespace: "web.tab",
     name: "evaluate",
     description: "Evaluate script in a tab (content-script context)",
-    params: ea,
-    returns: Ha,
+    params: ra,
+    returns: La,
     fields: ["tabId", "script"],
     paramTypes: [
       {
@@ -4263,7 +4360,7 @@ function Bt(e) {
   const { handlerKey: r, ...n } = e;
   rt(n), tr(e.action);
 }
-const oe = h.child("runner"), so = [
+const oe = h.child("runner"), lo = [
   "main_frame",
   "sub_frame",
   "stylesheet",
@@ -4273,7 +4370,7 @@ const oe = h.child("runner"), so = [
   "media",
   "other"
 ];
-class co {
+class uo {
   constructor(r) {
     M(this, "inFlight", /* @__PURE__ */ new Map());
     M(this, "onBeforeRequest", null);
@@ -4291,7 +4388,7 @@ class co {
     const n = {
       tabId: this.tabId,
       urls: ["<all_urls>"],
-      types: so
+      types: lo
     };
     this.onBeforeRequest = (o) => {
       o.tabId === this.tabId && this.inFlight.set(o.requestId, Date.now());
@@ -4451,7 +4548,7 @@ p({
         );
     }
     if (e.waitUntil === "networkidle") {
-      const A = new co(n);
+      const A = new uo(n);
       try {
         h.debug("page_goto_network_idle_start", { traceId: a }), A.start();
         const E = Math.max(_t * 2, u);
@@ -4502,8 +4599,8 @@ p({
   namespace: "page",
   name: "health",
   description: "Report tab readiness for mutations vs read-only snapshot APIs",
-  params: Pa,
-  returns: ja,
+  params: Ha,
+  returns: Ua,
   owner: "main-thread",
   handler: async (e, r) => {
     const n = await te("page.health()"), a = S(
@@ -4578,7 +4675,7 @@ p({
   namespace: "page",
   name: "close",
   description: "Close a tab",
-  params: Hn,
+  params: Un,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => {
@@ -4689,7 +4786,7 @@ p({
   namespace: "page",
   name: "active_tab",
   description: "Get the active tab",
-  params: Un,
+  params: Ln,
   returns: O,
   owner: "main-thread",
   handler: async (e, r) => {
@@ -4703,7 +4800,7 @@ p({
   errorCode: "E_NO_TAB",
   example: "page.active_tab()"
 });
-function $(e) {
+function K(e) {
   var a, o, i;
   const r = e.toLowerCase().trim();
   if (!r) return null;
@@ -4725,7 +4822,7 @@ function $(e) {
   }
   return null;
 }
-function lo(e) {
+function mo(e) {
   var o;
   const r = e.toLowerCase().trim();
   if (!r) return [];
@@ -4746,7 +4843,7 @@ function lo(e) {
   }
   return a;
 }
-function uo(e) {
+function po(e) {
   const r = document.querySelector(
     `[data-ref-id='${CSS.escape(e)}']`
   );
@@ -4770,13 +4867,13 @@ function uo(e) {
   }
   return i;
 }
-function K(e, r, n = !1) {
+function V(e, r, n = !1) {
   if (e) {
-    const a = n ? uo(e) : [];
+    const a = n ? po(e) : [];
     Se(or(e, { candidates: a }));
   }
   if (r) {
-    const a = n ? lo(r) : [];
+    const a = n ? mo(r) : [];
     Se(sr(r, a));
   }
   Se({
@@ -4785,21 +4882,21 @@ function K(e, r, n = !1) {
     category: "resource"
   });
 }
-const mo = /* @__PURE__ */ new Map([
+const bo = /* @__PURE__ */ new Map([
   [
     "sidepanel_click",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      return !a && n && (a = $(n)), a || K(e, n, !1), a.click(), null;
+      let a = e ? $(e) : null;
+      return !a && n && (a = K(n)), a || V(e, n, !1), a.click(), null;
     }
   ],
   [
     "sidepanel_dblclick",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      !a && n && (a = $(n)), a || K(e, n, !1);
+      let a = e ? $(e) : null;
+      !a && n && (a = K(n)), a || V(e, n, !1);
       const o = new MouseEvent("dblclick", { bubbles: !0 });
       return a.dispatchEvent(o), null;
     }
@@ -4808,8 +4905,8 @@ const mo = /* @__PURE__ */ new Map([
     "sidepanel_fill",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      !a && n && (a = $(n)), a || K(e, n, !1);
+      let a = e ? $(e) : null;
+      !a && n && (a = K(n)), a || V(e, n, !1);
       const o = r.value ?? "";
       return "value" in a && (a.value = String(o)), null;
     }
@@ -4818,8 +4915,8 @@ const mo = /* @__PURE__ */ new Map([
     "sidepanel_type",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      !a && n && (a = $(n)), a || K(e, n, !1);
+      let a = e ? $(e) : null;
+      !a && n && (a = K(n)), a || V(e, n, !1);
       const o = r.text ?? "";
       if ("value" in a) {
         const i = a;
@@ -4832,8 +4929,8 @@ const mo = /* @__PURE__ */ new Map([
     "sidepanel_append",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      !a && n && (a = $(n)), a || K(e, n, !1);
+      let a = e ? $(e) : null;
+      !a && n && (a = K(n)), a || V(e, n, !1);
       const o = r.text ?? "";
       if ("value" in a) {
         const i = a;
@@ -4863,8 +4960,8 @@ const mo = /* @__PURE__ */ new Map([
     "sidepanel_select",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      !a && n && (a = $(n)), a || K(e, n, !1);
+      let a = e ? $(e) : null;
+      !a && n && (a = K(n)), a || V(e, n, !1);
       const o = r.value ?? "";
       if ("value" in a) {
         const i = a;
@@ -4877,8 +4974,8 @@ const mo = /* @__PURE__ */ new Map([
     "sidepanel_check",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      !a && n && (a = $(n)), a || K(e, n, !1);
+      let a = e ? $(e) : null;
+      !a && n && (a = K(n)), a || V(e, n, !1);
       const o = typeof r.checked == "boolean" ? r.checked : !0;
       if ("checked" in a) {
         const i = a;
@@ -4891,8 +4988,8 @@ const mo = /* @__PURE__ */ new Map([
     "sidepanel_hover",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      !a && n && (a = $(n)), a || K(e, n, !1);
+      let a = e ? $(e) : null;
+      !a && n && (a = K(n)), a || V(e, n, !1);
       const o = new MouseEvent("mouseenter", { bubbles: !0 });
       return a.dispatchEvent(o), null;
     }
@@ -4920,15 +5017,15 @@ const mo = /* @__PURE__ */ new Map([
     "sidepanel_scroll_to",
     (e, r) => {
       const n = typeof r.label == "string" ? r.label : "";
-      let a = e ? B(e) : null;
-      return !a && n && (a = $(n)), a || K(e, n, !1), a.scrollIntoView({ behavior: "smooth", block: "center" }), null;
+      let a = e ? $(e) : null;
+      return !a && n && (a = K(n)), a || V(e, n, !1), a.scrollIntoView({ behavior: "smooth", block: "center" }), null;
     }
   ]
 ]);
 function H(e, r) {
-  const n = h.child("runner"), a = no(r);
+  const n = h.child("runner"), a = oo(r);
   n.debug("dispatchSidepanelEvent_start", { action: e, refId: a });
-  const o = W(r), i = mo.get(e);
+  const o = W(r), i = bo.get(e);
   if (!i)
     throw n.error("dispatchSidepanelEvent_no_handler", { action: e }), I(`Unknown sidepanel action: ${e}`, "E_UNKNOWN");
   return i(a, o);
@@ -4938,7 +5035,7 @@ p({
   namespace: "sidepanel",
   name: "click",
   description: "Click an element in the sidepanel",
-  params: ca,
+  params: da,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_click", e),
@@ -4965,7 +5062,7 @@ p({
   namespace: "sidepanel",
   name: "dblclick",
   description: "Double-click an element in the sidepanel",
-  params: la,
+  params: ua,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_dblclick", e),
@@ -4992,7 +5089,7 @@ p({
   namespace: "sidepanel",
   name: "fill",
   description: "Fill an element in the sidepanel",
-  params: da,
+  params: ma,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_fill", e),
@@ -5025,7 +5122,7 @@ p({
   namespace: "sidepanel",
   name: "type",
   description: "Type into an element in the sidepanel",
-  params: ua,
+  params: pa,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_type", e),
@@ -5058,7 +5155,7 @@ p({
   namespace: "sidepanel",
   name: "press",
   description: "Press a key in the sidepanel",
-  params: ma,
+  params: ba,
   returns: t.null(),
   fields: ["key"],
   owner: "main-thread",
@@ -5080,7 +5177,7 @@ p({
   namespace: "sidepanel",
   name: "select",
   description: "Select an option in the sidepanel",
-  params: pa,
+  params: ha,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_select", e),
@@ -5113,7 +5210,7 @@ p({
   namespace: "sidepanel",
   name: "check",
   description: "Check/uncheck an element in the sidepanel",
-  params: ba,
+  params: fa,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_check", e),
@@ -5146,7 +5243,7 @@ p({
   namespace: "sidepanel",
   name: "hover",
   description: "Hover over an element in the sidepanel",
-  params: ha,
+  params: ga,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_hover", e),
@@ -5173,7 +5270,7 @@ p({
   namespace: "sidepanel",
   name: "unhover",
   description: "Unhover in the sidepanel",
-  params: fa,
+  params: ya,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_unhover", e),
@@ -5187,7 +5284,7 @@ p({
   namespace: "sidepanel",
   name: "scroll",
   description: "Scroll the sidepanel",
-  params: ga,
+  params: _a,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_scroll", e),
@@ -5214,7 +5311,7 @@ p({
   namespace: "sidepanel",
   name: "scroll_to",
   description: "Scroll to an element in the sidepanel",
-  params: ya,
+  params: wa,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_scroll_to", e),
@@ -5241,7 +5338,7 @@ p({
   namespace: "sidepanel",
   name: "append",
   description: "Append text to an element in the sidepanel",
-  params: _a,
+  params: ka,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => H("sidepanel_append", e),
@@ -5274,7 +5371,7 @@ p({
   namespace: "sidepanel",
   name: "url",
   description: "Get the sidepanel URL",
-  params: wa,
+  params: Ea,
   returns: t.string(),
   owner: "main-thread",
   handler: async (e, r) => window.location.href,
@@ -5288,7 +5385,7 @@ p({
   namespace: "sidepanel",
   name: "title",
   description: "Get the sidepanel title",
-  params: ka,
+  params: Ia,
   returns: t.string(),
   owner: "main-thread",
   handler: async (e, r) => document.title,
@@ -5302,7 +5399,7 @@ p({
   namespace: "sidepanel",
   name: "wait",
   description: "Wait in the sidepanel",
-  params: Ea,
+  params: Sa,
   returns: t.boolean(),
   fields: ["duration"],
   owner: "main-thread",
@@ -5326,7 +5423,7 @@ p({
   namespace: "sidepanel",
   name: "snapshot",
   description: "Capture sidepanel DOM snapshot",
-  params: Ia,
+  params: va,
   returns: t.string(),
   owner: "main-thread",
   handler: async (e, r) => {
@@ -5364,7 +5461,7 @@ p({
   namespace: "sidepanel",
   name: "snapshot_text",
   description: "Capture sidepanel DOM snapshot and return text representation",
-  params: Sa,
+  params: xa,
   returns: t.string(),
   owner: "main-thread",
   handler: async (e, r) => {
@@ -5402,7 +5499,7 @@ p({
   namespace: "sidepanel",
   name: "snapshot_data",
   description: "Get sidepanel snapshot data",
-  params: va,
+  params: Ca,
   returns: Ot,
   owner: "main-thread",
   handler: async (e, r) => {
@@ -5438,7 +5535,7 @@ p({
   namespace: "dom",
   name: "snapshot",
   description: "Take a DOM snapshot",
-  params: xa,
+  params: Ta,
   returns: Ot,
   owner: "main-thread",
   handler: async (e, r) => {
@@ -5474,7 +5571,7 @@ p({
   namespace: "dom",
   name: "format",
   description: "Format a DOM snapshot",
-  params: Ca,
+  params: Ra,
   returns: t.string(),
   owner: "main-thread",
   handler: async (e, r) => S(await Wr(e)),
@@ -5559,7 +5656,7 @@ p({
   namespace: "web.tab",
   name: "get",
   description: "Get a tab by id",
-  params: Oa,
+  params: Ma,
   returns: O,
   fields: ["tabId"],
   aliases: [{ namespace: "tab", name: "get", fields: ["tabId"] }],
@@ -5683,7 +5780,7 @@ p({
   namespace: "web.tab",
   name: "close",
   description: "Close a tab",
-  params: Fn,
+  params: Wn,
   returns: t.null(),
   owner: "main-thread",
   handler: async (e, r) => {
@@ -5713,7 +5810,7 @@ p({
   namespace: "web.tab",
   name: "wait_for_load",
   description: "Wait for tab to load",
-  params: na,
+  params: oa,
   returns: t.boolean(),
   owner: "main-thread",
   handler: async (e, r) => {
@@ -5739,7 +5836,7 @@ p({
   example: "web.tab.wait_for_load({ tabId: 123, timeout: 5000 })"
 });
 const k = t.unknown(), w = t.union([t.null(), t.undefined(), t.boolean()]), Q = w;
-function y(e, r, n, a = k, o, i) {
+function _(e, r, n, a = k, o, i) {
   d(
     e,
     "chrome",
@@ -5859,7 +5956,7 @@ d(
   "chrome",
   "Clear an alarm",
   ["alarms"],
-  Za,
+  za,
   "ECHROME",
   "extension",
   [
@@ -6006,7 +6103,7 @@ d(
   [],
   'chrome.bookmarks.update("bookmarkId", { title: "New Title" })'
 );
-y(
+_(
   "chrome_browsingData_remove",
   ["browsingData"],
   "Remove browsing data",
@@ -6014,7 +6111,7 @@ y(
   "chrome.browsingData.remove({ since: 0 })",
   "null"
 );
-y(
+_(
   "chrome_browsingData_removeCache",
   ["browsingData"],
   "Remove cache",
@@ -6022,7 +6119,7 @@ y(
   "chrome.browsingData.removeCache({ since: 0 })",
   "null"
 );
-y(
+_(
   "chrome_browsingData_removeCookies",
   ["browsingData"],
   "Remove cookies",
@@ -6030,7 +6127,7 @@ y(
   "chrome.browsingData.removeCookies({ since: 0 })",
   "null"
 );
-y(
+_(
   "chrome_browsingData_removeDownloads",
   ["browsingData"],
   "Remove downloads",
@@ -6038,7 +6135,7 @@ y(
   "chrome.browsingData.removeDownloads({ since: 0 })",
   "null"
 );
-y(
+_(
   "chrome_browsingData_removeFormData",
   ["browsingData"],
   "Remove form data",
@@ -6046,7 +6143,7 @@ y(
   "chrome.browsingData.removeFormData({ since: 0 })",
   "null"
 );
-y(
+_(
   "chrome_browsingData_removeHistory",
   ["browsingData"],
   "Remove history",
@@ -6054,7 +6151,7 @@ y(
   "chrome.browsingData.removeHistory({ since: 0 })",
   "null"
 );
-y(
+_(
   "chrome_browsingData_removePasswords",
   ["browsingData"],
   "Remove passwords",
@@ -6067,7 +6164,7 @@ d(
   "chrome",
   "Create a context menu",
   ["contextMenus"],
-  Ka,
+  Za,
   "ECHROME",
   "extension",
   [],
@@ -6157,7 +6254,7 @@ d(
   [],
   'chrome.cookies.getAll({ url: "https://example.com" })'
 );
-y(
+_(
   "chrome_declarativeNetRequest_getDynamicRules",
   ["declarativeNetRequest"],
   "Get dynamic DNR rules",
@@ -6165,7 +6262,7 @@ y(
   "chrome.declarativeNetRequest.getDynamicRules()",
   "Rule[]"
 );
-y(
+_(
   "chrome_declarativeNetRequest_getEnabledRulesets",
   ["declarativeNetRequest"],
   "Get enabled DNR rulesets",
@@ -6173,7 +6270,7 @@ y(
   "chrome.declarativeNetRequest.getEnabledRulesets()",
   "RulesetInfo[]"
 );
-y(
+_(
   "chrome_declarativeNetRequest_getSessionRules",
   ["declarativeNetRequest"],
   "Get session DNR rules",
@@ -6181,7 +6278,7 @@ y(
   "chrome.declarativeNetRequest.getSessionRules()",
   "Rule[]"
 );
-y(
+_(
   "chrome_declarativeNetRequest_updateDynamicRules",
   ["declarativeNetRequest"],
   "Update dynamic DNR rules",
@@ -6189,7 +6286,7 @@ y(
   "chrome.declarativeNetRequest.updateDynamicRules({ addRules: [] })",
   "null"
 );
-y(
+_(
   "chrome_declarativeNetRequest_updateEnabledRulesets",
   ["declarativeNetRequest"],
   "Update enabled DNR rulesets",
@@ -6197,7 +6294,7 @@ y(
   "chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: [] })",
   "null"
 );
-y(
+_(
   "chrome_declarativeNetRequest_updateSessionRules",
   ["declarativeNetRequest"],
   "Update session DNR rules",
@@ -6205,7 +6302,7 @@ y(
   "chrome.declarativeNetRequest.updateSessionRules({ addRules: [] })",
   "null"
 );
-y(
+_(
   "chrome_desktopCapture_chooseDesktopMedia",
   ["desktopCapture"],
   "Choose desktop media",
@@ -6213,7 +6310,7 @@ y(
   'chrome.desktopCapture.chooseDesktopMedia(["screen"], (id) => id)',
   "string"
 );
-y(
+_(
   "chrome_desktopCapture_cancelChooseDesktopMedia",
   ["desktopCapture"],
   "Cancel desktop media picker",
@@ -6226,7 +6323,7 @@ d(
   "chrome",
   "Download a file",
   ["downloads"],
-  Ya,
+  to,
   "ECHROME",
   "extension",
   [],
@@ -6393,7 +6490,7 @@ d(
   [],
   'chrome.history.getVisits({ url: "https://example.com" })'
 );
-y(
+_(
   "chrome_identity_getAuthToken",
   ["identity"],
   "Get OAuth auth token",
@@ -6401,7 +6498,7 @@ y(
   "chrome.identity.getAuthToken({ interactive: true })",
   "{ accessToken: string }"
 );
-y(
+_(
   "chrome_identity_getProfileUserInfo",
   ["identity"],
   "Get profile user info",
@@ -6409,7 +6506,7 @@ y(
   "chrome.identity.getProfileUserInfo()",
   "{ email: string, id: string }"
 );
-y(
+_(
   "chrome_identity_launchWebAuthFlow",
   ["identity"],
   "Launch web auth flow",
@@ -6417,7 +6514,7 @@ y(
   'chrome.identity.launchWebAuthFlow({ url: "https://example.com/auth" })',
   "string"
 );
-y(
+_(
   "chrome_idle_queryState",
   ["idle"],
   "Query idle state",
@@ -6425,7 +6522,7 @@ y(
   "chrome.idle.queryState(60)",
   '"active" | "idle" | "locked"'
 );
-y(
+_(
   "chrome_management_get",
   ["management"],
   "Get extension info",
@@ -6433,7 +6530,7 @@ y(
   'chrome.management.get("extensionId")',
   "ExtensionInfo"
 );
-y(
+_(
   "chrome_management_getAll",
   ["management"],
   "Get all extensions",
@@ -6441,7 +6538,7 @@ y(
   "chrome.management.getAll()",
   "ExtensionInfo[]"
 );
-y(
+_(
   "chrome_management_setEnabled",
   ["management"],
   "Enable or disable extension",
@@ -6449,7 +6546,7 @@ y(
   'chrome.management.setEnabled("extensionId", true)',
   "null"
 );
-y(
+_(
   "chrome_management_uninstall",
   ["management"],
   "Uninstall extension",
@@ -6522,7 +6619,7 @@ d(
   [],
   'chrome.notifications.update("notificationId", { title: "Updated" })'
 );
-y(
+_(
   "chrome_offscreen_closeDocument",
   ["offscreen"],
   "Close offscreen document",
@@ -6530,7 +6627,7 @@ y(
   "chrome.offscreen.closeDocument()",
   "null"
 );
-y(
+_(
   "chrome_offscreen_createDocument",
   ["offscreen"],
   "Create offscreen document",
@@ -6538,7 +6635,7 @@ y(
   'chrome.offscreen.createDocument({ url: "offscreen.html", reasons: ["WORKERS"] })',
   "null"
 );
-y(
+_(
   "chrome_pageCapture_saveAsMHTML",
   ["pageCapture"],
   "Save page as MHTML",
@@ -6561,7 +6658,7 @@ async function $t(e, r, n, a) {
   ), s = bt(o, r, n), c = await Promise.resolve(pt(s, i));
   return await ct(), c;
 }
-y(
+_(
   "chrome_permissions_contains",
   ["permissions"],
   "Check permission",
@@ -6569,7 +6666,7 @@ y(
   'chrome.permissions.contains({ permissions: ["tabs"] })',
   "boolean"
 );
-y(
+_(
   "chrome_permissions_getAll",
   ["permissions"],
   "Get all permissions",
@@ -6669,7 +6766,7 @@ d(
   "chrome",
   "Execute a script",
   ["scripting"],
-  $a,
+  Va,
   "ECHROME",
   "extension",
   [],
@@ -6733,7 +6830,7 @@ d(
   "chrome",
   "Get synced devices",
   ["sessions"],
-  Xa,
+  Ya,
   "ECHROME",
   "extension",
   [],
@@ -6766,7 +6863,7 @@ d(
   "chrome",
   "Get CPU info",
   ["system", "cpu"],
-  eo,
+  ro,
   "ECHROME",
   "extension",
   [],
@@ -6777,7 +6874,7 @@ d(
   "chrome",
   "Get memory info",
   ["system", "memory"],
-  to,
+  no,
   "ECHROME",
   "extension",
   [],
@@ -6788,7 +6885,7 @@ d(
   "chrome",
   "Get storage info",
   ["system", "storage"],
-  ro,
+  ao,
   "ECHROME",
   "extension",
   [],
@@ -6799,7 +6896,7 @@ d(
   "chrome",
   "Query tab groups",
   ["tabGroups"],
-  Va,
+  Qa,
   "ECHROME",
   "extension",
   [],
@@ -6984,7 +7081,7 @@ d(
   [],
   "chrome.tabs.ungroup([1, 2, 3])"
 );
-y(
+_(
   "chrome_topSites_get",
   ["topSites"],
   "Get top sites",
@@ -6992,7 +7089,7 @@ y(
   "chrome.topSites.get()",
   "MostVisitedURL[]"
 );
-y(
+_(
   "chrome_tts_getVoices",
   ["tts"],
   "Get TTS voices",
@@ -7000,7 +7097,7 @@ y(
   "chrome.tts.getVoices()",
   "TtsVoice[]"
 );
-y(
+_(
   "chrome_tts_speak",
   ["tts"],
   "Speak text",
@@ -7008,7 +7105,7 @@ y(
   'chrome.tts.speak("Hello world")',
   "null"
 );
-y(
+_(
   "chrome_tts_stop",
   ["tts"],
   "Stop TTS",
@@ -7039,7 +7136,7 @@ d(
   "chrome",
   "Get all windows",
   ["windows"],
-  Fa,
+  Ga,
   "ECHROME",
   "extension",
   [],
@@ -7085,7 +7182,7 @@ d(
   ],
   "chrome.windows.remove(1)"
 );
-function po(e, r) {
+function ho(e, r) {
   if (r.length === 1 && typeof r[0] == "string")
     switch (e) {
       case "history_delete":
@@ -7117,7 +7214,7 @@ function L(e, r, n, a, o = [], i) {
     handler: async (f, b) => {
       const v = h.child("alias");
       qe(e, m);
-      const g = po(
+      const g = ho(
         e,
         Pe(f, e)
       );
@@ -7348,8 +7445,8 @@ p({
   namespace: "host",
   name: "call",
   description: "Call a host handler",
-  params: qa,
-  returns: Ma,
+  params: Pa,
+  returns: ja,
   fields: ["action", "params"],
   owner: "main-thread",
   handler: async (e, r) => {
@@ -7877,14 +7974,14 @@ class Kt {
     return Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
 }
-function _o(e, r, n) {
+function ko(e, r, n) {
   e.registerWorkerRelayPort(r, n);
 }
 export {
   Kt as ExtensionSession,
   Ce as LOG_LEVEL_NUMERIC,
-  go as registerHostHandler,
-  yo as registerHostHandlers,
-  _o as registerWorkerRelayPort,
+  _o as registerHostHandler,
+  wo as registerHostHandlers,
+  ko as registerWorkerRelayPort,
   Xt as setLogLevel
 };

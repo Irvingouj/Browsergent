@@ -181,11 +181,18 @@ function classifyErrorBase(
 			code: errCode,
 			hint: "The element refId is stale. Take a fresh snapshot and use the new refIds.",
 		};
-	if (errCode === "E_NOT_FOUND")
+	if (errCode === "E_NOT_FOUND") {
+		if (jsSource?.includes("select_option")) {
+			return {
+				code: errCode,
+				hint: "The option text was not found in the combobox dropdown. Check the candidates in the error and use an exact visible-text value from the dropdown options.",
+			};
+		}
 		return {
 			code: errCode,
 			hint: "No matching element found. Take a fresh snapshot and verify the label or refId.",
 		};
+	}
 	if (errCode === "E_OBSERVATION_REQUIRED")
 		return {
 			code: errCode,

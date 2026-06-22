@@ -660,7 +660,7 @@ class S {
     return this._refinement((n, s) => e(n) ? !0 : (s.addIssue(typeof r == "function" ? r(n, s) : r), !1));
   }
   _refinement(e) {
-    return new J({
+    return new Y({
       schema: this,
       typeName: k.ZodEffects,
       effect: { type: "refinement", refinement: e }
@@ -677,7 +677,7 @@ class S {
     };
   }
   optional() {
-    return F.create(this, this._def);
+    return V.create(this, this._def);
   }
   nullable() {
     return ne.create(this, this._def);
@@ -698,7 +698,7 @@ class S {
     return Ee.create(this, e, this._def);
   }
   transform(e) {
-    return new J({
+    return new Y({
       ...T(this._def),
       schema: this,
       typeName: k.ZodEffects,
@@ -1758,7 +1758,7 @@ function ue(t) {
     const e = {};
     for (const r in t.shape) {
       const n = t.shape[r];
-      e[r] = F.create(ue(n));
+      e[r] = V.create(ue(n));
     }
     return new A({
       ...t._def,
@@ -1767,7 +1767,7 @@ function ue(t) {
   } else return t instanceof W ? new W({
     ...t._def,
     type: ue(t.element)
-  }) : t instanceof F ? F.create(ue(t.unwrap())) : t instanceof ne ? ne.create(ue(t.unwrap())) : t instanceof z ? z.create(t.items.map((e) => ue(e))) : t;
+  }) : t instanceof V ? V.create(ue(t.unwrap())) : t instanceof ne ? ne.create(ue(t.unwrap())) : t instanceof z ? z.create(t.items.map((e) => ue(e))) : t;
 }
 class A extends S {
   constructor() {
@@ -2023,7 +2023,7 @@ class A extends S {
         r[n] = this.shape[n];
       else {
         let i = this.shape[n];
-        for (; i instanceof F; )
+        for (; i instanceof V; )
           i = i._def.innerType;
         r[n] = i;
       }
@@ -2130,7 +2130,7 @@ Ie.create = (t, e) => new Ie({
   typeName: k.ZodUnion,
   ...T(e)
 });
-const G = (t) => t instanceof Ae ? G(t.schema) : t instanceof J ? G(t.innerType()) : t instanceof Ce ? [t.value] : t instanceof re ? t.options : t instanceof st ? I.objectValues(t.enum) : t instanceof Oe ? G(t._def.innerType) : t instanceof We ? [void 0] : t instanceof Se ? [null] : t instanceof F ? [void 0, ...G(t.unwrap())] : t instanceof ne ? [null, ...G(t.unwrap())] : t instanceof ut || t instanceof Me ? G(t.unwrap()) : t instanceof Ne ? G(t._def.innerType) : [];
+const J = (t) => t instanceof Ae ? J(t.schema) : t instanceof Y ? J(t.innerType()) : t instanceof Ce ? [t.value] : t instanceof re ? t.options : t instanceof st ? I.objectValues(t.enum) : t instanceof Oe ? J(t._def.innerType) : t instanceof We ? [void 0] : t instanceof Se ? [null] : t instanceof V ? [void 0, ...J(t.unwrap())] : t instanceof ne ? [null, ...J(t.unwrap())] : t instanceof ut || t instanceof Me ? J(t.unwrap()) : t instanceof Ne ? J(t._def.innerType) : [];
 class ze extends S {
   _parse(e) {
     const { ctx: r } = this._processInputParams(e);
@@ -2175,7 +2175,7 @@ class ze extends S {
   static create(e, r, n) {
     const s = /* @__PURE__ */ new Map();
     for (const i of r) {
-      const c = G(i.shape[e]);
+      const c = J(i.shape[e]);
       if (!c.length)
         throw new Error(`A discriminator value for key \`${e}\` could not be extracted from all schema options`);
       for (const a of c) {
@@ -2702,7 +2702,7 @@ ge.create = (t, e) => new ge({
   typeName: k.ZodPromise,
   ...T(e)
 });
-class J extends S {
+class Y extends S {
   innerType() {
     return this._def.schema;
   }
@@ -2782,19 +2782,19 @@ class J extends S {
     I.assertNever(s);
   }
 }
-J.create = (t, e, r) => new J({
+Y.create = (t, e, r) => new Y({
   schema: t,
   typeName: k.ZodEffects,
   effect: e,
   ...T(r)
 });
-J.createWithPreprocess = (t, e, r) => new J({
+Y.createWithPreprocess = (t, e, r) => new Y({
   schema: e,
   effect: { type: "preprocess", transform: t },
   typeName: k.ZodEffects,
   ...T(r)
 });
-class F extends S {
+class V extends S {
   _parse(e) {
     return this._getType(e) === g.undefined ? L(void 0) : this._def.innerType._parse(e);
   }
@@ -2802,7 +2802,7 @@ class F extends S {
     return this._def.innerType;
   }
 }
-F.create = (t, e) => new F({
+V.create = (t, e) => new V({
   innerType: t,
   typeName: k.ZodOptional,
   ...T(e)
@@ -2977,61 +2977,61 @@ const E = W.create, l = A.create, x = Ie.create, jr = ze.create;
 Ee.create;
 const Dr = z.create, b = Re.create, Zr = Ae.create, we = Ce.create, Pe = re.create;
 ge.create;
-F.create;
+V.create;
 ne.create;
-const Y = J.createWithPreprocess;
-function N(t, e = 0, r = 2) {
+const K = Y.createWithPreprocess;
+function M(t, e = 0, r = 2) {
   if (e > r) return "...";
   if (t instanceof A) {
     const n = t.shape, s = Object.keys(n).filter((c) => !c.startsWith("__"));
     return s.length === 0 ? "{ }" : e >= r - 1 ? "{ ... }" : `{ ${s.map((c) => {
-      const a = n[c], h = a instanceof F, d = N(h ? a.unwrap() : a, e + 1, r);
+      const a = n[c], h = a instanceof V, d = M(h ? a.unwrap() : a, e + 1, r);
       return `${c}${h ? "?" : ""}: ${d}`;
     }).join(", ")} }`;
   }
   if (t instanceof Ie)
-    return t.options.map((n) => N(n, e, r)).join(" or ");
+    return t.options.map((n) => M(n, e, r)).join(" or ");
   if (t instanceof U) return "string";
   if (t instanceof oe) return "number";
   if (t instanceof Ze) return "boolean";
   if (t instanceof ce) return "bigint";
   if (t instanceof Se) return "null";
   if (t instanceof W) {
-    const n = N(t.element, e + 1, r);
+    const n = M(t.element, e + 1, r);
     return n === "unknown" || n === "any" ? "array" : `${n}[]`;
   }
   if (t instanceof z)
-    return `[${t.items.map((n) => N(n, e + 1, r)).join(", ")}]`;
+    return `[${t.items.map((n) => M(n, e + 1, r)).join(", ")}]`;
   if (t instanceof Re) {
-    const n = N(
+    const n = M(
       t._def.valueType,
       e + 1,
       r
     );
     return n === "unknown" || n === "any" ? "{ [key: string]: unknown }" : `{ [key: string]: ${n} }`;
   }
-  return t instanceof F ? `${N(t.unwrap(), e, r)}?` : t instanceof Ce ? JSON.stringify(t.value) : t instanceof re ? t.options.map((n) => `"${n}"`).join(" | ") : t instanceof et ? "any" : t instanceof ae ? "unknown" : t instanceof tt ? "void" : t instanceof We ? "undefined" : t instanceof J ? N(t.innerType(), e, r) : t instanceof Oe ? N(t.removeDefault(), e, r) : t instanceof ne ? `${N(t.unwrap(), e, r)} | null` : t instanceof Ae ? "lazy" : t instanceof ge ? `Promise<${N(t.unwrap(), e + 1, r)}>` : t instanceof ke ? "function" : t instanceof xe ? "Date" : t instanceof nt ? "Map" : t instanceof me ? "Set" : t instanceof Ee ? `${N(t._def.left, e, r)} & ${N(t._def.right, e, r)}` : t instanceof ze ? t.options.map((n) => N(n, e, r)).join(" or ") : t instanceof ut ? N(t.unwrap(), e, r) : t instanceof it ? "NaN" : t instanceof Ne ? N(t.removeCatch(), e, r) : t instanceof qe ? N(t._def.in, e, r) : t instanceof Me ? `readonly ${N(t.unwrap(), e, r)}` : "unknown";
+  return t instanceof V ? `${M(t.unwrap(), e, r)}?` : t instanceof Ce ? JSON.stringify(t.value) : t instanceof re ? t.options.map((n) => `"${n}"`).join(" | ") : t instanceof et ? "any" : t instanceof ae ? "unknown" : t instanceof tt ? "void" : t instanceof We ? "undefined" : t instanceof Y ? M(t.innerType(), e, r) : t instanceof Oe ? M(t.removeDefault(), e, r) : t instanceof ne ? `${M(t.unwrap(), e, r)} | null` : t instanceof Ae ? "lazy" : t instanceof ge ? `Promise<${M(t.unwrap(), e + 1, r)}>` : t instanceof ke ? "function" : t instanceof xe ? "Date" : t instanceof nt ? "Map" : t instanceof me ? "Set" : t instanceof Ee ? `${M(t._def.left, e, r)} & ${M(t._def.right, e, r)}` : t instanceof ze ? t.options.map((n) => M(n, e, r)).join(" or ") : t instanceof ut ? M(t.unwrap(), e, r) : t instanceof it ? "NaN" : t instanceof Ne ? M(t.removeCatch(), e, r) : t instanceof qe ? M(t._def.in, e, r) : t instanceof Me ? `readonly ${M(t.unwrap(), e, r)}` : "unknown";
 }
 function Wr(t) {
   return t === null ? "null" : t === void 0 ? "undefined" : Array.isArray(t) ? "array" : typeof t;
 }
-function Fr(t, e, r, n) {
+function Vr(t, e, r, n) {
   const s = r.filter((a) => a.path.length === 0), i = r.filter((a) => a.path.length > 0);
   if (s.length > 0 && i.length === 0) {
     const a = s.some((d) => d.code === "custom"), h = s.some(
       (d) => d.code !== "invalid_type" && d.code !== "invalid_literal" && d.code !== "invalid_union"
     );
     if (!a && !h) {
-      const d = N(e), m = Wr(n);
+      const d = M(e), m = Wr(n);
       return `Invalid parameters for ${t}: expected ${d}${d === "{ }" ? " or no args" : ""}, received ${m}`;
     }
   }
   const c = r.map((a) => `at '${a.path.length > 0 ? a.path.join(".") : "root"}': ${a.message}`);
   return `Invalid parameters for ${t}: ${c.join("; ")}`;
 }
-const Vr = /* @__PURE__ */ new Set();
+const Fr = /* @__PURE__ */ new Set();
 function Ur(t) {
-  return Vr.has(t);
+  return Fr.has(t);
 }
 const jt = /* @__PURE__ */ new Map();
 function Br(t, e) {
@@ -3074,12 +3074,12 @@ l({});
 const Kr = l({
   items: b(o()).describe("Record of key-value string pairs to store")
 });
-Y((t) => t !== null && typeof t == "object" && !Array.isArray(t) && !("items" in t) ? { items: t } : t, Kr);
+K((t) => t !== null && typeof t == "object" && !Array.isArray(t) && !("items" in t) ? { items: t } : t, Kr);
 const Qr = l({
   keys: E(o()).describe("Array of storage keys to retrieve"),
   defaults: b(o()).optional().describe("Default string values for missing keys")
 });
-Y(
+K(
   (t) => Array.isArray(t) ? { keys: t } : t,
   Qr
 );
@@ -3087,7 +3087,7 @@ l({});
 const Xr = l({
   keys: E(o()).describe("Array of storage keys to delete")
 });
-Y(
+K(
   (t) => Array.isArray(t) ? { keys: t } : t,
   Xr
 );
@@ -3125,7 +3125,7 @@ const se = () => o().regex(/^e\d+$/), en = 'use { refId: "e2" } or { label: "...
   });
 }, Dt = (t, e) => {
   t.x !== void 0 || t.y !== void 0 || ft(t, e);
-}, M = (t) => Y(
+}, O = (t) => K(
   (e) => typeof e == "string" || typeof e == "number" ? { __invalidPositional: e } : e,
   l({
     __invalidPositional: x([o(), f()]).optional().describe("Internal flag for positional argument rejection"),
@@ -3135,7 +3135,7 @@ const se = () => o().regex(/^e\d+$/), en = 'use { refId: "e2" } or { label: "...
   }).superRefine(ft)
 ), $e = {
   tabId: x([f(), q()]).optional().describe("Target tab ID")
-}, K = (t) => Y(
+}, H = (t) => K(
   (e) => typeof e == "string" || typeof e == "number" ? { __invalidPositional: e } : e,
   l({
     __invalidPositional: x([o(), f()]).optional().describe("Internal flag for positional argument rejection"),
@@ -3160,7 +3160,7 @@ l({});
 l({
   duration: D().default(1000n).describe("Duration to wait in milliseconds")
 });
-M();
+O();
 const tn = (t, e) => {
   [t.url, t.path, t.handle].filter(
     (n) => typeof n == "string" && n.length > 0
@@ -3188,37 +3188,40 @@ const tn = (t, e) => {
     mimeType: o().optional()
   })
 ]);
-M({
+O({
   value: o().describe("Value to fill into the element")
 });
-const rn = M({
+const rn = O({
   files: E(Zt).min(1).describe("Files to attach to the input")
 });
-M({
+O({
   files: E(Wt).min(1).describe("Resolved files for content-script application")
 });
-M({
+O({
   text: o().describe("Text to type into the element")
 });
-M({
+O({
   text: o().describe("Text to append into the element")
 });
 l({
   key: o().describe("Key to press (e.g. Enter, Escape, ArrowDown)")
 });
-M({
+O({
   value: o().describe("Value to select in the dropdown")
 });
-M({
+O({
+  value: o().describe("Visible text of the option to select (matched case-insensitively)")
+});
+O({
   checked: w().optional().describe("Desired checked state (true to check, false to uncheck)")
 });
-M();
+O();
 l({});
 l({
   direction: o().default("down").describe("Scroll direction: up, down, left, or right"),
   amount: f().default(300).describe("Pixels to scroll")
 });
-Y(
+K(
   (t) => typeof t == "string" || typeof t == "number" ? { __invalidPositional: t } : t,
   l({
     __invalidPositional: x([o(), f()]).optional().describe("Internal flag for positional argument rejection"),
@@ -3228,7 +3231,7 @@ Y(
     y: f().optional().describe("Y coordinate to scroll to")
   }).superRefine(Dt)
 );
-M();
+O();
 l({
   selector: o().describe("CSS selector to find elements")
 });
@@ -3246,7 +3249,7 @@ l({
 const nn = l({
   fields: E(o()).describe("Array of field names to extract")
 });
-Y(
+K(
   (t) => Array.isArray(t) ? { fields: t } : t,
   nn
 );
@@ -3261,7 +3264,7 @@ l({
   currentWindow: w().optional().describe("Whether the tabs are in the current window"),
   url: o().optional().describe("URL pattern to match tabs against")
 }).passthrough();
-Y(
+K(
   (t) => typeof t == "string" ? { url: t } : t,
   l({
     url: o().optional().describe("URL to open in the new tab"),
@@ -3283,17 +3286,17 @@ x([
     tab_id: f().optional()
   }).passthrough()
 ]);
-K();
-K({
+H();
+H({
   value: o().describe("Value to fill into the element")
 });
-const sn = K({
+const sn = H({
   files: E(Zt).min(1).describe("Files to attach to the input")
 });
-K({
+H({
   files: E(Wt).min(1).describe("Resolved files for content-script application")
 });
-Y(
+K(
   (t) => typeof t == "string" || typeof t == "number" ? { __invalidPositional: t } : t,
   l({
     __invalidPositional: x([o(), f()]).optional().describe("Internal flag for positional argument rejection"),
@@ -3304,20 +3307,23 @@ Y(
     y: f().optional().describe("Y coordinate to scroll to")
   }).superRefine(Dt)
 );
-K({
+H({
   text: o().describe("Text to type into the element")
 });
 l({
   ...$e,
   key: o().describe("Key to press (e.g. Enter, Escape, ArrowDown)")
 });
-K({
+H({
   value: o().describe("Value to select in the dropdown")
 });
-K({
+H({
+  value: o().describe("Visible text of the option to select (matched case-insensitively)")
+});
+H({
   checked: w().optional().describe("Desired checked state (true to check, false to uncheck)")
 });
-K();
+H();
 l({
   ...$e
 });
@@ -3326,7 +3332,7 @@ l({
   direction: o().default("down").describe("Scroll direction: up, down, left, or right"),
   amount: f().default(300).describe("Pixels to scroll")
 });
-K();
+H();
 l({
   tabId: x([f(), q()]).optional().describe("Target tab ID"),
   script: o().optional().describe("Script to evaluate"),
@@ -3363,31 +3369,31 @@ l({
   max_nodes: f().optional().describe("Maximum nodes to include"),
   options: l({}).passthrough().optional().describe("Snapshot options")
 }).passthrough();
-M();
-M();
-M({
+O();
+O();
+O({
   value: o().optional().describe("Value to fill into the element")
 });
-M({
+O({
   text: o().optional().describe("Text to type into the element")
 });
 l({
   key: o().optional().describe("Key to press (e.g. Enter, Escape, ArrowDown)")
 });
-M({
+O({
   value: o().optional().describe("Value to select in the dropdown")
 });
-M({
+O({
   checked: w().optional().describe("Desired checked state (true to check, false to uncheck)")
 });
-M();
+O();
 l({});
 l({
   direction: o().optional().describe("Scroll direction: up, down, left, or right"),
   amount: f().optional().describe("Pixels to scroll")
 });
-M();
-M({
+O();
+O({
   text: o().optional().describe("Text to append into the element")
 });
 l({});
@@ -3673,7 +3679,7 @@ l({
     "Opaque ID of the observation lease granted by this snapshot. Pass to subsequent actions to prove they act on fresh observations."
   )
 });
-const Ft = l({
+const Vt = l({
   refId: se().optional(),
   tag: o(),
   role: o().optional(),
@@ -3698,14 +3704,14 @@ const Ft = l({
   alt: o().optional(),
   accept: o().optional().describe("For input[type=file]: accepted MIME/extensions"),
   filesCount: f().optional().describe("For input[type=file]: selected file count"),
-  children: E(Zr(() => Ft)).optional().describe("Nested descendants up to `depth`")
+  children: E(Zr(() => Vt)).optional().describe("Nested descendants up to `depth`")
 });
 l({
-  nodes: E(Ft),
+  nodes: E(Vt),
   url: o(),
   title: o()
 });
-const Vt = l({
+const Ft = l({
   id: f().optional().describe("Tab ID"),
   tabId: f().optional().describe("Tab ID (added by runner)"),
   index: f().optional().describe("Tab index in the window"),
@@ -3726,7 +3732,7 @@ const Vt = l({
   width: f().optional().describe("Tab width"),
   height: f().optional().describe("Tab height"),
   sessionId: o().optional().describe("Session ID")
-}).passthrough(), hn = E(Vt), Ut = l({
+}).passthrough(), hn = E(Ft), Ut = l({
   id: f().optional().describe("Window ID"),
   focused: w().optional().describe("Whether the window is focused"),
   top: f().optional().describe("Window top position"),
@@ -3798,7 +3804,7 @@ const bn = l({
 E(bn);
 const _n = l({
   lastModified: f().optional().describe("Last modified time"),
-  tab: Vt.optional().describe("Tab info"),
+  tab: Ft.optional().describe("Tab info"),
   window: Ut.optional().describe("Window info")
 }).passthrough(), vn = E(_n), kn = l({
   deviceName: o().optional().describe("Device name"),
@@ -3845,18 +3851,18 @@ E(
   })
 );
 C.child("tool-registry");
-const Fe = /* @__PURE__ */ new Map(), Ve = /* @__PURE__ */ new Map();
+const Ve = /* @__PURE__ */ new Map(), Fe = /* @__PURE__ */ new Map();
 function ht(t) {
   return t && t.length > 0 ? t : "__default__";
 }
 function Bt(t) {
   const e = ht(t);
-  let r = Fe.get(e);
-  return r || (r = /* @__PURE__ */ new Map(), Fe.set(e, r)), r;
+  let r = Ve.get(e);
+  return r || (r = /* @__PURE__ */ new Map(), Ve.set(e, r)), r;
 }
 function Tn(t, e, r) {
-  const n = ht(t), s = (Ve.get(n) ?? 0) + 1;
-  Ve.set(n, s);
+  const n = ht(t), s = (Fe.get(n) ?? 0) + 1;
+  Fe.set(n, s);
   const i = `blob_${s}`;
   return Bt(t).set(i, {
     bytes: e,
@@ -3870,10 +3876,10 @@ function xn(t, e) {
 }
 function Sn(t) {
   const e = ht(t);
-  Fe.delete(e), Ve.delete(e);
+  Ve.delete(e), Fe.delete(e);
 }
 function St() {
-  Fe.clear(), Ve.clear();
+  Ve.clear(), Fe.clear();
 }
 const It = 8 * 1024;
 function In(t) {
@@ -4014,7 +4020,7 @@ function At(t, e) {
       error: { message: e, code: t }
     }), fe.delete(r);
 }
-const ye = /* @__PURE__ */ new Map(), V = /* @__PURE__ */ new Map();
+const ye = /* @__PURE__ */ new Map(), F = /* @__PURE__ */ new Map();
 let Ct = Promise.resolve(), Z = null;
 function Mn(t) {
   C.trace("sessionQueue_enqueue");
@@ -4049,11 +4055,11 @@ self.addEventListener("unhandledrejection", (t) => {
 function Pn(t, e) {
   ye.set(t, e);
 }
-function O(t, e, r) {
+function N(t, e, r) {
   Pn(t, async (n, s) => {
     const i = e.safeParse(he(n));
     if (!i.success) {
-      const c = Fr(
+      const c = Vr(
         t,
         e,
         i.error.issues,
@@ -4159,8 +4165,8 @@ function Yt(t) {
     return new Promise((d, m) => {
       var bt;
       if ((bt = a == null ? void 0 : a.signal) != null && bt.aborted) {
-        const H = new Error(`Relay aborted for action: ${r}`);
-        H.code = "E_ABORT", m(H);
+        const G = new Error(`Relay aborted for action: ${r}`);
+        G.code = "E_ABORT", m(G);
         return;
       }
       const R = Dn(e);
@@ -4178,21 +4184,21 @@ function Yt(t) {
       }
       const P = $n();
       let Q = !1;
-      const de = (H) => {
-        Q || (Q = !0, clearTimeout(mt), a != null && a.signal && a.signal.removeEventListener("abort", He), fe.delete(P), H());
+      const de = (G) => {
+        Q || (Q = !0, clearTimeout(mt), a != null && a.signal && a.signal.removeEventListener("abort", He), fe.delete(P), G());
       }, pt = () => {
         Gt(P, e, R);
       }, He = () => {
         pt();
-        const H = new Error(`Relay aborted for action: ${r}`);
-        H.code = "E_ABORT", de(() => m(H));
+        const G = new Error(`Relay aborted for action: ${r}`);
+        G.code = "E_ABORT", de(() => m(G));
       };
       a != null && a.signal && a.signal.addEventListener("abort", He);
       const mt = setTimeout(() => {
         pt(), de(() => m(new Error(`Relay timeout for action: ${r}`)));
       }, h);
       fe.set(P, {
-        settle: (H) => de(() => d(H)),
+        settle: (G) => de(() => d(G)),
         timeoutId: mt,
         abort: He,
         owner: e,
@@ -4215,7 +4221,7 @@ function Yt(t) {
     });
   };
 }
-const Zn = "worker", ve = 3e4, Ot = 5e3, Wn = 500, Fn = {
+const Zn = "worker", ve = 3e4, Ot = 5e3, Wn = 500, Vn = {
   page_goto: "timeout",
   page_wait_for: "timeout",
   tab_wait_for_load: "timeout",
@@ -4224,7 +4230,7 @@ const Zn = "worker", ve = 3e4, Ot = 5e3, Wn = 500, Fn = {
   page_wait: "duration",
   sidepanel_wait: "duration"
 }, Kt = /* @__PURE__ */ new Set(["page_goto"]);
-function Vn(t, e) {
+function Fn(t, e) {
   if (t === null || typeof t != "object" || Array.isArray(t))
     return null;
   const r = t[e];
@@ -4237,9 +4243,9 @@ const Bn = 6e4;
 function Qt(t, e) {
   if (qt.has(t))
     return Bn;
-  const r = Fn[t];
+  const r = Vn[t];
   if (!r) return ve;
-  let n = Vn(e, r);
+  let n = Fn(e, r);
   return n === null && Kt.has(t) && (n = ve), n === null ? ve : Math.max(
     ve,
     Un(t, n)
@@ -4293,7 +4299,7 @@ function Jn(t, e) {
     if (!s.ok)
       return s;
     if (t = s.params, ye.has(r)) {
-      const m = ye.get(r), R = (e == null ? void 0 : e.signal) ?? (e != null && e.runId ? (h = V.get(e.runId)) == null ? void 0 : h.signal : void 0);
+      const m = ye.get(r), R = (e == null ? void 0 : e.signal) ?? (e != null && e.runId ? (h = F.get(e.runId)) == null ? void 0 : h.signal : void 0);
       return (async () => {
         try {
           return { ok: !0, value: await m(t, { ...e, signal: R }) };
@@ -4319,7 +4325,7 @@ function Jn(t, e) {
       tabPolicy: i.tabPolicy
     })(t, {
       ...e,
-      signal: (e == null ? void 0 : e.signal) ?? (e != null && e.runId ? (d = V.get(e.runId)) == null ? void 0 : d.signal : void 0)
+      signal: (e == null ? void 0 : e.signal) ?? (e != null && e.runId ? (d = F.get(e.runId)) == null ? void 0 : d.signal : void 0)
     });
     return Ht.has(r) && typeof a == "object" && a !== null && "ok" in a && a.ok ? {
       ok: !0,
@@ -4341,7 +4347,7 @@ function zn(t) {
     return async (r, n) => {
       var i;
       r = he(r);
-      const s = (n == null ? void 0 : n.signal) ?? (n != null && n.runId ? (i = V.get(n.runId)) == null ? void 0 : i.signal : void 0);
+      const s = (n == null ? void 0 : n.signal) ?? (n != null && n.runId ? (i = F.get(n.runId)) == null ? void 0 : i.signal : void 0);
       try {
         return { ok: !0, value: await e(r, {
           ...n,
@@ -4371,7 +4377,7 @@ function zn(t) {
       try {
         const a = await e(i.params, {
           ...n,
-          signal: (n == null ? void 0 : n.signal) ?? (n != null && n.runId ? (c = V.get(n.runId)) == null ? void 0 : c.signal : void 0)
+          signal: (n == null ? void 0 : n.signal) ?? (n != null && n.runId ? (c = F.get(n.runId)) == null ? void 0 : c.signal : void 0)
         });
         return typeof a == "object" && a !== null && "ok" in a && a.ok && Ht.has(t.action) ? {
           ok: !0,
@@ -4389,82 +4395,82 @@ function zn(t) {
   }
 }
 function qn(t) {
-  O(
+  N(
     "exists",
     X,
     (e) => t.fsExists(e)
-  ), O(
+  ), N(
     "stat",
     X,
     (e) => t.fsStat(e)
-  ), O(
+  ), N(
     "read",
     X,
     (e) => t.fsRead(e)
-  ), O(
+  ), N(
     "readText",
     X,
     (e) => t.fsReadText(e)
-  ), O(
+  ), N(
     "readBase64",
     X,
     (e) => t.fsReadBase64(e)
-  ), O(
+  ), N(
     "list",
     X,
     (e) => t.fsList(e)
-  ), O(
+  ), N(
     "mkdir",
     X,
     (e) => t.fsMkdir(e)
-  ), O(
+  ), N(
     "delete",
     X,
     (e) => t.fsDelete(e)
-  ), O(
+  ), N(
     "copy",
     xt,
     (e) => t.fsCopy(e)
-  ), O(
+  ), N(
     "move",
     xt,
     (e) => t.fsMove(e)
-  ), O(
+  ), N(
     "write",
     le,
     (e) => t.fsWrite(e)
-  ), O(
+  ), N(
     "writeText",
     le,
     (e) => t.fsWriteText(e)
-  ), O(
+  ), N(
     "writeBase64",
     le,
     async (e) => {
       const r = e;
       return Cn(r.path, r.data), t.fsWriteBase64(r);
     }
-  ), O(
+  ), N(
     "append",
     le,
     (e) => t.fsAppend(e)
-  ), O(
+  ), N(
     "appendText",
     le,
     (e) => t.fsAppendText(e)
-  ), O(
+  ), N(
     "appendBase64",
     le,
     (e) => t.fsAppendBase64(e)
-  ), O(
+  ), N(
     "readRange",
     cn,
     (e) => t.fsReadRange(e)
-  ), O(
+  ), N(
     "update",
     dn,
     (e) => t.fsUpdate(e)
-  ), O(
+  ), N(
     "hash",
     ln,
     (e) => t.fsHash(e)
@@ -4547,7 +4553,7 @@ self.onmessage = async (t) => {
     switch (e.type) {
       case "runCell": {
         const n = e.runId, s = new AbortController();
-        n && V.set(n, s), Z = { id: e.id, runId: n }, C.trace("runCell_start", {
+        n && F.set(n, s), Z = { id: e.id, runId: n }, C.trace("runCell_start", {
           runId: n,
           callId: e.id,
           codeLen: e.code.length
@@ -4589,15 +4595,15 @@ self.onmessage = async (t) => {
             runId: n
           });
         } finally {
-          (Z == null ? void 0 : Z.id) === e.id && (Z = null), n && (V.delete(n), Sn(n));
+          (Z == null ? void 0 : Z.id) === e.id && (Z = null), n && (F.delete(n), Sn(n));
         }
         break;
       }
       case "reset": {
         r.setAborted(!0);
-        for (const n of V.values())
+        for (const n of F.values())
           n.abort();
-        V.clear(), St(), Nn(), ir(), At("E_RESET", "Worker reset");
+        F.clear(), St(), Nn(), ir(), At("E_RESET", "Worker reset");
         try {
           r.reset(), self.postMessage({ type: "result", id: e.id, data: { ok: !0 } });
         } catch (n) {
@@ -4608,9 +4614,9 @@ self.onmessage = async (t) => {
       }
       case "stop": {
         r.setAborted(!0);
-        for (const n of V.values())
+        for (const n of F.values())
           n.abort();
-        V.clear(), St(), At("E_STOPPED", "Worker stopped"), self.postMessage({ type: "result", id: e.id, data: { ok: !0 } });
+        F.clear(), St(), At("E_STOPPED", "Worker stopped"), self.postMessage({ type: "result", id: e.id, data: { ok: !0 } });
         break;
       }
       case "setFuelLimit": {
@@ -4691,7 +4697,7 @@ export {
   zn as createExecutableCallback,
   Jn as extensionDispatch,
   Pn as registerWorkerHandler,
-  O as registerWorkerHandlerValidated,
+  N as registerWorkerHandlerValidated,
   jn as registerWorkerPort,
   ct as resolveAsyncRelayResult,
   Qt as resolveRelayTimeoutMs,
