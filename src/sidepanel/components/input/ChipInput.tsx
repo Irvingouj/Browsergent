@@ -198,19 +198,13 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 		[inputRef],
 	);
 
-	// Track whether the last change originated here, so we don't clobber the
-	// DOM (and the caret) by echoing back the canonical string we just emitted.
-	const selfEdit = useRef(false);
-
 	// Render from value ONLY when it diverges from the live DOM. This covers
-	// external updates (history recall, drag-drop, picker insert). When the
+	// external updates (history recall, drag-drop, picker insert, submit). When
+	// the user types, onChange updates the store, the re-render comes back with
+	// value === live (same text), so no DOM re-render — caret preserved.
 	useEffect(() => {
 		const el = internalRef.current;
 		if (!el) return;
-		if (selfEdit.current) {
-			selfEdit.current = false;
-			return;
-		}
 		const live = reconstructCanonical(readDomNodes(el));
 		if (live !== value) {
 			el.innerHTML = renderBlocks(value);
@@ -220,38 +214,22 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 		}
 	}, [value, caretOffset]);
 
-	// Placeholder visibility: the :empty selector needs no child nodes, so we
-	// must clear the ZWSP we use to keep height when blank.
-	const ensureEmptyHeight = useCallback((el: HTMLDivElement): void => {
-		if (el.childNodes.length === 0) {
-			el.textContent = "\u200B";
-		}
-	}, []);
-
 	const handleInput = useCallback(
 		(e: Event) => {
 			const el = e.currentTarget as HTMLDivElement;
-			// Strip the ZWSP placeholder if real text arrived.
+			// After deleting all text, the browser leaves a <br>. Clear it so the
+			// element is truly empty (matches canonical "" and shows placeholder).
 			if (
-				el.childNodes.length === 1 &&
-				el.firstChild?.nodeType === Node.TEXT_NODE &&
-				el.firstChild.textContent === "\u200B"
+				el.textContent === "" ||
+				(el.childNodes.length === 1 && el.firstChild?.nodeName === "BR")
 			) {
-				el.textContent = "";
+				el.innerHTML = "";
 			}
 			const { canonical, cursor } = readState(el);
-			selfEdit.current = true;
 			onChange(canonical, cursor);
-			ensureEmptyHeight(el);
 		},
-		[onChange, ensureEmptyHeight],
+		[onChange],
 	);
-
-	// onKeyDown forwards directly to the consumer (useInputMode) which owns all
-	// key interpretation. No wrapper needed.
-
-	// Paste as plain text only — never rich HTML — so chip spans from elsewhere
-	// can't corrupt the model.
 	const handlePaste = useCallback(
 		(e: ClipboardEvent) => {
 			if (onPaste) {
@@ -268,28 +246,11 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 
 	const handleFocus = useCallback(() => {
 		onFocus?.();
-		const el = internalRef.current;
-		if (!el || el.childNodes.length > 0) return;
-		// Input is empty: insert ZWSP so the element has height, then
-		// position the caret at offset 0 (before the ZWSP).
-		el.textContent = "\u200B";
-		const doc = el.ownerDocument;
-		const sel = doc.getSelection();
-		if (!sel) return;
-		const firstChild = el.firstChild;
-		if (!firstChild) return;
-		const range = doc.createRange();
-		range.setStart(firstChild, 0);
-		range.collapse(true);
-		sel.removeAllRanges();
-		sel.addRange(range);
 	}, [onFocus]);
 
 	const handleBlur = useCallback(() => {
-		const el = internalRef.current;
-		if (el) ensureEmptyHeight(el);
 		onBlur?.();
-	}, [onBlur, ensureEmptyHeight]);
+	}, [onBlur]);
 
 	const isEmpty = parseBlocks(value).every(
 		(b: Block) => b.type === "text" && b.text === "",
@@ -297,6 +258,11 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 
 	return (
 		<div class="relative">
+			{isEmpty && !disabled && placeholder && (
+				<div class="absolute inset-0 px-md py-sm text-sm text-text-dim pointer-events-none whitespace-pre-wrap truncate">
+					{placeholder}
+				</div>
+			)}
 			<div
 				ref={setRef}
 				contentEditable={!disabled}
@@ -304,7 +270,6 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 				role="textbox"
 				aria-multiline="true"
 				aria-label={placeholder ?? "Task input"}
-				data-placeholder={isEmpty ? (placeholder ?? "") : undefined}
 				onInput={handleInput}
 				onKeyDown={onKeyDown}
 				onFocus={handleFocus}
@@ -316,7 +281,6 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 					"whitespace-pre-wrap",
 					"break-words",
 					"overflow-y-auto",
-					isEmpty ? "task-input-chip--empty" : "",
 				].join(" ")}
 			/>
 		</div>

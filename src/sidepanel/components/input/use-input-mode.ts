@@ -286,12 +286,14 @@ export function useInputMode({
 				return;
 			}
 
-			if (action.effect === "restore-draft") {
-				const restoredDraft =
-					modeRef.current.kind === "history" ? modeRef.current.savedDraft : "";
-				store.getState().setTaskDraft(restoredDraft);
-				return;
-			}
+		if (action.effect === "restore-draft") {
+			const restoredDraft =
+				modeRef.current.kind === "history" ? modeRef.current.savedDraft : "";
+			store.getState().setTaskDraft(restoredDraft);
+			cursorRef.current = restoredDraft.length;
+			setPendingCaret(restoredDraft.length);
+			return;
+		}
 
 			if (action.effect === "recall-history") {
 				if (action.recallDirection === "older") {

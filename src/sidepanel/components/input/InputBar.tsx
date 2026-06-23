@@ -75,15 +75,17 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	);
 
 	// Auto-grow the contentEditable to fit content, capped at MAX_INPUT_HEIGHT.
-	// When empty, clear explicit height so CSS min-h-[36px] controls sizing.
+	// When empty, clear explicit height (and any stale DOM content left after a
+	// submit) so CSS min-h-[36px] controls sizing.
 	useEffect(() => {
 		const el = internalRef.current;
 		if (!el) return;
-		el.style.height = "auto";
 		if (!taskInput) {
+			if (el.innerHTML !== "") el.innerHTML = "";
 			el.style.height = "";
 			return;
 		}
+		el.style.height = "auto";
 		const next = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
 		el.style.height = `${next}px`;
 	}, [taskInput]);
