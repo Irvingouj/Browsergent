@@ -222,6 +222,59 @@ export async function readTaskInput(sidePanel: Page): Promise<string> {
 	return prev;
 }
 
+/** Mock chrome.runtime.onMessage on a page before content-script injection.
+ * Returns a function to dispatch messages to registered listeners. */
+export async function mockChromeRuntimeOnMessage(
+	page: Page,
+): Promise<(action: string) => Promise<unknown>> {
+	await page.evaluate(() => {
+		const listeners: Array<
+			(
+				msg: unknown,
+				sender: unknown,
+				sendResponse: (r: unknown) => void,
+			) => void
+		> = [];
+		(window as unknown as Record<string, unknown>).chrome = {
+			runtime: {
+				id: "test-extension-id",
+				onMessage: {
+					addListener: (
+						fn: (msg: unknown, sender: unknown, sendResponse: (r: unknown) => void) => void,
+					) => listeners.push(fn),
+					removeListener: (
+						fn: (msg: unknown, sender: unknown, sendResponse: (r: unknown) => void) => void,
+					) => {
+						const i = listeners.indexOf(fn);
+						if (i >= 0) listeners.splice(i, 1);
+					},
+				},
+			},
+		};
+		(window as unknown as Record<string, unknown>).__testListeners = listeners;
+	});
+	return (action: string) =>
+		page.evaluate((act) => {
+			const listeners = (
+				window as unknown as Record<string, unknown>
+			).__testListeners as Array<
+				(msg: unknown, sender: unknown, sendResponse: (r: unknown) => void) => void
+			>;
+			return Promise.all(
+				listeners.map(
+					(listener) =>
+						new Promise<unknown>((resolve) => {
+							listener(
+								{ type: "registryCall", action: act, params: {}, id: "test-1" },
+								{ id: "test-extension-id" },
+								(response: unknown) => resolve(response),
+							);
+						}),
+				),
+			).then((results) => results[0]);
+		}, action);
+}
+
 import { createServer } from "node:http";
 
 export interface MockAnthropicServer {

@@ -5,8 +5,8 @@ vi.mock("../../package.json", () => ({
 	default: {
 		version: "0.1.0",
 		dependencies: {
-			"@pi-oxide/pi-host-web": "0.9.0",
-			"@pi-oxide/extension-js": "0.4.0",
+			"@pi-oxide/pi-host-web": "0.9.3",
+			"@pi-oxide/extension-js": "0.10.2",
 		},
 	},
 }));
@@ -44,8 +44,8 @@ describe("exportConversation", () => {
 			exportedAt: "2026-06-06T00:00:00Z",
 			packages: {
 				browsergent: "0.1.0",
-				"pi-host-web": "0.9.0",
-				"extension-js": "0.4.0",
+				"pi-host-web": "0.9.3",
+				"extension-js": "0.10.2",
 			},
 			messages,
 			trace,
@@ -65,8 +65,8 @@ describe("exportConversation", () => {
 		expect(parsed.exportedAt).toBe("2026-06-06T00:00:00Z");
 		expect(parsed.packages).toEqual({
 			browsergent: "0.1.0",
-			"pi-host-web": "0.9.0",
-			"extension-js": "0.4.0",
+			"pi-host-web": "0.9.3",
+			"extension-js": "0.10.2",
 		});
 
 		vi.unstubAllGlobals();
@@ -105,8 +105,8 @@ describe("exportConversation", () => {
 			exportedAt: "2026-06-06T00:00:00Z",
 			packages: {
 				browsergent: "0.1.0",
-				"pi-host-web": "0.9.0",
-				"extension-js": "0.4.0",
+				"pi-host-web": "0.9.3",
+				"extension-js": "0.10.2",
 			},
 			messages: [],
 			trace: [],
@@ -138,8 +138,8 @@ describe("exportConversation", () => {
 			exportedAt: "2026-06-06T00:00:00Z",
 			packages: {
 				browsergent: "0.1.0",
-				"pi-host-web": "0.9.0",
-				"extension-js": "0.4.0",
+				"pi-host-web": "0.9.3",
+				"extension-js": "0.10.2",
 			},
 			messages: [],
 			trace: [],
@@ -158,8 +158,8 @@ describe("exportConversation", () => {
 
 		const snapshot = buildExportSnapshot([], [], []);
 		expect(snapshot.packages.browsergent).toBe("0.1.0");
-		expect(snapshot.packages["pi-host-web"]).toBe("0.9.0");
-		expect(snapshot.packages["extension-js"]).toBe("0.4.0");
+		expect(snapshot.packages["pi-host-web"]).toBe("0.9.3");
+		expect(snapshot.packages["extension-js"]).toBe("0.10.2");
 		expect(snapshot.exportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 	});
 });

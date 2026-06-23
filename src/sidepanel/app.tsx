@@ -275,6 +275,10 @@ const App: FunctionalComponent = () => {
 			}
 		}
 
+		// Append timestamp as footnote so system prompt stays stable for prefix caching.
+		const now = new Date().toISOString();
+		resolvedTask = `${resolvedTask}\n\n[Current time: ${now}]`;
+
 		browsergentStore.getState().setTaskDraft("");
 
 		const runId = crypto.randomUUID();

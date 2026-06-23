@@ -99,7 +99,7 @@ export class AgentLoop {
 			store: indexedDbStore(),
 			instructions: composeSystemPrompt(skillCatalog),
 			context: {
-				maxTokens: 100_000,
+				maxTokens: 1_000_000,
 				toolResultLimit: 50_000,
 				summarize: true,
 			},

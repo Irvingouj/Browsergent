@@ -124,13 +124,6 @@ async function getExtensionJsDocs(
 		: renderMarkdownDocs(filtered);
 }
 
-function truncateToolResult(text: string, maxChars: number): string {
-	if (text.length <= maxChars) return text;
-	const head = Math.floor(maxChars / 2);
-	const tail = maxChars - head;
-	return `${text.slice(0, head)}\n\n... [truncated ${text.length - maxChars} chars] ...\n\n${text.slice(-tail)}`;
-}
-
 function classifyError(
 	source: {
 		kind?: string;
@@ -287,7 +280,7 @@ path (e.g. "/user") to list only direct children of that directory. Binary files
 const FILE_READ_DESCRIPTION = `Read text content from a file.
 - \`path\` is the file path (e.g. "/foo.md" or "sub/bar.md"). Relative paths resolve against root "/".
 - Use file_list to discover paths.
-- Returns the text content; long files are truncated with a [truncated] marker.
+- Returns the text content in full.
 - Binary files return E_FILE_BINARY.
 Prefer this over run_js when you just want to read a file's content.`;
 
@@ -309,7 +302,6 @@ const FILE_WRITE_DESCRIPTION = `Create or overwrite a text file at the given pat
 
 const FILE_PATH_HELP =
 	'Call file_list first to see available paths. Paths may be absolute ("/foo.md") or relative ("foo.md" resolves to "/foo.md").';
-const MAX_FILE_READ_CHARS = 50_000;
 
 function validateFileToolPath(path: string): string | null {
 	const trimmed = path.trim();
@@ -358,24 +350,6 @@ function formatFileOpError(err: unknown): string {
 	return formatToolError("E_FILE_UNKNOWN", msg, FILE_PATH_HELP);
 }
 
-function truncateFileContent(content: string): {
-	text: string;
-	truncated: boolean;
-} {
-	if (content.length <= MAX_FILE_READ_CHARS) {
-		return { text: content, truncated: false };
-	}
-	const marker = "\n\n[truncated]\n\n";
-	const budget = MAX_FILE_READ_CHARS - marker.length;
-	const head = Math.ceil(budget / 2);
-	const tail = budget - head;
-	return {
-		text:
-			content.slice(0, head) + marker + (tail > 0 ? content.slice(-tail) : ""),
-		truncated: true,
-	};
-}
-
 function formatFileListResult(
 	files: {
 		id: string;
@@ -393,16 +367,6 @@ function formatFileListResult(
 	);
 	return [header, ...rows].join("\n");
 }
-
-function formatFileReadResult(
-	content: string,
-	bytes: number,
-	truncated: boolean,
-): string {
-	const head = truncated ? `[truncated — file is ${bytes} bytes]\n\n` : "";
-	return head + content;
-}
-
 function formatFileEditResult(
 	occurrences: number,
 	bytes: number,
@@ -532,7 +496,7 @@ export function createAgentTools(
 								.map((line) => `${tracePrefix}${line}`)
 								.join("\n")
 						: formatted;
-					return truncateToolResult(prefixed, 50000);
+					return prefixed;
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
 					const traceId = getCurrentTraceId();
@@ -577,7 +541,7 @@ export function createAgentTools(
 				const namespace = parsed.data?.namespace;
 				try {
 					const docs = await getExtensionJsDocs(getDocs, format, namespace);
-					return truncateToolResult(docs, 50000);
+					return docs;
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
 					return formatToolError(
@@ -631,7 +595,7 @@ export function createAgentTools(
 				}
 				try {
 					const content = await loadSkill(skill, resourcePath);
-					return truncateToolResult(content, 50000);
+					return content;
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : String(err);
 					if (msg.includes("disable-model-invocation")) {
@@ -722,8 +686,7 @@ export function createAgentTools(
 							"",
 						);
 					}
-					const { text, truncated } = truncateFileContent(result.content);
-					return formatFileReadResult(text, result.bytes, truncated);
+					return result.content;
 				} catch (err) {
 					return formatFileOpError(err);
 				}

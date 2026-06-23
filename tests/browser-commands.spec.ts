@@ -13,6 +13,7 @@ import {
 	createTestPage,
 	injectContentScript,
 	launchExtension,
+	mockChromeRuntimeOnMessage,
 } from "./helpers";
 
 const FORM_HTML = `
@@ -71,31 +72,26 @@ test("extension-js content script injects without error", async () => {
 test("extension-js content script assigns ref IDs to interactive elements", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, FORM_HTML);
+
+	// Mock chrome.runtime before injecting the content script
+	const dispatch = await mockChromeRuntimeOnMessage(testPage);
 	await injectContentScript(testPage);
 
-	// Trigger a snapshot via the content script's inline snapshot function
-	await testPage.evaluate(() => {
-		const all = document.body.querySelectorAll("*");
-		for (const el of all) {
-			if (el instanceof HTMLElement) {
-				const tag = el.tagName.toLowerCase();
-				if (
-					tag === "input" ||
-					tag === "button" ||
-					tag === "select" ||
-					tag === "textarea"
-				) {
-					el.setAttribute("data-ref-id", "1");
-				}
-			}
-		}
+	// Trigger the snapshot via the registered listener
+	await dispatch("page_snapshot_data");
+
+	// Verify interactive elements got real ref IDs matching /^e\d+$/
+	const refIds = await testPage.evaluate(() => {
+		const elements = document.querySelectorAll<HTMLElement>(
+			"input, button, select, textarea",
+		);
+		return Array.from(elements).map((el) => el.getAttribute("data-ref-id"));
 	});
 
-	// Verify interactive elements got ref IDs
-	const refCount = await testPage.evaluate(() => {
-		return document.querySelectorAll("[data-ref-id]").length;
-	});
-	expect(refCount).toBeGreaterThanOrEqual(5);
+	expect(refIds.length).toBeGreaterThanOrEqual(5);
+	for (const refId of refIds) {
+		expect(refId).toMatch(/^e\d+$/);
+	}
 
 	await close();
 });

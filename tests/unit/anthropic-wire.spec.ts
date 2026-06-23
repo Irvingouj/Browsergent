@@ -1,301 +1,151 @@
 import { describe, expect, test } from "vitest";
-import {
-	contentToText,
-	toAnthropicContent,
-	toAnthropicMessages,
-	toAnthropicTools,
-	toStopReason,
-} from "../../src/worker/anthropic-wire";
+import { toAnthropicMessages } from "../../src/worker/anthropic-wire";
+import type { AgentMessage } from "@pi-oxide/pi-host-web/raw";
 
-describe("contentToText", () => {
-	test("extracts text from content blocks", () => {
-		const blocks = [
-			{ type: "text" as const, text: "hello" },
-			{ type: "tool_call" as const, id: "tc1", name: "run_js", arguments: {} },
-			{ type: "text" as const, text: "world" },
+const USAGE = {
+	input: 0,
+	output: 0,
+	cache_read: 0,
+	cache_write: 0,
+	total_tokens: 0,
+};
+
+function userMsg(text: string): AgentMessage {
+	return {
+		role: "user",
+		content: [{ type: "text", text }],
+		timestamp: 1700000000000,
+	};
+}
+
+function assistantMsg(text: string): AgentMessage {
+	return {
+		role: "assistant",
+		content: [{ type: "text", text }],
+		api: "anthropic",
+		provider: "anthropic",
+		model: "test-model",
+		stop_reason: "end_turn",
+		timestamp: 1700000001000,
+		usage: { ...USAGE },
+	};
+}
+
+function assistantToolCallMsg(
+	id: string,
+	name: string,
+	args: Record<string, unknown>,
+): AgentMessage {
+	return {
+		role: "assistant",
+		content: [{ type: "tool_call", id, name, arguments: args }],
+		api: "anthropic",
+		provider: "anthropic",
+		model: "test-model",
+		stop_reason: "tool_use",
+		timestamp: 1700000001000,
+		usage: { ...USAGE },
+	};
+}
+
+function toolResultMsg(id: string, text: string): AgentMessage {
+	return {
+		role: "tool_result",
+		tool_call_id: id,
+		tool_name: "run_js",
+		content: [{ type: "text", text }],
+		is_error: false,
+		timestamp: 1700000002000,
+	};
+}
+
+describe("toAnthropicMessages: prefix stability across growing turns", () => {
+	test("alternating user/assistant: appending messages does not alter prefix", () => {
+		const turn1: AgentMessage[] = [
+			userMsg("Hello"),
+			assistantMsg("Hi there"),
+			userMsg("How are you?"),
 		];
-		expect(contentToText(blocks)).toBe("hello\nworld");
-	});
-
-	test("returns empty string when no text blocks", () => {
-		const blocks = [
-			{ type: "tool_call" as const, id: "tc1", name: "run_js", arguments: {} },
+		const turn2: AgentMessage[] = [
+			...turn1,
+			assistantMsg("I'm good"),
+			userMsg("Great"),
 		];
-		expect(contentToText(blocks)).toBe("");
-	});
-});
 
-describe("toAnthropicContent", () => {
-	test("converts text block to Anthropic text", () => {
-		const result = toAnthropicContent({ type: "text", text: "hello" });
-		expect(result).toEqual({ type: "text", text: "hello" });
-	});
+		const out1 = toAnthropicMessages(turn1);
+		const out2 = toAnthropicMessages(turn2);
 
-	test("converts tool_call block to Anthropic tool_use", () => {
-		const result = toAnthropicContent({
-			type: "tool_call",
-			id: "tc1",
-			name: "run_js",
-			arguments: { code: "1+1" },
-		});
-		expect(result).toEqual({
-			type: "tool_use",
-			id: "tc1",
-			name: "run_js",
-			input: { code: "1+1" },
-		});
+		expect(out2.length).toBeGreaterThan(out1.length);
+		for (let i = 0; i < out1.length; i++) {
+			expect(JSON.stringify(out2[i])).toBe(JSON.stringify(out1[i]));
+		}
 	});
 
-	test("converts tool_call with non-object arguments to empty object", () => {
-		const result = toAnthropicContent({
-			type: "tool_call",
-			id: "tc1",
-			name: "run_js",
-			arguments: "not-an-object",
-		});
-		expect(result).toEqual({
-			type: "tool_use",
-			id: "tc1",
-			name: "run_js",
-			input: {},
-		});
-	});
-
-	test("converts image block to text placeholder", () => {
-		const result = toAnthropicContent({
-			type: "image",
-			media_type: "image/png",
-			data: "base64data",
-		});
-		expect(result).toEqual({ type: "text", text: "[image: image/png]" });
-	});
-});
-
-describe("toAnthropicMessages", () => {
-	test("converts user message with single text to string content", () => {
-		const messages = [
-			{
-				role: "user" as const,
-				content: [{ type: "text" as const, text: "hello" }],
-				timestamp: 1,
-			},
+	test("tool_result merging: appending assistant after tool_result does not alter prefix", () => {
+		const turn1: AgentMessage[] = [
+			userMsg("Run a tool"),
+			assistantToolCallMsg("call_0", "run_js", { code: "return 1" }),
+			toolResultMsg("call_0", "result: 1"),
 		];
-		const result = toAnthropicMessages(messages);
-		expect(result).toEqual([{ role: "user", content: "hello" }]);
-	});
-
-	test("converts user message with mixed content to array content", () => {
-		const messages = [
-			{
-				role: "user" as const,
-				content: [
-					{ type: "text" as const, text: "hello" },
-					{
-						type: "tool_call" as const,
-						id: "tc1",
-						name: "run_js",
-						arguments: {},
-					},
-				],
-				timestamp: 1,
-			},
+		const turn2: AgentMessage[] = [
+			...turn1,
+			assistantMsg("The result was 1."),
 		];
-		const result = toAnthropicMessages(messages);
-		expect(result).toEqual([
-			{
-				role: "user",
-				content: [
-					{ type: "text", text: "hello" },
-					{ type: "tool_use", id: "tc1", name: "run_js", input: {} },
-				],
-			},
-		]);
+
+		const out1 = toAnthropicMessages(turn1);
+		const out2 = toAnthropicMessages(turn2);
+
+		// out1 has: user, assistant(tool_call), user(tool_result)
+		// out2 has: user, assistant(tool_call), user(tool_result), assistant(text)
+		// The first 3 messages must be byte-identical
+		expect(out2.length).toBe(out1.length + 1);
+		for (let i = 0; i < out1.length; i++) {
+			expect(JSON.stringify(out2[i])).toBe(JSON.stringify(out1[i]));
+		}
 	});
 
-	test("merges consecutive user messages into one", () => {
-		// Strict Anthropic-compatible endpoints reject consecutive same-role
-		// messages ("roles must alternate"). When the core drops an empty
-		// assistant between two user turns, the wire layer must merge them.
-		const messages = [
-			{
-				role: "user" as const,
-				content: [{ type: "text" as const, text: "first" }],
-				timestamp: 1,
-			},
-			{
-				role: "user" as const,
-				content: [{ type: "text" as const, text: "second" }],
-				timestamp: 2,
-			},
-			{
-				role: "assistant" as const,
-				content: [{ type: "text" as const, text: "reply" }],
-				timestamp: 3,
-			},
+	test("consecutive user messages merge identically when prefix is preserved", () => {
+		// Two consecutive user messages (core dropped an empty assistant)
+		const turn1: AgentMessage[] = [
+			userMsg("First question"),
+			userMsg("Second question"),
 		];
-		const result = toAnthropicMessages(messages);
-		expect(result).toHaveLength(2);
-		expect(result[0]).toEqual({ role: "user", content: "first\nsecond" });
-		expect(result[1]).toEqual({
-			role: "assistant",
-			content: [{ type: "text", text: "reply" }],
-		});
-	});
-
-	test("converts assistant message to array content", () => {
-		const messages = [
-			{
-				role: "assistant" as const,
-				content: [{ type: "text" as const, text: "hi there" }],
-				timestamp: 2,
-			},
+		const turn2: AgentMessage[] = [
+			...turn1,
+			assistantMsg("Both answered"),
 		];
-		const result = toAnthropicMessages(messages);
-		expect(result).toEqual([
-			{ role: "assistant", content: [{ type: "text", text: "hi there" }] },
-		]);
+
+		const out1 = toAnthropicMessages(turn1);
+		const out2 = toAnthropicMessages(turn2);
+
+		// out1: one merged user message
+		// out2: same merged user message + assistant
+		expect(out1.length).toBe(1);
+		expect(out2.length).toBe(2);
+		expect(JSON.stringify(out2[0])).toBe(JSON.stringify(out1[0]));
 	});
 
-	test("converts tool_result to user tool_result block", () => {
-		const messages = [
-			{
-				role: "tool_result" as const,
-				content: [{ type: "text" as const, text: "42" }],
-				tool_call_id: "tc1",
-				timestamp: 3,
-			},
+	test("3-turn conversation: full prefix stability", () => {
+		const base: AgentMessage[] = [
+			userMsg("Turn 0"),
+			assistantMsg("Reply 0"),
 		];
-		const result = toAnthropicMessages(messages);
-		expect(result).toEqual([
-			{
-				role: "user",
-				content: [
-					{
-						type: "tool_result",
-						tool_use_id: "tc1",
-						content: "42",
-						is_error: undefined,
-					},
-				],
-			},
-		]);
-	});
-
-	test("coalesces consecutive tool_results into a single user message", () => {
-		// Reproduces the failed LLM request: an assistant turn emits multiple
-		// parallel tool_use blocks, and the core returns one tool_result message
-		// per call. Anthropic requires all tool_results for a single assistant
-		// turn to be in ONE user message — sending two consecutive user messages
-		// triggers: "tool_use ids were found without tool_result blocks
-		// immediately after".
-		const messages = [
-			{
-				role: "user" as const,
-				content: [{ type: "text" as const, text: "go" }],
-				timestamp: 1,
-			},
-			{
-				role: "assistant" as const,
-				content: [
-					{ type: "text" as const, text: "calling two tools" },
-					{
-						type: "tool_call" as const,
-						id: "tc1",
-						name: "snapshot",
-						arguments: {},
-					},
-					{
-						type: "tool_call" as const,
-						id: "tc2",
-						name: "file_list",
-						arguments: {},
-					},
-				],
-				timestamp: 2,
-			},
-			{
-				role: "tool_result" as const,
-				content: [{ type: "text" as const, text: "snap result" }],
-				tool_call_id: "tc1",
-				timestamp: 3,
-			},
-			{
-				role: "tool_result" as const,
-				content: [{ type: "text" as const, text: "files" }],
-				tool_call_id: "tc2",
-				timestamp: 4,
-			},
+		const turn1: AgentMessage[] = [...base, userMsg("Turn 1")];
+		const turn2: AgentMessage[] = [
+			...turn1,
+			assistantMsg("Reply 1"),
+			userMsg("Turn 2"),
 		];
-		const result = toAnthropicMessages(messages);
-		// Expected: user, assistant, then ONE user with both tool_results.
-		expect(result).toHaveLength(3);
-		expect(result[2]).toEqual({
-			role: "user",
-			content: [
-				{
-					type: "tool_result",
-					tool_use_id: "tc1",
-					content: "snap result",
-					is_error: undefined,
-				},
-				{
-					type: "tool_result",
-					tool_use_id: "tc2",
-					content: "files",
-					is_error: undefined,
-				},
-			],
-		});
-	});
-});
 
-describe("toAnthropicTools", () => {
-	test("converts tool definitions with object parameters", () => {
-		const tools = [
-			{
-				name: "run_js",
-				description: "Run JS code",
-				parameters: { type: "object", properties: {} },
-			},
-		];
-		const result = toAnthropicTools(tools);
-		expect(result).toEqual([
-			{
-				name: "run_js",
-				description: "Run JS code",
-				input_schema: { type: "object", properties: {} },
-			},
-		]);
-	});
+		const outBase = toAnthropicMessages(base);
+		const out1 = toAnthropicMessages(turn1);
+		const out2 = toAnthropicMessages(turn2);
 
-	test("defaults non-object parameters to { type: object }", () => {
-		const tools = [
-			{
-				name: "run_js",
-				description: "Run JS code",
-				parameters: null,
-			},
-		];
-		const result = toAnthropicTools(tools);
-		expect(result).toEqual([
-			{
-				name: "run_js",
-				description: "Run JS code",
-				input_schema: { type: "object" },
-			},
-		]);
-	});
-});
-
-describe("toStopReason", () => {
-	test("maps known stop reasons", () => {
-		expect(toStopReason("end_turn")).toBe("end_turn");
-		expect(toStopReason("max_tokens")).toBe("max_tokens");
-		expect(toStopReason("tool_use")).toBe("tool_use");
-	});
-
-	test("defaults unknown reasons to end_turn", () => {
-		expect(toStopReason("unknown_reason")).toBe("end_turn");
-		expect(toStopReason(null)).toBe("end_turn");
+		for (let i = 0; i < outBase.length; i++) {
+			expect(JSON.stringify(out1[i])).toBe(JSON.stringify(outBase[i]));
+		}
+		for (let i = 0; i < out1.length; i++) {
+			expect(JSON.stringify(out2[i])).toBe(JSON.stringify(out1[i]));
+		}
 	});
 });

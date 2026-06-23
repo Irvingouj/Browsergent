@@ -11,7 +11,6 @@ export default defineConfig({
 	},
 	testIgnore: [
 		"**/extension-js-types.spec.ts",
-		"**/real-provider-smoke.spec.ts",
 		"**/unit/**/*.spec.ts",
 		"**/unit/**/*.spec.tsx",
 	],

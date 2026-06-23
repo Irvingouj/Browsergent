@@ -6,6 +6,7 @@ import {
 	selectSkillCatalog,
 	selectMessageIds,
 	selectMessagesById,
+	selectFilesVersion,
 } from "../../../state/selectors";
 import type { FilesController } from "../../../controllers/files-controller";
 import type { SkillMeta } from "../../../skills/skill-types";
@@ -70,6 +71,7 @@ export function useInputMode({
 	const openTabs = useStore(browsergentStore, selectOpenTabs);
 	const messageIds = useStore(browsergentStore, selectMessageIds);
 	const messagesById = useStore(browsergentStore, selectMessagesById);
+	const filesVersion = useStore(browsergentStore, selectFilesVersion);
 
 	const [mode, setMode] = useState<InputMode>(CLOSED_MODE);
 	const modeRef = useRef<InputMode>(mode);
@@ -151,7 +153,7 @@ export function useInputMode({
 		return () => {
 			cancelled = true;
 		};
-	}, [mode.kind, filesController]);
+	}, [mode.kind, filesController, filesVersion]);
 
 	// --- Picker items ---
 	const skillPickerItems = useMemo(

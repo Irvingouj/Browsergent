@@ -226,3 +226,65 @@ test("blur hides the @ picker", async () => {
 
 	await close();
 });
+
+test("@ picker refreshes after file upload while open", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+
+	// Upload one file via Files panel so the picker has an initial item
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible({
+		timeout: 10000,
+	});
+	await uploadFileViaPanel(
+		sidePanel,
+		"first.txt",
+		"first content",
+		"text/plain",
+	);
+	await expect(sidePanel.locator("text=first.txt")).toBeVisible({
+		timeout: 10000,
+	});
+
+	// Switch to Chat and open the picker
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	const taskInput = sidePanel.locator('[data-testid="task-input"]');
+	await taskInput.click();
+	await taskInput.fill("@");
+	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({
+		timeout: 5000,
+	});
+	await expect(
+		sidePanel.getByTestId("command-picker").locator("text=first.txt").first(),
+	).toBeVisible();
+	// second.txt is not uploaded yet
+	await expect(
+		sidePanel.getByTestId("command-picker").locator("text=second.txt"),
+	).toHaveCount(0);
+
+	// Upload a second file via drag-drop on the chat input (picker stays open)
+	await sidePanel.evaluate(
+		({ name, content, mime }) => {
+			const dt = new DataTransfer();
+			dt.items.add(new File([content], name, { type: mime }));
+			const target =
+				document.querySelector('[data-testid="task-input"]') ??
+				document.body;
+			target.dispatchEvent(
+				new DragEvent("drop", { dataTransfer: dt, bubbles: true }),
+			);
+		},
+		{ name: "second.txt", content: "second content", mime: "text/plain" },
+	);
+
+	// The second file should appear in the already-open picker without
+	// closing/reopening — filesVersion bump triggers the file-fetch effect.
+	await expect(
+		sidePanel
+			.getByTestId("command-picker")
+			.locator("text=second.txt")
+			.first(),
+	).toBeVisible({ timeout: 10000 });
+
+	await close();
+});

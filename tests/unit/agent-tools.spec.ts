@@ -743,31 +743,19 @@ describe("file_read truncation", () => {
 		mockFileOp.mockReset();
 	});
 
-	test("truncates content exceeding MAX_FILE_READ_CHARS with head+tail+marker", async () => {
+	test("does not truncate content — WASM handles truncation", async () => {
 		const huge = "A".repeat(50_001);
 		mockFileOp.mockResolvedValue({
 			op: "read",
 			content: huge,
 			bytes: 50_001,
-			truncated: true,
 		});
 		const tools = makeTools();
 		const handler = tools.getHandler("file_read");
 		if (!handler) throw new Error("file_read handler not found");
 		const result = (await handler({ path: "big.txt" })) as string;
-
-		expect(result).toContain("[truncated — file is 50001 bytes]");
-		expect(result).toContain("\n\n[truncated]\n\n");
-
-		const marker = "\n\n[truncated]\n\n";
-		const budget = 50_000 - marker.length;
-		const expectedHead = Math.ceil(budget / 2);
-		const expectedTail = budget - expectedHead;
-
-		const prefix = `[truncated — file is 50001 bytes]\n\n`;
-		expect(result.startsWith(prefix + "A".repeat(expectedHead))).toBe(true);
-		expect(result.endsWith("A".repeat(expectedTail))).toBe(true);
-		expect(result).not.toBe(huge);
+		expect(result).toBe(huge);
+		expect(result).not.toContain("[truncated]");
 	});
 
 	test("does not truncate content at exactly MAX_FILE_READ_CHARS", async () => {

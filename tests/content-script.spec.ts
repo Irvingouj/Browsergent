@@ -10,7 +10,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createTestPage, launchExtension } from "./helpers";
+import { createTestPage, launchExtension, mockChromeRuntimeOnMessage } from "./helpers";
 
 const TEST_FORM_HTML = `
 <!DOCTYPE html>
@@ -72,29 +72,27 @@ test("extension-js content script initializes on page", async () => {
 test("extension-js content script assigns data-ref-id attributes", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, TEST_FORM_HTML);
+
+	// Mock chrome.runtime before injecting the content script so its
+	// onMessage listener registers against our mock.
+	const dispatch = await mockChromeRuntimeOnMessage(testPage);
 	await injectExtensionJsContentScript(testPage);
 
-	// The content script's inlineSnapshot assigns data-ref-id to interactive elements
-	// Trigger snapshot by dispatching a message or calling the function directly
-	const elements = await testPage.evaluate(() => {
-		// Simulate what tab.snapshot does: call the snapshot function
-		// which sets data-ref-id on interactive elements
-		const body = document.body;
-		const interactive = body.querySelectorAll(
+	// Trigger the snapshot via the registered listener
+	await dispatch("page_snapshot_data");
+
+	// Verify the real snapshot assigned data-ref-id attributes
+	const refIds = await testPage.evaluate(() => {
+		const elements = document.querySelectorAll<HTMLElement>(
 			"input, button, select, textarea",
 		);
-		const results: string[] = [];
-		for (const el of interactive) {
-			if (el instanceof HTMLElement) {
-				results.push(el.tagName.toLowerCase());
-			}
-		}
-		return results;
+		return Array.from(elements).map((el) => el.getAttribute("data-ref-id"));
 	});
 
-	expect(elements).toContain("input");
-	expect(elements).toContain("select");
-	expect(elements).toContain("button");
+	expect(refIds.length).toBeGreaterThanOrEqual(4);
+	for (const refId of refIds) {
+		expect(refId).toMatch(/^e\d+$/);
+	}
 
 	await close();
 });

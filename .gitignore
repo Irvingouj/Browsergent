@@ -21,5 +21,6 @@ smoke/runs*.tar.gz
 release/
 # Local agent working artifacts — never project files
 reasonix.toml
+.agents/
 OBSERVATION_ACTION_SAFETY_PLAN.md
 *-PLAN.md
