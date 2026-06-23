@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { AnthropicProvider } from "../../src/worker/anthropic";
-import { composeSystemPrompt } from "../../src/worker/anthropic-prompts";
 import type {
 	AgentMessage,
 	LlmContext,
 	ToolDefinition,
 } from "@pi-oxide/pi-host-web/raw";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { AnthropicProvider } from "../../src/worker/anthropic";
+import { composeSystemPrompt } from "../../src/worker/anthropic-prompts";
 
 // ── SSE mock helpers ──────────────────────────────────────────────
 
@@ -42,7 +42,10 @@ function textResponseSSE(text: string): ReadableStream<Uint8Array> {
 				delta: { type: "text_delta", text },
 			},
 		},
-		{ event: "content_block_stop", data: { type: "content_block_stop", index: 0 } },
+		{
+			event: "content_block_stop",
+			data: { type: "content_block_stop", index: 0 },
+		},
 		{
 			event: "message_delta",
 			data: {
@@ -77,7 +80,10 @@ function toolCallResponseSSE(
 				delta: { type: "input_json_delta", partial_json: JSON.stringify(args) },
 			},
 		},
-		{ event: "content_block_stop", data: { type: "content_block_stop", index: 0 } },
+		{
+			event: "content_block_stop",
+			data: { type: "content_block_stop", index: 0 },
+		},
 		{
 			event: "message_delta",
 			data: {
@@ -275,7 +281,9 @@ describe("prefix cache: multi-turn wire stability", () => {
 		const server = new MockAnthropicServer();
 		server.setResponsePlan((idx) => {
 			if (idx < 3) {
-				return toolCallResponseSSE(`call_${idx}`, "run_js", { code: "return 1" });
+				return toolCallResponseSSE(`call_${idx}`, "run_js", {
+					code: "return 1",
+				});
 			}
 			return textResponseSSE("Done");
 		});
@@ -286,7 +294,9 @@ describe("prefix cache: multi-turn wire stability", () => {
 			model: "test-model",
 		});
 
-		const messages: AgentMessage[] = [userMsg("Run three tool calls then summarize.")];
+		const messages: AgentMessage[] = [
+			userMsg("Run three tool calls then summarize."),
+		];
 
 		// Turn 0: LLM calls run_js → tool result added
 		await drain(await provider.call(ctx([...messages])));

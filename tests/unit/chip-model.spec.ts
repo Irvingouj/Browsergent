@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
-	parseBlocks,
-	reconstructCanonical,
-	offsetToNodePosition,
 	nodePositionToOffset,
+	offsetToNodePosition,
+	parseBlocks,
 	type ReconstructNode,
+	reconstructCanonical,
 } from "../../src/sidepanel/components/input/chip-model";
 
 describe("parseBlocks", () => {
@@ -96,14 +96,18 @@ describe("offsetToNodePosition / nodePositionToOffset round-trip", () => {
 	test("offset inside leading text node maps to a text position", () => {
 		const pos = offsetToNodePosition(nodes, 2);
 		expect(pos).toEqual({ nodeIndex: 0, offsetInNode: 2 });
-		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(2);
+		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(
+			2,
+		);
 	});
 
 	test("offset at chip boundary is end of preceding text node", () => {
 		// offset 3 = start of chip = end of "ab "
 		const pos = offsetToNodePosition(nodes, 3);
 		expect(pos).toEqual({ nodeIndex: 0, offsetInNode: 3 });
-		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(3);
+		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(
+			3,
+		);
 	});
 
 	test("offset inside chip snaps to nearest edge of chip node", () => {
@@ -118,7 +122,9 @@ describe("offsetToNodePosition / nodePositionToOffset round-trip", () => {
 		// offset 20 = " de" char 1
 		const pos = offsetToNodePosition(nodes, 20);
 		expect(pos).toEqual({ nodeIndex: 2, offsetInNode: 1 });
-		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(20);
+		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(
+			20,
+		);
 	});
 
 	test("offset past end clamps to end of last node", () => {

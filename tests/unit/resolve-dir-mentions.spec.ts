@@ -70,8 +70,8 @@ describe("buildDirContextXmlBlock", () => {
 		const [mention] = parseDirMentions("@[dir:/project/src:src]");
 		expect(buildDirContextXmlBlock(mention!, [])).toBe(
 			'<directory_reference path="/project/src" name="src">\n' +
-			'  <note>directory empty or not found</note>\n' +
-			'</directory_reference>',
+				"  <note>directory empty or not found</note>\n" +
+				"</directory_reference>",
 		);
 	});
 
@@ -86,8 +86,8 @@ describe("buildDirContextXmlBlock", () => {
 		};
 		expect(buildDirContextXmlBlock(mention!, [child])).toBe(
 			'<directory_reference path="/project/src" name="src">\n' +
-			'  <entry path="/project/src/readme.md" name="readme.md" size="123" kind="file" isText="yes" />\n' +
-			'</directory_reference>',
+				'  <entry path="/project/src/readme.md" name="readme.md" size="123" kind="file" isText="yes" />\n' +
+				"</directory_reference>",
 		);
 	});
 
@@ -102,8 +102,8 @@ describe("buildDirContextXmlBlock", () => {
 		};
 		expect(buildDirContextXmlBlock(mention!, [child])).toBe(
 			'<directory_reference path="/project/src" name="src">\n' +
-			'  <entry path="/project/src/sub" name="sub" size="0" kind="directory" isText="no" />\n' +
-			'</directory_reference>',
+				'  <entry path="/project/src/sub" name="sub" size="0" kind="directory" isText="no" />\n' +
+				"</directory_reference>",
 		);
 	});
 
@@ -166,7 +166,9 @@ describe("buildDirContextXmlBlock", () => {
 		expect(result).not.toContain('path="/big/f50.md"');
 		expect(result).not.toContain('path="/big/f59.md"');
 		// Truncation note present and counts remaining entries.
-		expect(result).toContain("<note>10 more entries omitted; use file_list to enumerate</note>");
+		expect(result).toContain(
+			"<note>10 more entries omitted; use file_list to enumerate</note>",
+		);
 	});
 
 	test("does not cap when at or below limit", () => {

@@ -1,6 +1,9 @@
 import { useStore } from "zustand";
+import {
+	selectMovePromptTarget,
+	selectMovePromptValue,
+} from "../../../state/selectors";
 import { browsergentStore } from "../../../state/store";
-import { selectMovePromptTarget, selectMovePromptValue } from "../../../state/selectors";
 
 interface MoveDialogProps {
 	onMove: (id: string, targetDir: string) => Promise<void>;

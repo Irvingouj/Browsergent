@@ -50,41 +50,37 @@ export function toAnthropicMessages(
 		const msg = messages[i];
 		if (!msg) continue;
 		switch (msg.role) {
-		case "user": {
-			// Merge consecutive user messages into one. Strict
-			// Anthropic-compatible endpoints reject adjacent same-role
-			// messages ("roles must alternate"). This arises when the core
-			// drops an empty assistant message between two user turns.
-			const blocks: AnthropicContentBlock[] = msg.content.map(
-				toAnthropicContent,
-			);
-			let allSingleText =
-				msg.content.length === 1 && msg.content[0]?.type === "text";
-			while (
-				i + 1 < messages.length &&
-				messages[i + 1]?.role === "user"
-			) {
-				i++;
-				const next = messages[i];
-				if (next?.role !== "user") break;
-				allSingleText =
-					allSingleText &&
-					next.content.length === 1 &&
-					next.content[0]?.type === "text";
-				blocks.push(...next.content.map(toAnthropicContent));
+			case "user": {
+				// Merge consecutive user messages into one. Strict
+				// Anthropic-compatible endpoints reject adjacent same-role
+				// messages ("roles must alternate"). This arises when the core
+				// drops an empty assistant message between two user turns.
+				const blocks: AnthropicContentBlock[] =
+					msg.content.map(toAnthropicContent);
+				let allSingleText =
+					msg.content.length === 1 && msg.content[0]?.type === "text";
+				while (i + 1 < messages.length && messages[i + 1]?.role === "user") {
+					i++;
+					const next = messages[i];
+					if (next?.role !== "user") break;
+					allSingleText =
+						allSingleText &&
+						next.content.length === 1 &&
+						next.content[0]?.type === "text";
+					blocks.push(...next.content.map(toAnthropicContent));
+				}
+				if (allSingleText) {
+					result.push({
+						role: "user",
+						content: blocks
+							.map((b) => (b.type === "text" ? b.text : ""))
+							.join("\n"),
+					});
+				} else {
+					result.push({ role: "user", content: blocks });
+				}
+				break;
 			}
-			if (allSingleText) {
-				result.push({
-					role: "user",
-					content: blocks
-						.map((b) => (b.type === "text" ? b.text : ""))
-						.join("\n"),
-				});
-			} else {
-				result.push({ role: "user", content: blocks });
-			}
-			break;
-		}
 			case "assistant": {
 				result.push({
 					role: "assistant",

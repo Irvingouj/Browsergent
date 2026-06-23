@@ -41,9 +41,7 @@ export function stripTabMentions(draft: string): string {
 	return draft.replace(TAB_MENTION_RE, "").trim();
 }
 
-export function dedupeTabMentionsById(
-	mentions: TabMention[],
-): TabMention[] {
+export function dedupeTabMentionsById(mentions: TabMention[]): TabMention[] {
 	const seen = new Set<string>();
 	const deduped: TabMention[] = [];
 	for (const mention of mentions) {

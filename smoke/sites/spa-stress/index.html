@@ -85,14 +85,14 @@
 	<div id="result" class="result" role="status" aria-live="polite"></div>
 
 <script>
-(function () {
+(() => {
 	"use strict";
 
 	// ── Trap 1: chip-adding ──────────────────────────────────────
 	var tagCount = 0;
 	var tagsEl = document.getElementById("tags");
 	var countEl = document.getElementById("tag-count");
-	document.getElementById("add-tag").addEventListener("click", function () {
+	document.getElementById("add-tag").addEventListener("click", () => {
 		tagCount += 1;
 		countEl.textContent = String(tagCount);
 		var chip = document.createElement("span");
@@ -102,12 +102,12 @@
 		// STRUCTURAL MUTATION: appending a child node invalidates the lease.
 		tagsEl.appendChild(chip);
 	});
-	document.getElementById("other-action").addEventListener("click", function () {
+	document.getElementById("other-action").addEventListener("click", () => {
 		showResult("ok", "Other action fired. tag count = " + tagCount);
 	});
 
 	// ── Trap 2: profile form ─────────────────────────────────────
-	document.getElementById("save-profile").addEventListener("click", function () {
+	document.getElementById("save-profile").addEventListener("click", () => {
 		var name = document.getElementById("full-name").value.trim();
 		var email = document.getElementById("email").value.trim();
 		var phone = document.getElementById("phone").value.trim();
@@ -135,18 +135,18 @@
 		countryList.innerHTML = "";
 		var q = query.trim().toLowerCase();
 		if (!q) { countryList.classList.remove("open"); return; }
-		var matches = COUNTRIES.filter(function (c) { return c.toLowerCase().indexOf(q) !== -1; });
+		var matches = COUNTRIES.filter((c) => c.toLowerCase().indexOf(q) !== -1);
 		if (matches.length === 0) {
 			countryList.classList.remove("open");
 			return;
 		}
-		matches.forEach(function (name) {
+		matches.forEach((name) => {
 			var item = document.createElement("div");
 			item.className = "autocomplete-item";
 			item.setAttribute("role", "option");
 			item.setAttribute("aria-label", name);
 			item.textContent = name;
-			item.addEventListener("click", function () {
+			item.addEventListener("click", () => {
 				countryInput.value = name;
 				countryList.classList.remove("open");
 				countryStatus.textContent = "Selected: " + name;
@@ -155,14 +155,14 @@
 		});
 		countryList.classList.add("open");
 	}
-	countryInput.addEventListener("input", function () {
+	countryInput.addEventListener("input", () => {
 		renderCountrySuggestions(countryInput.value);
 	});
 
 	// ── Trap 4: feed re-render ───────────────────────────────────
 	var feedEl = document.getElementById("feed");
 	var feedSeq = 0;
-	document.getElementById("refresh-feed").addEventListener("click", function () {
+	document.getElementById("refresh-feed").addEventListener("click", () => {
 		feedSeq += 1;
 		// STRUCTURAL MUTATION: wholesale innerHTML replacement.
 		// Any refId observed before this point is now disconnected/replaced.

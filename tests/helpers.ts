@@ -240,10 +240,18 @@ export async function mockChromeRuntimeOnMessage(
 				id: "test-extension-id",
 				onMessage: {
 					addListener: (
-						fn: (msg: unknown, sender: unknown, sendResponse: (r: unknown) => void) => void,
+						fn: (
+							msg: unknown,
+							sender: unknown,
+							sendResponse: (r: unknown) => void,
+						) => void,
 					) => listeners.push(fn),
 					removeListener: (
-						fn: (msg: unknown, sender: unknown, sendResponse: (r: unknown) => void) => void,
+						fn: (
+							msg: unknown,
+							sender: unknown,
+							sendResponse: (r: unknown) => void,
+						) => void,
 					) => {
 						const i = listeners.indexOf(fn);
 						if (i >= 0) listeners.splice(i, 1);
@@ -255,10 +263,13 @@ export async function mockChromeRuntimeOnMessage(
 	});
 	return (action: string) =>
 		page.evaluate((act) => {
-			const listeners = (
-				window as unknown as Record<string, unknown>
-			).__testListeners as Array<
-				(msg: unknown, sender: unknown, sendResponse: (r: unknown) => void) => void
+			const listeners = (window as unknown as Record<string, unknown>)
+				.__testListeners as Array<
+				(
+					msg: unknown,
+					sender: unknown,
+					sendResponse: (r: unknown) => void,
+				) => void
 			>;
 			return Promise.all(
 				listeners.map(

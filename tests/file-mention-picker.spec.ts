@@ -30,9 +30,7 @@ test("@ picker inserts file mention token into task input", async () => {
 		sidePanel.getByTestId("command-picker").locator("text=picker.txt").first(),
 	).toBeVisible();
 
-	await sidePanel
-		.getByTestId("command-picker-item-/picker.txt")
-		.click();
+	await sidePanel.getByTestId("command-picker-item-/picker.txt").click();
 
 	const value = await readTaskInput(sidePanel);
 	expect(value).toMatch(/@\[file:[^:\]]+:picker\.txt\]/);
@@ -54,12 +52,7 @@ test("@ picker ArrowDown moves highlight to second row and stays there", async (
 		"alpha content",
 		"text/plain",
 	);
-	await uploadFileViaPanel(
-		sidePanel,
-		"beta.txt",
-		"beta content",
-		"text/plain",
-	);
+	await uploadFileViaPanel(sidePanel, "beta.txt", "beta content", "text/plain");
 	await expect(sidePanel.locator("text=alpha.txt")).toBeVisible({
 		timeout: 10000,
 	});
@@ -78,13 +71,13 @@ test("@ picker ArrowDown moves highlight to second row and stays there", async (
 	// Move to second row with ArrowDown
 	await taskInput.press("ArrowDown");
 	// Second row should now be active
-	await expect(
-		sidePanel.locator('[data-picker-index="1"]'),
-	).toHaveClass(/bg-accent-soft/);
+	await expect(sidePanel.locator('[data-picker-index="1"]')).toHaveClass(
+		/bg-accent-soft/,
+	);
 	// First row should NOT be active
-	await expect(
-		sidePanel.locator('[data-picker-index="0"]'),
-	).not.toHaveClass(/bg-accent-soft/);
+	await expect(sidePanel.locator('[data-picker-index="0"]')).not.toHaveClass(
+		/bg-accent-soft/,
+	);
 
 	await close();
 });
@@ -129,16 +122,16 @@ test("@ picker typing query resets active row to 0", async () => {
 
 	// Move to second row (index 1)
 	await taskInput.press("ArrowDown");
-	await expect(
-		sidePanel.locator('[data-picker-index="1"]'),
-	).toHaveClass(/bg-accent-soft/);
+	await expect(sidePanel.locator('[data-picker-index="1"]')).toHaveClass(
+		/bg-accent-soft/,
+	);
 
 	// Type an extra char to narrow the query — active row must reset to 0
 	await taskInput.press("1");
 	// After query narrows to "doc1", the filter changes; activeIndex must be back at 0
-	await expect(
-		sidePanel.locator('[data-picker-index="0"]'),
-	).toHaveClass(/bg-accent-soft/);
+	await expect(sidePanel.locator('[data-picker-index="0"]')).toHaveClass(
+		/bg-accent-soft/,
+	);
 
 	await close();
 });
@@ -268,8 +261,7 @@ test("@ picker refreshes after file upload while open", async () => {
 			const dt = new DataTransfer();
 			dt.items.add(new File([content], name, { type: mime }));
 			const target =
-				document.querySelector('[data-testid="task-input"]') ??
-				document.body;
+				document.querySelector('[data-testid="task-input"]') ?? document.body;
 			target.dispatchEvent(
 				new DragEvent("drop", { dataTransfer: dt, bubbles: true }),
 			);
@@ -280,10 +272,7 @@ test("@ picker refreshes after file upload while open", async () => {
 	// The second file should appear in the already-open picker without
 	// closing/reopening — filesVersion bump triggers the file-fetch effect.
 	await expect(
-		sidePanel
-			.getByTestId("command-picker")
-			.locator("text=second.txt")
-			.first(),
+		sidePanel.getByTestId("command-picker").locator("text=second.txt").first(),
 	).toBeVisible({ timeout: 10000 });
 
 	await close();

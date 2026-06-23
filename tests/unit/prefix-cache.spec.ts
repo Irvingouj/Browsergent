@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { composeSystemPrompt } from "../../src/worker/anthropic-prompts";
-import { createAgentTools } from "../../src/worker/agent-tools";
 import type { CellResult } from "../../src/types/extjs-utils";
+import { createAgentTools } from "../../src/worker/agent-tools";
+import { composeSystemPrompt } from "../../src/worker/anthropic-prompts";
 
 const mockGetDocs = vi.fn();
 const mockLoadSkill = vi.fn();
@@ -36,7 +36,9 @@ describe("prefix cache: system prompt stability", () => {
 
 	test("composeSystemPrompt is stable across many calls", () => {
 		const catalog = "## available_skills\nfoo, bar";
-		const results = Array.from({ length: 10 }, () => composeSystemPrompt(catalog));
+		const results = Array.from({ length: 10 }, () =>
+			composeSystemPrompt(catalog),
+		);
 		expect(results.every((r) => r === results[0])).toBe(true);
 	});
 
@@ -62,7 +64,9 @@ describe("prefix cache: tool results pass through without TS truncation", () => 
 		const tools = makeTools(runJs);
 		const handler = tools.getHandler("run_js");
 		if (!handler) throw new Error("run_js handler not found");
-		const result = (await handler({ code: "return 'x'.repeat(60000)" })) as string;
+		const result = (await handler({
+			code: "return 'x'.repeat(60000)",
+		})) as string;
 		expect(result.length).toBeGreaterThan(50_000);
 		expect(result).not.toContain("[truncated");
 		expect(result).not.toContain("... [truncated");

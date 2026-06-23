@@ -106,13 +106,9 @@ export class FilesController {
 			const childPath =
 				dirPath === "/" ? `/${entry.name}` : `${dirPath}/${entry.name}`;
 			if (entry.kind === "directory") {
-				out.push(
-					buildDirectoryNode({ name: entry.name, path: childPath }),
-				);
+				out.push(buildDirectoryNode({ name: entry.name, path: childPath }));
 			} else {
-				out.push(
-					buildFileNode({ name: entry.name, path: childPath }),
-				);
+				out.push(buildFileNode({ name: entry.name, path: childPath }));
 			}
 		}
 		return out;

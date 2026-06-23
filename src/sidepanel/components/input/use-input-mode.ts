@@ -1,33 +1,35 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { useStore } from "zustand/react";
-import { browsergentStore } from "../../../state/store";
 import {
-	selectOpenTabs,
-	selectSkillCatalog,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks";
+import { useStore } from "zustand/react";
+import type { FilesController } from "../../../controllers/files-controller";
+import { getSkillService } from "../../../skills/skill-service";
+import type { SkillMeta } from "../../../skills/skill-types";
+import {
+	selectFilesVersion,
 	selectMessageIds,
 	selectMessagesById,
-	selectFilesVersion,
+	selectOpenTabs,
+	selectSkillCatalog,
 } from "../../../state/selectors";
-import type { FilesController } from "../../../controllers/files-controller";
-import type { SkillMeta } from "../../../skills/skill-types";
-import { getSkillService } from "../../../skills/skill-service";
+import { browsergentStore } from "../../../state/store";
+import type { ChatMessage } from "../../../types/messages";
 import {
 	buildPickerInsert,
 	filesToPickerItems,
-	resolvePickerState,
 	tabsToPickerItems,
 } from "../../detect-mention-state";
+import { type CommandPickerItem, filterPickerItems } from "../CommandPicker";
 import {
-	type CommandPickerItem,
-	filterPickerItems,
-} from "../CommandPicker";
-import type { ChatMessage } from "../../../types/messages";
-import {
-	type InputMode,
-	type KeyActionCtx,
 	CLOSED_MODE,
-	resolveInputMode,
+	type InputMode,
 	interpretKey,
+	type KeyActionCtx,
+	resolveInputMode,
 } from "./input-mode";
 
 export function skillsToPickerItems(
@@ -77,7 +79,9 @@ export function useInputMode({
 	const modeRef = useRef<InputMode>(mode);
 	modeRef.current = mode;
 
-	const [filePickerItems, setFilePickerItems] = useState<CommandPickerItem[]>([]);
+	const [filePickerItems, setFilePickerItems] = useState<CommandPickerItem[]>(
+		[],
+	);
 	const store = browsergentStore;
 
 	// Caret offset tracked from ChipInput's onChange; DOM-agnostic replacement
@@ -85,7 +89,9 @@ export function useInputMode({
 	const cursorRef = useRef(0);
 	// Caret offset to restore after the next external value change (picker
 	// insert, history recall). ChipInput consumes and clears this.
-	const [pendingCaret, setPendingCaret] = useState<number | undefined>(undefined);
+	const [pendingCaret, setPendingCaret] = useState<number | undefined>(
+		undefined,
+	);
 
 	// --- History data ---
 	const userHistory = useMemo(
@@ -156,10 +162,7 @@ export function useInputMode({
 	}, [mode.kind, filesController, filesVersion]);
 
 	// --- Picker items ---
-	const skillPickerItems = useMemo(
-		() => skillsToPickerItems(skills),
-		[skills],
-	);
+	const skillPickerItems = useMemo(() => skillsToPickerItems(skills), [skills]);
 	const filteredSkillItems = useMemo(
 		() =>
 			mode.kind === "picker-slash"
@@ -174,10 +177,7 @@ export function useInputMode({
 				: [],
 		[filePickerItems, mode],
 	);
-	const tabPickerItems = useMemo(
-		() => tabsToPickerItems(openTabs),
-		[openTabs],
-	);
+	const tabPickerItems = useMemo(() => tabsToPickerItems(openTabs), [openTabs]);
 	const filteredTabItems = useMemo(
 		() =>
 			mode.kind === "picker-at"
@@ -186,28 +186,28 @@ export function useInputMode({
 		[tabPickerItems, mode],
 	);
 
-	const isPickerOpen = mode.kind === "picker-at" || mode.kind === "picker-slash";
+	const isPickerOpen =
+		mode.kind === "picker-at" || mode.kind === "picker-slash";
 	const pickerItems =
 		mode.kind === "picker-at"
 			? [...filteredFileItems, ...filteredTabItems]
 			: filteredSkillItems;
 	const emptyMessage =
-		mode.kind === "picker-at" ? "No matching files or tabs" : "No matching skills";
+		mode.kind === "picker-at"
+			? "No matching files or tabs"
+			: "No matching skills";
 	const activeIndex =
-		(mode.kind === "picker-at" || mode.kind === "picker-slash")
+		mode.kind === "picker-at" || mode.kind === "picker-slash"
 			? mode.activeIndex
 			: 0;
 
 	// --- Text mutation → mode resolution ---
-	const onInput = useCallback(
-		(value: string, cursor: number): void => {
-			cursorRef.current = cursor;
-			setMode((prev) => resolveInputMode(value, cursor, prev));
-			// User input supersedes any pending programmatic caret restore.
-			setPendingCaret(undefined);
-		},
-		[],
-	);
+	const onInput = useCallback((value: string, cursor: number): void => {
+		cursorRef.current = cursor;
+		setMode((prev) => resolveInputMode(value, cursor, prev));
+		// User input supersedes any pending programmatic caret restore.
+		setPendingCaret(undefined);
+	}, []);
 
 	// --- Key handling ---
 	const onKeyDown = useCallback(
@@ -218,7 +218,12 @@ export function useInputMode({
 			const caretAtEnd = cursor === val.length;
 			const itemCount = pickerItems.length;
 
-			const ctx: KeyActionCtx = { itemCount, caretAtStart, caretAtEnd, isRunning };
+			const ctx: KeyActionCtx = {
+				itemCount,
+				caretAtStart,
+				caretAtEnd,
+				isRunning,
+			};
 			const action = interpretKey(modeRef.current, e, ctx);
 			if (!action) return;
 
@@ -283,9 +288,7 @@ export function useInputMode({
 
 			if (action.effect === "restore-draft") {
 				const restoredDraft =
-					modeRef.current.kind === "history"
-						? modeRef.current.savedDraft
-						: "";
+					modeRef.current.kind === "history" ? modeRef.current.savedDraft : "";
 				store.getState().setTaskDraft(restoredDraft);
 				return;
 			}
@@ -297,7 +300,11 @@ export function useInputMode({
 						const newIdx = modeRef.current.index - 1;
 						if (newIdx >= 0) {
 							const msg = userHistory[newIdx];
-							setMode({ kind: "history", index: newIdx, savedDraft: modeRef.current.savedDraft });
+							setMode({
+								kind: "history",
+								index: newIdx,
+								savedDraft: modeRef.current.savedDraft,
+							});
 							if (msg) {
 								store.getState().setTaskDraft(msg);
 								cursorRef.current = msg.length;
@@ -348,7 +355,8 @@ export function useInputMode({
 				const items = pickerItems;
 				if (items.length > 0) {
 					const idx =
-						modeRef.current.kind === "picker-at" || modeRef.current.kind === "picker-slash"
+						modeRef.current.kind === "picker-at" ||
+						modeRef.current.kind === "picker-slash"
 							? modeRef.current.activeIndex
 							: 0;
 					const item = items[Math.min(idx, items.length - 1)];
@@ -380,17 +388,17 @@ export function useInputMode({
 			const draft = store.getState().ui.taskDraft;
 			const currentState = modeRef.current;
 			const startIndex =
-				currentState.kind === "picker-at" || currentState.kind === "picker-slash"
+				currentState.kind === "picker-at" ||
+				currentState.kind === "picker-slash"
 					? currentState.startIndex
 					: 0;
 			const endIndex =
-				currentState.kind === "picker-at"
-					? currentState.endIndex
-					: undefined;
+				currentState.kind === "picker-at" ? currentState.endIndex : undefined;
 			const fallbackCursor =
 				startIndex +
 				1 +
-	(currentState.kind === "picker-at" || currentState.kind === "picker-slash"
+				(currentState.kind === "picker-at" ||
+				currentState.kind === "picker-slash"
 					? currentState.query.length
 					: 0);
 			const cursor = cursorRef.current ?? fallbackCursor;

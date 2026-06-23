@@ -1,7 +1,7 @@
 import { useStore } from "zustand";
-import { browsergentStore } from "../../../state/store";
 import { selectContextMenu } from "../../../state/selectors";
 import type { FileNodeId } from "../../../state/slices/files-slice";
+import { browsergentStore } from "../../../state/store";
 
 interface FileContextMenuProps {
 	onRename: (id: FileNodeId) => void;
@@ -63,7 +63,9 @@ export const FileContextMenu = ({
 			<button
 				type="button"
 				class="w-full text-left px-sm py-xs text-xs text-text-secondary hover:bg-bg-hover"
-				onClick={() => browsergentStore.getState().openMovePrompt(contextMenu.nodeId)}
+				onClick={() =>
+					browsergentStore.getState().openMovePrompt(contextMenu.nodeId)
+				}
 			>
 				Move…
 			</button>

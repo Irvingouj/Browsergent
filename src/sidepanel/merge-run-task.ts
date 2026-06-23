@@ -1,6 +1,4 @@
-import {
-	stripSkillToken,
-} from "../skills/resolve-skill-activations";
+import { stripSkillToken } from "../skills/resolve-skill-activations";
 import {
 	buildAttachmentXmlBlock,
 	buildTaskWithAttachments,
@@ -42,7 +40,9 @@ export function mergeSkillAndFileAttachments(
 	const attachmentBlocks = attachments
 		.map((a) => buildAttachmentXmlBlock(a.displayName, a.fileId, a.content))
 		.join("\n\n");
-	const userRemainder = stripTabMentions(stripFileMentions(stripSkillToken(task))).trim();
+	const userRemainder = stripTabMentions(
+		stripFileMentions(stripSkillToken(task)),
+	).trim();
 
 	const parts: string[] = [skillBlock];
 	if (attachmentBlocks) {

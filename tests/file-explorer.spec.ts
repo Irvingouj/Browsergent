@@ -83,7 +83,8 @@ async function createViaToolbar(
 	kind: "folder" | "file",
 	name: string,
 ) {
-	const buttonTestId = kind === "folder" ? "new-folder-button" : "new-file-button";
+	const buttonTestId =
+		kind === "folder" ? "new-folder-button" : "new-file-button";
 	const placeholder = kind === "folder" ? "folder name…" : "file name…";
 
 	await sidePanel.getByTestId(buttonTestId).click();
@@ -165,11 +166,7 @@ test("creates a file via New File button, shows preview when clicked", async () 
 
 		// Create file "readme.md"
 		await createViaToolbar(sidePanel, "file", "readme.md");
-		const fileNode = await waitForTreeNode(
-			sidePanel,
-			"tree-file",
-			"readme.md",
-		);
+		const fileNode = await waitForTreeNode(sidePanel, "tree-file", "readme.md");
 
 		// Click the file to see preview
 		await fileNode.click();
@@ -216,7 +213,9 @@ test("renames a file via double-click on the label", async () => {
 
 		// Old name gone, new name appears
 		await expect(
-			sidePanel.locator('[data-testid="tree-file"]').filter({ hasText: "old.md" }),
+			sidePanel
+				.locator('[data-testid="tree-file"]')
+				.filter({ hasText: "old.md" }),
 		).not.toBeVisible({ timeout: 10000 });
 		await waitForTreeNode(sidePanel, "tree-file", "new.md");
 	} finally {

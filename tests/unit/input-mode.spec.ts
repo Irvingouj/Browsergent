@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { interpretKey, resolveInputMode, CLOSED_MODE } from "../../src/sidepanel/components/input/input-mode";
+import {
+	CLOSED_MODE,
+	interpretKey,
+	resolveInputMode,
+} from "../../src/sidepanel/components/input/input-mode";
 
 // ---------------------------------------------------------------------------
 // Slice 1 — picker-at Enter with items → select-active
@@ -14,7 +18,13 @@ describe("interpretKey — picker Enter selects active item", () => {
 
 	test("Enter in picker-at with items > 0 returns select-active", () => {
 		const result = interpretKey(
-			{ kind: "picker-at", query: "test", startIndex: 0, endIndex: 5, activeIndex: 0 },
+			{
+				kind: "picker-at",
+				query: "test",
+				startIndex: 0,
+				endIndex: 5,
+				activeIndex: 0,
+			},
 			{ key: "Enter", shiftKey: false } as KeyboardEvent,
 			ctx,
 		);
@@ -47,7 +57,12 @@ describe("interpretKey — plain-mode Enter", () => {
 		const result = interpretKey(
 			{ kind: "plain" },
 			{ key: "Enter", shiftKey: false } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
 		expect(result).toEqual({
 			type: "prevent-default",
@@ -59,7 +74,12 @@ describe("interpretKey — plain-mode Enter", () => {
 		const result = interpretKey(
 			{ kind: "plain" },
 			{ key: "Enter", shiftKey: true } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
 		expect(result).toBeNull();
 	});
@@ -78,11 +98,22 @@ describe("interpretKey — plain-mode Enter", () => {
 // Slice 3 — ArrowDown moves activeIndex and resolveInputMode preserves it
 // ---------------------------------------------------------------------------
 describe("interpretKey — ArrowDown/ArrowUp in picker", () => {
-	const baseCtx = { itemCount: 3, caretAtStart: false, caretAtEnd: false, isRunning: false };
+	const baseCtx = {
+		itemCount: 3,
+		caretAtStart: false,
+		caretAtEnd: false,
+		isRunning: false,
+	};
 
 	test("ArrowDown increments activeIndex", () => {
 		const result = interpretKey(
-			{ kind: "picker-at", query: "f", startIndex: 0, endIndex: 2, activeIndex: 0 },
+			{
+				kind: "picker-at",
+				query: "f",
+				startIndex: 0,
+				endIndex: 2,
+				activeIndex: 0,
+			},
 			{ key: "ArrowDown" } as KeyboardEvent,
 			baseCtx,
 		);
@@ -94,7 +125,13 @@ describe("interpretKey — ArrowDown/ArrowUp in picker", () => {
 
 	test("ArrowDown clamps at last item", () => {
 		const result = interpretKey(
-			{ kind: "picker-at", query: "f", startIndex: 0, endIndex: 2, activeIndex: 2 },
+			{
+				kind: "picker-at",
+				query: "f",
+				startIndex: 0,
+				endIndex: 2,
+				activeIndex: 2,
+			},
 			{ key: "ArrowDown" } as KeyboardEvent,
 			baseCtx,
 		);
@@ -118,7 +155,13 @@ describe("interpretKey — ArrowDown/ArrowUp in picker", () => {
 
 	test("ArrowUp clamps at 0", () => {
 		const result = interpretKey(
-			{ kind: "picker-at", query: "f", startIndex: 0, endIndex: 2, activeIndex: 0 },
+			{
+				kind: "picker-at",
+				query: "f",
+				startIndex: 0,
+				endIndex: 2,
+				activeIndex: 0,
+			},
 			{ key: "ArrowUp" } as KeyboardEvent,
 			baseCtx,
 		);
@@ -179,9 +222,20 @@ describe("resolveInputMode — regression guard", () => {
 describe("interpretKey — zero-item picker Enter fallthrough", () => {
 	test("picker-at Enter with 0 items submits instead of select-active", () => {
 		const result = interpretKey(
-			{ kind: "picker-at", query: "zzz", startIndex: 0, endIndex: 4, activeIndex: 0 },
+			{
+				kind: "picker-at",
+				query: "zzz",
+				startIndex: 0,
+				endIndex: 4,
+				activeIndex: 0,
+			},
 			{ key: "Enter", shiftKey: false } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
 		expect(result).toEqual({ type: "prevent-default", effect: "submit" });
 	});
@@ -190,7 +244,12 @@ describe("interpretKey — zero-item picker Enter fallthrough", () => {
 		const result = interpretKey(
 			{ kind: "picker-slash", query: "zzz", startIndex: 0, activeIndex: 0 },
 			{ key: "Enter", shiftKey: false } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
 		expect(result).toEqual({ type: "prevent-default", effect: "submit" });
 	});
@@ -202,9 +261,20 @@ describe("interpretKey — zero-item picker Enter fallthrough", () => {
 describe("interpretKey — Escape", () => {
 	test("picker-at Escape dismisses picker (no blur)", () => {
 		const result = interpretKey(
-			{ kind: "picker-at", query: "f", startIndex: 0, endIndex: 2, activeIndex: 0 },
+			{
+				kind: "picker-at",
+				query: "f",
+				startIndex: 0,
+				endIndex: 2,
+				activeIndex: 0,
+			},
 			{ key: "Escape" } as KeyboardEvent,
-			{ itemCount: 5, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 5,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
 		expect(result).toMatchObject({
 			type: "prevent-default",
@@ -217,7 +287,12 @@ describe("interpretKey — Escape", () => {
 		const result = interpretKey(
 			{ kind: "picker-slash", query: "s", startIndex: 0, activeIndex: 0 },
 			{ key: "Escape" } as KeyboardEvent,
-			{ itemCount: 2, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 2,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
 		expect(result).toMatchObject({
 			type: "prevent-default",
@@ -262,7 +337,12 @@ describe("interpretKey — history recall", () => {
 		const result = interpretKey(
 			{ kind: "history", index: 2, savedDraft: "hello" },
 			{ key: "Escape" } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
 		expect(result).toMatchObject({
 			type: "prevent-default",
@@ -280,44 +360,84 @@ describe("interpretKey — text-editing commands", () => {
 		const result = interpretKey(
 			{ kind: "plain" },
 			{ key: "Backspace", ctrlKey: true } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
-		expect(result).toMatchObject({ type: "prevent-default", effect: "delete-word" });
+		expect(result).toMatchObject({
+			type: "prevent-default",
+			effect: "delete-word",
+		});
 	});
 
 	test("Alt+Backspace returns delete-word", () => {
 		const result = interpretKey(
 			{ kind: "plain" },
 			{ key: "Backspace", altKey: true } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
-		expect(result).toMatchObject({ type: "prevent-default", effect: "delete-word" });
+		expect(result).toMatchObject({
+			type: "prevent-default",
+			effect: "delete-word",
+		});
 	});
 
 	test("Ctrl+K returns delete-to-eol", () => {
 		const result = interpretKey(
 			{ kind: "plain" },
 			{ key: "k", ctrlKey: true } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
-		expect(result).toMatchObject({ type: "prevent-default", effect: "delete-to-eol" });
+		expect(result).toMatchObject({
+			type: "prevent-default",
+			effect: "delete-to-eol",
+		});
 	});
 
 	test("Ctrl+Shift+K returns delete-line", () => {
 		const result = interpretKey(
 			{ kind: "plain" },
 			{ key: "k", ctrlKey: true, shiftKey: true } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
-		expect(result).toMatchObject({ type: "prevent-default", effect: "delete-line" });
+		expect(result).toMatchObject({
+			type: "prevent-default",
+			effect: "delete-line",
+		});
 	});
 
 	test("text-edit commands also work in history mode", () => {
 		const result = interpretKey(
 			{ kind: "history", index: 0, savedDraft: "draft" },
 			{ key: "Backspace", altKey: true } as KeyboardEvent,
-			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: false },
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+			},
 		);
-		expect(result).toMatchObject({ type: "prevent-default", effect: "delete-word" });
+		expect(result).toMatchObject({
+			type: "prevent-default",
+			effect: "delete-word",
+		});
 	});
 });

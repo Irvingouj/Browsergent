@@ -1,4 +1,7 @@
-import { tokenizeMentions, type MentionSegment } from "../../../utils/markdown-stream";
+import {
+	type MentionSegment,
+	tokenizeMentions,
+} from "../../../utils/markdown-stream";
 
 /**
  * Canonical input model. The store holds `taskDraft` as a plain string with
@@ -85,7 +88,9 @@ export interface ReconstructNode {
 	raw: string | null;
 }
 
-export function reconstructCanonical(nodes: ReadonlyArray<ReconstructNode>): string {
+export function reconstructCanonical(
+	nodes: ReadonlyArray<ReconstructNode>,
+): string {
 	let out = "";
 	for (const n of nodes) {
 		out += n.raw ?? n.text ?? "";

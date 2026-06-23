@@ -10,7 +10,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createTestPage, launchExtension, mockChromeRuntimeOnMessage } from "./helpers";
+import {
+	createTestPage,
+	launchExtension,
+	mockChromeRuntimeOnMessage,
+} from "./helpers";
 
 const TEST_FORM_HTML = `
 <!DOCTYPE html>

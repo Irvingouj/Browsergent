@@ -11,9 +11,7 @@ describe("tokenizeMentions", () => {
 	});
 
 	test("splits file mentions from surrounding text", () => {
-		const result = tokenizeMentions(
-			"Check @[file:abc-123:src/App.tsx] please",
-		);
+		const result = tokenizeMentions("Check @[file:abc-123:src/App.tsx] please");
 		expect(result).toEqual([
 			{ type: "text", text: "Check " },
 			{
@@ -94,9 +92,7 @@ describe("tokenizeMentions", () => {
 
 describe("renderMarkdown with tokens", () => {
 	test("renders file mentions as chips with basename and escaped title", () => {
-		const html = renderMarkdown(
-			"Look at @[file:f1:src/util/foo.ts] carefully",
-		);
+		const html = renderMarkdown("Look at @[file:f1:src/util/foo.ts] carefully");
 		expect(html).toContain("mention-chip");
 		expect(html).toContain('data-chip-kind="file"');
 		expect(html).toContain("foo.ts");
@@ -133,7 +129,7 @@ describe("renderMarkdown with tokens", () => {
 
 	test("escapes HTML in token attributes", () => {
 		const html = renderMarkdown(
-			'@[file:f1:<script>alert(1)</script>.md] hello',
+			"@[file:f1:<script>alert(1)</script>.md] hello",
 		);
 		// The chip's inner text and title attribute must escape < and >
 		expect(html).not.toContain("<script>");

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { useStore } from "zustand";
-import { browsergentStore } from "../../../state/store";
-import { selectSelectedFileId } from "../../../state/selectors";
 import type { FilesController } from "../../../controllers/files-controller";
 import { isTextFile } from "../../../controllers/files-utils";
+import { selectSelectedFileId } from "../../../state/selectors";
 import type { FileNode } from "../../../state/slices/files-slice";
+import { browsergentStore } from "../../../state/store";
 
 interface FilePreviewProps {
 	node: FileNode;

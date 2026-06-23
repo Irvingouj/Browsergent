@@ -1,5 +1,5 @@
-import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { createServer } from "node:http";
 import { expect, test } from "@playwright/test";
 import {
 	configureMockProvider,
@@ -86,11 +86,31 @@ test("tool stale ref — retry after fresh snapshot", async () => {
 
 	const mock = startMockAnthropicServer({
 		responses: [
-			{ chunks: makeToolStream(SNAPSHOT_AND_STORE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: makeToolStream(CLICK_SWAP), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: makeToolStream(CLICK_STALE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: makeToolStream(RESNAPSHOT_AND_CLICK), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: makeTextStream("Done."), delays: [0, 0, 0, 0], stopReason: "end_turn" },
+			{
+				chunks: makeToolStream(SNAPSHOT_AND_STORE),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: makeToolStream(CLICK_SWAP),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: makeToolStream(CLICK_STALE),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: makeToolStream(RESNAPSHOT_AND_CLICK),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: makeTextStream("Done."),
+				delays: [0, 0, 0, 0],
+				stopReason: "end_turn",
+			},
 		],
 	});
 

@@ -1,9 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
-import { handleFileOp } from "../../src/sidepanel/file-op-handler";
 import type { FilesController } from "../../src/controllers/files-controller";
+import { handleFileOp } from "../../src/sidepanel/file-op-handler";
 import type { FileNode } from "../../src/state/slices/files-slice";
 
-function makeFileNode(overrides: Partial<FileNode> & { name: string; path: string }): FileNode {
+function makeFileNode(
+	overrides: Partial<FileNode> & { name: string; path: string },
+): FileNode {
 	return {
 		id: overrides.path,
 		kind: "file",
@@ -11,7 +13,9 @@ function makeFileNode(overrides: Partial<FileNode> & { name: string; path: strin
 	};
 }
 
-function makeDirNode(overrides: Partial<FileNode> & { name: string; path: string }): FileNode {
+function makeDirNode(
+	overrides: Partial<FileNode> & { name: string; path: string },
+): FileNode {
 	return {
 		id: overrides.path,
 		kind: "directory",
@@ -22,8 +26,18 @@ function makeDirNode(overrides: Partial<FileNode> & { name: string; path: string
 describe("handleFileOp list", () => {
 	test("list with NO prefix returns ALL files; each entry has path and name", async () => {
 		const allFiles: FileNode[] = [
-			makeFileNode({ name: "a.md", path: "/user/a.md", size: 100, mime: "text/markdown" }),
-			makeFileNode({ name: "b.txt", path: "/user/b.txt", size: 200, mime: "text/plain" }),
+			makeFileNode({
+				name: "a.md",
+				path: "/user/a.md",
+				size: 100,
+				mime: "text/markdown",
+			}),
+			makeFileNode({
+				name: "b.txt",
+				path: "/user/b.txt",
+				size: 200,
+				mime: "text/plain",
+			}),
 		];
 
 		const filesController = {
@@ -157,7 +171,12 @@ describe("handleFileOp list", () => {
 
 	test("each returned FileOpListEntry has path field as first TSV column shape", async () => {
 		const allFiles: FileNode[] = [
-			makeFileNode({ name: "doc.md", path: "/doc.md", size: 5, mime: "text/markdown" }),
+			makeFileNode({
+				name: "doc.md",
+				path: "/doc.md",
+				size: 5,
+				mime: "text/markdown",
+			}),
 		];
 
 		const filesController = {

@@ -1,7 +1,7 @@
 import type { FilesController } from "../controllers/files-controller";
-import { stripTabMentions } from "./resolve-tab-mentions";
 import { escapeXmlAttr, escapeXmlText } from "../skills/validate-skill-meta";
 import { truncateWithMarker } from "../utils/truncate";
+import { stripTabMentions } from "./resolve-tab-mentions";
 
 const FILE_MENTION_RE = /@\[file:([^:\]]+):([^:\]]+)\]/g;
 
@@ -77,8 +77,7 @@ export async function resolveFileMentions(
 		try {
 			content = await filesController.readFileText(mention.fileId);
 		} catch (err: unknown) {
-			const code =
-				err instanceof Error ? err.message : String(err);
+			const code = err instanceof Error ? err.message : String(err);
 			if (code.includes("E_NOT_FOUND")) {
 				throw new Error(`File not found: ${mention.fileId}`);
 			}

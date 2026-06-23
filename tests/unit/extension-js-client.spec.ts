@@ -88,8 +88,13 @@ describe("ExtensionJsClient", () => {
 		vi.useFakeTimers();
 		ExtensionJsClient.instance = null;
 		client = ExtensionJsClient.getInstance();
-		const { mockInit, mockRunCellAsync, mockStopWith, mockApiDocs, mockStoreState } =
-			await getMocks();
+		const {
+			mockInit,
+			mockRunCellAsync,
+			mockStopWith,
+			mockApiDocs,
+			mockStoreState,
+		} = await getMocks();
 		mockInit.mockClear();
 		mockRunCellAsync.mockClear();
 		mockRunCellAsync.mockResolvedValue({ status: "ok", value: 42 });
@@ -185,8 +190,18 @@ describe("ExtensionJsClient", () => {
 		const run2 = client.runJs("2+2");
 		await Promise.all([run1, run2]);
 		expect(mockRunCellAsync).toHaveBeenCalledTimes(2);
-		expect(mockRunCellAsync).toHaveBeenNthCalledWith(1, "1+1", undefined, undefined);
-		expect(mockRunCellAsync).toHaveBeenNthCalledWith(2, "2+2", undefined, undefined);
+		expect(mockRunCellAsync).toHaveBeenNthCalledWith(
+			1,
+			"1+1",
+			undefined,
+			undefined,
+		);
+		expect(mockRunCellAsync).toHaveBeenNthCalledWith(
+			2,
+			"2+2",
+			undefined,
+			undefined,
+		);
 	});
 
 	test("runJs times out but does NOT trigger rebuild", async () => {
@@ -386,7 +401,10 @@ describe("ExtensionJsClient", () => {
 			mockRunCellAsync.mockRejectedValueOnce(new Error("unsafe aliasing"));
 			mockRunCellAsync.mockResolvedValue({ status: "ok", value: 42 });
 
-			const results = await Promise.allSettled([client.runJs("a"), client.runJs("b")]);
+			const results = await Promise.allSettled([
+				client.runJs("a"),
+				client.runJs("b"),
+			]);
 			expect(mockInit).toHaveBeenCalledTimes(2); // NOT 3 — concurrent callers share one rebuild
 			const rejected = results.filter((r) => r.status === "rejected");
 			const fulfilled = results.filter((r) => r.status === "fulfilled");

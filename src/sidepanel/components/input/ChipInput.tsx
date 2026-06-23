@@ -1,13 +1,13 @@
 import type { FunctionalComponent, Ref } from "preact";
 import { useCallback, useEffect, useRef } from "preact/hooks";
 import {
+	type Block,
 	nodePositionToOffset,
 	offsetToNodePosition,
 	parseBlocks,
+	type ReconstructNode,
 	readDomNodes,
 	reconstructCanonical,
-	type Block,
-	type ReconstructNode,
 } from "./chip-model";
 
 /**
@@ -66,23 +66,20 @@ function chipClass(kind: "dir" | "file" | "tab" | "skill"): string {
 function renderBlocks(value: string): string {
 	const blocks = parseBlocks(value);
 	if (blocks.length === 0) return "";
-	const escape = (s: string): string =>
-		s
-			.replace(/&/g, "&amp;")
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;");
+	const htmlEscape = (s: string): string =>
+		s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 	let html = "";
 	for (const block of blocks) {
 		if (block.type === "text") {
-			html += escape(block.text);
+			html += htmlEscape(block.text);
 			continue;
 		}
 		const titleAttr =
-			block.title !== null ? ` title="${escape(block.title)}"` : "";
+			block.title !== null ? ` title="${htmlEscape(block.title)}"` : "";
 		// contenteditable=false makes the span atomic: the caret jumps over it
 		// and backspace removes it whole. data-raw carries the canonical token
 		// so we can reconstruct the string on input.
-		html += `<span class="${chipClass(block.kind)}" contenteditable="false" data-raw="${escape(block.raw)}" data-chip-kind="${block.kind}"${titleAttr}>${escape(block.label)}</span>`;
+		html += `<span class="${chipClass(block.kind)}" contenteditable="false" data-raw="${htmlEscape(block.raw)}" data-chip-kind="${block.kind}"${titleAttr}>${htmlEscape(block.label)}</span>`;
 	}
 	return html;
 }
@@ -271,6 +268,21 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 
 	const handleFocus = useCallback(() => {
 		onFocus?.();
+		const el = internalRef.current;
+		if (!el || el.childNodes.length > 0) return;
+		// Input is empty: insert ZWSP so the element has height, then
+		// position the caret at offset 0 (before the ZWSP).
+		el.textContent = "\u200B";
+		const doc = el.ownerDocument;
+		const sel = doc.getSelection();
+		if (!sel) return;
+		const firstChild = el.firstChild;
+		if (!firstChild) return;
+		const range = doc.createRange();
+		range.setStart(firstChild, 0);
+		range.collapse(true);
+		sel.removeAllRanges();
+		sel.addRange(range);
 	}, [onFocus]);
 
 	const handleBlur = useCallback(() => {
@@ -279,7 +291,9 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 		onBlur?.();
 	}, [onBlur, ensureEmptyHeight]);
 
-	const isEmpty = parseBlocks(value).every((b: Block) => b.type === "text" && b.text === "");
+	const isEmpty = parseBlocks(value).every(
+		(b: Block) => b.type === "text" && b.text === "",
+	);
 
 	return (
 		<div class="relative">

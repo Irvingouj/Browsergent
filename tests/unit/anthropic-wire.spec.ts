@@ -1,6 +1,6 @@
+import type { AgentMessage } from "@pi-oxide/pi-host-web/raw";
 import { describe, expect, test } from "vitest";
 import { toAnthropicMessages } from "../../src/worker/anthropic-wire";
-import type { AgentMessage } from "@pi-oxide/pi-host-web/raw";
 
 const USAGE = {
 	input: 0,
@@ -87,10 +87,7 @@ describe("toAnthropicMessages: prefix stability across growing turns", () => {
 			assistantToolCallMsg("call_0", "run_js", { code: "return 1" }),
 			toolResultMsg("call_0", "result: 1"),
 		];
-		const turn2: AgentMessage[] = [
-			...turn1,
-			assistantMsg("The result was 1."),
-		];
+		const turn2: AgentMessage[] = [...turn1, assistantMsg("The result was 1.")];
 
 		const out1 = toAnthropicMessages(turn1);
 		const out2 = toAnthropicMessages(turn2);
@@ -110,10 +107,7 @@ describe("toAnthropicMessages: prefix stability across growing turns", () => {
 			userMsg("First question"),
 			userMsg("Second question"),
 		];
-		const turn2: AgentMessage[] = [
-			...turn1,
-			assistantMsg("Both answered"),
-		];
+		const turn2: AgentMessage[] = [...turn1, assistantMsg("Both answered")];
 
 		const out1 = toAnthropicMessages(turn1);
 		const out2 = toAnthropicMessages(turn2);
@@ -126,10 +120,7 @@ describe("toAnthropicMessages: prefix stability across growing turns", () => {
 	});
 
 	test("3-turn conversation: full prefix stability", () => {
-		const base: AgentMessage[] = [
-			userMsg("Turn 0"),
-			assistantMsg("Reply 0"),
-		];
+		const base: AgentMessage[] = [userMsg("Turn 0"), assistantMsg("Reply 0")];
 		const turn1: AgentMessage[] = [...base, userMsg("Turn 1")];
 		const turn2: AgentMessage[] = [
 			...turn1,

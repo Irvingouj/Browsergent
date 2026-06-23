@@ -30,9 +30,7 @@ export function stripDirMentions(draft: string): string {
 	return draft.replace(DIR_MENTION_RE, "").trim();
 }
 
-export function dedupeDirMentionsById(
-	mentions: DirMention[],
-): DirMention[] {
+export function dedupeDirMentionsById(mentions: DirMention[]): DirMention[] {
 	const seen = new Set<string>();
 	const deduped: DirMention[] = [];
 	for (const mention of mentions) {

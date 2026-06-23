@@ -1,7 +1,9 @@
+import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { useStore } from "zustand";
-import type { FunctionalComponent } from "preact";
-import { browsergentStore } from "../../../state/store";
+import type { FilesController } from "../../../controllers/files-controller";
+import { findSkillManifest } from "../../../controllers/files-utils";
+import { getSkillService } from "../../../skills/skill-service";
 import {
 	selectContextMenu,
 	selectExpandedFolderIds,
@@ -10,14 +12,12 @@ import {
 	selectRenamingNodeId,
 	selectSelectedFileId,
 } from "../../../state/selectors";
-import type { FilesController } from "../../../controllers/files-controller";
-import { findSkillManifest } from "../../../controllers/files-utils";
-import { getSkillService } from "../../../skills/skill-service";
 import type { FileNode, FileNodeId } from "../../../state/slices/files-slice";
+import { browsergentStore } from "../../../state/store";
+import { FileContextMenu } from "./FileContextMenu";
 import { FilePreview } from "./FilePreview";
 import { FilesToolbar } from "./FilesToolbar";
 import { FileTree } from "./FileTree";
-import { FileContextMenu } from "./FileContextMenu";
 import { MoveDialog } from "./MoveDialog";
 
 interface FilesPanelProps {
@@ -188,7 +188,12 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 				targetDir === "" ? `/${node.name}` : `${targetDir}/${node.name}`;
 			try {
 				await filesController.move(node.path, newPath);
-				state.moveNode(id, targetDir === "" ? undefined : targetDir, node.name, newPath);
+				state.moveNode(
+					id,
+					targetDir === "" ? undefined : targetDir,
+					node.name,
+					newPath,
+				);
 				onFilesChanged?.();
 			} catch (err) {
 				setError(err instanceof Error ? err.message : "Move failed");
@@ -230,25 +235,25 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 
 	return (
 		<div data-testid="files-panel" class="flex flex-col h-full">
-		<FilesToolbar
-			filesController={filesController}
-			onFilesChanged={onFilesChanged}
-			onUpload={handleUpload}
-			onError={setError}
-		/>
+			<FilesToolbar
+				filesController={filesController}
+				onFilesChanged={onFilesChanged}
+				onUpload={handleUpload}
+				onError={setError}
+			/>
 			<div
 				data-dropzone={ROOT_NODE_ID}
 				onDragOver={(e) => e.preventDefault()}
-			onDrop={(e) => {
-				e.preventDefault();
-				const files = e.dataTransfer?.files;
-				if (files && files.length > 0) {
-					void handleUpload(files);
-					return;
-				}
-				const draggedId = e.dataTransfer?.getData("application/x-bg-node");
-				if (draggedId) void handleMove(draggedId, "");
-			}}
+				onDrop={(e) => {
+					e.preventDefault();
+					const files = e.dataTransfer?.files;
+					if (files && files.length > 0) {
+						void handleUpload(files);
+						return;
+					}
+					const draggedId = e.dataTransfer?.getData("application/x-bg-node");
+					if (draggedId) void handleMove(draggedId, "");
+				}}
 				class="flex-1 overflow-y-auto"
 			>
 				{filesState.rootIds.length > 0 ? (
@@ -264,7 +269,9 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 						onDelete={(id) => void handleDelete(id)}
 						onContextMenu={openContextMenu}
 						onRename={handleRename}
-						onRenameStart={(id) => browsergentStore.getState().startRenaming(id)}
+						onRenameStart={(id) =>
+							browsergentStore.getState().startRenaming(id)
+						}
 						onRenameCancel={() => browsergentStore.getState().cancelRenaming()}
 						onMove={handleMove}
 					/>

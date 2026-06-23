@@ -11,9 +11,9 @@ import { createAgentTools } from "./agent-tools";
 import type { AnthropicConfig } from "./anthropic";
 import { composeSystemPrompt } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
+import { getCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { isToolErrorEnvelope } from "./tool-error-result";
-import { getCurrentTraceId } from "./current-trace";
 
 function isTextContentBlock(c: {
 	type: string;

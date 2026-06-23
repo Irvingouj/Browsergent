@@ -1,5 +1,5 @@
-import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { createServer } from "node:http";
 import { expect, test } from "@playwright/test";
 import {
 	configureMockProvider,
@@ -74,8 +74,16 @@ test("observation-action safety: branching click does NOT invalidate lease (E2E)
 
 	const mock = startMockAnthropicServer({
 		responses: [
-			{ chunks: toolUseChunks("tc1", "m1", SNAPSHOT_CODE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: toolUseChunks("tc2", "m2", DOUBLE_CLICK_CODE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
+			{
+				chunks: toolUseChunks("tc1", "m1", SNAPSHOT_CODE),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: toolUseChunks("tc2", "m2", DOUBLE_CLICK_CODE),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
 		],
 	});
 
@@ -86,7 +94,9 @@ test("observation-action safety: branching click does NOT invalidate lease (E2E)
 	await configureMockProvider(sidePanel, mock.url);
 	await focusTargetTab(testPage);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("click branch then other");
+	await sidePanel
+		.locator('[data-testid="task-input"]')
+		.fill("click branch then other");
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	// Both clicks fire in one run_js cell. The Branch click sets "chipped"
@@ -99,7 +109,9 @@ test("observation-action safety: branching click does NOT invalidate lease (E2E)
 	// The Branch click sets "chipped", then the Other click sets "other_clicked".
 	// Both fire so fast that the final state is "other_clicked" — proving
 	// the second click succeeded against the SAME observation (no re-snapshot).
-	await expect(testPage.locator("#status")).toHaveText("other_clicked", { timeout: 10000 });
+	await expect(testPage.locator("#status")).toHaveText("other_clicked", {
+		timeout: 10000,
+	});
 
 	server.close();
 	await close();
@@ -187,14 +199,24 @@ test("observation-action safety: multiple fills on one observation succeed (form
 		res.writeHead(200, { "Content-Type": "text/html" });
 		res.end(FORM_HTML);
 	});
-	await new Promise<void>((resolve) => formServer.listen(0, "127.0.0.1", resolve));
+	await new Promise<void>((resolve) =>
+		formServer.listen(0, "127.0.0.1", resolve),
+	);
 	const addr = formServer.address();
 	const formUrl = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}/`;
 
 	const mock = startMockAnthropicServer({
 		responses: [
-			{ chunks: toolUseChunks("fc1", "fm1", SNAPSHOT_CODE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: toolUseChunks("fc2", "fm2", MULTI_FILL_CODE), delays: [0, 0, 0, 0], stopReason: "tool_use" },
+			{
+				chunks: toolUseChunks("fc1", "fm1", SNAPSHOT_CODE),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: toolUseChunks("fc2", "fm2", MULTI_FILL_CODE),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
 		],
 	});
 
@@ -205,14 +227,22 @@ test("observation-action safety: multiple fills on one observation succeed (form
 	await configureMockProvider(sidePanel, mock.url);
 	await focusTargetTab(testPage);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("fill all three fields");
+	await sidePanel
+		.locator('[data-testid="task-input"]')
+		.fill("fill all three fields");
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// All three inputs must be filled — proves fills do not invalidate the lease.
-	await expect(testPage.locator("#email")).toHaveValue("a@b.com", { timeout: 30000 });
-	await expect(testPage.locator("#name")).toHaveValue("Alice", { timeout: 5000 });
-	await expect(testPage.locator("#phone")).toHaveValue("5551234", { timeout: 5000 });
+	await expect(testPage.locator("#email")).toHaveValue("a@b.com", {
+		timeout: 30000,
+	});
+	await expect(testPage.locator("#name")).toHaveValue("Alice", {
+		timeout: 5000,
+	});
+	await expect(testPage.locator("#phone")).toHaveValue("5551234", {
+		timeout: 5000,
+	});
 
 	formServer.close();
 	await close();

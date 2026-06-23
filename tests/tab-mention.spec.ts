@@ -165,9 +165,10 @@ test("run with a tab mention injects <tab .../> XML into the model request", asy
 	// Wait for the tab-mention chip to render in the contentEditable before
 	// typing more text — the picker click dispatches setTaskDraft and ChipInput
 	// reconciles async; typing into the stale DOM would overwrite the token.
-	await expect(
-		sidePanel.locator('[data-testid="task-input"]'),
-	).toContainText("Target Page", { timeout: 5000 });
+	await expect(sidePanel.locator('[data-testid="task-input"]')).toContainText(
+		"Target Page",
+		{ timeout: 5000 },
+	);
 	await taskInput.pressSequentially(" describe this tab");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

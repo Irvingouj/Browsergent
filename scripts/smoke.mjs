@@ -156,7 +156,12 @@ try {
 			// nudge: open a benign page to keep the context alive and let the SW register
 			await context
 				.newPage()
-				.then((p) => p.goto("about:blank").catch(() => {}).then(() => p.close().catch(() => {})))
+				.then((p) =>
+					p
+						.goto("about:blank")
+						.catch(() => {})
+						.then(() => p.close().catch(() => {})),
+				)
 				.catch(() => {});
 		}
 	}
@@ -301,96 +306,122 @@ try {
 			} catch {
 				finalStatus = "timeout";
 			}
-		finalStatus =
-			(await sidePanel
-				.locator('[data-testid="agent-status"]')
-				.textContent({ timeout: 5000 })
-				.catch(() => null)) || finalStatus;
+			finalStatus =
+				(await sidePanel
+					.locator('[data-testid="agent-status"]')
+					.textContent({ timeout: 5000 })
+					.catch(() => null)) || finalStatus;
 
 			const durationMs = Date.now() - startedAt;
 
-		// Capture everything. Each step is best-effort so one failure doesn't lose the rest.
-		// Save the most diagnostic artifacts (API conversation, console) first.
-		const captureErr = [];
-		let chat = [];
-		let trace = [];
-		let targetText = "";
-		try {
-			chat = await captureChat();
-		} catch (e) { captureErr.push(`chat: ${e.message}`); }
-		try {
-			trace = await captureTrace();
-		} catch (e) { captureErr.push(`trace: ${e.message}`); }
-		try {
-			targetText = (await target.content()).replace(/\s+/g, " ").slice(0, 50000);
-		} catch (e) { captureErr.push(`targetContent: ${e.message}`); }
-		const doneHintFound =
-			sc.doneHint &&
-			([...chat, ...trace, targetText].some((t) => t.includes(sc.doneHint)) ||
-				apiCalls.some((c) => c.body.includes(sc.doneHint)));
+			// Capture everything. Each step is best-effort so one failure doesn't lose the rest.
+			// Save the most diagnostic artifacts (API conversation, console) first.
+			const captureErr = [];
+			let chat = [];
+			let trace = [];
+			let targetText = "";
+			try {
+				chat = await captureChat();
+			} catch (e) {
+				captureErr.push(`chat: ${e.message}`);
+			}
+			try {
+				trace = await captureTrace();
+			} catch (e) {
+				captureErr.push(`trace: ${e.message}`);
+			}
+			try {
+				targetText = (await target.content())
+					.replace(/\s+/g, " ")
+					.slice(0, 50000);
+			} catch (e) {
+				captureErr.push(`targetContent: ${e.message}`);
+			}
+			const doneHintFound =
+				sc.doneHint &&
+				([...chat, ...trace, targetText].some((t) => t.includes(sc.doneHint)) ||
+					apiCalls.some((c) => c.body.includes(sc.doneHint)));
 
-		try {
+			try {
+				writeFileSync(
+					path.join(scenarioDir, "conversation.json"),
+					JSON.stringify(apiCalls, null, 2),
+				);
+			} catch (e) {
+				captureErr.push(`conversation: ${e.message}`);
+			}
+			try {
+				writeFileSync(
+					path.join(scenarioDir, "chat.txt"),
+					chat.join("\n\n---\n\n"),
+				);
+			} catch (e) {
+				captureErr.push(`chatWrite: ${e.message}`);
+			}
+			try {
+				writeFileSync(
+					path.join(scenarioDir, "trace.txt"),
+					trace.join("\n\n---\n\n"),
+				);
+			} catch (e) {
+				captureErr.push(`traceWrite: ${e.message}`);
+			}
+			try {
+				writeFileSync(path.join(scenarioDir, "target.html.txt"), targetText);
+			} catch (e) {
+				captureErr.push(`targetWrite: ${e.message}`);
+			}
+			try {
+				writeFileSync(
+					path.join(scenarioDir, "sidepanel-console.log"),
+					panelConsole.splice(0).join("\n"),
+				);
+			} catch (e) {
+				captureErr.push(`panelConsole: ${e.message}`);
+			}
+			try {
+				writeFileSync(
+					path.join(scenarioDir, "target-console.log"),
+					targetConsole.join("\n"),
+				);
+			} catch (e) {
+				captureErr.push(`targetConsole: ${e.message}`);
+			}
+			try {
+				await sidePanel.screenshot({
+					path: path.join(scenarioDir, "sidepanel.png"),
+					fullPage: true,
+				});
+			} catch (e) {
+				captureErr.push(`sidepanelScreenshot: ${e.message}`);
+			}
+			try {
+				await target.screenshot({
+					path: path.join(scenarioDir, "target.png"),
+					fullPage: true,
+				});
+			} catch (e) {
+				captureErr.push(`targetScreenshot: ${e.message}`);
+			}
 			writeFileSync(
-				path.join(scenarioDir, "conversation.json"),
-				JSON.stringify(apiCalls, null, 2),
+				path.join(scenarioDir, "result.json"),
+				JSON.stringify(
+					{
+						id: sc.id,
+						name: sc.name,
+						task,
+						model: DEEPSEEK_MODEL,
+						baseUrl: DEEPSEEK_BASE_URL,
+						finalStatus,
+						durationMs,
+						doneHint: sc.doneHint,
+						doneHintFound: Boolean(doneHintFound),
+						captureErrors: captureErr.length ? captureErr : undefined,
+					},
+					null,
+					2,
+				),
 			);
-		} catch (e) { captureErr.push(`conversation: ${e.message}`); }
-		try {
-			writeFileSync(
-				path.join(scenarioDir, "chat.txt"),
-				chat.join("\n\n---\n\n"),
-			);
-		} catch (e) { captureErr.push(`chatWrite: ${e.message}`); }
-		try {
-			writeFileSync(
-				path.join(scenarioDir, "trace.txt"),
-				trace.join("\n\n---\n\n"),
-			);
-		} catch (e) { captureErr.push(`traceWrite: ${e.message}`); }
-		try { writeFileSync(path.join(scenarioDir, "target.html.txt"), targetText); } catch (e) { captureErr.push(`targetWrite: ${e.message}`); }
-		try {
-			writeFileSync(
-				path.join(scenarioDir, "sidepanel-console.log"),
-				panelConsole.splice(0).join("\n"),
-			);
-		} catch (e) { captureErr.push(`panelConsole: ${e.message}`); }
-		try {
-			writeFileSync(
-				path.join(scenarioDir, "target-console.log"),
-				targetConsole.join("\n"),
-			);
-		} catch (e) { captureErr.push(`targetConsole: ${e.message}`); }
-		try {
-			await sidePanel.screenshot({
-				path: path.join(scenarioDir, "sidepanel.png"),
-				fullPage: true,
-			});
-		} catch (e) { captureErr.push(`sidepanelScreenshot: ${e.message}`); }
-		try {
-			await target.screenshot({
-				path: path.join(scenarioDir, "target.png"),
-				fullPage: true,
-			});
-		} catch (e) { captureErr.push(`targetScreenshot: ${e.message}`); }
-		writeFileSync(
-			path.join(scenarioDir, "result.json"),
-			JSON.stringify(
-				{
-					id: sc.id,
-					name: sc.name,
-					task,
-					model: DEEPSEEK_MODEL,
-					baseUrl: DEEPSEEK_BASE_URL,
-					finalStatus,
-					durationMs,
-					doneHint: sc.doneHint,
-					doneHintFound: Boolean(doneHintFound),
-					captureErrors: captureErr.length ? captureErr : undefined,
-				},
-				null,
-				2,
-			),
-		);
 
 			return {
 				id: sc.id,

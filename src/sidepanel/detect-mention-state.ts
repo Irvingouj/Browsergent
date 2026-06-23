@@ -91,8 +91,7 @@ export function filesToPickerItems(
 	// picker is for user files only, so exclude them (and /skills/.seed-version).
 	return files
 		.filter(
-			(file) =>
-				file.path !== "/skills" && !file.path.startsWith("/skills/"),
+			(file) => file.path !== "/skills" && !file.path.startsWith("/skills/"),
 		)
 		.map((file) => ({
 			id: file.id,
@@ -107,7 +106,10 @@ export function filesToPickerItems(
 		}));
 }
 
-export function buildTabMentionToken(tabId: string | number, title: string): string {
+export function buildTabMentionToken(
+	tabId: string | number,
+	title: string,
+): string {
 	return `@[tab:${tabId}:${sanitizeTokenName(title)}]`;
 }
 
@@ -122,11 +124,16 @@ export function tabsToPickerItems(
 	tabs: ReadonlyArray<chrome.tabs.Tab>,
 ): CommandPickerItem[] {
 	return tabs
-		.filter((tab) => typeof tab.id === "number" && isReferenceableTabUrl(tab.url))
+		.filter(
+			(tab) => typeof tab.id === "number" && isReferenceableTabUrl(tab.url),
+		)
 		.map((tab) => ({
 			id: `tab:${tab.id}`,
 			label: tab.title?.trim() || tab.url || `Tab ${tab.id}`,
 			description: tab.url ?? "",
-			insertText: buildTabMentionToken(tab.id as number, tab.title ?? tab.url ?? ""),
+			insertText: buildTabMentionToken(
+				tab.id as number,
+				tab.title ?? tab.url ?? "",
+			),
 		}));
 }

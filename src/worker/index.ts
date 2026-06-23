@@ -20,10 +20,10 @@ import type {
 import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 import { AgentLoop } from "./agent-loop";
 import type { AnthropicConfig } from "./anthropic";
+import { setCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { FileOpRelay } from "./file-op-relay";
 import { LoadSkillRelay } from "./load-skill-relay";
-import { getCurrentTraceId, setCurrentTraceId } from "./current-trace";
 
 enableStreamDebug();
 

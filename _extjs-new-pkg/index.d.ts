@@ -1,6 +1,7 @@
 declare global {
-    interface Window {
-        __jsNotebookContentScriptInjected?: boolean;
-    }
+	interface Window {
+		__jsNotebookContentScriptInjected?: boolean;
+	}
 }
+
 export {};

@@ -1,9 +1,6 @@
-import { useEffect, useState } from "preact/hooks";
 import type { FunctionalComponent } from "preact";
-import type {
-	FileNode,
-	FileNodeId,
-} from "../../../state/slices/files-slice";
+import { useEffect, useState } from "preact/hooks";
+import type { FileNode, FileNodeId } from "../../../state/slices/files-slice";
 
 interface FileTreeProps {
 	nodes: Record<FileNodeId, FileNode>;
@@ -28,9 +25,7 @@ export const FileTree = (props: FileTreeProps) => (
 			{props.rootIds.map((id) => {
 				const node = props.nodes[id];
 				if (!node) return null;
-				return (
-					<TreeNode key={node.id} node={node} depth={0} {...props} />
-				);
+				return <TreeNode key={node.id} node={node} depth={0} {...props} />;
 			})}
 		</div>
 	</div>
@@ -95,7 +90,8 @@ const TreeNode: FunctionalComponent<TreeNodeProps> = ({
 		const draggedPath = e.dataTransfer?.getData("text/plain");
 		const draggedId = e.dataTransfer?.getData("application/x-bg-node");
 		if (!draggedId || !draggedPath) return;
-		if (draggedPath === node.path || draggedPath.startsWith(node.path + "/")) return;
+		if (draggedPath === node.path || draggedPath.startsWith(`${node.path}/`))
+			return;
 		void onMove(draggedId, node.path);
 	};
 
@@ -137,7 +133,9 @@ const TreeNode: FunctionalComponent<TreeNodeProps> = ({
 							viewBox="0 0 16 16"
 							fill="none"
 							class="flex-shrink-0 text-text-muted transition-transform"
-							style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+							style={{
+								transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+							}}
 						>
 							<path
 								d="M5 3l6 5-6 5"
@@ -174,8 +172,18 @@ const TreeNode: FunctionalComponent<TreeNodeProps> = ({
 							isSelected ? "text-accent" : "text-text-muted",
 						].join(" ")}
 					>
-						<path d="M9 1H3v14h10V5L9 1z" stroke="currentColor" stroke-width="1.2" fill="none" />
-						<path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2" fill="none" />
+						<path
+							d="M9 1H3v14h10V5L9 1z"
+							stroke="currentColor"
+							stroke-width="1.2"
+							fill="none"
+						/>
+						<path
+							d="M9 1v4h4"
+							stroke="currentColor"
+							stroke-width="1.2"
+							fill="none"
+						/>
 					</svg>
 				)}
 				{isRenaming ? (
@@ -197,7 +205,10 @@ const TreeNode: FunctionalComponent<TreeNodeProps> = ({
 						class="flex-1 px-xs py-[1px] text-xs bg-bg-surface border border-accent rounded text-text-primary focus:outline-none"
 					/>
 				) : (
-					<span class="truncate flex-1" onDblClick={() => onRenameStart(node.id)}>
+					<span
+						class="truncate flex-1"
+						onDblClick={() => onRenameStart(node.id)}
+					>
 						{node.name}
 					</span>
 				)}

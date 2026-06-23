@@ -301,7 +301,12 @@ describe("filesToPickerItems token insertion", () => {
 	test("includes non-text files (pdf, png, etc.) — exclude nothing", () => {
 		const files = [
 			{ id: "f1", name: "notes.md", path: "/notes.md", kind: "file" as const },
-			{ id: "f2", name: "photo.png", path: "/photo.png", kind: "file" as const },
+			{
+				id: "f2",
+				name: "photo.png",
+				path: "/photo.png",
+				kind: "file" as const,
+			},
 			{ id: "f3", name: "doc.pdf", path: "/doc.pdf", kind: "file" as const },
 			{ id: "f4", name: "data.csv", path: "/data.csv", kind: "file" as const },
 		];
@@ -312,7 +317,12 @@ describe("filesToPickerItems token insertion", () => {
 
 	test("includes directories alongside files", () => {
 		const files = [
-			{ id: "f1", name: "readme.md", path: "/readme.md", kind: "file" as const },
+			{
+				id: "f1",
+				name: "readme.md",
+				path: "/readme.md",
+				kind: "file" as const,
+			},
 			{ id: "d1", name: "subdir", path: "/subdir", kind: "directory" as const },
 		];
 		const items = filesToPickerItems(files);

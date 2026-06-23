@@ -27,7 +27,7 @@ function buildFileChip(_fileId: string, name: string): string {
 }
 
 function buildTabChip(_tabId: string, title: string): string {
-	const label = title.length > 20 ? title.slice(0, 20) + "…" : title;
+	const label = title.length > 20 ? `${title.slice(0, 20)}…` : title;
 	return `<span class="mention-chip inline-flex items-center gap-1 rounded border border-border-strong bg-bg-muted px-1.5 py-0.5 text-xs font-medium text-text-primary align-middle" title="${escapeHtml(title)}" data-chip-kind="tab">${escapeHtml(label)}</span>`;
 }
 
@@ -40,7 +40,8 @@ function buildSkillChip(skillName: string): string {
  * as typed. Returns a mix of text and mention segments.
  */
 export function tokenizeMentions(text: string): MentionSegment[] {
-	const TOKEN_RE = /@\[dir:([^:\]]+):([^:\]]+)\]|@\[file:([^:\]]+):([^:\]]+)\]|@\[tab:(\d+):([^\]]+)\]|\/skill:([a-z0-9-]+)/g;
+	const TOKEN_RE =
+		/@\[dir:([^:\]]+):([^:\]]+)\]|@\[file:([^:\]]+):([^:\]]+)\]|@\[tab:(\d+):([^\]]+)\]|\/skill:([a-z0-9-]+)/g;
 	const segments: MentionSegment[] = [];
 	let lastIndex = 0;
 

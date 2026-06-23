@@ -1,8 +1,19 @@
 import { detectAtState, detectSlashState } from "../../detect-mention-state";
 
 export type InputMode =
-	| { kind: "picker-at"; query: string; startIndex: number; endIndex: number; activeIndex: number }
-	| { kind: "picker-slash"; query: string; startIndex: number; activeIndex: number }
+	| {
+			kind: "picker-at";
+			query: string;
+			startIndex: number;
+			endIndex: number;
+			activeIndex: number;
+	  }
+	| {
+			kind: "picker-slash";
+			query: string;
+			startIndex: number;
+			activeIndex: number;
+	  }
 	| { kind: "history"; index: number; savedDraft: string }
 	| { kind: "plain" };
 
@@ -73,7 +84,10 @@ export function resolveInputMode(
 	return CLOSED_MODE;
 }
 
-function ensureSelectActive(_mode: InputMode, ctx: KeyActionCtx): KeyAction | null {
+function ensureSelectActive(
+	_mode: InputMode,
+	ctx: KeyActionCtx,
+): KeyAction | null {
 	if (ctx.itemCount === 0) return null;
 	return {
 		type: "prevent-default",
@@ -82,8 +96,13 @@ function ensureSelectActive(_mode: InputMode, ctx: KeyActionCtx): KeyAction | nu
 	};
 }
 
-function movePickerActive(mode: InputMode, delta: -1 | 1, ctx: KeyActionCtx): KeyAction {
-	if (mode.kind === "plain" || mode.kind === "history") return { type: "prevent-default" };
+function movePickerActive(
+	mode: InputMode,
+	delta: -1 | 1,
+	ctx: KeyActionCtx,
+): KeyAction {
+	if (mode.kind === "plain" || mode.kind === "history")
+		return { type: "prevent-default" };
 	const nextIndex = mode.activeIndex + delta;
 	const clamped = Math.max(0, Math.min(nextIndex, ctx.itemCount - 1));
 	return {
@@ -101,7 +120,11 @@ export function interpretKey(
 		case "picker-at":
 		case "picker-slash": {
 			if (e.key === "Escape") {
-				return { type: "prevent-default", effect: "dismiss-picker", nextMode: { kind: "plain" } };
+				return {
+					type: "prevent-default",
+					effect: "dismiss-picker",
+					nextMode: { kind: "plain" },
+				};
 			}
 			if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
 				const sel = ensureSelectActive(mode, ctx);
@@ -117,7 +140,11 @@ export function interpretKey(
 			const edit = textEditEffect(e);
 			if (edit) return { type: "prevent-default", effect: edit };
 			if (e.key === "Escape") {
-				return { type: "prevent-default", effect: "restore-draft", nextMode: { kind: "plain" } };
+				return {
+					type: "prevent-default",
+					effect: "restore-draft",
+					nextMode: { kind: "plain" },
+				};
 			}
 			if (e.key === "Enter" && !e.shiftKey && !ctx.isRunning) {
 				return { type: "prevent-default", effect: "submit" };

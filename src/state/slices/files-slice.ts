@@ -61,7 +61,12 @@ export interface FilesSlice {
 	setFileNodes(nodes: FileNode[]): void;
 	incrementFilesVersion(): void;
 	toggleFolderExpanded(id: FileNodeId): void;
-	moveNode(id: FileNodeId, newParentId: FileNodeId | undefined, newName: string, newPath: string): void;
+	moveNode(
+		id: FileNodeId,
+		newParentId: FileNodeId | undefined,
+		newName: string,
+		newPath: string,
+	): void;
 	renameNode(id: FileNodeId, newName: string, newPath: string): void;
 	startCreating(kind: CreatingKind, parentPath: string): void;
 	setCreatingName(name: string): void;
@@ -94,7 +99,7 @@ function updateDescendants(
 	oldPath: string,
 	newPath: string,
 ): Record<FileNodeId, FileNode> {
-	const prefix = oldPath + "/";
+	const prefix = `${oldPath}/`;
 	const updated: Record<FileNodeId, FileNode> = {};
 	for (const key of Object.keys(nodes)) {
 		const node = nodes[key];
@@ -154,7 +159,14 @@ export function createFilesSlice(
 					node.parentId === undefined
 						? [...state.files.rootIds, node.id]
 						: state.files.rootIds;
-				return { files: { ...state.files, nodes, rootIds, filesVersion: state.files.filesVersion + 1 } };
+				return {
+					files: {
+						...state.files,
+						nodes,
+						rootIds,
+						filesVersion: state.files.filesVersion + 1,
+					},
+				};
 			});
 		},
 		removeFileNode(id) {
@@ -187,31 +199,28 @@ export function createFilesSlice(
 				},
 			}));
 		},
-	setFileNodes(nodes) {
-		const next = buildFileState(nodes);
-		set((state) => {
-			// Only clear selection if its node is gone; otherwise preserve it so
-			// the preview keeps its content while FilesPanel's listAllFiles effect
-			// refreshes the tree. This breaks the loop: effect fires → setFileNodes
-			// → selectedFileId cleared → selection lost → preview unloadable.
-			const selectedFileId =
-				state.files.selectedFileId &&
-				Object.prototype.hasOwnProperty.call(
-					next.nodes,
-					state.files.selectedFileId,
-				)
-					? state.files.selectedFileId
-					: null;
-			return {
-				files: {
-					...state.files,
-					...next,
-					selectedFileId,
-					filesVersion: state.files.filesVersion + 1,
-				},
-			};
-		});
-	},
+		setFileNodes(nodes) {
+			const next = buildFileState(nodes);
+			set((state) => {
+				// Only clear selection if its node is gone; otherwise preserve it so
+				// the preview keeps its content while FilesPanel's listAllFiles effect
+				// refreshes the tree. This breaks the loop: effect fires → setFileNodes
+				// → selectedFileId cleared → selection lost → preview unloadable.
+				const selectedFileId =
+					state.files.selectedFileId &&
+					Object.hasOwn(next.nodes, state.files.selectedFileId)
+						? state.files.selectedFileId
+						: null;
+				return {
+					files: {
+						...state.files,
+						...next,
+						selectedFileId,
+						filesVersion: state.files.filesVersion + 1,
+					},
+				};
+			});
+		},
 		incrementFilesVersion() {
 			set((state) => ({
 				files: { ...state.files, filesVersion: state.files.filesVersion + 1 },
@@ -235,15 +244,15 @@ export function createFilesSlice(
 				if (existing.kind === "directory") {
 					nodes = updateDescendants(nodes, oldPath, newPath);
 				}
-			const nextNode: FileNode = {
-				...existing,
-				id: newPath,
-				path: newPath,
-				name: newName,
-				// Explicit override: clearing to undefined when moving to root,
-				// otherwise ...existing would leak the stale parentId.
-				parentId: newParentId,
-			};
+				const nextNode: FileNode = {
+					...existing,
+					id: newPath,
+					path: newPath,
+					name: newName,
+					// Explicit override: clearing to undefined when moving to root,
+					// otherwise ...existing would leak the stale parentId.
+					parentId: newParentId,
+				};
 				nodes[newPath] = nextNode;
 				let rootIds: FileNodeId[];
 				if (newParentId === undefined) {
@@ -254,7 +263,9 @@ export function createFilesSlice(
 					rootIds = state.files.rootIds.filter((r) => r !== id);
 				}
 				const selectedFileId =
-					state.files.selectedFileId === id ? newPath : state.files.selectedFileId;
+					state.files.selectedFileId === id
+						? newPath
+						: state.files.selectedFileId;
 				return {
 					files: {
 						...state.files,
@@ -276,12 +287,19 @@ export function createFilesSlice(
 				if (existing.kind === "directory") {
 					nodes = updateDescendants(nodes, oldPath, newPath);
 				}
-				nodes[newPath] = { ...existing, id: newPath, path: newPath, name: newName };
+				nodes[newPath] = {
+					...existing,
+					id: newPath,
+					path: newPath,
+					name: newName,
+				};
 				const rootIds = state.files.rootIds.includes(id)
 					? [...state.files.rootIds.filter((r) => r !== id), newPath]
 					: state.files.rootIds;
 				const selectedFileId =
-					state.files.selectedFileId === id ? newPath : state.files.selectedFileId;
+					state.files.selectedFileId === id
+						? newPath
+						: state.files.selectedFileId;
 				return {
 					files: {
 						...state.files,
@@ -317,7 +335,9 @@ export function createFilesSlice(
 			}));
 		},
 		openContextMenu(nodeId, x, y) {
-			set((state) => ({ files: { ...state.files, contextMenu: { nodeId, x, y } } }));
+			set((state) => ({
+				files: { ...state.files, contextMenu: { nodeId, x, y } },
+			}));
 		},
 		closeContextMenu() {
 			set((state) => ({ files: { ...state.files, contextMenu: null } }));

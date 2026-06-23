@@ -32,16 +32,15 @@ test("file mention injects attachment block into first provider request", async 
 	await expect(sidePanel.getByTestId("command-picker")).toBeVisible({
 		timeout: 5000,
 	});
-	await sidePanel
-		.getByTestId("command-picker-item-/notes.txt")
-		.click();
+	await sidePanel.getByTestId("command-picker-item-/notes.txt").click();
 	// The picker click dispatches setTaskDraft; ChipInput reconciles the
 	// contentEditable DOM one render later. Wait for the token to appear before
 	// typing more text, otherwise pressSequentially types into the stale DOM
 	// and the subsequent onInput overwrites the token.
-	await expect(
-		sidePanel.locator('[data-testid="task-input"]'),
-	).toContainText("notes.txt", { timeout: 5000 });
+	await expect(sidePanel.locator('[data-testid="task-input"]')).toContainText(
+		"notes.txt",
+		{ timeout: 5000 },
+	);
 	await taskInput.pressSequentially(" summarize this file");
 
 	await sidePanel.getByRole("button", { name: "Run task" }).click();

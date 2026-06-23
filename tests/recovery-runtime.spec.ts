@@ -27,8 +27,16 @@ test("tool compile error — agent surfaces error and completes", async () => {
 	test.setTimeout(60000);
 	const mock = startMockAnthropicServer({
 		responses: [
-			{ chunks: makeToolStream("run_js", { code: "function({" }), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: makeTextStream("Compile error handled."), delays: [0, 0, 0, 0], stopReason: "end_turn" },
+			{
+				chunks: makeToolStream("run_js", { code: "function({" }),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: makeTextStream("Compile error handled."),
+				delays: [0, 0, 0, 0],
+				stopReason: "end_turn",
+			},
 		],
 	});
 	const { sidePanel, close } = await launchExtension();
@@ -38,10 +46,9 @@ test("tool compile error — agent surfaces error and completes", async () => {
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Compile error surfaces as a failed trace entry
-	await expect(sidePanel.locator('[data-testid="trace-entry"]').first()).toContainText(
-		"✗",
-		{ timeout: 15000 },
-	);
+	await expect(
+		sidePanel.locator('[data-testid="trace-entry"]').first(),
+	).toContainText("✗", { timeout: 15000 });
 
 	// Agent continues and completes
 	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(
@@ -59,8 +66,16 @@ test("runtime corrupted — session rebuilds and health check passes", async () 
 	test.setTimeout(60000);
 	const mock = startMockAnthropicServer({
 		responses: [
-			{ chunks: makeToolStream("run_js", { code: "null.x" }), delays: [0, 0, 0, 0], stopReason: "tool_use" },
-			{ chunks: makeTextStream("Runtime error handled."), delays: [0, 0, 0, 0], stopReason: "end_turn" },
+			{
+				chunks: makeToolStream("run_js", { code: "null.x" }),
+				delays: [0, 0, 0, 0],
+				stopReason: "tool_use",
+			},
+			{
+				chunks: makeTextStream("Runtime error handled."),
+				delays: [0, 0, 0, 0],
+				stopReason: "end_turn",
+			},
 		],
 	});
 	const { sidePanel, close } = await launchExtension();
@@ -70,10 +85,9 @@ test("runtime corrupted — session rebuilds and health check passes", async () 
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Runtime error surfaces as a failed trace entry
-	await expect(sidePanel.locator('[data-testid="trace-entry"]').first()).toContainText(
-		"✗",
-		{ timeout: 15000 },
-	);
+	await expect(
+		sidePanel.locator('[data-testid="trace-entry"]').first(),
+	).toContainText("✗", { timeout: 15000 });
 
 	// Agent continues and completes
 	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(

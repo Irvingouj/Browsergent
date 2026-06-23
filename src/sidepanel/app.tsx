@@ -5,6 +5,7 @@ import {
 	buildExportSnapshot,
 	exportConversation,
 } from "../controllers/export-controller";
+import { isTextFile } from "../controllers/files-controller";
 import { parseSkillActivation } from "../skills/resolve-skill-activations";
 import { getSkillService } from "../skills/skill-service";
 import type { SkillDiagnostic } from "../skills/skill-types";
@@ -34,16 +35,13 @@ import { InputBar } from "./components/input/InputBar";
 import { SettingsForm } from "./components/SettingsForm";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
-import {
-	mergeSkillAndFileAttachments,
-} from "./merge-run-task";
-import { isTextFile } from "../controllers/files-controller";
+import { mergeSkillAndFileAttachments } from "./merge-run-task";
+import type { DirContextChild } from "./resolve-dir-mentions";
 import {
 	buildDirContextXmlBlock,
 	dedupeDirMentionsById,
 	parseDirMentions,
 } from "./resolve-dir-mentions";
-import type { DirContextChild } from "./resolve-dir-mentions";
 import {
 	parseFileMentions,
 	resolveFileMentions,
@@ -203,36 +201,40 @@ const App: FunctionalComponent = () => {
 			}
 		}
 
-	// Resolve @[dir:...] mentions: list their immediate children so the agent
-	// knows what's inside without wasting turns on file_list.
-	const dirMentions = parseDirMentions(task);
-	if (dirMentions.length > 0) {
-		const filesController = filesControllerRef.current;
-		const deduped = dedupeDirMentionsById(dirMentions);
-		if (filesController) {
-			const blocks: string[] = [];
-			for (const mention of deduped) {
-				let children: DirContextChild[] = [];
-				try {
-					const nodes = await filesController.listDirectChildren(mention.path);
-					children = nodes.map((node): DirContextChild => ({
-						name: node.name,
-						path: node.path,
-						kind: node.kind,
-						size: node.size ?? 0,
-						isText: isTextFile(node.name),
-					}));
-				} catch {
-					// degrade gracefully: emit note form on failure
+		// Resolve @[dir:...] mentions: list their immediate children so the agent
+		// knows what's inside without wasting turns on file_list.
+		const dirMentions = parseDirMentions(task);
+		if (dirMentions.length > 0) {
+			const filesController = filesControllerRef.current;
+			const deduped = dedupeDirMentionsById(dirMentions);
+			if (filesController) {
+				const blocks: string[] = [];
+				for (const mention of deduped) {
+					let children: DirContextChild[] = [];
+					try {
+						const nodes = await filesController.listDirectChildren(
+							mention.path,
+						);
+						children = nodes.map(
+							(node): DirContextChild => ({
+								name: node.name,
+								path: node.path,
+								kind: node.kind,
+								size: node.size ?? 0,
+								isText: isTextFile(node.name),
+							}),
+						);
+					} catch {
+						// degrade gracefully: emit note form on failure
+					}
+					blocks.push(buildDirContextXmlBlock(mention, children));
 				}
-				blocks.push(buildDirContextXmlBlock(mention, children));
-			}
-			const dirBlock = blocks.join("\n");
-			if (dirBlock) {
-				resolvedTask = `${resolvedTask}\n${dirBlock}`;
+				const dirBlock = blocks.join("\n");
+				if (dirBlock) {
+					resolvedTask = `${resolvedTask}\n${dirBlock}`;
+				}
 			}
 		}
-	}
 
 		// Resolve @-mentioned open tabs: inject tabId/url/title so the agent can act on a specific tab.
 		const tabMentions = parseTabMentions(task);
@@ -240,8 +242,12 @@ const App: FunctionalComponent = () => {
 			try {
 				const resolved = await resolveTabMentions(tabMentions);
 				const missing = resolved.filter(
-					(r): r is { ok: false; missing: { tabId: string; displayName: string } } =>
-						!r.ok,
+					(
+						r,
+					): r is {
+						ok: false;
+						missing: { tabId: string; displayName: string };
+					} => !r.ok,
 				);
 				if (missing.length > 0) {
 					const labels = missing

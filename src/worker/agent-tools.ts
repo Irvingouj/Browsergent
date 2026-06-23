@@ -2,10 +2,10 @@ import type { AgentToolDefinition, AgentTools } from "@pi-oxide/pi-host-web";
 import { z } from "zod";
 import type { CellResult } from "../types/extjs-utils";
 import { formatJsRunResult } from "../types/extjs-utils";
+import { getCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { JS_TOOL_PROMPT } from "./js-tool-prompt";
 import { formatToolError, isStackUseful } from "./tool-error-result";
-import { getCurrentTraceId } from "./current-trace";
 
 interface ExtensionJsApiEntry {
 	namespace: string;
@@ -363,7 +363,8 @@ function formatFileListResult(
 	if (files.length === 0) return "No files in session.";
 	const header = "path\tname\tsize\tmime\tisText";
 	const rows = files.map(
-		(f) => `${f.path}\t${f.name}\t${f.size}\t${f.mime}\t${f.isText ? "yes" : "no"}`,
+		(f) =>
+			`${f.path}\t${f.name}\t${f.size}\t${f.mime}\t${f.isText ? "yes" : "no"}`,
 	);
 	return [header, ...rows].join("\n");
 }
@@ -451,11 +452,11 @@ export function createAgentTools(
 					try {
 						const readResult = await fileOp({ op: "read", path: fileName });
 						if (readResult.op !== "read") {
-						return formatToolError(
-							"E_FILE_UNKNOWN",
-							`Unexpected result op for file_read: ${readResult.op}`,
-							"",
-						);
+							return formatToolError(
+								"E_FILE_UNKNOWN",
+								`Unexpected result op for file_read: ${readResult.op}`,
+								"",
+							);
 						}
 						code = readResult.content;
 					} catch (err) {
@@ -481,7 +482,7 @@ export function createAgentTools(
 							code?: string | null;
 							stack?: string | null;
 						};
-					const { code: errCode, hint, stack } = classifyError(err, code);
+						const { code: errCode, hint, stack } = classifyError(err, code);
 						return formatToolError(
 							errCode,
 							`${tracePrefix}${formatJsRunResult(result)}`,

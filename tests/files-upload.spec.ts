@@ -16,13 +16,11 @@ test("toolbar Upload button uploads a file, visible after reload", async () => {
 		});
 
 		// Upload via the hidden file input (same path the Upload button triggers)
-		await sidePanel
-			.locator('[data-testid="file-upload"]')
-			.setInputFiles({
-				name: "upload-test.txt",
-				mimeType: "text/plain",
-				buffer: Buffer.from("hello upload"),
-			});
+		await sidePanel.locator('[data-testid="file-upload"]').setInputFiles({
+			name: "upload-test.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("hello upload"),
+		});
 
 		// File should appear in the tree
 		const fileNode = sidePanel
@@ -114,9 +112,7 @@ test("dropping a folder with SKILL.md imports a skill instead of uploading files
 		await sidePanel.evaluate(
 			({ dt }) => {
 				const skillMd = new File(
-					[
-						"---\nname: test-skill\ndescription: A test skill\n---\n# Hello\n",
-					],
+					["---\nname: test-skill\ndescription: A test skill\n---\n# Hello\n"],
 					"SKILL.md",
 					{ type: "text/markdown" },
 				);

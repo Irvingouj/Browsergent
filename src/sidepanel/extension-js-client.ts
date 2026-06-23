@@ -124,7 +124,7 @@ export class ExtensionJsClient implements SkillFsClient {
 			this.session = session;
 			this.runnerPromise = runner;
 			this.initialized = true;
-		setLogLevel("error");
+			setLogLevel("error");
 		})();
 		try {
 			await this.initPromise;
@@ -365,7 +365,10 @@ export class ExtensionJsClient implements SkillFsClient {
 		}
 	}
 
-	private async executeWithTimeout(code: string, traceId?: string): Promise<CellResult> {
+	private async executeWithTimeout(
+		code: string,
+		traceId?: string,
+	): Promise<CellResult> {
 		if (!this.session) {
 			throw new Error("ExtensionSession not available");
 		}

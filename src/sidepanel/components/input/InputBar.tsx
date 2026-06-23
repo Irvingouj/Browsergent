@@ -10,8 +10,8 @@ import {
 import { browsergentStore } from "../../../state/store";
 import { buildFileMentionToken } from "../../detect-mention-state";
 import { CommandPicker } from "../CommandPicker";
-import { useInputMode } from "./use-input-mode";
 import { ChipInput } from "./ChipInput";
+import { useInputMode } from "./use-input-mode";
 
 const MAX_INPUT_HEIGHT = 200;
 
@@ -75,10 +75,15 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	);
 
 	// Auto-grow the contentEditable to fit content, capped at MAX_INPUT_HEIGHT.
+	// When empty, clear explicit height so CSS min-h-[36px] controls sizing.
 	useEffect(() => {
 		const el = internalRef.current;
 		if (!el) return;
 		el.style.height = "auto";
+		if (!taskInput) {
+			el.style.height = "";
+			return;
+		}
 		const next = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
 		el.style.height = `${next}px`;
 	}, [taskInput]);
@@ -219,7 +224,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
 			>
-			<div class="relative flex-1">
+				<div class="relative flex-1">
 					{mode.isPickerOpen ? (
 						<CommandPicker
 							items={mode.pickerItems}
@@ -238,12 +243,12 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						inputRef={setInputRef}
 						value={taskInput}
 						caretOffset={pendingCaret}
-					onChange={(canonical, cursor) => {
-						cursorRef.current = cursor;
-						setPendingFileCaret(undefined);
-						browsergentStore.getState().setTaskDraft(canonical);
-						mode.onInput(canonical, cursor);
-					}}
+						onChange={(canonical, cursor) => {
+							cursorRef.current = cursor;
+							setPendingFileCaret(undefined);
+							browsergentStore.getState().setTaskDraft(canonical);
+							mode.onInput(canonical, cursor);
+						}}
 						onKeyDown={mode.onKeyDown}
 						onFocus={() => mode.loadSkills()}
 						onBlur={mode.onBlur}

@@ -1,10 +1,13 @@
 import { useRef } from "preact/hooks";
 import { useStore } from "zustand";
-import { browsergentStore } from "../../../state/store";
-import { selectCreatingKind, selectCreatingName } from "../../../state/selectors";
-import type { CreatingKind } from "../../../state/slices/files-slice";
-import { sanitizeFileName } from "../../../controllers/files-utils";
 import type { FilesController } from "../../../controllers/files-controller";
+import { sanitizeFileName } from "../../../controllers/files-utils";
+import {
+	selectCreatingKind,
+	selectCreatingName,
+} from "../../../state/selectors";
+import type { CreatingKind } from "../../../state/slices/files-slice";
+import { browsergentStore } from "../../../state/store";
 
 interface FilesToolbarProps {
 	filesController: FilesController;
@@ -52,7 +55,6 @@ export const FilesToolbar = ({
 		}
 		browsergentStore.getState().cancelCreating();
 	};
-
 
 	const beginCreate = (kind: CreatingKind): void => {
 		const parentPath = resolveParentPath(
@@ -113,7 +115,9 @@ export const FilesToolbar = ({
 						}
 					}}
 					onBlur={() => browsergentStore.getState().cancelCreating()}
-					placeholder={creatingKind === "folder" ? "folder name…" : "file name…"}
+					placeholder={
+						creatingKind === "folder" ? "folder name…" : "file name…"
+					}
 					data-testid="creating-input"
 					class="px-sm py-[3px] text-xs bg-bg-surface border border-border rounded-md text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent min-w-[120px]"
 				/>
