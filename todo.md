@@ -36,6 +36,7 @@
 ## 已知 bug
 
 - [ ] **`@` picker 在上传文件后未刷新** — 通过输入栏拖放或 Files 面板的上传按钮上传文件后，`@` 列表仍显示陈旧的文件名，直到侧栏重新加载。原因：`use-picker.ts` 中的 `filePickerItems` memo 依赖 `filesState.nodes`，但文件上传未触发 `filesVersion` 变更（selectors 依赖链未更新导致 Preact 未重渲染）。
+- [x] **LLM 流网络错误被静默转为 completed** — **已修复（pi-oxide `0.9.4`）。** 根因不在 Browsergent 侧，而在 `@pi-oxide/pi-host-web` SDK 的 `EventMapper`：`convertWasmMessage` 丢弃了 WASM `AssistantMessage` 的 `stop_reason`/`error_message`，且 `buildRunResult` 的 `completed` 分支从不填充 `error` 字段——导致 `agent-loop.ts:256` 的 `completed && result.error` 分支不可达。修复：SDK 侧在 `turn_end` 事件中捕获 `stop_reason: "error"` → 设置 `RunState.error`，`buildRunResult` 返回 `status: "failed"` + `error`。Browsergent `agent-loop.ts:241` 的 `result.status === "failed"` 分支现可正确处理所有三种场景（无输出、有工具调用后、首次调用）。
 
 ---
 
