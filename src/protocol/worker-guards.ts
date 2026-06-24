@@ -30,6 +30,9 @@ function isString(value: unknown): value is string {
 function isNumber(value: unknown): value is number {
 	return typeof value === "number";
 }
+function isBoolean(value: unknown): value is boolean {
+	return typeof value === "boolean";
+}
 
 function isOptionalString(value: unknown): value is string | undefined {
 	return value === undefined || typeof value === "string";
@@ -143,6 +146,17 @@ export function isAgentDiagnosticEvent(
 			return isString(event.eventType) && isString(event.data);
 		case "provider_sse_remainder":
 			return isString(event.data);
+		case "provider_retry":
+			return (
+				isNumber(event.attempt) &&
+				isNumber(event.maxAttempts) &&
+				isNumber(event.delayMs) &&
+				isString(event.error) &&
+				(!("status" in event) ||
+					event.status === undefined ||
+					isNumber(event.status)) &&
+				isBoolean(event.recoverable)
+			);
 		case "model_request":
 			return (
 				isString(event.instructions) &&

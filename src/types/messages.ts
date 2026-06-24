@@ -126,6 +126,16 @@ export type AgentDiagnosticEvent =
 			data: string;
 	  }
 	| {
+			kind: "provider_retry";
+			timestamp: number;
+			attempt: number;
+			maxAttempts: number;
+			delayMs: number;
+			status?: number;
+			error: string;
+			recoverable: boolean;
+	  }
+	| {
 			kind: "model_request";
 			timestamp: number;
 			instructions: string;

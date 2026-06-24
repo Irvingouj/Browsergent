@@ -12,6 +12,7 @@ import {
 	selectMessageIds,
 	selectMessagesById,
 	selectModel,
+	selectRetryState,
 	selectSessionPanelOpen,
 	selectSessions,
 	selectSettingsOpen,
@@ -38,6 +39,9 @@ describe("selectors", () => {
 					timestamp: 1,
 				},
 			],
+		},
+		diagnostics: {
+			events: [] as unknown[],
 		},
 		agent: {
 			status: "running" as const,
@@ -135,5 +139,86 @@ describe("selectors", () => {
 
 	test("selectExpandedFolderIds returns expanded folder ids", () => {
 		expect(selectExpandedFolderIds(mockStore)).toEqual(["/sub"]);
+	});
+});
+
+describe("selectRetryState", () => {
+	function makeStore(status: string, events: unknown[]): BrowsergentStore {
+		return {
+			chat: { messageIds: [], messagesById: {} },
+			trace: { entries: [] },
+			diagnostics: { events: events as never },
+			agent: { status: status as never },
+			ui: { taskDraft: "", activeTab: "chat", settingsOpen: false },
+			settings: { anthropicApiKey: "", baseUrl: "", model: "" },
+			session: { sessionPanelOpen: false, sessions: [], activeSessionId: null },
+			extjs: { status: "ready", output: "" },
+			files: {
+				nodes: {},
+				rootIds: [],
+				selectedFileId: null,
+				filesVersion: 0,
+				expandedFolderIds: [],
+			},
+		} as unknown as BrowsergentStore;
+	}
+
+	const retryEvent = {
+		kind: "provider_retry",
+		timestamp: 1000,
+		attempt: 2,
+		maxAttempts: 3,
+		delayMs: 2000,
+		status: 429,
+		error: "rate limited",
+		recoverable: true,
+	};
+
+	test("returns null when diagnostics is empty", () => {
+		expect(selectRetryState(makeStore("running", []))).toBeNull();
+	});
+
+	test("returns null when last event is not provider_retry", () => {
+		expect(
+			selectRetryState(
+				makeStore("running", [{ kind: "provider_request" }]),
+			),
+		).toBeNull();
+	});
+
+	test("returns null when agent status is not an active run state", () => {
+		expect(selectRetryState(makeStore("idle", [retryEvent]))).toBeNull();
+		expect(selectRetryState(makeStore("done", [retryEvent]))).toBeNull();
+		expect(selectRetryState(makeStore("stopped", [retryEvent]))).toBeNull();
+		expect(selectRetryState(makeStore("error", [retryEvent]))).toBeNull();
+	});
+
+	test("returns retry state when last event is provider_retry and running", () => {
+		const result = selectRetryState(makeStore("waiting_for_model", [retryEvent]));
+		expect(result).toEqual({
+			attempt: 2,
+			maxAttempts: 3,
+			delayMs: 2000,
+			status: 429,
+			errorLabel: "rate limit",
+		});
+	});
+
+	test("normalizes 529 to 'overloaded'", () => {
+		const event = { ...retryEvent, status: 529 };
+		const result = selectRetryState(makeStore("running", [event]));
+		expect(result?.errorLabel).toBe("overloaded");
+	});
+
+	test("falls back to 'http N' for unknown status", () => {
+		const event = { ...retryEvent, status: 502 };
+		const result = selectRetryState(makeStore("running", [event]));
+		expect(result?.errorLabel).toBe("bad gateway");
+	});
+
+	test("falls back to 'network error' when status is undefined", () => {
+		const event = { ...retryEvent, status: undefined };
+		const result = selectRetryState(makeStore("running", [event]));
+		expect(result?.errorLabel).toBe("network error");
 	});
 });

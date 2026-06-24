@@ -12,7 +12,7 @@
 		"skipLibCheck": true,
 		"outDir": "dist",
 		"rootDir": "src",
-		"lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+		"lib": ["ES2024", "DOM", "DOM.Iterable", "WebWorker"],
 		"types": ["chrome"],
 		"paths": {
 			"preact": ["./node_modules/preact"],

@@ -63,35 +63,52 @@ export function useTitleGeneration(
 			}
 
 			try {
-				const response = await fetch(`${url}/v1/messages`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						"x-api-key": key,
-					},
-					body: JSON.stringify({
-						model: modelName,
-						max_tokens: 20,
-						messages: [{ role: "user", content: prompt }],
-					}),
-				});
+				const maxRetries = 3;
+				for (let attempt = 0; attempt <= maxRetries; attempt++) {
+					if (attempt > 0) {
+						const delay = Math.min(500 * 2 ** (attempt - 1), 4000);
+						await new Promise<void>((resolve) => setTimeout(resolve, delay));
+					}
 
-				if (!response.ok) return;
+					try {
+						const response = await fetch(`${url}/v1/messages`, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								"x-api-key": key,
+							},
+							body: JSON.stringify({
+								model: modelName,
+								max_tokens: 20,
+								messages: [{ role: "user", content: prompt }],
+							}),
+						});
 
-				const data = (await response.json()) as {
-					content?: Array<{ text?: string }>;
-				};
-				const title = data.content?.[0]?.text?.trim();
-				if (!title) return;
+						if (!response.ok) {
+							const retryable = [429, 500, 502, 503, 504, 529].includes(
+								response.status,
+							);
+							if (retryable && attempt < maxRetries) continue;
+							return;
+						}
 
-				await sessionControllerRef.current?.updateTitle(
-					targetSessionId,
-					title,
-					false,
-				);
-				browsergentStore.getState().sessionTitleUpdated(targetSessionId, title);
-			} catch {
-				// Silently ignore failures
+						const data = (await response.json()) as {
+							content?: Array<{ text?: string }>;
+						};
+						const title = data.content?.[0]?.text?.trim();
+						if (!title) return;
+
+						await sessionControllerRef.current?.updateTitle(
+							targetSessionId,
+							title,
+							false,
+						);
+						browsergentStore.getState().sessionTitleUpdated(targetSessionId, title);
+						return;
+					} catch {
+						if (attempt < maxRetries) continue;
+					}
+				}
 			} finally {
 				titleGeneratedForSession.current.add(targetSessionId);
 			}

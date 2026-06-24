@@ -33,8 +33,53 @@ function isRetryableStatus(status: number): boolean {
 		status === 500 ||
 		status === 502 ||
 		status === 503 ||
-		status === 504
+		status === 504 ||
+		status === 529
 	);
+}
+
+const BASE_DELAY_MS = 500;
+const MAX_DELAY_MS = 8000;
+const JITTER_RATIO = 0.25;
+
+function computeBackoff(attempt: number): number {
+	const exp = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), MAX_DELAY_MS);
+	const jitter = exp * JITTER_RATIO * (Math.random() * 2 - 1);
+	return Math.max(0, Math.round(exp + jitter));
+}
+
+function parseRetryAfter(header: string | null): number | undefined {
+	if (!header) return undefined;
+	const secs = Number(header);
+	if (!Number.isNaN(secs)) return secs * 1000;
+	const date = Date.parse(header);
+	if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
+	return undefined;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+	const { promise, resolve, reject } = Promise.withResolvers<void>();
+	if (ms <= 0) {
+		resolve();
+		return promise;
+	}
+	const onAbort = () => {
+		clearTimeout(timer);
+		reject(new DOMException("Aborted", "AbortError"));
+	};
+	const timer = setTimeout(() => {
+		signal?.removeEventListener("abort", onAbort);
+		resolve();
+	}, ms);
+	if (signal) {
+		if (signal.aborted) {
+			clearTimeout(timer);
+			reject(new DOMException("Aborted", "AbortError"));
+		} else {
+			signal.addEventListener("abort", onAbort, { once: true });
+		}
+	}
+	return promise;
 }
 
 export class AnthropicProvider {
@@ -64,26 +109,61 @@ export class AnthropicProvider {
 
 		const maxRetries = 3;
 		let lastError = "";
+		let lastStatus: number | undefined;
+		let lastRetryAfterMs: number | undefined;
+
+		function abortedResult(): LlmStream {
+			async function* chunks(): AsyncGenerator<LlmChunk> {
+				yield { kind: "error" as const, message: "Request aborted" };
+			}
+			return {
+				chunks: chunks(),
+				result: Promise.resolve({
+					Err: {
+						error: { code: "aborted", message: "Request aborted" },
+						aborted: true,
+					},
+				}),
+			};
+		}
+
+		function errorResult(code: string, message: string): LlmStream {
+			async function* chunks(): AsyncGenerator<LlmChunk> {
+				yield { kind: "error" as const, message };
+			}
+			return {
+				chunks: chunks(),
+				result: Promise.resolve({
+					Err: { error: { code, message }, aborted: false },
+				}),
+			};
+		}
 
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			if (attempt > 0) {
-				const delay = Math.min(500 * 2 ** (attempt - 1), 8000);
-				await new Promise((resolve) => setTimeout(resolve, delay));
+				const delay =
+					lastRetryAfterMs !== undefined
+						? lastRetryAfterMs
+						: computeBackoff(attempt);
+				this.onDiagnostic({
+					kind: "provider_retry",
+					timestamp: Date.now(),
+					attempt,
+					maxAttempts: maxRetries,
+					delayMs: delay,
+					status: lastStatus,
+					error: lastError,
+					recoverable: true,
+				});
+				try {
+					await sleep(delay, signal);
+				} catch {
+					return abortedResult();
+				}
 			}
 
 			if (signal?.aborted) {
-				async function* abortedChunks(): AsyncGenerator<LlmChunk> {
-					yield { kind: "error" as const, message: "Request aborted" };
-				}
-				return {
-					chunks: abortedChunks(),
-					result: Promise.resolve({
-						Err: {
-							error: { code: "aborted", message: "Request aborted" },
-							aborted: true,
-						},
-					}),
-				};
+				return abortedResult();
 			}
 
 			try {
@@ -105,21 +185,14 @@ export class AnthropicProvider {
 				if (!resp.ok) {
 					const errorText = await resp.text();
 					lastError = `Anthropic API error ${resp.status}: ${errorText}`;
-					if (isRetryableStatus(resp.status)) {
+					lastStatus = resp.status;
+					lastRetryAfterMs = parseRetryAfter(
+						resp.headers.get("retry-after"),
+					);
+					if (isRetryableStatus(resp.status) && attempt < maxRetries) {
 						continue;
 					}
-					async function* errorChunks(): AsyncGenerator<LlmChunk> {
-						yield { kind: "error" as const, message: lastError };
-					}
-					return {
-						chunks: errorChunks(),
-						result: Promise.resolve({
-							Err: {
-								error: { code: "api_error", message: lastError },
-								aborted: false,
-							},
-						}),
-					};
+					return errorResult("api_error", lastError);
 				}
 
 				const responseBody = resp.body;
@@ -134,55 +207,18 @@ export class AnthropicProvider {
 				);
 			} catch (err) {
 				if (signal?.aborted) {
-					async function* abortedChunks(): AsyncGenerator<LlmChunk> {
-						yield { kind: "error" as const, message: "Request aborted" };
-					}
-					return {
-						chunks: abortedChunks(),
-						result: Promise.resolve({
-							Err: {
-								error: { code: "aborted", message: "Request aborted" },
-								aborted: true,
-							},
-						}),
-					};
+					return abortedResult();
 				}
 				lastError = err instanceof Error ? err.message : String(err);
+				lastStatus = undefined;
+				lastRetryAfterMs = undefined;
 				if (isRetryableError(err) && attempt < maxRetries) {
 					continue;
 				}
-				async function* netErrorChunks(): AsyncGenerator<LlmChunk> {
-					yield { kind: "error" as const, message: lastError };
-				}
-				return {
-					chunks: netErrorChunks(),
-					result: Promise.resolve({
-						Err: {
-							error: { code: "network_error", message: lastError },
-							aborted: false,
-						},
-					}),
-				};
+				return errorResult("network_error", lastError);
 			}
 		}
 
-		async function* exhaustedChunks(): AsyncGenerator<LlmChunk> {
-			yield {
-				kind: "error" as const,
-				message: lastError || "Retries exhausted",
-			};
-		}
-		return {
-			chunks: exhaustedChunks(),
-			result: Promise.resolve({
-				Err: {
-					error: {
-						code: "api_error",
-						message: lastError || "Retries exhausted",
-					},
-					aborted: false,
-				},
-			}),
-		};
+		return errorResult("api_error", lastError || "Retries exhausted");
 	}
 }

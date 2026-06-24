@@ -24,6 +24,7 @@ import {
 	selectSessions,
 	selectSettingsOpen,
 	selectSkillDiagnostics,
+	selectRetryState,
 	selectTaskDraft,
 	selectTraceEntries,
 } from "../state/selectors";
@@ -60,6 +61,27 @@ function formatSkillDiagnostic(diagnostic: SkillDiagnostic): string {
 	return `collision "${diagnostic.name}": ${diagnostic.loserPath} replaced by ${diagnostic.winnerPath}`;
 }
 
+function statusDotClass(isRetrying: boolean, status: string): string {
+	if (isRetrying) return "bg-warning text-warning animate-pulse-glow";
+	switch (status) {
+		case "idle":
+		case "stopped":
+			return "bg-text-dim";
+		case "loading":
+			return "bg-warning text-warning animate-pulse-glow";
+		case "running":
+			return "bg-accent text-accent animate-pulse-glow";
+		case "waiting_for_model":
+			return "bg-text-muted text-text-muted animate-pulse-glow";
+		case "executing_tool":
+			return "bg-warning text-warning animate-pulse-glow";
+		case "done":
+			return "bg-success";
+		default:
+			return "bg-danger text-danger";
+	}
+}
+
 function currentSessionSnapshot(): {
 	messages: ChatMessage[];
 	trace: ReturnType<typeof selectTraceEntries>;
@@ -90,6 +112,7 @@ const App: FunctionalComponent = () => {
 	const diagnostics = useStore(browsergentStore, selectDiagnosticEvents);
 	const status = useStore(browsergentStore, selectAgentStatus);
 	const statusReason = useStore(browsergentStore, selectAgentStatusReason);
+	const retryState = useStore(browsergentStore, selectRetryState);
 	const taskInput = useStore(browsergentStore, selectTaskDraft);
 	const apiKey = useStore(browsergentStore, selectApiKey);
 	const baseUrl = useStore(browsergentStore, selectBaseUrl);
@@ -586,27 +609,13 @@ const App: FunctionalComponent = () => {
 
 			{/* Status bar */}
 			<div class="relative z-10 px-md py-xs bg-bg-base border-t border-border flex items-center gap-sm font-mono text-[10px] text-text-dim tracking-wider uppercase">
-				<span
-					class={[
-						"w-1.5 h-1.5 rounded-full flex-shrink-0",
-						status === "idle" || status === "stopped"
-							? "bg-text-dim"
-							: status === "loading"
-								? "bg-warning text-warning animate-pulse-glow"
-								: status === "running"
-									? "bg-accent text-accent animate-pulse-glow"
-									: status === "waiting_for_model"
-										? "bg-text-muted text-text-muted animate-pulse-glow"
-										: status === "executing_tool"
-											? "bg-warning text-warning animate-pulse-glow"
-											: status === "done"
-												? "bg-success"
-												: "bg-danger text-danger ",
-					].join(" ")}
+			<span
+					class={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(retryState !== null, status)}`}
 				/>
 				<span class="flex-1 truncate" data-testid="agent-status">
-					{status}
-					{statusReason ? ` — ${statusReason}` : ""}
+					{retryState
+						? `retry ${retryState.attempt}/${retryState.maxAttempts} · ${(retryState.delayMs / 1000).toFixed(1)}s · ${retryState.errorLabel}`
+						: `${status}${statusReason ? ` — ${statusReason}` : ""}`}
 				</span>
 				{skillDiagnostics.length > 0 ? (
 					<span

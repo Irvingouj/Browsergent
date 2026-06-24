@@ -5,6 +5,55 @@ export const selectMessagesById = (s: BrowsergentStore) => s.chat.messagesById;
 export const selectTraceEntries = (s: BrowsergentStore) => s.trace.entries;
 export const selectDiagnosticEvents = (s: BrowsergentStore) =>
 	s.diagnostics.events;
+
+export interface RetryState {
+	attempt: number;
+	maxAttempts: number;
+	delayMs: number;
+	status?: number;
+	errorLabel: string;
+}
+
+const STATUS_LABELS: Record<number, string> = {
+	429: "rate limit",
+	500: "server error",
+	502: "bad gateway",
+	503: "unavailable",
+	504: "timeout",
+	529: "overloaded",
+};
+
+function retryErrorLabel(status: number | undefined): string {
+	if (status !== undefined && status in STATUS_LABELS) {
+		return STATUS_LABELS[status] ?? `http ${status}`;
+	}
+	if (status !== undefined) {
+		return `http ${status}`;
+	}
+	return "network error";
+}
+
+const ACTIVE_RUN_STATUSES: Record<string, true> = {
+	loading: true,
+	running: true,
+	waiting_for_model: true,
+	executing_tool: true,
+};
+
+export const selectRetryState = (s: BrowsergentStore): RetryState | null => {
+	if (!(s.agent.status in ACTIVE_RUN_STATUSES)) return null;
+	const events = s.diagnostics.events;
+	if (events.length === 0) return null;
+	const last = events[events.length - 1];
+	if (last === undefined || last.kind !== "provider_retry") return null;
+	return {
+		attempt: last.attempt,
+		maxAttempts: last.maxAttempts,
+		delayMs: last.delayMs,
+		status: last.status,
+		errorLabel: retryErrorLabel(last.status),
+	};
+};
 export const selectAgentStatus = (s: BrowsergentStore) => s.agent.status;
 export const selectAgentStatusReason = (s: BrowsergentStore) =>
 	s.agent.statusReason;
