@@ -400,12 +400,17 @@ export function createAgentTools(
 							name: {
 								type: "string",
 								description:
-									'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
+									'Path of a text file on the shared OPFS filesystem to execute (e.g. "script.js" or "/skills/user/my-skill/references/do-thing.js"). Use file_list to discover paths. Mutually exclusive with code.',
 							},
 						},
 						required: ["name"],
 						description:
-							"Reference to an uploaded file. Mutually exclusive with 'code'.",
+							"Reference to a file to execute. Mutually exclusive with 'code'.",
+					},
+					params: {
+						type: "object",
+						description:
+							"Optional parameters injected into the cell as globalThis._params. Use to parameterize a script executed via 'file' or to pass values into inline code without string interpolation.",
 					},
 				},
 			},
@@ -414,10 +419,11 @@ export function createAgentTools(
 					.object({
 						code: z.string().optional(),
 						file: z.object({ name: z.string() }).optional(),
+						params: z.record(z.unknown()).optional(),
 					})
 					.safeParse(input);
 				if (!parsed.success) {
-					return "run_js input must be an object with 'code' (string) and/or 'file' ({ name: string })";
+					return "run_js input must be an object with 'code' (string) and/or 'file' ({ name: string }) and optional 'params' (object)";
 				}
 				const hasCode =
 					parsed.data.code !== undefined && parsed.data.code.trim().length > 0;
@@ -469,6 +475,11 @@ export function createAgentTools(
 				if (!code.trim()) {
 					return "run_js requires a non-empty 'code' string";
 				}
+
+				if (parsed.data.params !== undefined) {
+					code = `globalThis._params = ${JSON.stringify(parsed.data.params)};\n${code}`;
+				}
+
 
 				try {
 					const result = await runJs(code);

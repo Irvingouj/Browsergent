@@ -85,6 +85,39 @@ describe("run_js tool error handling", () => {
 		expect(isToolErrorEnvelope(result as string)).toBe(false);
 	});
 
+	test("injects params as globalThis._params prefix when provided", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "ok",
+			result: "ok",
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		await handler({ code: "page.snapshot()", params: { url: "https://x", n: 3 } });
+		expect(runJs).toHaveBeenCalledTimes(1);
+		const executedCode = runJs.mock.calls[0][0] as string;
+		expect(executedCode.startsWith("globalThis._params = ")).toBe(true);
+		expect(executedCode).toContain('"url":"https://x"');
+		expect(executedCode).toContain('"n":3');
+		expect(executedCode).toContain("page.snapshot()");
+	});
+
+	test("does not inject params prefix when params omitted", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "ok",
+			result: "ok",
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		await handler({ code: "page.snapshot()" });
+		const executedCode = runJs.mock.calls[0][0] as string;
+		expect(executedCode.startsWith("globalThis._params")).toBe(false);
+		expect(executedCode).toBe("page.snapshot()");
+	});
+
 	test("returns validation message for empty code without calling runJs", async () => {
 		const runJs = vi.fn();
 		const tools = makeTools(runJs);

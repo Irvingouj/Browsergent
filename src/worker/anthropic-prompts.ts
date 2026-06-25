@@ -24,12 +24,17 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 						name: {
 							type: "string",
 							description:
-								'Name of an uploaded session file to execute (e.g. "script.js"). Use file_list to discover names.',
+								'Path of a text file on the shared OPFS filesystem to execute (e.g. "script.js" or "/skills/user/my-skill/references/do-thing.js"). Use file_list to discover paths. Mutually exclusive with code.',
 						},
 					},
 					required: ["name"],
 					description:
-						"Reference to an uploaded file. Mutually exclusive with 'code'.",
+						"Reference to a file to execute. Mutually exclusive with 'code'.",
+				},
+				params: {
+					type: "object",
+					description:
+						"Optional parameters injected into the cell as globalThis._params. Use to parameterize a script executed via 'file' or to pass values into inline code without string interpolation.",
 				},
 			},
 		},
@@ -145,6 +150,22 @@ export const BROWSER_TOOLS: AnthropicTool[] = [
 export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating JavaScript code via the run_js tool.
 
 Use get_doc proactively. Before any run_js that touches APIs you are not 100% sure about, call get_doc to verify exact function names, argument order, and return types. Prefer get_doc over guessing.
+
+## Capability atlas
+You have a broad runtime — far more than snapshot/click/fill. When a task could use a capability below, call get_doc with the namespace to get exact signatures, then use it. Do not attempt manual DOM workarounds (simulating a form submit with clicks, building a date picker by hand, etc.) when a purpose-built API exists.
+
+- page.* — observe and act on the active tab: snapshot, snapshot_data, snapshot_query (filtered by role/tag/text/name/href/interactiveOnly), snapshot_text, url, title, goto, back, forward, reload, click, dblclick, fill, type, append, press, select, select_option, check, check_radio, hover, unhover, scroll, scroll_to, submit, set_files, find, wait, health, fetch, active_tab, tabs, switch, new_tab, close.
+- web.tab.* — the SAME action set as page.* but scoped to a specific tabId; plus tab management: list, get, find, query, current, create, activate, close, wait_for_load. Prefer web.tab.* when the task names a specific tab.
+- web.sleep(ms) — the only timer API; setTimeout/setInterval do not exist in the sandbox.
+- network.fetch / web.fetch — HTTP client returning { body, headers, ok, status }. Use for API calls and data retrieval outside the page context.
+- fs.* — OPFS filesystem: exists, stat, list, mkdir, delete, copy, move, read, readText, readBase64, readRange, write, writeText, writeBase64, append, appendText, appendBase64, update, hash. Auto-creates parent dirs.
+- clipboard.read / clipboard.write — system clipboard.
+- storage.* — localStorage CRUD: get, set, delete, list, set_many, get_many, get_all, delete_many, clear.
+- dom.snapshot / dom.format — raw DOM snapshot and formatting utilities.
+- chrome.* — Chrome extension API passthrough: downloads, bookmarks, cookies, history, notifications, tabs, windows, scripting, sessions, alarms, action, contextMenus, declarativeNetRequest, desktopCapture, identity, idle, management, offscreen, pageCapture, permissions, runtime, sidePanel, system, tabGroups, topSites, browsingData. Call get_doc with namespace='chrome' to discover available methods for a given API.
+- sidepanel.* — act on Browsergent's own side panel. Use only when explicitly controlling the side panel.
+
+Exploration mindset: when a task involves downloading files, uploading files, form submission, radio buttons, clipboard, tab management, HTTP/API calls, cookies, bookmarks, or browser history, scan the atlas above and call get_doc for the exact API before falling back to manual DOM interaction. The runtime almost always has a purpose-built API that is more reliable than simulating it with clicks and fills.
 
 Key rules:
 1. Observe before acting.

@@ -4,7 +4,7 @@
  */
 
 export const JS_TOOL_PROMPT = `Execute JavaScript code to control the browser via the extension-js runtime.
-ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. Do not guess function names, argument shapes, or return types.
+ALWAYS call get_doc first when you need any page.*, web.*, web.tab.*, chrome.*, fs.*, clipboard.*, storage.*, dom.*, or network.* API. Do not guess function names, argument shapes, or return types. The runtime exposes far more than snapshot/click/fill — when a task could use form submission (page.submit), file uploads (page.set_files), radio buttons (page.check_radio), double-click (page.dblclick), keyboard input (page.type/press/append), scrolling (page.scroll/scroll_to), tab management (web.tab.list/create/activate/close), downloads (chrome.downloads), cookies (chrome.cookies), bookmarks (chrome.bookmarks), history (chrome.history), HTTP requests (network.fetch), clipboard (clipboard.read/write), or localStorage (storage.*), call get_doc with the relevant namespace to get the exact API before falling back to manual DOM interaction.
 
 ## Browsergent-specific rules
 - The target web page is controlled through page.* APIs.
@@ -39,12 +39,30 @@ ALWAYS call get_doc first when you need any page.*, web.*, chrome.*, or fs API. 
 - If an attached file is too large, it may be truncated with a \`[truncated]\` marker.
 - The user may reference an open browser tab using \`@[tab:{tabId}:{title}]\` at compose time. The resolved tab appears in the task context as \`<tab tabId="..." url="..." title="..."/>\`. To act on that specific tab, call \`await web.tab.activate(tabId)\` then use \`web.tab.*\` (\`web.tab.snapshot\`, \`web.tab.click\`, \`web.tab.fill\`, etc.) with that \`tabId\` in the SAME cell — do NOT use \`page.*\` after activating, since the active tab may briefly resolve to the side panel and throw an opaque TypeError. Prefer \`web.tab.*\` whenever the task names that tab.
 
-## Running uploaded scripts
-- \`run_js\` accepts either \`code\` (inline string) OR \`file: { name: "script.js" }\` (path to a text file in the shared OPFS filesystem). They are mutually exclusive — providing both returns E_JS_INVALID_INPUT.
+## Running scripts (uploaded or skill-bundled)
+- \`run_js\` accepts either \`code\` (inline string) OR \`file: { name: "..." }\` (path to a text file on the shared OPFS filesystem). They are mutually exclusive — providing both returns E_JS_INVALID_INPUT.
+- Optional \`params\` (object) is injected into the cell as \`globalThis._params\` before the script runs. Use it to parameterize a script without string interpolation: \`run_js({ file: { name: "scripts/fill-form.js" }, params: { url: "https://...", value: "Toronto" } })\`. Inside the cell, read \`globalThis._params.url\`, \`globalThis._params.value\`. \`params\` works with both \`code\` and \`file\`.
 - Use \`file_list\` to discover file paths, then \`run_js({ file: { name: "scripts/build.js" } })\` to execute.
+- Skill-bundled scripts live under \`/skills/{bundled|user}/<skill-name>/references/*.js\` on the SAME filesystem. Execute them directly: \`run_js({ file: { name: "/skills/user/my-skill/references/do-thing.js" }, params: { tabId: 123 } })\`. Use \`load_skill\` to discover a skill's references/ files, or \`file_list("/skills/user/my-skill/references")\` to list them.
 - The file's text content becomes the cell body. Same execution model applies: isolated cell, no cross-call locals, top-level bindings do not persist.
 - Binary files (images, archives) are rejected with E_FILE_BINARY. Only text files can be executed.
 - \`@[file:...]\` attachments (mentioned above) inject file content into the task context for analysis. \`run_js({ file })\` is different: it executes the file as JS code.
+- Reuse over rewrite: when a task resembles something a skill's references/ script already does, load and execute that script with \`params\` rather than re-implementing the logic inline. This keeps behavior consistent and lets the user audit the script.
+
+## Capability quick-reference
+Beyond snapshot/click/fill, the runtime exposes these namespaces. Call get_doc with the namespace for exact signatures.
+- page.*: type, append, press, submit, check, check_radio, hover, unhover, dblclick, scroll, scroll_to, set_files, select, select_option, snapshot_query (filtered), snapshot_text, back, forward, reload, wait, health, fetch, active_tab, tabs, switch, new_tab, close.
+- web.tab.*: the full page.* action set scoped to a tabId, plus list, get, find, query, current, create, activate, close, wait_for_load. Prefer web.tab.* when the task names a specific tab.
+- web.sleep(ms): the only timer API (no setTimeout/setInterval).
+- network.fetch / web.fetch: HTTP client → { body, headers, ok, status }.
+- fs.*: exists, stat, list, mkdir, delete, copy, move, read, readText, readBase64, readRange, write, writeText, writeBase64, append, appendText, appendBase64, update, hash.
+- clipboard.read / clipboard.write: system clipboard.
+- storage.*: localStorage CRUD (get, set, delete, list, set_many, get_many, get_all, delete_many, clear).
+- dom.snapshot / dom.format: raw DOM snapshot and formatting.
+- chrome.*: downloads, bookmarks, cookies, history, notifications, tabs, windows, scripting, sessions, alarms, action, contextMenus, declarativeNetRequest, desktopCapture, identity, idle, management, offscreen, pageCapture, permissions, runtime, sidePanel, system, tabGroups, topSites, browsingData.
+- sidepanel.*: act on Browsergent's own side panel. Use only when explicitly controlling the side panel.
+
+Match the task to the API before reaching for manual DOM workarounds: file downloads → chrome.downloads; form submission → page.submit/web.tab.submit; file uploads → page.set_files/web.tab.set_files; radio buttons → page.check_radio/web.tab.check_radio; API/data retrieval → network.fetch; clipboard → clipboard.*; cookies/bookmarks/history → chrome.*.
 
 ## Common patterns
 Current page:

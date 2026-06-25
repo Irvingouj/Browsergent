@@ -53,4 +53,24 @@ describe("agent prompt policy", () => {
 		expect(JS_TOOL_PROMPT).toContain("select_option");
 		expect(JS_TOOL_PROMPT).toContain("combobox");
 	});
+	test("exposes a capability atlas so the agent explores beyond snapshot/click/fill", () => {
+		expect(SYSTEM_PROMPT).toContain("Capability atlas");
+		expect(SYSTEM_PROMPT).toContain("Exploration mindset");
+		expect(SYSTEM_PROMPT).toContain("chrome.*");
+		expect(SYSTEM_PROMPT).toContain("clipboard.read");
+		expect(SYSTEM_PROMPT).toContain("network.fetch");
+		expect(SYSTEM_PROMPT).toContain("submit");
+		expect(SYSTEM_PROMPT).toContain("web.tab.*");
+		expect(JS_TOOL_PROMPT).toContain("Capability quick-reference");
+		expect(JS_TOOL_PROMPT).toContain("page.set_files");
+		expect(JS_TOOL_PROMPT).toContain("page.check_radio");
+		expect(JS_TOOL_PROMPT).toContain("storage.*");
+		expect(JS_TOOL_PROMPT).toContain("chrome.downloads");
+	});
+	test("documents run_js params and skill-script reuse", () => {
+		expect(JS_TOOL_PROMPT).toContain("globalThis._params");
+		expect(JS_TOOL_PROMPT).toContain("params");
+		expect(JS_TOOL_PROMPT).toContain("/skills/user/my-skill/references");
+		expect(JS_TOOL_PROMPT).toContain("Reuse over rewrite");
+	});
 });
