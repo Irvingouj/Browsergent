@@ -1,26 +1,6 @@
 # Browsergent TODO
 
-> **所有优先级任务（5 项）均已落地。** 以下 §1–§11 均已完成，§13–§14 也已实现。
-
-## 已完成 — 无需再动
-
-| § | 功能 | 状态 |
-|---|------|------|
-| 1 | JS 代码块 UI 渲染 | ✅ 完成 |
-| 2 | 移除 JS tab → Files 面板（文件树 + 预览 + 上传） | ✅ 完成 |
-| 3 | `@` 命令 — 引用文件 | ✅ 完成 |
-| 4 | 合并到 §6 Layer 1 | — |
-| 5 | Agent 空闲时重新聚焦输入框 | ✅ 完成 |
-| 6 | Agent Skills 系统（Layers 1/2a/2b/2c + Phase D 用户技能） | ✅ 完成 |
-| 7 | Shift+Enter 多行输入 | ✅ 完成 |
-| 8 | 直接文件工具（`file_list`/`read`/`edit`/`delete`/`write`） | ✅ 完成 |
-| 9 | 聊天拖放文件 → 上传 + 自动附加 | ✅ 完成 |
-| 10 | `run_js` 支持文件引用参数 | ✅ 完成 |
-| 11 | 统一 OPFS 文件系统（无 session 作用域、无 .index.json、无 IndexedDB） | ✅ 完成 |
-| 13 | 真实文件管理器（创建/删除/重命名/移动文件夹和文件） | ✅ 完成 |
-| 14 | `@` 引用打开标签页 | ✅ 完成 |
-
----
+> §1–§11、§13–§14 已全部落地。
 
 ## Candidate features (investigated — not started)
 
@@ -30,53 +10,7 @@
 | 15 | Snapshot: full HTML + richer table/list view | ⚠️ Partial — table/list/item **角色已存在**；gap 在于平面展示 + 无 HTML 导出。需改 trace 数据模型（`AgentTraceEntry.result` 仅存扁平字符串，上游 `SemanticNode` 无 parent/children/depth），属 hardcore | Presentation = Browsergent; HTML export = upstream `web-js` |
 | 16 | Lightweight PDF API | ✅ Feasible — agent 无法读取 PDF 内容 | upstream `web-js` + Browsergent `file_read` |
 | 17 | Per-domain site skill registry | ✅ Feasible — 通过 `SkillMeta.domains` 按域名过滤/自动激活 | Browsergent skills layer |
-
----
-
-## 已知 bug
-
-- [ ] **`@` picker 在上传文件后未刷新** — 通过输入栏拖放或 Files 面板的上传按钮上传文件后，`@` 列表仍显示陈旧的文件名，直到侧栏重新加载。原因：`use-picker.ts` 中的 `filePickerItems` memo 依赖 `filesState.nodes`，但文件上传未触发 `filesVersion` 变更（selectors 依赖链未更新导致 Preact 未重渲染）。
-- [x] **LLM 流网络错误被静默转为 completed** — **已修复（pi-oxide `0.9.4`）。** 根因不在 Browsergent 侧，而在 `@pi-oxide/pi-host-web` SDK 的 `EventMapper`：`convertWasmMessage` 丢弃了 WASM `AssistantMessage` 的 `stop_reason`/`error_message`，且 `buildRunResult` 的 `completed` 分支从不填充 `error` 字段——导致 `agent-loop.ts:256` 的 `completed && result.error` 分支不可达。修复：SDK 侧在 `turn_end` 事件中捕获 `stop_reason: "error"` → 设置 `RunState.error`，`buildRunResult` 返回 `status: "failed"` + `error`。Browsergent `agent-loop.ts:241` 的 `result.status === "failed"` 分支现可正确处理所有三种场景（无输出、有工具调用后、首次调用）。
-
----
-
-## 旧章节（留作参考，已完成）
-
-### 1. JS code block UI
-
-**已核实：** `TraceEntryCompact.tsx` 已正确渲染 `run_js` 代码块（解析 JSON 提取 `code` 字段，`font-mono` 代码块，显示状态 spinner，折叠预览显示代码首行）。所有复选框均已勾选并验证。
-
-### 2. Remove JS tab → Files panel (file tree + preview + upload)
-
-**已核实：** `UiTab = "chat" | "files"`（无 "js"）。`FilesPanel.tsx` 存在于 `components/files/` 下。`InputBar.tsx` 存在于 `components/input/` 下。已完成文件树（`FileTree.tsx`）、预览（`FilePreview.tsx`）、上传功能。`session-panel.tsx` 中的会话持久化也已实现。
-
-### 3. `@` command — reference files in the task input
-
-**已核实：** `resolve-file-mentions.ts` 已完整实现。`InputBar.tsx` 中的 `usePicker`（`use-picker.ts`）处理 `@` 检测、文件列表展示、插入 token。`detect-mention-state.ts` 中的 `filesToPickerItems`/`buildPickerInsert`/`resolvePickerState` 均已实现。Run 时的 `resolveFileMentions` → XML `<file>` 注入已就绪。
-
-### 5. Refocus input bar when agent becomes idle
-
-**已核实：** `InputBar.tsx` 通过监听 agent 状态变化实现重新聚焦。所有复选框均已勾选。
-
-### 6. Agent Skills system (highest priority)
-
-**已核实：** Layer 1（`/` palette）、Layer 2a（activation inject）、Layer 2b（`load_skill` tool）、Layer 2c（system metadata catalog）均已实现。Phase D（user skills）已发布。Stepped closure（`skill-compose-inject.spec.ts` Playwright E2E）已存在。
-
-### 7-11. 其他已发布功能
-
-全部通过代码库核实确认。详见上方表格。
-
-### 13. Real file explorer (create/delete/rename/move)
-
-**已核实：** 已完成。`FilesController` 中包含 `createFolder`、`createFile`、`move`、`rename`、`fsCopy`。`FilesPanel.tsx` 支持右键菜单（`FileContextMenu.tsx`）、内联重命名、拖拽移动（`MoveDialog.tsx` + HTML5 DnD between `TreeNode`s）、工具栏（`FilesToolbar.tsx`）。`file-explorer.spec.ts` E2E 测试已存在。自动刷新通过 `filesVersion` 实现。
-
-### 14. `@` mention for open tabs
-
-**已核实：** 已完成。`resolve-tab-mentions.ts` 包含 `parseTabMentions`、`resolveTabMentions`、`buildTabContextXmlBlock`。`detect-mention-state.ts` 包含 `tabsToPickerItems`、`buildTabMentionToken`（过滤 `chrome-extension://` / `chrome://`）。`use-picker.ts` 在 `@` picker 打开时加载标签页，订阅 `tabs.onUpdated/onRemoved`，标签页项目与文件项目合并。`merge-run-task.ts` 在处理 agent 消息前会 `stripTabMentions`。
-
----
-
-## 候选功能详情
+| 18 | Cross-origin iframe 交互（多帧 snapshot + 跨帧 action） | ✅ Feasible — 显式 `frameId` 字段方案；扩展特权绕过 SOP，`all_frames` 注入 + per-frame `sendMessage` | Browsergent background + content-script + types + prompt |
 
 ### 12. 右键页面元素 → 在聊天中引用
 
@@ -96,3 +30,50 @@
 ### 17. Per-domain site skills
 
 **未启动。** 需要添加 `SkillMeta.domains` 字段、域名过滤、自动激活触发、域名徽章 UI。
+
+### 18. Cross-origin iframe 交互（多帧 snapshot + 跨帧 action）
+
+**可行性结论：** ✅ 可行 — 采用**显式 `frameId` 字段方案**（非 refId 编码前缀）。Chrome 扩展特权绕过同源策略：`host_permissions: ["<all_urls>"]` + `all_frames: true` 让 content script 注入跨域 iframe 并访问其 DOM。
+
+**架构：**
+
+1. **权限层** — `manifest.json` 增加 `webNavigation` + `scripting` permissions；`host_permissions: ["<all_urls>"]`；content_scripts 设 `"all_frames": true, "run_at": "document_idle"`。
+2. **类型层（显式方案）** — `ElementSnapshot` 增加 `frameId: number` 字段；`BrowserCommand` 中所有 refId 变体增加 `frameId: number` 字段；`PageSnapshot` 携带 frame 元数据（`{ frameId, url, parentFrameId }[]`）。类型链显式、可读，frame 定位不依赖字符串解析。
+3. **Frame 枚举** — Background 调用 `chrome.webNavigation.getAllFrames({ tabId })` → 过滤可达 frame（`/^https?:/.test(url)` 且非 `chrome-extension://`/`chrome://`）→ 跳过 sandboxed（无 `allow-same-origin`）和非 HTML content type。
+4. **Snapshot 合并** — 对每个可达 frame 并行 `chrome.tabs.sendMessage(tabId, snapshotCmd, { frameId })` → 每个 frame 的 content script 独立执行 `collect_document`（逻辑不变）→ background 给每个 `ElementSnapshot` 标注 `frameId` → 合并成统一 `PageSnapshot`。
+5. **Action 路由** — `BrowserCommand` 携带 `frameId` → background 用 `chrome.tabs.sendMessage(tabId, cmd, { frameId })` 路由到对应 frame 的 content script → 该 frame 内按 `refId` 解析元素执行 click/fill/select。非 refId 命令（`page.goto`/`page.scroll`/`page.url`）路由到顶层 frame（`frameId: 0`）。
+6. **Prompt 更新** — `js-tool-prompt.ts` 在 snapshot 文本中标注 frame 边界（`--- Frame N (url) ---`），让 agent 理解 `frameId` 语义。
+
+**不能解决：**
+- `sandbox` 且无 `allow-same-origin` 的 iframe — opaque origin，Chrome 不允许 content script 注入，浏览器硬限制。
+- `chrome://` / `chrome-extension://` frame — 受 AGENTS.md 不变量约束拒绝。
+
+**边界情况：**
+- Frame 延迟加载 → snapshot 前等待 `chrome.webNavigation.onCompleted`，或支持 agent 主动重新 snapshot。
+- Frame 内导航 → 监听 `onCommitted` 更新 frame 映射；action 后重新 snapshot。
+- 嵌套 iframe → `all_frames: true` 自动递归注入所有层级；snapshot 标注嵌套深度。
+- 1×1 隐形广告 iframe → 过滤 `width<=1 || height<=1`。
+
+**改动文件：** `manifest.json` + `src/background/index.ts`（frame 枚举/合并/路由）+ `src/types/browser.ts`（`ElementSnapshot`/`BrowserCommand` 加 `frameId`）+ `src/sidepanel/extension-js-client.ts`（per-frame 消息分发）+ `src/worker/js-tool-prompt.ts`（frame 边界标注）+ content script（基本不改，已 per-frame 独立运行，只是之前只收集顶层）。
+
+**未启动。** 等待确认后实现。
+
+---
+
+## 已完成
+
+| § | 功能 | 状态 |
+|---|------|------|
+| 1 | JS 代码块 UI 渲染 | ✅ 完成 |
+| 2 | 移除 JS tab → Files 面板（文件树 + 预览 + 上传） | ✅ 完成 |
+| 3 | `@` 命令 — 引用文件 | ✅ 完成 |
+| 4 | 合并到 §6 Layer 1 | — |
+| 5 | Agent 空闲时重新聚焦输入框 | ✅ 完成 |
+| 6 | Agent Skills 系统（Layers 1/2a/2b/2c + Phase D 用户技能） | ✅ 完成 |
+| 7 | Shift+Enter 多行输入 | ✅ 完成 |
+| 8 | 直接文件工具（`file_list`/`read`/`edit`/`delete`/`write`） | ✅ 完成 |
+| 9 | 聊天拖放文件 → 上传 + 自动附加 | ✅ 完成 |
+| 10 | `run_js` 支持文件引用参数 | ✅ 完成 |
+| 11 | 统一 OPFS 文件系统（无 session 作用域、无 .index.json、无 IndexedDB） | ✅ 完成 |
+| 13 | 真实文件管理器（创建/删除/重命名/移动文件夹和文件） | ✅ 完成 |
+| 14 | `@` 引用打开标签页 | ✅ 完成 |
