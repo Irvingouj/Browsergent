@@ -27,6 +27,7 @@
 		"system.memory",
 		"system.storage",
 		"tabGroups",
+		"webNavigation",
 		"tabs",
 		"topSites",
 		"tts",
@@ -42,7 +43,7 @@
 			"matches": ["http://*/*", "https://*/*"],
 			"js": ["content-script.js"],
 			"run_at": "document_idle",
-			"all_frames": false
+			"all_frames": true
 		}
 	],
 	"content_security_policy": {
