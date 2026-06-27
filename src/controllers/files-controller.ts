@@ -84,6 +84,7 @@ export class FilesController {
 					path,
 					...(parentId !== undefined ? { parentId } : {}),
 					size: bytes,
+					...(file.type ? { mime: file.type } : {}),
 				}),
 			);
 		}
@@ -148,6 +149,10 @@ export class FilesController {
 
 	async readFileText(path: string): Promise<string> {
 		return this.fs.fsReadText(path);
+	}
+
+	async readFileBase64(path: string): Promise<string> {
+		return this.fs.fsReadBase64(path);
 	}
 
 	async writeFile(path: string, content: string): Promise<void> {

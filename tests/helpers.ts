@@ -115,6 +115,33 @@ export async function uploadFileViaPanel(
 	);
 }
 
+/** Upload a binary file through the Files panel input, building it from base64 browser-side. */
+export async function uploadBinaryViaPanel(
+	sidePanel: Page,
+	fileName: string,
+	base64: string,
+	mimeType = "application/octet-stream",
+): Promise<void> {
+	await sidePanel.evaluate(
+		({ fileName, base64, mimeType }) => {
+			const binary = atob(base64);
+			const bytes = new Uint8Array(binary.length);
+			for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+			const dataTransfer = new DataTransfer();
+			const file = new File([bytes], fileName, { type: mimeType });
+			dataTransfer.items.add(file);
+			const input = document.querySelector(
+				'[data-testid="file-upload"]',
+			) as HTMLInputElement | null;
+			if (input) {
+				input.files = dataTransfer.files;
+				input.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		},
+		{ fileName, base64, mimeType },
+	);
+}
+
 const MOCK_END_TURN_CHUNKS = [
 	`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
 	`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
