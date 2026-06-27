@@ -8,6 +8,7 @@ export interface SkillMeta {
 	baseDir: string;
 	disableModelInvocation: boolean;
 	argumentNames: ReadonlyArray<string>;
+	match?: string;
 }
 
 export interface SkillDocument {

@@ -30,7 +30,8 @@ export type PanelToWorker =
 	| { type: "loadSkillResult"; id: string; content: string }
 	| { type: "loadSkillError"; id: string; error: string }
 	| { type: "fileOpResult"; id: string; result: FileOpResult }
-	| { type: "fileOpError"; id: string; error: string };
+	| { type: "fileOpError"; id: string; error: string }
+	| { type: "skillAutoActivate"; runId: string; skillName: string; skillBody: string; url: string };
 
 export interface WorkerSettings {
 	anthropicApiKey?: string;

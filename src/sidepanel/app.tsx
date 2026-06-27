@@ -1,3 +1,6 @@
+import { matchSkillsToUrl } from "../skills/url-match";
+import { getUrlTracker } from "./url-tracker";
+import { addPendingAutoSkill, clearPendingAutoSkills, drainPendingAutoSkills } from "./pending-auto-skills";
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
@@ -6,7 +9,7 @@ import {
 	exportConversation,
 } from "../controllers/export-controller";
 import { isTextFile } from "../controllers/files-controller";
-import { parseSkillActivation } from "../skills/resolve-skill-activations";
+import { buildSkillXmlBlock, parseSkillActivation } from "../skills/resolve-skill-activations";
 import { getSkillService } from "../skills/skill-service";
 import type { SkillDiagnostic } from "../skills/skill-types";
 import {
@@ -157,6 +160,56 @@ const App: FunctionalComponent = () => {
 		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages, trace]);
 
+	// Subscribe to URL changes: match environmental skills, dispatch when
+	// running, stage when idle.
+	useEffect(() => {
+		const tracker = getUrlTracker();
+		const unsub = tracker.subscribe(async (state) => {
+			const url = state.currentUrl;
+			if (!url) return;
+			let matched: ReturnType<typeof matchSkillsToUrl>;
+			try {
+				matched = matchSkillsToUrl(await getSkillService().listSkills(), url);
+			} catch (err: unknown) {
+				console.warn("[auto-skill] failed to list skills:", err);
+				return;
+			}
+			if (matched.length === 0) return;
+			for (const skill of matched) {
+				let body: string;
+				try {
+					body = await getSkillService().loadSkill(skill.name, undefined, {
+						source: "tool",
+					});
+				} catch (err: unknown) {
+					console.warn("[auto-skill] failed to load skill body:", skill.name, err);
+					continue;
+				}
+				// Re-read state after the async load: the run may have ended or
+				// switched. Stale steers from a prior run are dropped by the
+				// worker's runId guard regardless, but avoid posting them here.
+				const agentState = browsergentStore.getState().agent;
+				const isRunning =
+					agentState.status === "loading" ||
+					agentState.status === "running" ||
+					agentState.status === "waiting_for_model" ||
+					agentState.status === "executing_tool";
+				if (isRunning && agentState.activeRunId) {
+					bridgeRef.current?.post({
+						type: "skillAutoActivate",
+						runId: agentState.activeRunId,
+						skillName: skill.name,
+						skillBody: body,
+						url,
+					});
+				} else {
+					addPendingAutoSkill(skill.name);
+				}
+			}
+		});
+		return unsub;
+	}, [bridgeRef]);
+
 	const handleRun = useCallback(async () => {
 		const task = taskInput.trim();
 		if (!task) return;
@@ -187,6 +240,40 @@ const App: FunctionalComponent = () => {
 				return;
 			}
 			console.warn("Skill catalog failed:", err);
+		}
+
+		// Idle-path environmental skills: drain staged names, load each body,
+		// and bake into resolvedTask (parity with the running-path steer and
+		// the compose-time /skill: injection). Without this an idle-matched
+		// skill only appeared in the catalog; the LLM never saw its body.
+		const pendingSkillNames = drainPendingAutoSkills();
+		if (pendingSkillNames.length > 0) {
+			activatedSkills = Array.from(
+				new Set([...activatedSkills, ...pendingSkillNames]),
+			);
+			try {
+				const allSkills = await getSkillService().listSkills();
+				const url = getUrlTracker().getCurrentUrl();
+				const blocks: string[] = [];
+				for (const name of pendingSkillNames) {
+					const meta = allSkills.find((s) => s.name === name);
+					if (!meta) continue;
+					const body = await getSkillService().loadSkill(name, undefined, {
+						source: "tool",
+					});
+					const inner = buildSkillXmlBlock(meta, body);
+					blocks.push(
+						url
+							? `<navigation_trigger url="${url}">${inner}</navigation_trigger>`
+							: inner,
+					);
+				}
+				if (blocks.length > 0) {
+					resolvedTask = `${resolvedTask}\n${blocks.join("\n")}`;
+				}
+			} catch (err: unknown) {
+				console.warn("[auto-skill] failed to bake idle skills:", err);
+			}
 		}
 
 		// Resolve file mentions
@@ -410,6 +497,7 @@ const App: FunctionalComponent = () => {
 				});
 			}
 			browsergentStore.getState().agentReset();
+			clearPendingAutoSkills();
 			browsergentStore.getState().sessionPanelOpenChanged(false);
 			browsergentStore.getState().setSettingsOpen(false);
 			await reloadSessionList();
@@ -428,8 +516,8 @@ const App: FunctionalComponent = () => {
 		if (!newId) return;
 		browsergentStore.getState().clearChat();
 		browsergentStore.getState().clearTrace();
-		browsergentStore.getState().clearDiagnostics();
 		browsergentStore.getState().agentReset();
+		clearPendingAutoSkills();
 		browsergentStore.getState().sessionCreated(newId);
 		browsergentStore.getState().sessionPanelOpenChanged(false);
 		await reloadSessionList();

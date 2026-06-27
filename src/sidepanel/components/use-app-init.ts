@@ -1,3 +1,4 @@
+import { getUrlTracker } from "../url-tracker";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ExtjsController } from "../../controllers/extjs-controller";
 import { FilesController } from "../../controllers/files-controller";
@@ -174,6 +175,34 @@ export function useAppInit(): AppInitResult {
 			void storageRef?.close();
 		};
 	}, []);
+
+	// Wire chrome.webNavigation.onCommitted to UrlTracker.
+	useEffect(() => {
+		const tracker = getUrlTracker();
+
+		// Seed current URL on panel open.
+		if (typeof chrome !== "undefined" && chrome.tabs?.query) {
+			chrome.tabs
+				.query({ active: true, currentWindow: true })
+				.then((tabs) => {
+					const url = tabs[0]?.url;
+					if (url) tracker.onNavigate(url);
+				})
+				.catch(() => {});
+		}
+
+		// Listen for main-frame navigations.
+		if (typeof chrome !== "undefined" && chrome.webNavigation?.onCommitted) {
+			const handler = (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => {
+				if (details.frameId === 0) tracker.onNavigate(details.url);
+			};
+			chrome.webNavigation.onCommitted.addListener(handler);
+			return () => {
+				chrome.webNavigation.onCommitted.removeListener(handler);
+			};
+		}
+	}, []);
+
 
 	return {
 		initialized,

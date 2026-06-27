@@ -5,6 +5,7 @@ export interface SkillFrontmatter {
 	description?: string;
 	"disable-model-invocation"?: boolean;
 	arguments?: string | string[];
+	match?: string;
 }
 
 export interface ParsedSkillMd {
@@ -37,6 +38,9 @@ function coerceFrontmatter(raw: unknown): SkillFrontmatter {
 	}
 	if (typeof obj.arguments === "string" || Array.isArray(obj.arguments)) {
 		frontmatter.arguments = obj.arguments as string | string[];
+	}
+	if (typeof obj.match === "string") {
+		frontmatter.match = obj.match;
 	}
 
 	return frontmatter;

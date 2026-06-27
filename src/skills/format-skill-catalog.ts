@@ -18,13 +18,17 @@ function truncateDescription(text: string, maxChars: number): string {
 
 function formatSkillEntry(skill: SkillMeta, descBudget: number): string {
 	const desc = truncateDescription(skill.description, descBudget);
-	return [
+	const lines = [
 		"  <skill>",
 		`    <name>${escapeXmlText(skill.name)}</name>`,
 		`    <description>${escapeXmlText(desc)}</description>`,
 		`    <location>${escapeXmlText(skill.skillPath)}</location>`,
-		"  </skill>",
-	].join("\n");
+	];
+	if (skill.match) {
+		lines.push(`    <match>${escapeXmlText(skill.match)}</match>`);
+	}
+	lines.push("  </skill>");
+	return lines.join("\n");
 }
 
 function catalogLength(entries: string[]): number {

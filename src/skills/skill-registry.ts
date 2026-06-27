@@ -19,6 +19,7 @@ import type {
 } from "./skill-types";
 import {
 	validateSkillDescription,
+	validateSkillMatch,
 	validateSkillName,
 } from "./validate-skill-meta";
 
@@ -89,6 +90,20 @@ async function loadSkillMetaFromDir(
 		diagnostics.push({ kind: "validation", path: skillPath, message });
 	}
 
+	// match is optional; invalid match warns but does not block the skill.
+	const rawMatch = frontmatter.match?.trim();
+	let match: string | undefined;
+	if (rawMatch) {
+		const matchErrors = validateSkillMatch(rawMatch);
+		if (matchErrors.length > 0) {
+			for (const message of matchErrors) {
+				diagnostics.push({ kind: "validation", path: skillPath, message });
+			}
+		} else {
+			match = rawMatch;
+		}
+	}
+
 	if (nameErrors.length > 0 || descriptionErrors.length > 0) {
 		return { meta: null, diagnostics };
 	}
@@ -109,6 +124,7 @@ async function loadSkillMetaFromDir(
 			baseDir,
 			disableModelInvocation: frontmatter["disable-model-invocation"] === true,
 			argumentNames: parseArgumentNames(frontmatter.arguments),
+			match,
 		},
 		diagnostics,
 	};

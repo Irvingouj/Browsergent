@@ -28,6 +28,29 @@ Hello`;
 		expect(parsed.body).toContain("# Body");
 	});
 
+	test("parses match field", () => {
+		const raw = `---
+name: jobs-skill
+description: A skill
+match: linkedin.com/jobs/*
+---
+
+Body`;
+		const parsed = parseFrontmatter(raw);
+		expect(parsed.frontmatter.match).toBe("linkedin.com/jobs/*");
+	});
+
+	test("omits match field when absent", () => {
+		const raw = `---
+name: plain-skill
+description: A skill
+---
+
+Body`;
+		const parsed = parseFrontmatter(raw);
+		expect(parsed.frontmatter.match).toBeUndefined();
+	});
+
 	test("parses YAML array arguments", () => {
 		const raw = `---
 name: array-skill

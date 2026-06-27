@@ -7,6 +7,8 @@ import type {
 	AgentTraceEntry,
 } from "../types/messages";
 import { streamLog } from "../utils/stream-logger";
+import { escapeXmlAttr } from "../skills/validate-skill-meta";
+import { truncateSkillBody } from "../skills/resolve-skill-activations";
 import { createAgentTools } from "./agent-tools";
 import type { AnthropicConfig } from "./anthropic";
 import { composeSystemPrompt } from "./anthropic";
@@ -68,7 +70,8 @@ export class AgentLoop {
 	private stepCount = 0;
 	private assistantMessageId: string | null = null;
 	private hadOutput = false;
-
+	// Conversation-scoped dedup: each skill steered at most once per run.
+	private injectedSkills = new Set<string>();
 	async run(
 		sessionId: string,
 		displayTask: string,
@@ -81,6 +84,7 @@ export class AgentLoop {
 		this.stepCount = 0;
 		this.assistantMessageId = null;
 		this.hadOutput = false;
+		this.injectedSkills.clear();
 
 		callbacks.onStatus("loading");
 
@@ -284,6 +288,31 @@ export class AgentLoop {
 		}
 	}
 
+	/**
+	 * Steer a navigation-triggered skill into the running turn. Queues, never
+	 * interrupts — the message drains at the next continue_turn. No-op if the
+	 * skill was already injected in this run, or if the agent isn't running.
+	 */
+	async steerSkill(
+		skillName: string,
+		skillBody: string,
+		url: string,
+	): Promise<void> {
+		if (!this.agent || this.aborted) return;
+		if (this.injectedSkills.has(skillName)) return;
+		this.injectedSkills.add(skillName);
+		const text = `<navigation_trigger url="${escapeXmlAttr(url)}"><skill name="${escapeXmlAttr(skillName)}">${truncateSkillBody(skillBody)}</skill></navigation_trigger>`;
+		await this.agent.steer({
+			text,
+			source: {
+				kind: "navigation" as const,
+				url,
+				matchedSkills: [skillName],
+			},
+		});
+		streamLog("agentloop.steer_skill", { skillName, url });
+	}
+
 	reset(): void {
 		this.aborted = true;
 		this.agent?.stop();
@@ -296,5 +325,6 @@ export class AgentLoop {
 			}
 		}
 		this.agent = null;
+		this.injectedSkills.clear();
 	}
 }

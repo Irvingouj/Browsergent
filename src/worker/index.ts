@@ -448,6 +448,11 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 		case "fileOpError":
 			handleFileOpRelayError(msg.id, msg.error);
 			break;
+		case "skillAutoActivate":
+			if (msg.runId === currentRunId) {
+				void agentLoop?.steerSkill(msg.skillName, msg.skillBody, msg.url);
+			}
+			break;
 	}
 };
 

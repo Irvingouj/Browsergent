@@ -43,6 +43,18 @@ export function validateSkillDescription(
 	return errors;
 }
 
+export function validateSkillMatch(match: string): string[] {
+	const errors: string[] = [];
+	if (match.trim() === "") {
+		errors.push("match must not be empty when present");
+	} else if (!/^[a-z0-9/*?.:_-]+$/i.test(match)) {
+		errors.push(
+			"match contains invalid characters (allowed: a-z 0-9 / * ? . : _ -)",
+		);
+	}
+	return errors;
+}
+
 export function escapeXmlText(value: string): string {
 	return value
 		.replace(/&/g, "&amp;")

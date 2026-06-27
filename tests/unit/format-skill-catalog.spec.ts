@@ -50,4 +50,14 @@ describe("format-skill-catalog", () => {
 		const catalog = formatSkillCatalog(many, { charBudget: 500 });
 		expect(catalog.length).toBeLessThanOrEqual(520);
 	});
+
+	test("includes <match> element when skill has match field", () => {
+		const catalog = formatSkillCatalog([{ ...bundled, match: "linkedin.com/jobs/*" }]);
+		expect(catalog).toContain("<match>linkedin.com/jobs/*</match>");
+	});
+
+	test("omits <match> element when skill has no match field", () => {
+		const catalog = formatSkillCatalog([bundled]);
+		expect(catalog).not.toContain("<match>");
+	});
 });
