@@ -19,7 +19,6 @@ import type {
 } from "../types/messages";
 import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 import { AgentLoop } from "./agent-loop";
-import type { AnthropicConfig } from "./anthropic";
 import { setCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { FileOpRelay } from "./file-op-relay";
@@ -245,13 +244,13 @@ function handleAgentStart(
 	currentSessionId = sessionId;
 	currentActivatedSkills = activatedSkills ?? [];
 
-	if (!settings.anthropicApiKey) {
+	if (!settings.apiKey) {
 		post({
 			type: "agentError",
 			runId,
 			error: {
 				code: "E_NO_API_KEY",
-				message: "Set your Anthropic API key in settings",
+				message: "Set an API key for the active provider in Settings",
 			},
 		});
 		return;
@@ -263,14 +262,8 @@ function handleAgentStart(
 
 	agentLoop = new AgentLoop();
 
-	const config: AnthropicConfig = {
-		apiKey: settings.anthropicApiKey,
-		baseUrl: settings.baseUrl,
-		model: settings.model,
-	};
-
 	agentLoop
-		.run(sessionId, task, resolvedTask ?? task, skillCatalog ?? "", config, {
+		.run(sessionId, task, resolvedTask ?? task, skillCatalog ?? "", settings, {
 			onStatus(status, reason) {
 				postIfCurrentRun(runId, {
 					type: "agentStatus",

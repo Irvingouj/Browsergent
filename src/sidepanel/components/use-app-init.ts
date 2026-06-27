@@ -1,4 +1,3 @@
-import { getUrlTracker } from "../url-tracker";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ExtjsController } from "../../controllers/extjs-controller";
 import { FilesController } from "../../controllers/files-controller";
@@ -8,10 +7,14 @@ import { WorkerBridge } from "../../controllers/worker-bridge";
 import { browsergentStore } from "../../state/store";
 import { IndexedDBStorage } from "../../storage/indexeddb-storage";
 import { MemoryStorage } from "../../storage/memory-storage";
-import { migrateFromChromeStorage } from "../../storage/migrate";
+import {
+	migrateFromChromeStorage,
+	migrateLegacySingleProvider,
+} from "../../storage/migrate";
 import type { StorageBackend } from "../../storage/storage-backend";
 import { ExtensionJsClient } from "../extension-js-client";
 import { handleFileOp } from "../file-op-handler";
+import { getUrlTracker } from "../url-tracker";
 
 export interface AppInitResult {
 	initialized: boolean;
@@ -45,6 +48,7 @@ export function useAppInit(): AppInitResult {
 					return;
 				}
 				await migrateFromChromeStorage(storage);
+				await migrateLegacySingleProvider(storage);
 				if (cancelled) {
 					storage.close();
 					return;
@@ -193,7 +197,9 @@ export function useAppInit(): AppInitResult {
 
 		// Listen for main-frame navigations.
 		if (typeof chrome !== "undefined" && chrome.webNavigation?.onCommitted) {
-			const handler = (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => {
+			const handler = (
+				details: chrome.webNavigation.WebNavigationTransitionCallbackDetails,
+			) => {
 				if (details.frameId === 0) tracker.onNavigate(details.url);
 			};
 			chrome.webNavigation.onCommitted.addListener(handler);
@@ -202,7 +208,6 @@ export function useAppInit(): AppInitResult {
 			};
 		}
 	}, []);
-
 
 	return {
 		initialized,

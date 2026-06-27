@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import { AnthropicProvider } from "../../src/worker/anthropic";
 import type { AgentDiagnosticEvent } from "../../src/types/messages";
+import { AnthropicProvider } from "../../src/worker/anthropic";
 
 // Mock headers map so resp.headers.get("retry-after") works in tests
 function mockHeaders(retryAfter?: string): Headers {

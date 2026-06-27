@@ -1,17 +1,16 @@
 import { describe, expect, test } from "vitest";
 import {
+	selectActiveProvider,
 	selectActiveSessionId,
 	selectActiveTab,
 	selectAgentActiveRunId,
 	selectAgentStatus,
 	selectAgentStatusReason,
-	selectApiKey,
-	selectBaseUrl,
 	selectExpandedFolderIds,
 	selectExtjsStatus,
 	selectMessageIds,
 	selectMessagesById,
-	selectModel,
+	selectProviders,
 	selectRetryState,
 	selectSessionPanelOpen,
 	selectSessions,
@@ -54,9 +53,25 @@ describe("selectors", () => {
 			settingsOpen: false,
 		},
 		settings: {
-			anthropicApiKey: "sk-test",
-			baseUrl: "https://api.example.com",
-			model: "claude-test",
+			providers: [
+				{
+					id: "p1",
+					name: "Test",
+					kind: "anthropic",
+					baseUrl: "https://api.example.com",
+					apiKey: "sk-test",
+					model: "claude-test",
+				},
+				{
+					id: "p2",
+					name: "Other",
+					kind: "openai",
+					baseUrl: "https://api.openai.com",
+					apiKey: "sk-other",
+					model: "gpt-4o",
+				},
+			],
+			activeProviderId: "p1",
 		},
 		session: {
 			sessionPanelOpen: true,
@@ -105,16 +120,21 @@ describe("selectors", () => {
 		expect(selectActiveTab(mockStore)).toBe("chat");
 	});
 
-	test("selectApiKey returns key", () => {
-		expect(selectApiKey(mockStore)).toBe("sk-test");
+	test("selectActiveProvider returns the active provider", () => {
+		expect(selectActiveProvider(mockStore)?.id).toBe("p1");
+		expect(selectActiveProvider(mockStore)?.apiKey).toBe("sk-test");
 	});
 
-	test("selectBaseUrl returns url", () => {
-		expect(selectBaseUrl(mockStore)).toBe("https://api.example.com");
+	test("selectActiveProvider returns null when no active id", () => {
+		const noActive = {
+			...mockStore,
+			settings: { ...mockStore.settings, activeProviderId: null },
+		} as unknown as BrowsergentStore;
+		expect(selectActiveProvider(noActive)).toBeNull();
 	});
 
-	test("selectModel returns model", () => {
-		expect(selectModel(mockStore)).toBe("claude-test");
+	test("selectProviders returns the providers list", () => {
+		expect(selectProviders(mockStore)).toHaveLength(2);
 	});
 
 	test("selectSettingsOpen returns settingsOpen", () => {
@@ -180,9 +200,7 @@ describe("selectRetryState", () => {
 
 	test("returns null when last event is not provider_retry", () => {
 		expect(
-			selectRetryState(
-				makeStore("running", [{ kind: "provider_request" }]),
-			),
+			selectRetryState(makeStore("running", [{ kind: "provider_request" }])),
 		).toBeNull();
 	});
 
@@ -194,7 +212,9 @@ describe("selectRetryState", () => {
 	});
 
 	test("returns retry state when last event is provider_retry and running", () => {
-		const result = selectRetryState(makeStore("waiting_for_model", [retryEvent]));
+		const result = selectRetryState(
+			makeStore("waiting_for_model", [retryEvent]),
+		);
 		expect(result).toEqual({
 			attempt: 2,
 			maxAttempts: 3,

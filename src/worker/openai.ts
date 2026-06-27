@@ -1,25 +1,24 @@
 /**
- * AnthropicProvider — streams LLM responses for the raw WASM host API.
+ * OpenAIProvider — streams LLM responses from any OpenAI Chat Completions
+ * compatible endpoint (OpenAI, DeepSeek, OpenRouter, Groq, Together, vLLM,
+ * Ollama, LM Studio, Fireworks-openai, etc.).
  *
- * Converts SDK AgentMessage[] → Anthropic wire format, streams SSE back as
- * LlmChunk / LlmResult.  The LLM has ONE tool: run_js.
+ * Converts SDK AgentMessage[] → OpenAI wire format, streams SSE back as
+ * LlmChunk / LlmResult. The LLM has ONE tool: run_js.
  */
 
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";
 import type { AgentDiagnosticEvent } from "../types/messages";
-import type { AnthropicConfig } from "./anthropic-prompts";
-import {
-	BROWSER_TOOLS,
-	composeSystemPrompt,
-	SYSTEM_PROMPT,
-} from "./anthropic-prompts";
-import { createAnthropicStream } from "./anthropic-sse";
-import { toAnthropicMessages, toAnthropicTools } from "./anthropic-wire";
 import type { LlmStream } from "./llm-streamer";
+import { createOpenAIStream } from "./openai-sse";
+import { toOpenAIMessages, toOpenAITools } from "./openai-wire";
 import { defaultBaseUrlFor } from "./provider-defaults";
 
-export type { AnthropicConfig } from "./anthropic-prompts";
-export { BROWSER_TOOLS, composeSystemPrompt, SYSTEM_PROMPT };
+export interface OpenAIConfig {
+	apiKey: string;
+	model: string;
+	baseUrl?: string;
+}
 
 function isRetryableError(err: unknown): boolean {
 	if (err instanceof Error) {
@@ -34,8 +33,7 @@ function isRetryableStatus(status: number): boolean {
 		status === 500 ||
 		status === 502 ||
 		status === 503 ||
-		status === 504 ||
-		status === 529
+		status === 504
 	);
 }
 
@@ -44,64 +42,56 @@ const MAX_DELAY_MS = 8000;
 const JITTER_RATIO = 0.25;
 
 function computeBackoff(attempt: number): number {
-	const exp = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), MAX_DELAY_MS);
-	const jitter = exp * JITTER_RATIO * (Math.random() * 2 - 1);
-	return Math.max(0, Math.round(exp + jitter));
+	const exp = BASE_DELAY_MS * 2 ** (attempt - 1);
+	const capped = Math.min(exp, MAX_DELAY_MS);
+	const jitter = capped * JITTER_RATIO * (Math.random() * 2 - 1);
+	return Math.max(0, Math.round(capped + jitter));
 }
 
 function parseRetryAfter(header: string | null): number | undefined {
 	if (!header) return undefined;
 	const secs = Number(header);
-	if (!Number.isNaN(secs)) return secs * 1000;
+	if (Number.isFinite(secs) && secs >= 0) return secs * 1000;
 	const date = Date.parse(header);
 	if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
 	return undefined;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-	const { promise, resolve, reject } = Promise.withResolvers<void>();
-	if (ms <= 0) {
-		resolve();
-		return promise;
-	}
-	const onAbort = () => {
-		clearTimeout(timer);
-		reject(new DOMException("Aborted", "AbortError"));
-	};
-	const timer = setTimeout(() => {
-		signal?.removeEventListener("abort", onAbort);
-		resolve();
-	}, ms);
-	if (signal) {
-		if (signal.aborted) {
-			clearTimeout(timer);
-			reject(new DOMException("Aborted", "AbortError"));
-		} else {
-			signal.addEventListener("abort", onAbort, { once: true });
-		}
-	}
-	return promise;
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(resolve, ms);
+		signal?.addEventListener(
+			"abort",
+			() => {
+				clearTimeout(timer);
+				reject(new DOMException("Aborted", "AbortError"));
+			},
+			{ once: true },
+		);
+	});
 }
 
-export class AnthropicProvider {
+export class OpenAIProvider {
 	constructor(
-		private config: AnthropicConfig,
+		private config: OpenAIConfig,
 		private onDiagnostic: (event: AgentDiagnosticEvent) => void = () => {},
 	) {}
 
 	async call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream> {
-		const baseUrl = this.config.baseUrl ?? defaultBaseUrlFor("anthropic");
-		const isFireworks = baseUrl.includes("fireworks.ai");
+		const baseUrl = (
+			this.config.baseUrl ?? defaultBaseUrlFor("openai")
+		).replace(/\/$/, "");
 
 		const body = {
 			model: this.config.model,
-			max_tokens: 4096,
-			system: context.system_prompt,
-			messages: toAnthropicMessages(context.messages),
-			tools: toAnthropicTools(context.tools),
+			messages: toOpenAIMessages(context.messages, context.system_prompt),
+			...(context.tools.length > 0
+				? { tools: toOpenAITools(context.tools) }
+				: {}),
 			stream: true,
+			max_tokens: 4096,
 		};
-		const url = `${baseUrl}/v1/messages`;
+		const url = `${baseUrl}/v1/chat/completions`;
 		this.onDiagnostic({
 			kind: "provider_request",
 			timestamp: Date.now(),
@@ -172,12 +162,7 @@ export class AnthropicProvider {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						...(isFireworks
-							? { Authorization: `Bearer ${this.config.apiKey}` }
-							: {
-									"x-api-key": this.config.apiKey,
-									"anthropic-version": "2023-06-01",
-								}),
+						Authorization: `Bearer ${this.config.apiKey}`,
 					},
 					body: JSON.stringify(body),
 					signal: signal ?? null,
@@ -185,7 +170,7 @@ export class AnthropicProvider {
 
 				if (!resp.ok) {
 					const errorText = await resp.text();
-					lastError = `Anthropic API error ${resp.status}: ${errorText}`;
+					lastError = `OpenAI-compatible API error ${resp.status}: ${errorText}`;
 					lastStatus = resp.status;
 					lastRetryAfterMs = parseRetryAfter(resp.headers.get("retry-after"));
 					if (isRetryableStatus(resp.status) && attempt < maxRetries) {
@@ -196,9 +181,9 @@ export class AnthropicProvider {
 
 				const responseBody = resp.body;
 				if (!responseBody) {
-					throw new Error("Anthropic response has no body");
+					throw new Error("OpenAI-compatible response has no body");
 				}
-				return createAnthropicStream(
+				return createOpenAIStream(
 					responseBody,
 					this.config.model,
 					signal,

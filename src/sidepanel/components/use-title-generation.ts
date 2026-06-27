@@ -2,24 +2,110 @@ import { useEffect, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { SessionController } from "../../controllers/session-controller";
 import {
+	selectActiveProvider,
 	selectActiveSessionId,
 	selectAgentStatus,
-	selectApiKey,
-	selectBaseUrl,
-	selectModel,
 	selectSessions,
 } from "../../state/selectors";
+import type { ProviderConfig } from "../../state/slices/settings-slice";
 import { browsergentStore } from "../../state/store";
 import type { ChatMessage } from "../../types/messages";
+import { defaultBaseUrlFor } from "../../worker/provider-defaults";
+
+function isLocalhost(url: string): boolean {
+	try {
+		const u = new URL(url);
+		return (
+			u.hostname === "localhost" ||
+			u.hostname === "127.0.0.1" ||
+			u.hostname === "0.0.0.0" ||
+			u.hostname === "::1"
+		);
+	} catch {
+		return false;
+	}
+}
+
+/** Thrown on a non-OK title-gen response; carries the status for retry gating. */
+class TitleHttpError extends Error {
+	constructor(readonly status: number) {
+		super(`title request failed: ${status}`);
+		this.name = "TitleHttpError";
+	}
+}
+
+/** POST a title-generation request shaped for the provider's wire format. */
+async function requestTitle(
+	provider: ProviderConfig,
+	prompt: string,
+	signal: AbortSignal,
+): Promise<string | null> {
+	const base = (provider.baseUrl || defaultBaseUrlFor(provider.kind)).replace(
+		/\/$/,
+		"",
+	);
+	const url =
+		provider.kind === "anthropic"
+			? `${base}/v1/messages`
+			: `${base}/v1/chat/completions`;
+
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	if (provider.kind === "anthropic") {
+		headers["x-api-key"] = provider.apiKey;
+	} else {
+		headers.Authorization = `Bearer ${provider.apiKey}`;
+	}
+
+	// Body is identical across kinds; the wire differences are URL + auth + response shape.
+	const body = {
+		model: provider.model,
+		max_tokens: 20,
+		messages: [{ role: "user", content: prompt }],
+	};
+
+	const resp = await fetch(url, {
+		method: "POST",
+		headers,
+		body: JSON.stringify(body),
+		signal,
+	});
+	if (!resp.ok) {
+		throw new TitleHttpError(resp.status);
+	}
+
+	const raw: unknown = await resp.json();
+	if (
+		typeof raw === "object" &&
+		raw !== null &&
+		"content" in raw &&
+		Array.isArray(raw.content)
+	) {
+		const block = (raw.content as Array<{ text?: unknown }>)[0];
+		return typeof block?.text === "string" ? block.text.trim() : null;
+	}
+	if (
+		typeof raw === "object" &&
+		raw !== null &&
+		"choices" in raw &&
+		Array.isArray(raw.choices)
+	) {
+		const choice = (
+			raw.choices as Array<{ message?: { content?: unknown } }>
+		)[0];
+		const c = choice?.message?.content;
+		return typeof c === "string" ? c.trim() : null;
+	}
+	return null;
+}
 
 export function useTitleGeneration(
 	sessionControllerRef: { current: SessionController | null },
 	messages: ChatMessage[],
 ): void {
 	const status = useStore(browsergentStore, selectAgentStatus);
-	const apiKey = useStore(browsergentStore, selectApiKey);
-	const baseUrl = useStore(browsergentStore, selectBaseUrl);
-	const model = useStore(browsergentStore, selectModel);
+	const activeProvider = useStore(browsergentStore, selectActiveProvider);
 	const sessions = useStore(browsergentStore, selectSessions);
 	const activeSessionId = useStore(browsergentStore, selectActiveSessionId);
 	const titleGeneratedForSession = useRef<Set<string>>(new Set());
@@ -39,28 +125,18 @@ export function useTitleGeneration(
 		const targetSessionId = activeSessionId;
 
 		async function generateTitle() {
-			const prompt = `Summarize this conversation in 5 words or less.\n\n${messages.map((m) => `${m.kind}: ${m.text}`).join("\n")}`;
-			const key = apiKey;
-			const url = baseUrl || "https://api.anthropic.com";
-			const modelName = model || "claude-sonnet-4-20250514";
-
-			const isLocalhost = (() => {
-				try {
-					const u = new URL(url);
-					return (
-						u.hostname === "localhost" ||
-						u.hostname === "127.0.0.1" ||
-						u.hostname === "0.0.0.0" ||
-						u.hostname === "::1"
-					);
-				} catch {
-					return false;
-				}
-			})();
-			if (isLocalhost) {
+			// No provider configured, or localhost endpoint (no network): skip.
+			if (!activeProvider?.apiKey) return;
+			const provider = activeProvider;
+			const base = provider.baseUrl || defaultBaseUrlFor(provider.kind);
+			if (isLocalhost(base)) {
 				titleGeneratedForSession.current.add(targetSessionId);
 				return;
 			}
+
+			const prompt = `Summarize this conversation in 5 words or less.\n\n${messages.map((m) => `${m.kind}: ${m.text}`).join("\n")}`;
+			const controller = new AbortController();
+			const retryableStatus = new Set([429, 500, 502, 503, 504, 529]);
 
 			try {
 				const maxRetries = 3;
@@ -71,42 +147,30 @@ export function useTitleGeneration(
 					}
 
 					try {
-						const response = await fetch(`${url}/v1/messages`, {
-							method: "POST",
-							headers: {
-								"Content-Type": "application/json",
-								"x-api-key": key,
-							},
-							body: JSON.stringify({
-								model: modelName,
-								max_tokens: 20,
-								messages: [{ role: "user", content: prompt }],
-							}),
-						});
-
-						if (!response.ok) {
-							const retryable = [429, 500, 502, 503, 504, 529].includes(
-								response.status,
+						const title = await requestTitle(
+							provider,
+							prompt,
+							controller.signal,
+						);
+						if (title) {
+							await sessionControllerRef.current?.updateTitle(
+								targetSessionId,
+								title,
+								false,
 							);
-							if (retryable && attempt < maxRetries) continue;
+							browsergentStore
+								.getState()
+								.sessionTitleUpdated(targetSessionId, title);
 							return;
 						}
-
-						const data = (await response.json()) as {
-							content?: Array<{ text?: string }>;
-						};
-						const title = data.content?.[0]?.text?.trim();
-						if (!title) return;
-
-						await sessionControllerRef.current?.updateTitle(
-							targetSessionId,
-							title,
-							false,
-						);
-						browsergentStore.getState().sessionTitleUpdated(targetSessionId, title);
+						// Malformed response body — not transient, stop.
 						return;
-					} catch {
-						if (attempt < maxRetries) continue;
+					} catch (err) {
+						// Only retry on transient server errors; bail on 4xx/other immediately.
+						const status =
+							err instanceof TitleHttpError ? err.status : undefined;
+						if (status === undefined || !retryableStatus.has(status)) return;
+						if (attempt >= maxRetries) return;
 					}
 				}
 			} finally {
@@ -117,9 +181,7 @@ export function useTitleGeneration(
 		void generateTitle();
 	}, [
 		status,
-		apiKey,
-		baseUrl,
-		model,
+		activeProvider,
 		messages,
 		activeSessionId,
 		sessions,

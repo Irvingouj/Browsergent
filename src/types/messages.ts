@@ -6,6 +6,9 @@ import type { CellResult } from "./extjs-utils";
 
 export type { BrowsergentError };
 
+/** Wire-format kind for an LLM provider. */
+export type ProviderKind = "anthropic" | "openai";
+
 // --- Panel -> Worker ---
 
 export type PanelToWorker =
@@ -31,10 +34,17 @@ export type PanelToWorker =
 	| { type: "loadSkillError"; id: string; error: string }
 	| { type: "fileOpResult"; id: string; result: FileOpResult }
 	| { type: "fileOpError"; id: string; error: string }
-	| { type: "skillAutoActivate"; runId: string; skillName: string; skillBody: string; url: string };
+	| {
+			type: "skillAutoActivate";
+			runId: string;
+			skillName: string;
+			skillBody: string;
+			url: string;
+	  };
 
 export interface WorkerSettings {
-	anthropicApiKey?: string;
+	kind: ProviderKind;
+	apiKey: string;
 	baseUrl?: string;
 	model: string;
 }

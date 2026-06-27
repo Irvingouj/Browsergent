@@ -64,11 +64,23 @@ describe("migrateFromChromeStorage", () => {
 
 		await migrateFromChromeStorage(storage);
 
-		expect(await storage.get("settings", "apiKey")).toBe("sk-key");
-		expect(await storage.get("settings", "baseUrl")).toBe(
-			"https://api.example.com",
+		const providers = await storage.get<
+			Array<{
+				id: string;
+				apiKey: string;
+				baseUrl: string;
+				model: string;
+				kind: string;
+			}>
+		>("settings", "providers");
+		expect(providers).toHaveLength(1);
+		expect(providers?.[0]?.apiKey).toBe("sk-key");
+		expect(providers?.[0]?.baseUrl).toBe("https://api.example.com");
+		expect(providers?.[0]?.model).toBe("claude-sonnet-4-6");
+		expect(providers?.[0]?.kind).toBe("anthropic");
+		expect(await storage.get("settings", "activeProviderId")).toBe(
+			providers?.[0]?.id,
 		);
-		expect(await storage.get("settings", "model")).toBe("claude-sonnet-4-6");
 	});
 
 	test("skips migration if already marked", async () => {
@@ -116,7 +128,12 @@ describe("migrateFromChromeStorage", () => {
 
 		await migrateFromChromeStorage(storage);
 
-		expect(await storage.get("settings", "apiKey")).toBe("sk-key");
+		const providers = await storage.get<Array<{ id: string; apiKey: string }>>(
+			"settings",
+			"providers",
+		);
+		expect(providers?.[0]?.apiKey).toBe("sk-key");
+		expect(providers?.[0]?.baseUrl).toBe("https://api.anthropic.com");
 		expect(await storage.get("settings", "__migrated")).toBe(true);
 	});
 

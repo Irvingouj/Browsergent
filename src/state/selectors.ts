@@ -1,3 +1,4 @@
+import type { ProviderConfig } from "./slices/settings-slice";
 import type { BrowsergentStore } from "./store";
 
 export const selectMessageIds = (s: BrowsergentStore) => s.chat.messageIds;
@@ -63,9 +64,17 @@ export const selectTaskDraft = (s: BrowsergentStore) => s.ui.taskDraft;
 export const selectActiveTab = (s: BrowsergentStore) => s.ui.activeTab;
 export const selectChatUpload = (s: BrowsergentStore) => s.ui.chatUpload;
 export const selectChatDragOver = (s: BrowsergentStore) => s.ui.chatDragOver;
-export const selectApiKey = (s: BrowsergentStore) => s.settings.anthropicApiKey;
-export const selectBaseUrl = (s: BrowsergentStore) => s.settings.baseUrl;
-export const selectModel = (s: BrowsergentStore) => s.settings.model;
+export const selectProviders = (s: BrowsergentStore) => s.settings.providers;
+export const selectActiveProviderId = (s: BrowsergentStore) =>
+	s.settings.activeProviderId;
+export const selectActiveProvider = (
+	s: BrowsergentStore,
+): ProviderConfig | null => {
+	const { providers, activeProviderId } = s.settings;
+	if (!activeProviderId) return null;
+	return providers.find((p) => p.id === activeProviderId) ?? null;
+};
+export const selectSettingsLoaded = (s: BrowsergentStore) => s.settings.loaded;
 export const selectSettingsOpen = (s: BrowsergentStore) => s.ui.settingsOpen;
 export const selectSessionPanelOpen = (s: BrowsergentStore) =>
 	s.session.sessionPanelOpen;

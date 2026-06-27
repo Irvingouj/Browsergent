@@ -1,6 +1,3 @@
-import { matchSkillsToUrl } from "../skills/url-match";
-import { getUrlTracker } from "./url-tracker";
-import { addPendingAutoSkill, clearPendingAutoSkills, drainPendingAutoSkills } from "./pending-auto-skills";
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
@@ -9,25 +6,27 @@ import {
 	exportConversation,
 } from "../controllers/export-controller";
 import { isTextFile } from "../controllers/files-controller";
-import { buildSkillXmlBlock, parseSkillActivation } from "../skills/resolve-skill-activations";
+import {
+	buildSkillXmlBlock,
+	parseSkillActivation,
+} from "../skills/resolve-skill-activations";
 import { getSkillService } from "../skills/skill-service";
 import type { SkillDiagnostic } from "../skills/skill-types";
+import { matchSkillsToUrl } from "../skills/url-match";
 import {
+	selectActiveProvider,
 	selectActiveSessionId,
 	selectActiveTab,
 	selectAgentStatus,
 	selectAgentStatusReason,
-	selectApiKey,
-	selectBaseUrl,
 	selectDiagnosticEvents,
 	selectMessageIds,
 	selectMessagesById,
-	selectModel,
+	selectRetryState,
 	selectSessionPanelOpen,
 	selectSessions,
 	selectSettingsOpen,
 	selectSkillDiagnostics,
-	selectRetryState,
 	selectTaskDraft,
 	selectTraceEntries,
 } from "../state/selectors";
@@ -36,10 +35,15 @@ import type { ChatMessage } from "../types/messages";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
 import { InputBar } from "./components/input/InputBar";
-import { SettingsForm } from "./components/SettingsForm";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
 import { mergeSkillAndFileAttachments } from "./merge-run-task";
+import {
+	addPendingAutoSkill,
+	clearPendingAutoSkills,
+	drainPendingAutoSkills,
+} from "./pending-auto-skills";
 import type { DirContextChild } from "./resolve-dir-mentions";
 import {
 	buildDirContextXmlBlock,
@@ -56,6 +60,7 @@ import {
 	resolveTabMentions,
 } from "./resolve-tab-mentions";
 import { SessionPanel } from "./session-panel";
+import { getUrlTracker } from "./url-tracker";
 
 function formatSkillDiagnostic(diagnostic: SkillDiagnostic): string {
 	if (diagnostic.kind === "validation") {
@@ -117,9 +122,7 @@ const App: FunctionalComponent = () => {
 	const statusReason = useStore(browsergentStore, selectAgentStatusReason);
 	const retryState = useStore(browsergentStore, selectRetryState);
 	const taskInput = useStore(browsergentStore, selectTaskDraft);
-	const apiKey = useStore(browsergentStore, selectApiKey);
-	const baseUrl = useStore(browsergentStore, selectBaseUrl);
-	const model = useStore(browsergentStore, selectModel);
+	const activeProvider = useStore(browsergentStore, selectActiveProvider);
 	const showSettings = useStore(browsergentStore, selectSettingsOpen);
 	const sessionPanelOpen = useStore(browsergentStore, selectSessionPanelOpen);
 	const _sessions = useStore(browsergentStore, selectSessions);
@@ -182,7 +185,11 @@ const App: FunctionalComponent = () => {
 						source: "tool",
 					});
 				} catch (err: unknown) {
-					console.warn("[auto-skill] failed to load skill body:", skill.name, err);
+					console.warn(
+						"[auto-skill] failed to load skill body:",
+						skill.name,
+						err,
+					);
 					continue;
 				}
 				// Re-read state after the async load: the run may have ended or
@@ -213,8 +220,8 @@ const App: FunctionalComponent = () => {
 	const handleRun = useCallback(async () => {
 		const task = taskInput.trim();
 		if (!task) return;
-		if (!apiKey) {
-			browsergentStore.getState().setSettingsOpen(true);
+		if (!activeProvider?.apiKey) {
+			browsergentStore.getState().setActiveTab("settings");
 			return;
 		}
 		const sessionId = sessionControllerRef.current?.getActiveSessionId();
@@ -408,13 +415,18 @@ const App: FunctionalComponent = () => {
 			resolvedTask,
 			skillCatalog,
 			activatedSkills,
-			settings: { anthropicApiKey: apiKey, baseUrl, model },
+			settings: activeProvider
+				? {
+						kind: activeProvider.kind,
+						apiKey: activeProvider.apiKey,
+						baseUrl: activeProvider.baseUrl || undefined,
+						model: activeProvider.model,
+					}
+				: { kind: "anthropic", apiKey: "", model: "" },
 		});
 	}, [
 		taskInput,
-		apiKey,
-		baseUrl,
-		model,
+		activeProvider,
 		sessionControllerRef,
 		bridgeRef,
 		filesControllerRef,
@@ -424,17 +436,6 @@ const App: FunctionalComponent = () => {
 		const runId = browsergentStore.getState().agent.activeRunId;
 		bridgeRef.current?.post({ type: "agentStop", runId });
 	}, [bridgeRef]);
-
-	const handleSaveApiKey = useCallback(() => {
-		settingsControllerRef.current
-			?.save({ anthropicApiKey: apiKey, baseUrl, model })
-			.then(() => {
-				browsergentStore.getState().setSettingsOpen(false);
-			})
-			.catch((err: unknown) => {
-				console.warn("Settings save failed:", err);
-			});
-	}, [apiKey, baseUrl, model, settingsControllerRef]);
 
 	const handleExportConversation = useCallback(() => {
 		exportConversation(buildExportSnapshot(messages, trace, diagnostics));
@@ -619,6 +620,20 @@ const App: FunctionalComponent = () => {
 						>
 							Files
 						</button>
+						<button
+							type="button"
+							onClick={() =>
+								browsergentStore.getState().setActiveTab("settings")
+							}
+							class={[
+								"px-sm py-[3px] text-xs font-medium cursor-pointer transition-all rounded-full",
+								activeTab === "settings"
+									? "bg-text-primary text-bg-base"
+									: "bg-transparent text-text-secondary hover:text-text-primary",
+							].join(" ")}
+						>
+							Settings
+						</button>
 					</div>
 					<button
 						type="button"
@@ -646,15 +661,7 @@ const App: FunctionalComponent = () => {
 				</div>
 			</div>
 
-			{/* Settings modal */}
-			{showSettings && (
-				<SettingsForm
-					onSave={handleSaveApiKey}
-					onExport={handleExportConversation}
-					onClose={() => browsergentStore.getState().setSettingsOpen(false)}
-				/>
-			)}
-
+			{/* Settings lives in its own tab now — see SettingsPanel render in Main content. */}
 			{/* Main content */}
 			<div
 				ref={chatScrollRef}
@@ -680,6 +687,11 @@ const App: FunctionalComponent = () => {
 				)}
 				{activeTab === "chat" ? (
 					<ChatPanel />
+				) : activeTab === "settings" ? (
+					<SettingsPanel
+						settingsController={settingsControllerRef.current}
+						onExportConversation={handleExportConversation}
+					/>
 				) : initialized && filesControllerRef.current ? (
 					<FilesPanel
 						filesController={filesControllerRef.current}
@@ -697,7 +709,7 @@ const App: FunctionalComponent = () => {
 
 			{/* Status bar */}
 			<div class="relative z-10 px-md py-xs bg-bg-base border-t border-border flex items-center gap-sm font-mono text-[10px] text-text-dim tracking-wider uppercase">
-			<span
+				<span
 					class={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(retryState !== null, status)}`}
 				/>
 				<span class="flex-1 truncate" data-testid="agent-status">
@@ -738,9 +750,10 @@ const App: FunctionalComponent = () => {
 					onCreateSession={handleCreateSession}
 					onDeleteSession={handleDeleteSession}
 					onUpdateTitle={handleUpdateTitle}
-					onSettingsClick={() =>
-						browsergentStore.getState().setSettingsOpen(true)
-					}
+					onSettingsClick={() => {
+						browsergentStore.getState().setActiveTab("settings");
+						browsergentStore.getState().sessionPanelOpenChanged(false);
+					}}
 					canSwitch={!isRunning}
 				/>
 			)}

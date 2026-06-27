@@ -1,5 +1,7 @@
 import type { AgentRunResult } from "@pi-oxide/pi-host-web";
 import { Agent, indexedDbStore } from "@pi-oxide/pi-host-web";
+import { truncateSkillBody } from "../skills/resolve-skill-activations";
+import { escapeXmlAttr } from "../skills/validate-skill-meta";
 import type { CellResult } from "../types/extjs-utils";
 import type {
 	AgentDiagnosticEvent,
@@ -7,14 +9,12 @@ import type {
 	AgentTraceEntry,
 } from "../types/messages";
 import { streamLog } from "../utils/stream-logger";
-import { escapeXmlAttr } from "../skills/validate-skill-meta";
-import { truncateSkillBody } from "../skills/resolve-skill-activations";
 import { createAgentTools } from "./agent-tools";
-import type { AnthropicConfig } from "./anthropic";
 import { composeSystemPrompt } from "./anthropic";
-import { createAnthropicModel } from "./anthropic-model";
 import { getCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
+import type { RuntimeProvider } from "./provider-model";
+import { createProviderModel } from "./provider-model";
 import { isToolErrorEnvelope } from "./tool-error-result";
 
 function isTextContentBlock(c: {
@@ -77,7 +77,7 @@ export class AgentLoop {
 		displayTask: string,
 		resolvedTask: string,
 		skillCatalog: string,
-		config: AnthropicConfig,
+		provider: RuntimeProvider,
 		callbacks: AgentLoopCallbacks,
 	): Promise<void> {
 		this.aborted = false;
@@ -88,7 +88,7 @@ export class AgentLoop {
 
 		callbacks.onStatus("loading");
 
-		const model = createAnthropicModel(config, callbacks.onDiagnostic);
+		const model = createProviderModel(provider, callbacks.onDiagnostic);
 		const tools = createAgentTools(
 			callbacks.runJs,
 			callbacks.getDocs,

@@ -275,7 +275,8 @@ type PanelToWorker =
   | { type: "loadSkillError"; id: string; error: string };
 
 interface WorkerSettings {
-  anthropicApiKey?: string;
+  kind: ProviderKind;   // "anthropic" | "openai"
+  apiKey: string;
   baseUrl?: string;
   model: string;
 }

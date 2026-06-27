@@ -1,7 +1,7 @@
 import type { StoreApi } from "zustand/vanilla";
 import type { BrowsergentStore } from "../store";
 
-export type UiTab = "chat" | "files";
+export type UiTab = "chat" | "files" | "settings";
 
 export type ChatUploadStatus =
 	| { kind: "idle" }

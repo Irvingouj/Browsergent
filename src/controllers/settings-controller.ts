@@ -1,38 +1,39 @@
+import type { ProviderConfig } from "../state/slices/settings-slice";
 import { browsergentStore } from "../state/store";
 import type { StorageBackend } from "../storage/storage-backend";
 
 export interface SettingsValues {
-	anthropicApiKey: string;
-	baseUrl: string;
-	model: string;
+	providers: ProviderConfig[];
+	activeProviderId: string | null;
 }
 
 export class SettingsController {
 	constructor(private readonly storage: StorageBackend) {}
 
 	async load(): Promise<void> {
-		const apiKey = await this.storage.get<string>("settings", "apiKey");
-		const baseUrl = await this.storage.get<string>("settings", "baseUrl");
-		const model = await this.storage.get<string>("settings", "model");
-		const current = browsergentStore.getState().settings;
+		const providers =
+			(await this.storage.get<ProviderConfig[]>("settings", "providers")) ?? [];
+		const activeProviderId =
+			(await this.storage.get<string | null>("settings", "activeProviderId")) ??
+			null;
 		browsergentStore.getState().settingsLoaded({
-			anthropicApiKey: apiKey ?? current.anthropicApiKey,
-			baseUrl: baseUrl ?? current.baseUrl,
-			model: model ?? current.model,
+			providers,
+			activeProviderId,
 			loaded: true,
 		});
 	}
 
-	async save(settings: SettingsValues): Promise<void> {
+	async save(values: SettingsValues): Promise<void> {
 		try {
-			browsergentStore.getState().settingsSaveStarted();
-			await this.storage.set("settings", "apiKey", settings.anthropicApiKey);
-			await this.storage.set("settings", "baseUrl", settings.baseUrl);
-			await this.storage.set("settings", "model", settings.model);
+			await this.storage.set("settings", "providers", values.providers);
+			await this.storage.set(
+				"settings",
+				"activeProviderId",
+				values.activeProviderId,
+			);
 			browsergentStore.getState().settingsSaved({
-				anthropicApiKey: settings.anthropicApiKey,
-				baseUrl: settings.baseUrl,
-				model: settings.model,
+				providers: values.providers,
+				activeProviderId: values.activeProviderId,
 				loaded: true,
 			});
 		} catch (err) {
