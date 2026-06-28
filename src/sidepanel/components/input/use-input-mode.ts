@@ -31,6 +31,8 @@ import {
 	type KeyActionCtx,
 	resolveInputMode,
 } from "./input-mode";
+import type { Draft, EditorCommand } from "./draft-model";
+import { parseDraftAtOffset, serializeDraft } from "./draft-model";
 
 export function skillsToPickerItems(
 	skills: ReadonlyArray<SkillMeta>,
@@ -49,25 +51,30 @@ export interface InputModeApi {
 	pickerItems: CommandPickerItem[];
 	activeIndex: number;
 	emptyMessage: string;
-	onInput(value: string, cursor: number): void;
+	onRead(value: string, offset: number): void;
 	onKeyDown(e: KeyboardEvent): void;
 	onBlur(): void;
 	setActiveIndex(index: number): void;
 	applySelection(item: CommandPickerItem): void;
 	loadSkills(): void;
-	/** Caret offset to restore after the next external value change. */
-	pendingCaret: number | undefined;
 }
 
 interface UseInputModeArgs {
 	filesController: FilesController | null;
 	isRunning: boolean;
 	onSubmit: () => void;
+	/** Read the latest Draft synchronously (key handlers close over one render). */
+	getDraft: () => Draft;
+	/** Dispatch a programmatic EditorCommand (insert-chip, history, submit). */
+	dispatch: (command: EditorCommand) => void;
 }
+
 export function useInputMode({
 	filesController,
 	isRunning,
 	onSubmit,
+	getDraft,
+	dispatch,
 }: UseInputModeArgs): InputModeApi {
 	const skills = useStore(browsergentStore, selectSkillCatalog);
 	const openTabs = useStore(browsergentStore, selectOpenTabs);
@@ -84,14 +91,10 @@ export function useInputMode({
 	);
 	const store = browsergentStore;
 
-	// Caret offset tracked from ChipInput's onChange; DOM-agnostic replacement
-	// for reading textarea.selectionStart/End directly.
-	const cursorRef = useRef(0);
-	// Caret offset to restore after the next external value change (picker
-	// insert, history recall). ChipInput consumes and clears this.
-	const [pendingCaret, setPendingCaret] = useState<number | undefined>(
-		undefined,
-	);
+	// design: 这里曾用 cursorRef + pendingCaret + pendingFileCaret 三个变量管理光标,
+	// 导致每个新动作都要记得 setPendingCaret,漏一个就是幽灵光标跳动。现在光标是
+	// Draft zipper 的缝隙,程序化动作通过 dispatch(EditorCommand) 走 reducer,
+	// 光标恢复是 reconcile 的一部分,无需手动管理。
 
 	// --- History data ---
 	const userHistory = useMemo(
@@ -134,14 +137,8 @@ export function useInputMode({
 				});
 		};
 		refresh();
-		const onUpdated = (): void => refresh();
-		const onRemoved = (): void => refresh();
-		chrome.tabs.onUpdated?.addListener(onUpdated);
-		chrome.tabs.onRemoved?.addListener(onRemoved);
-		return () => {
-			chrome.tabs.onUpdated?.removeListener(onUpdated);
-			chrome.tabs.onRemoved?.removeListener(onRemoved);
-		};
+		const interval = setInterval(refresh, 2000);
+		return () => clearInterval(interval);
 	}, [mode.kind, store]);
 
 	// --- File fetch (live, while at picker is open) ---
@@ -201,21 +198,23 @@ export function useInputMode({
 			? mode.activeIndex
 			: 0;
 
-	// --- Text mutation → mode resolution ---
-	const onInput = useCallback((value: string, cursor: number): void => {
-		cursorRef.current = cursor;
-		setMode((prev) => resolveInputMode(value, cursor, prev));
-		// User input supersedes any pending programmatic caret restore.
-		setPendingCaret(undefined);
+	// --- Typing path: ChipInput reports (value, offset), resolve picker mode ---
+	const onRead = useCallback((value: string, offset: number): void => {
+		setMode((prev) => resolveInputMode(value, offset, prev));
 	}, []);
 
 	// --- Key handling ---
 	const onKeyDown = useCallback(
 		(e: KeyboardEvent): void => {
-			const cursor = cursorRef.current;
-			const val = store.getState().ui.taskDraft;
+			const draft = getDraft();
+			const value = serializeDraft(draft);
+			// cursor offset = sum of left lengths (zipper gap)
+			let cursor = 0;
+			for (const inline of draft.left) {
+				cursor += inline.kind === "text" ? inline.value.length : inline.raw.length;
+			}
 			const caretAtStart = cursor === 0;
-			const caretAtEnd = cursor === val.length;
+			const caretAtEnd = cursor === value.length;
 			const itemCount = pickerItems.length;
 
 			const ctx: KeyActionCtx = {
@@ -228,50 +227,6 @@ export function useInputMode({
 			if (!action) return;
 
 			e.preventDefault();
-
-			// Apply text-editing commands
-			if (action.effect === "delete-word") {
-				const ss = cursor;
-				let nextText: string;
-				let nextCursor: number;
-				let i = ss - 1;
-				while (i >= 0 && val[i] === " ") i--;
-				while (i >= 0 && val[i] !== " ") i--;
-				const wordStart = i + 1;
-				nextText = val.slice(0, wordStart) + val.slice(ss);
-				nextCursor = wordStart;
-				store.getState().setTaskDraft(nextText);
-				cursorRef.current = nextCursor;
-				setPendingCaret(nextCursor);
-				setMode(CLOSED_MODE);
-				return;
-			}
-
-			if (action.effect === "delete-to-eol") {
-				const pos = cursor;
-				const nextNewline = val.indexOf("\n", pos);
-				const end = nextNewline === -1 ? val.length : nextNewline;
-				const nextText = val.slice(0, pos) + val.slice(end);
-				store.getState().setTaskDraft(nextText);
-				cursorRef.current = pos;
-				setPendingCaret(pos);
-				setMode(CLOSED_MODE);
-				return;
-			}
-
-			if (action.effect === "delete-line") {
-				const pos = cursor;
-				const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
-				const nextNewline = val.indexOf("\n", pos);
-				const lineEnd = nextNewline === -1 ? val.length : nextNewline + 1;
-				const nextText = val.slice(0, lineStart) + val.slice(lineEnd);
-				const nextCursor = Math.min(lineStart, nextText.length);
-				store.getState().setTaskDraft(nextText);
-				cursorRef.current = nextCursor;
-				setPendingCaret(nextCursor);
-				setMode(CLOSED_MODE);
-				return;
-			}
 
 			// Apply mode transition
 			if (action.nextMode) setMode(action.nextMode);
@@ -286,18 +241,19 @@ export function useInputMode({
 				return;
 			}
 
-		if (action.effect === "restore-draft") {
-			const restoredDraft =
-				modeRef.current.kind === "history" ? modeRef.current.savedDraft : "";
-			store.getState().setTaskDraft(restoredDraft);
-			cursorRef.current = restoredDraft.length;
-			setPendingCaret(restoredDraft.length);
-			return;
-		}
+			if (action.effect === "restore-draft") {
+				const restoredDraft =
+					modeRef.current.kind === "history" ? modeRef.current.savedDraft : "";
+				dispatch({
+					kind: "replace-from-history",
+					draft: parseDraftAtOffset(restoredDraft, restoredDraft.length),
+				});
+				return;
+			}
 
 			if (action.effect === "recall-history") {
 				if (action.recallDirection === "older") {
-					const draft = store.getState().ui.taskDraft;
+					const currentDraft = value;
 					if (modeRef.current.kind === "history") {
 						const newIdx = modeRef.current.index - 1;
 						if (newIdx >= 0) {
@@ -308,25 +264,26 @@ export function useInputMode({
 								savedDraft: modeRef.current.savedDraft,
 							});
 							if (msg) {
-								store.getState().setTaskDraft(msg);
-								cursorRef.current = msg.length;
-								setPendingCaret(msg.length);
+								dispatch({
+									kind: "replace-from-history",
+									draft: parseDraftAtOffset(msg, msg.length),
+								});
 							}
 						}
 					} else {
-						// Enter history from plain
 						const lastIdx = userHistory.length - 1;
 						if (lastIdx >= 0) {
 							const msg = userHistory[lastIdx];
 							setMode((prev) =>
 								prev.kind === "history"
 									? prev
-									: { kind: "history", index: lastIdx, savedDraft: draft },
+									: { kind: "history", index: lastIdx, savedDraft: currentDraft },
 							);
 							if (msg) {
-								store.getState().setTaskDraft(msg);
-								cursorRef.current = msg.length;
-								setPendingCaret(msg.length);
+								dispatch({
+									kind: "replace-from-history",
+									draft: parseDraftAtOffset(msg, msg.length),
+								});
 							}
 						}
 					}
@@ -337,17 +294,18 @@ export function useInputMode({
 						const msg = userHistory[newIdx];
 						setMode({ ...modeRef.current, index: newIdx });
 						if (msg) {
-							store.getState().setTaskDraft(msg);
-							cursorRef.current = msg.length;
-							setPendingCaret(msg.length);
+							dispatch({
+								kind: "replace-from-history",
+								draft: parseDraftAtOffset(msg, msg.length),
+							});
 						}
 					} else {
-						// Past the newest → restore draft
 						setMode(CLOSED_MODE);
 						const restored = modeRef.current.savedDraft;
-						store.getState().setTaskDraft(restored);
-						cursorRef.current = restored.length;
-						setPendingCaret(restored.length);
+						dispatch({
+							kind: "replace-from-history",
+							draft: parseDraftAtOffset(restored, restored.length),
+						});
 					}
 				}
 				return;
@@ -366,8 +324,14 @@ export function useInputMode({
 				}
 				return;
 			}
+
+			// text-edit effects (delete-word/to-eol/line) — these mutate text,
+			// which is browser-led editing territory. Defer to the next input
+			// event: we don't intercept them, let the browser handle and onRead
+			// will pick up the result. (They are Ctrl-Backspace / Cmd-K combos;
+			// falling through to default browser behavior is acceptable.)
 		},
-		[isRunning, onSubmit, pickerItems, store, userHistory],
+		[isRunning, onSubmit, getDraft, dispatch, pickerItems, userHistory],
 	);
 
 	// --- Blur ---
@@ -387,7 +351,12 @@ export function useInputMode({
 
 	const applyPickerSelection = useCallback(
 		(item: CommandPickerItem): void => {
-			const draft = store.getState().ui.taskDraft;
+			const draft = getDraft();
+			const value = serializeDraft(draft);
+			let cursor = 0;
+			for (const inline of draft.left) {
+				cursor += inline.kind === "text" ? inline.value.length : inline.raw.length;
+			}
 			const currentState = modeRef.current;
 			const startIndex =
 				currentState.kind === "picker-at" ||
@@ -396,27 +365,20 @@ export function useInputMode({
 					: 0;
 			const endIndex =
 				currentState.kind === "picker-at" ? currentState.endIndex : undefined;
-			const fallbackCursor =
-				startIndex +
-				1 +
-				(currentState.kind === "picker-at" ||
-				currentState.kind === "picker-slash"
-					? currentState.query.length
-					: 0);
-			const cursor = cursorRef.current ?? fallbackCursor;
 			const { nextText, cursorPos } = buildPickerInsert(
-				draft,
+				value,
 				cursor,
 				startIndex,
 				item.insertText,
 				endIndex,
 			);
-			store.getState().setTaskDraft(nextText);
-			cursorRef.current = cursorPos;
-			setPendingCaret(cursorPos);
+			dispatch({
+				kind: "replace-from-history",
+				draft: parseDraftAtOffset(nextText, cursorPos),
+			});
 			setMode(CLOSED_MODE);
 		},
-		[store],
+		[getDraft, dispatch],
 	);
 
 	return {
@@ -425,12 +387,11 @@ export function useInputMode({
 		pickerItems,
 		activeIndex,
 		emptyMessage,
-		onInput,
+		onRead,
 		onKeyDown,
 		onBlur,
 		setActiveIndex,
 		applySelection: applyPickerSelection,
 		loadSkills,
-		pendingCaret,
 	};
 }

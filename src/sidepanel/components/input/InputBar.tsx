@@ -10,7 +10,16 @@ import {
 import { browsergentStore } from "../../../state/store";
 import { buildFileMentionToken } from "../../detect-mention-state";
 import { CommandPicker } from "../CommandPicker";
-import { ChipInput } from "./ChipInput";
+import { ChipInput, type DomSync } from "./ChipInput";
+import {
+	applyCommand,
+	type Draft,
+	type EditorCommand,
+	emptyDraft,
+	parseDraft,
+	parseDraftAtOffset,
+	serializeDraft,
+} from "./draft-model";
 import { useInputMode } from "./use-input-mode";
 
 const MAX_INPUT_HEIGHT = 200;
@@ -43,23 +52,67 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const isUploading = chatUpload.kind === "uploading";
 	const uploadError = chatUpload.kind === "error" ? chatUpload.message : null;
 
+	// design: Draft 是屏幕真相(文字 + 光标 zipper)。store.taskDraft 是持久化
+	// 格式,只在提交/外部变化时与 Draft 交换。打字只动 Draft,不碰 store——
+	// 所以没有两个真相源互相回声(那是上一版的病根:lastWrittenRef/revision/...)。
+	const [draft, setDraft] = useState<Draft>(emptyDraft());
+	// design: DomSync 是显式的 tagged state,告诉 ChipInput 何时重写 DOM。
+	// idle = DOM 已正确(打字刚来),别碰。reconcile = 程序化命令改了 Draft,
+	// DOM 过期,必须重写 + 落光标。这取代了 boolean flag 和 revision 计数器。
+	const [domSync, setDomSync] = useState<DomSync>({ kind: "idle" });
+
+	const draftRef = useRef(draft);
+	draftRef.current = draft;
+	const getDraft = useCallback((): Draft => draftRef.current, []);
+
+	// design: 外部 taskDraft 变化(submit 后清空 / session 切换)→ 读进 Draft + reconcile。
+	// 因为打字不写 store,这里永远不会被自己的写触发,无回声。
+	useEffect(() => {
+		setDraft((prev) => {
+			const prevValue = serializeDraft(prev);
+			if (prevValue === taskInput) return prev;
+			return parseDraft(taskInput);
+		});
+		setDomSync({ kind: "reconcile", draft: parseDraft(taskInput) });
+	}, [taskInput]);
+
+	// 打字路径 (A):ChipInput 报告 (value, offset),重建 Draft + 更新 picker mode。
+	// design: 用 onReadRef 避免 handleRead 与 mode 之间的声明顺序环(TDZ)。
+	// mode 在下面定义,这里先占 ref 位,mode 变化时同步更新 ref。
+	const onReadRef = useRef<(value: string, offset: number) => void>(() => {});
+	const handleRead = useCallback((value: string, offset: number): void => {
+		setDraft(parseDraftAtOffset(value, offset));
+		setDomSync({ kind: "idle" });
+		onReadRef.current(value, offset);
+	}, []);
+
+	// 程序化路径 (B):应用 EditorCommand,更新 Draft,触发 reconcile。
+	const dispatch = useCallback((command: EditorCommand): void => {
+		const result = applyCommand(draftRef.current, command);
+		if (result.kind === "draft-updated") {
+			setDraft(result.draft);
+			setDomSync({ kind: "reconcile", draft: result.draft });
+			// design: 提交路径之外的所有程序化命令也要同步 store,因为
+			// app.tsx 的 handleRun 读 taskInput。这是单向投影,不是双向同步。
+			browsergentStore.getState().setTaskDraft(serializeDraft(result.draft));
+		} else if (result.kind === "submitted") {
+			browsergentStore.getState().setTaskDraft(result.value);
+			setDraft(result.nextDraft);
+			setDomSync({ kind: "reconcile", draft: result.nextDraft });
+			onRun();
+		}
+		// submit-blocked-empty: 不做任何事(空 draft 不能提交)
+	}, [onRun]);
+
 	const mode = useInputMode({
 		filesController,
 		isRunning,
-		onSubmit: onRun,
+		onSubmit: () => dispatch({ kind: "submit" }),
+		getDraft,
+		dispatch,
 	});
+	onReadRef.current = mode.onRead;
 
-	// Caret offset tracked from ChipInput onChange; replaces reading
-	// textarea.selectionStart directly. pendingCaret restores the caret after
-	// external value changes (file drag-drop insert, picker, history).
-	const cursorRef = useRef(0);
-	const [pendingFileCaret, setPendingFileCaret] = useState<number | undefined>(
-		undefined,
-	);
-	const pendingCaret = mode.pendingCaret ?? pendingFileCaret;
-
-	// Track the contentEditable element so we can auto-resize it. The external
-	// inputRef is forwarded through ChipInput's callback ref.
 	const internalRef = useRef<HTMLDivElement | null>(null);
 	const setInputRef = useCallback(
 		(node: HTMLDivElement | null): void => {
@@ -75,20 +128,18 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	);
 
 	// Auto-grow the contentEditable to fit content, capped at MAX_INPUT_HEIGHT.
-	// When empty, clear explicit height (and any stale DOM content left after a
-	// submit) so CSS min-h-[36px] controls sizing.
+	const draftValue = serializeDraft(draft);
 	useEffect(() => {
 		const el = internalRef.current;
 		if (!el) return;
-		if (!taskInput) {
-			if (el.innerHTML !== "") el.innerHTML = "";
+		if (!draftValue) {
 			el.style.height = "";
 			return;
 		}
 		el.style.height = "auto";
 		const next = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
 		el.style.height = `${next}px`;
-	}, [taskInput]);
+	}, [draftValue]);
 
 	const uploadAndInsertMentions = useCallback(
 		async (files: File[]): Promise<void> => {
@@ -100,8 +151,6 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				});
 				return;
 			}
-			// Caret offset tracked from ChipInput onChange (no textarea API).
-			const cursor = cursorRef.current;
 			browsergentStore.getState().setChatUploadStatus({ kind: "uploading" });
 			try {
 				const nodes = await filesController.uploadFiles(files);
@@ -109,21 +158,22 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 					browsergentStore.getState().addFileNode(node);
 				}
 				onFilesChanged?.();
-				if (nodes.length > 0) {
-					const tokens = nodes.map((n) => buildFileMentionToken(n.id, n.name));
-					const needsLeadingSpace =
-						cursor > 0 && !/\s/.test(taskInput[cursor - 1] ?? "");
-					const insertText = `${needsLeadingSpace ? " " : ""}${tokens.join(" ")} `;
-					const nextText =
-						taskInput.slice(0, cursor) + insertText + taskInput.slice(cursor);
-					const nextCursor = cursor + insertText.length;
-					browsergentStore.getState().setTaskDraft(nextText);
-					cursorRef.current = nextCursor;
-					setPendingFileCaret(nextCursor);
-					requestAnimationFrame(() => {
-						internalRef.current?.focus();
+				for (const node of nodes) {
+					const token = buildFileMentionToken(node.id, node.name);
+					dispatch({
+						kind: "insert-chip",
+						inline: {
+							kind: "chip",
+							chipKind: "file",
+							raw: token,
+							label: node.name,
+							title: node.name,
+						},
 					});
 				}
+				requestAnimationFrame(() => {
+					internalRef.current?.focus();
+				});
 				browsergentStore.getState().setChatUploadStatus({ kind: "idle" });
 			} catch (err: unknown) {
 				const message =
@@ -133,7 +183,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 					.setChatUploadStatus({ kind: "error", message });
 			}
 		},
-		[filesController, sessionId, taskInput, onFilesChanged],
+		[filesController, sessionId, dispatch, onFilesChanged],
 	);
 
 	const handleDragOver = useCallback((e: DragEvent) => {
@@ -235,22 +285,16 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 							onActiveIndexChange={(i) => mode.setActiveIndex(i)}
 							onDismiss={() => {
 								// Dismiss via key is handled by interpretKey; this
-								// callback is only for the window-level Escape fallback
-								// (which we removed) and external dismiss.
+								// callback is only for external dismiss.
 							}}
 							emptyMessage={mode.emptyMessage}
 						/>
 					) : null}
 					<ChipInput
 						inputRef={setInputRef}
-						value={taskInput}
-						caretOffset={pendingCaret}
-						onChange={(canonical, cursor) => {
-							cursorRef.current = cursor;
-							setPendingFileCaret(undefined);
-							browsergentStore.getState().setTaskDraft(canonical);
-							mode.onInput(canonical, cursor);
-						}}
+						draft={draft}
+						domSync={domSync}
+						onRead={handleRead}
 						onKeyDown={mode.onKeyDown}
 						onFocus={() => mode.loadSkills()}
 						onBlur={mode.onBlur}

@@ -1,7 +1,6 @@
 import type { FunctionalComponent, Ref } from "preact";
 import { useCallback, useEffect, useRef } from "preact/hooks";
 import {
-	type Block,
 	nodePositionToOffset,
 	offsetToNodePosition,
 	parseBlocks,
@@ -9,26 +8,38 @@ import {
 	readDomNodes,
 	reconstructCanonical,
 } from "./chip-model";
+import type { Draft, Inline } from "./draft-model";
 
 /**
- * contentEditable input that renders @ mentions and / skills as atomic,
- * non-editable chip spans. Plain text between chips is editable normally;
- * the caret works everywhere; backspace deletes a whole chip.
+ * contentEditable view over a `Draft`. Two data flows meet here:
  *
- * Contract with the store: `value` is the canonical string (tokens inlined).
- * The DOM is the view; on every edit we read it back, rebuild the canonical
- * string, and call `onChange`. We only re-render the DOM from `value` when it
- * diverges from what the DOM currently produces (external updates like history
- * recall, drag-drop, or picker insert) — never while the user is typing, to
- * preserve their caret.
+ * A. Typing (browser-led): the browser edits the DOM; on each `input` event we
+ *    read the canonical value + caret offset and call `onRead` so the parent
+ *    can rebuild the Draft. We NEVER write the DOM back on this path — the
+ *    browser just wrote it, it's correct, rewriting races the next keystroke.
  *
- * Caret offset reporting uses chip-model's offset<->node mapping so consumers
- * (useInputMode) keep operating on (string, offset) exactly like the textarea.
+ * B. Programmatic (reducer-led): when the parent applies an EditorCommand
+ *    (insert-chip, history, submit-clear), it sets `domSync` to `reconcile`.
+ *    The effect below rewrites the DOM from the Draft and restores the caret.
+ *    After reconciling, `domSync` returns to `idle`.
+ *
+ * design: "should I rewrite the DOM?" is encoded as a tagged `DomSync` state,
+ * not a boolean flag or a counter. idle/reconcile are the only two states;
+ * invalid mixes (rewrite without reconcile, reconcile without rewrite) are
+ * unrepresentable. This is what kills the caret-racing bug at the root.
  */
 
+export type DomSync =
+	| { readonly kind: "idle" }
+	| { readonly kind: "reconcile"; readonly draft: Draft };
+
 export interface ChipInputProps {
-	value: string;
-	onChange: (canonical: string, cursorOffset: number) => void;
+	/** The Draft the parent believes is current. Used for placeholder check. */
+	draft: Draft;
+	/** When !== "idle", rewrite DOM from draft.draft and restore caret. */
+	domSync: DomSync;
+	/** Typing path: parent rebuilds Draft from (value, offset) we report. */
+	onRead: (value: string, offset: number) => void;
 	onKeyDown: (e: KeyboardEvent) => void;
 	onFocus?: () => void;
 	onBlur?: () => void;
@@ -37,8 +48,6 @@ export interface ChipInputProps {
 	placeholder?: string;
 	disabled?: boolean;
 	class?: string;
-	/** Caret offset to restore after the next external value change. */
-	caretOffset?: number;
 }
 
 function chipClass(kind: "dir" | "file" | "tab" | "skill"): string {
@@ -62,12 +71,14 @@ function chipClass(kind: "dir" | "file" | "tab" | "skill"): string {
 	].join(" ");
 }
 
+function htmlEscape(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 /** Build the DOM innerHTML for a canonical value. */
 function renderBlocks(value: string): string {
 	const blocks = parseBlocks(value);
 	if (blocks.length === 0) return "";
-	const htmlEscape = (s: string): string =>
-		s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 	let html = "";
 	for (const block of blocks) {
 		if (block.type === "text") {
@@ -76,27 +87,42 @@ function renderBlocks(value: string): string {
 		}
 		const titleAttr =
 			block.title !== null ? ` title="${htmlEscape(block.title)}"` : "";
-		// contenteditable=false makes the span atomic: the caret jumps over it
-		// and backspace removes it whole. data-raw carries the canonical token
-		// so we can reconstruct the string on input.
 		html += `<span class="${chipClass(block.kind)}" contenteditable="false" data-raw="${htmlEscape(block.raw)}" data-chip-kind="${block.kind}"${titleAttr}>${htmlEscape(block.label)}</span>`;
 	}
 	return html;
 }
 
-/** Read (canonical, cursorOffset) from the live contentEditable. */
-function readState(root: HTMLElement): { canonical: string; cursor: number } {
-	const nodes = readDomNodes(root);
-	const canonical = reconstructCanonical(nodes);
-	const sel = root.ownerDocument.getSelection();
-	let cursor = canonical.length;
-	if (sel && sel.rangeCount > 0) {
-		const range = sel.getRangeAt(0);
-		if (root.contains(range.startContainer)) {
-			cursor = cursorFromRange(root, nodes, range);
-		}
+function serializeDraft(draft: Draft): string {
+	let out = "";
+	const emit = (inline: Inline): void => {
+		out += inline.kind === "text" ? inline.value : inline.raw;
+	};
+	draft.left.forEach(emit);
+	draft.right.forEach(emit);
+	return out;
+}
+
+/** Canonical offset of the caret (cursor sits in the zipper gap). */
+function caretOffset(draft: Draft): number {
+	let n = 0;
+	for (const inline of draft.left) {
+		n += inline.kind === "text" ? inline.value.length : inline.raw.length;
 	}
-	return { canonical, cursor };
+	return n;
+}
+
+/** Read the canonical caret offset from the live contentEditable. */
+function readSelectionOffset(root: HTMLElement): number {
+	const nodes = readDomNodes(root);
+	const sel = root.ownerDocument.getSelection();
+	if (!sel || sel.rangeCount === 0) {
+		return reconstructCanonical(nodes).length;
+	}
+	const range = sel.getRangeAt(0);
+	if (!root.contains(range.startContainer)) {
+		return reconstructCanonical(nodes).length;
+	}
+	return cursorFromRange(root, nodes, range);
 }
 
 function cursorFromRange(
@@ -114,7 +140,6 @@ function cursorFromRange(
 			nodeIndex = i;
 			break;
 		}
-		// Selection can land inside a chip's text — treat as the chip node.
 		if (
 			child.nodeType === Node.ELEMENT_NODE &&
 			startContainer.nodeType === Node.TEXT_NODE &&
@@ -155,7 +180,6 @@ function setCaret(root: HTMLElement, offset: number): void {
 		range.setStart(child, Math.min(pos.offsetInNode, len));
 		range.collapse(true);
 	} else {
-		// element (chip): position before or after
 		const el = child as Element;
 		const after = pos.offsetInNode >= 1;
 		if (after && el.nextSibling) {
@@ -172,8 +196,9 @@ function setCaret(root: HTMLElement, offset: number): void {
 }
 
 export const ChipInput: FunctionalComponent<ChipInputProps> = ({
-	value,
-	onChange,
+	draft,
+	domSync,
+	onRead,
 	onKeyDown,
 	onFocus,
 	onBlur,
@@ -182,9 +207,12 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 	placeholder,
 	disabled,
 	class: className,
-	caretOffset,
 }) => {
 	const internalRef = useRef<HTMLDivElement | null>(null);
+	// design: IME 组合期间绝不读 DOM/写 model。组合中的拼音是 transient DOM 文本,
+	// 此时读回会得到未 commit 的内容,造成抖动。compositionend 后一次性读。
+	const isComposing = useRef(false);
+
 	const setRef = useCallback(
 		(node: HTMLDivElement | null): void => {
 			internalRef.current = node;
@@ -198,24 +226,22 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 		[inputRef],
 	);
 
-	// Render from value ONLY when it diverges from the live DOM. This covers
-	// external updates (history recall, drag-drop, picker insert, submit). When
-	// the user types, onChange updates the store, the re-render comes back with
-	// value === live (same text), so no DOM re-render — caret preserved.
+	// design: 只在 domSync === reconcile 时重写 DOM + 落光标(B 路径)。
+	// 打字(A 路径)更新 draft 但 domSync 停在 idle,所以此 effect 不跑,
+	// 不和浏览器的下一键竞态。idle/reconcile 是显式的 tagged state,
+	// 不是 boolean flag——"重写但不 reconcile"或反之是 unrepresentable 的。
 	useEffect(() => {
+		if (domSync.kind !== "reconcile") return;
 		const el = internalRef.current;
 		if (!el) return;
-		const live = reconstructCanonical(readDomNodes(el));
-		if (live !== value) {
-			el.innerHTML = renderBlocks(value);
-		}
-		if (caretOffset !== undefined) {
-			setCaret(el, caretOffset);
-		}
-	}, [value, caretOffset]);
+		const value = serializeDraft(domSync.draft);
+		el.innerHTML = renderBlocks(value);
+		setCaret(el, caretOffset(domSync.draft));
+	}, [domSync]);
 
 	const handleInput = useCallback(
 		(e: Event) => {
+			if (isComposing.current) return;
 			const el = e.currentTarget as HTMLDivElement;
 			// After deleting all text, the browser leaves a <br>. Clear it so the
 			// element is truly empty (matches canonical "" and shows placeholder).
@@ -225,13 +251,29 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 			) {
 				el.innerHTML = "";
 			}
-			const { canonical, cursor } = readState(el);
-			onChange(canonical, cursor);
+			// design: A 路径——只读 DOM 报告给 parent,绝不写回。浏览器是打字期间
+			// 唯一的 DOM 写者;我们读一次 (value, offset),让 parent 重建 Draft。
+			const value = reconstructCanonical(readDomNodes(el));
+			const offset = readSelectionOffset(el);
+			onRead(value, offset);
 		},
-		[onChange],
+		[onRead],
 	);
+
+	const handleCompositionStart = useCallback((): void => {
+		isComposing.current = true;
+	}, []);
+
+	const handleCompositionEnd = useCallback(
+		(e: CompositionEvent): void => {
+			isComposing.current = false;
+			handleInput(e);
+		},
+		[handleInput],
+	);
+
 	const handlePaste = useCallback(
-		(e: ClipboardEvent) => {
+		(e: ClipboardEvent): void => {
 			if (onPaste) {
 				onPaste(e);
 				if (e.defaultPrevented) return;
@@ -244,17 +286,15 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 		[onPaste],
 	);
 
-	const handleFocus = useCallback(() => {
+	const handleFocus = useCallback((): void => {
 		onFocus?.();
 	}, [onFocus]);
 
-	const handleBlur = useCallback(() => {
+	const handleBlur = useCallback((): void => {
 		onBlur?.();
 	}, [onBlur]);
 
-	const isEmpty = parseBlocks(value).every(
-		(b: Block) => b.type === "text" && b.text === "",
-	);
+	const isEmpty = draft.left.length === 0 && draft.right.length === 0;
 
 	return (
 		<div class="relative">
@@ -275,6 +315,8 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 				onFocus={handleFocus}
 				onBlur={handleBlur}
 				onPaste={handlePaste}
+				onCompositionStart={handleCompositionStart}
+				onCompositionEnd={handleCompositionEnd}
 				class={[
 					className ?? "",
 					"task-input-chip",
