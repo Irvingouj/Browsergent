@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { findSkillManifest } from "../../src/controllers/files-utils";
+import { findSkillManifest } from "../../src/controllers/files";
 
 function makeFile(name: string, wrp?: string): File {
 	const f = new File(["content"], name, { type: "text/plain" });

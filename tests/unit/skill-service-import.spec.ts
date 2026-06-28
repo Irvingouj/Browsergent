@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { SkillService } from "../../src/skills/skill-service";
-import type { SkillFsClient, SkillMeta } from "../../src/skills/skill-types";
+import type { FsClient, SkillMeta } from "../../src/skills/skill-types";
 
-interface MockFs extends SkillFsClient {
+interface MockFs extends FsClient {
 	storage: Map<string, string>;
 }
 
@@ -10,10 +10,10 @@ function createMockFs(): MockFs {
 	const storage = new Map<string, string>();
 	return {
 		storage,
-		async fsExists(path: string): Promise<boolean> {
-			return storage.has(path);
+		async exists(path: string): Promise<{ exists: boolean }> {
+			return { exists: storage.has(path) };
 		},
-		async fsList(path: string): Promise<{ name: string; kind: string }[]> {
+		async list(path: string): Promise<{ entries: { name: string; kind: string }[] }> {
 			const entries: { name: string; kind: string }[] = [];
 			const prefix = path.endsWith("/") ? path : `${path}/`;
 			for (const [key, value] of storage.entries()) {
@@ -28,25 +28,28 @@ function createMockFs(): MockFs {
 					entries.push({ name, kind });
 				}
 			}
-			return entries;
+			return { entries };
 		},
-		async fsReadText(path: string): Promise<string> {
+		async readText(path: string): Promise<{ data: string }> {
 			const data = storage.get(path);
 			if (data === undefined) throw new Error(`Not found: ${path}`);
-			return data;
+			return { data };
 		},
-		async fsWriteText(path: string, data: string): Promise<void> {
+		async writeText(path: string, data: string): Promise<{ path: string; bytes_written: number }> {
 			storage.set(path, data);
+			return { path, bytes_written: data.length };
 		},
-		async fsMkdir(path: string): Promise<void> {
+		async mkdir(path: string): Promise<{ ok: true }> {
 			if (!storage.has(path)) storage.set(path, "__DIR__");
+			return { ok: true };
 		},
-		async fsDelete(path: string): Promise<void> {
+		async delete(path: string): Promise<{ ok: true }> {
 			storage.delete(path);
+			return { ok: true };
 		},
-		async fsWriteBase64(): Promise<void> {},
-		async fsReadBase64(): Promise<string> {
-			return "";
+		async writeBase64(): Promise<{ path: string; bytes_written: number }> { return { path: "", bytes_written: 0 }; },
+		async readBase64(): Promise<{ data: string }> {
+			return { data: "" };
 		},
 	};
 }

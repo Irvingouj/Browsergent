@@ -12,7 +12,7 @@ import {
 import type {
 	SkillDiagnostic,
 	SkillDocument,
-	SkillFsClient,
+	FsClient,
 	SkillListResult,
 	SkillMeta,
 	SkillScope,
@@ -29,18 +29,18 @@ interface LoadMetaResult {
 }
 
 async function loadSkillMetaFromDir(
-	fs: SkillFsClient,
+	fs: FsClient,
 	scope: SkillScope,
 	dirName: string,
 ): Promise<LoadMetaResult> {
 	const skillPath = skillMdPath(scope, dirName);
 	const diagnostics: SkillDiagnostic[] = [];
-	const exists = await fs.fsExists(skillPath);
+	const { exists } = await fs.exists(skillPath);
 	if (!exists) return { meta: null, diagnostics };
 
 	let raw: string;
 	try {
-		raw = await fs.fsReadText(skillPath);
+		({ data: raw } = await fs.readText(skillPath));
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		diagnostics.push({
@@ -131,14 +131,14 @@ async function loadSkillMetaFromDir(
 }
 
 async function listScopeSkills(
-	fs: SkillFsClient,
+	fs: FsClient,
 	scope: SkillScope,
 	root: string,
 ): Promise<{ skills: SkillMeta[]; diagnostics: SkillDiagnostic[] }> {
-	const rootExists = await fs.fsExists(root);
+	const { exists: rootExists } = await fs.exists(root);
 	if (!rootExists) return { skills: [], diagnostics: [] };
 
-	const entries = await fs.fsList(root);
+	const { entries } = await fs.list(root);
 	const skills: SkillMeta[] = [];
 	const diagnostics: SkillDiagnostic[] = [];
 
@@ -153,7 +153,7 @@ async function listScopeSkills(
 }
 
 export class SkillRegistry {
-	constructor(private readonly fs: SkillFsClient) {}
+	constructor(private readonly fs: FsClient) {}
 
 	async listSkills(): Promise<SkillListResult> {
 		const bundled = await listScopeSkills(
@@ -214,7 +214,7 @@ export class SkillRegistry {
 		if (!meta) {
 			throw new Error(`Unknown skill: ${skillName}`);
 		}
-		const raw = await this.fs.fsReadText(meta.skillPath);
+		const { data: raw } = await this.fs.readText(meta.skillPath);
 		const { body } = parseFrontmatter(raw);
 		return { meta, body };
 	}
@@ -228,10 +228,11 @@ export class SkillRegistry {
 			throw new Error(`Unknown skill: ${skillName}`);
 		}
 		const fullPath = joinSkillResourcePath(meta.baseDir, relativePath);
-		const exists = await this.fs.fsExists(fullPath);
+		const { exists } = await this.fs.exists(fullPath);
 		if (!exists) {
 			throw new Error(`Skill resource not found: ${relativePath}`);
 		}
-		return this.fs.fsReadText(fullPath);
+		const { data } = await this.fs.readText(fullPath);
+		return data;
 	}
 }

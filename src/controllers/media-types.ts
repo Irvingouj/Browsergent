@@ -1,4 +1,4 @@
-import { isTextFile } from "./files-utils";
+import { isTextFile } from "./files";
 
 export type MediaKind = "image" | "video" | "pdf" | "audio" | "text" | "binary";
 
@@ -48,4 +48,24 @@ export function classifyMedia(name: string, mime?: string): MediaKind {
 	}
 	if (isTextFile(name)) return "text";
 	return "binary";
+}
+
+/** Per-type default preview panel height in pixels. */
+export function defaultPreviewHeightPx(kind: MediaKind): number {
+	switch (kind) {
+		case "pdf":
+			return 520;
+		case "image":
+			return 420;
+		case "video":
+			return 420;
+		case "audio":
+			return 120;
+		case "text":
+			return 240;
+		case "binary":
+			return 80;
+		default:
+			return 240;
+	}
 }

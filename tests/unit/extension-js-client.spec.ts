@@ -118,42 +118,42 @@ describe("ExtensionJsClient", () => {
 		test("fsWriteText fires onFsMutation after success", async () => {
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
-			await client.fsWriteText("/notes.md", "body");
+			await client.writeText("/notes.md", "body");
 			expect(calls).toEqual(["hit"]);
 		});
 
 		test("fsMkdir fires onFsMutation after success", async () => {
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
-			await client.fsMkdir("/sub");
+			await client.mkdir("/sub");
 			expect(calls).toEqual(["hit"]);
 		});
 
 		test("fsDelete fires onFsMutation after success", async () => {
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
-			await client.fsDelete("/notes.md");
+			await client.delete("/notes.md");
 			expect(calls).toEqual(["hit"]);
 		});
 
 		test("fsExists does NOT fire onFsMutation", async () => {
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
-			await client.fsExists("/notes.md");
+			await client.exists("/notes.md");
 			expect(calls).toEqual([]);
 		});
 
 		test("fsList does NOT fire onFsMutation", async () => {
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
-			await client.fsList("/");
+			await client.list("/");
 			expect(calls).toEqual([]);
 		});
 
 		test("fsReadText does NOT fire onFsMutation", async () => {
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
-			await client.fsReadText("/notes.md");
+			await client.readText("/notes.md");
 			expect(calls).toEqual([]);
 		});
 
@@ -165,7 +165,7 @@ describe("ExtensionJsClient", () => {
 			mockFs.writeText.mockRejectedValueOnce(new Error("disk full"));
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
-			await expect(client.fsWriteText("/x", "y")).rejects.toThrow("disk full");
+			await expect(client.writeText("/x", "y")).rejects.toThrow("disk full");
 			expect(calls).toEqual([]);
 		});
 
@@ -173,7 +173,7 @@ describe("ExtensionJsClient", () => {
 			const calls: string[] = [];
 			client.setOnFsMutation(() => calls.push("hit"));
 			client.setOnFsMutation(null);
-			await client.fsWriteText("/notes.md", "body");
+			await client.writeText("/notes.md", "body");
 			expect(calls).toEqual([]);
 		});
 	});

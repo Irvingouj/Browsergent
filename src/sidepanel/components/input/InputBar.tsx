@@ -1,7 +1,7 @@
 import type { FunctionalComponent, Ref } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
-import type { FilesController } from "../../../controllers/files-controller";
+import type { FilesController } from "../../../controllers/files";
 import {
 	selectChatDragOver,
 	selectChatUpload,

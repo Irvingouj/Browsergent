@@ -1,7 +1,7 @@
 import { useRef } from "preact/hooks";
 import { useStore } from "zustand";
-import type { FilesController } from "../../../controllers/files-controller";
-import { sanitizeFileName } from "../../../controllers/files-utils";
+import type { FilesController } from "../../../controllers/files";
+import { sanitizeFileName } from "../../../controllers/files";
 import {
 	selectCreatingKind,
 	selectCreatingName,

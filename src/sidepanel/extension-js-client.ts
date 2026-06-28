@@ -12,9 +12,15 @@
 import type {
 	CellResult,
 	ExtensionSession as ExtensionSessionType,
+	FsBoolResult,
+	FsExistsResult,
+	FsListResult,
+	FsStatResult,
+	FsStringResult,
+	FsWriteResult,
 } from "@pi-oxide/extension-js";
 import { setLogLevel } from "@pi-oxide/extension-js";
-import type { SkillFsClient, SkillFsListEntry } from "../skills/skill-types";
+import type { FsClient } from "../skills/skill-types";
 import { browsergentStore } from "../state/store";
 
 const EXTJS_TIMEOUT_MS = 30_000;
@@ -88,7 +94,7 @@ function isExtjsRelayResponse(msg: unknown): msg is ExtjsRelayResponse {
 	);
 }
 
-export class ExtensionJsClient implements SkillFsClient {
+export class ExtensionJsClient implements FsClient {
 	private static instance: ExtensionJsClient | null = null;
 	private session: ExtensionSessionType | null = null;
 	private runnerPromise: Promise<void> | null = null;
@@ -149,95 +155,71 @@ export class ExtensionJsClient implements SkillFsClient {
 		return this.executeDocsWithTimeout(format);
 	}
 
-	async fsExists(path: string): Promise<boolean> {
+	private async fsCall<P, R>(
+		op: (fs: ExtensionSessionType["fs"]) => (p: P) => Promise<R>,
+		params: P,
+		label: string,
+	): Promise<R> {
 		await this.ensureReady();
 		return this.enqueue(async () => {
 			if (!this.session) throw new Error("ExtensionSession not available");
-			const result = await this.session.fs.exists({ path });
-			return result.exists;
-		}, "fsExists failed");
+			return op(this.session.fs)(params);
+		}, label);
+	}
+// Reads: no onFsMutation. Return session.fs.* wrapped results directly.
+	exists(path: string): Promise<FsExistsResult> {
+		return this.fsCall((fs) => fs.exists, { path }, "exists failed");
+	}
+	stat(path: string): Promise<FsStatResult> {
+		return this.fsCall((fs) => fs.stat, { path }, "stat failed");
+	}
+	list(path: string): Promise<FsListResult> {
+		return this.fsCall((fs) => fs.list, { path }, "list failed");
+	}
+	readText(path: string): Promise<FsStringResult> {
+		return this.fsCall((fs) => fs.readText, { path }, "readText failed");
+	}
+	readBase64(path: string): Promise<FsStringResult> {
+		return this.fsCall((fs) => fs.readBase64, { path }, "readBase64 failed");
 	}
 
-	async fsList(path: string): Promise<ReadonlyArray<SkillFsListEntry>> {
-		await this.ensureReady();
-		return this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			const result = await this.session.fs.list({ path });
-			return result.entries.map((e) => ({ name: e.name, kind: e.kind }));
-		}, "fsList failed");
-	}
-
-	async fsReadText(path: string): Promise<string> {
-		await this.ensureReady();
-		return this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			const result = await this.session.fs.readText({ path });
-			return result.data;
-		}, "fsReadText failed");
-	}
-
-	async fsWriteText(path: string, data: string): Promise<void> {
-		await this.ensureReady();
-		await this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fs.writeText({ path, data });
-		}, "fsWriteText failed");
+	// Writes: fire onFsMutation after success.
+	async writeText(path: string, data: string): Promise<FsWriteResult> {
+		const result = await this.fsCall((fs) => fs.writeText, { path, data }, "writeText failed");
 		this.onFsMutation?.();
+		return result;
 	}
 
-	async fsWriteBase64(path: string, base64: string): Promise<void> {
-		await this.ensureReady();
-		await this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fs.writeBase64({ path, data: base64 });
-		}, "fsWriteBase64 failed");
+	async writeBase64(path: string, base64: string): Promise<FsWriteResult> {
+		const result = await this.fsCall((fs) => fs.writeBase64, { path, data: base64 }, "writeBase64 failed");
 		this.onFsMutation?.();
+		return result;
 	}
 
-	async fsReadBase64(path: string): Promise<string> {
-		await this.ensureReady();
-		return this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			const result = await this.session.fs.readBase64({ path });
-			return result.data;
-		}, "fsReadBase64 failed");
-	}
-
-	async fsMkdir(path: string): Promise<void> {
-		await this.ensureReady();
-		await this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fs.mkdir({ path });
-		}, "fsMkdir failed");
+	async mkdir(path: string): Promise<FsBoolResult> {
+		const result = await this.fsCall((fs) => fs.mkdir, { path }, "mkdir failed");
 		this.onFsMutation?.();
+		return result;
 	}
 
-	async fsDelete(path: string): Promise<void> {
-		await this.ensureReady();
-		await this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fs.delete({ path });
-		}, "fsDelete failed");
+	async delete(path: string): Promise<FsBoolResult> {
+		const result = await this.fsCall((fs) => fs.delete, { path }, "delete failed");
 		this.onFsMutation?.();
+		return result;
 	}
 
-	async fsMove(from: string, to: string): Promise<void> {
-		await this.ensureReady();
-		await this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fs.move({ from, to });
-		}, "fsMove failed");
+	async move(from: string, to: string): Promise<FsBoolResult> {
+		const result = await this.fsCall((fs) => fs.move, { from, to }, "move failed");
 		this.onFsMutation?.();
+		return result;
 	}
 
-	async fsCopy(from: string, to: string): Promise<void> {
-		await this.ensureReady();
-		await this.enqueue(async () => {
-			if (!this.session) throw new Error("ExtensionSession not available");
-			await this.session.fs.copy({ from, to });
-		}, "fsCopy failed");
+	async copy(from: string, to: string): Promise<FsBoolResult> {
+		const result = await this.fsCall((fs) => fs.copy, { from, to }, "copy failed");
 		this.onFsMutation?.();
+		return result;
 	}
+
 
 	private enqueue<T>(fn: () => Promise<T>, errorLabel: string): Promise<T> {
 		return new Promise<T>((resolve, reject) => {

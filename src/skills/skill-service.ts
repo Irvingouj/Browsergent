@@ -13,7 +13,7 @@ import { SkillRegistry } from "./skill-registry";
 import type {
 	LoadSkillOptions,
 	SkillDiagnostic,
-	SkillFsClient,
+	FsClient,
 	SkillMeta,
 } from "./skill-types";
 
@@ -27,7 +27,7 @@ export class SkillService {
 	private readonly subscribers = new Set<SkillsChangedCallback>();
 
 	constructor(
-		private readonly fsFactory: (() => Promise<SkillFsClient>) | null = null,
+		private readonly fsFactory: (() => Promise<FsClient>) | null = null,
 	) {}
 
 	async ensureReady(): Promise<SkillRegistry> {
@@ -57,7 +57,7 @@ export class SkillService {
 		await this.refreshDiagnostics();
 	}
 
-	private async defaultFsClient(): Promise<SkillFsClient> {
+	private async defaultFsClient(): Promise<FsClient> {
 		const client = ExtensionJsClient.getInstance();
 		await client.init();
 		return client;
@@ -188,6 +188,6 @@ export function notifySkillsChanged(): void {
 	getSkillService().notifySkillsChanged();
 }
 
-export function createSkillRegistryForFs(fs: SkillFsClient): SkillRegistry {
+export function createSkillRegistryForFs(fs: FsClient): SkillRegistry {
 	return new SkillRegistry(fs);
 }

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { createSkillRegistryForFs } from "../../src/skills/skill-service";
-import type { SkillFsClient } from "../../src/skills/skill-types";
+import type { FsClient } from "../../src/skills/skill-types";
 
-function makeFs(files: Record<string, string>): SkillFsClient {
+function makeFs(files: Record<string, string>): FsClient {
 	const dirs = new Set<string>();
 	for (const key of Object.keys(files)) {
 		const parts = key.split("/").filter(Boolean);
@@ -11,10 +11,10 @@ function makeFs(files: Record<string, string>): SkillFsClient {
 		}
 	}
 	return {
-		async fsExists(path: string) {
-			return path in files || dirs.has(path);
+		async exists(path: string) {
+			return { exists: path in files || dirs.has(path) };
 		},
-		async fsList(path: string) {
+		async list(path: string) {
 			const prefix = path.endsWith("/") ? path : `${path}/`;
 			const names = new Set<string>();
 			for (const key of Object.keys(files)) {
@@ -29,25 +29,26 @@ function makeFs(files: Record<string, string>): SkillFsClient {
 				const first = rest.split("/")[0];
 				if (first) names.add(first);
 			}
-			return [...names].map((name) => {
+			const entries = [...names].map((name) => {
 				const child = `${prefix}${name}`;
 				const isDir =
 					dirs.has(child) ||
 					Object.keys(files).some((k) => k.startsWith(`${child}/`));
 				return { name, kind: isDir ? "directory" : "file" };
 			});
+			return { entries };
 		},
-		async fsReadText(path: string) {
+		async readText(path: string) {
 			const content = files[path];
 			if (content === undefined) throw new Error(`missing ${path}`);
-			return content;
+			return { data: content };
 		},
-		async fsWriteText() {},
-		async fsMkdir() {},
-		async fsDelete() {},
-		async fsWriteBase64() {},
-		async fsReadBase64() {
-			return "";
+		async writeText() { return { ok: true as const }; },
+		async mkdir() { return { ok: true as const }; },
+		async delete() { return { ok: true as const }; },
+		async writeBase64() { return { path: "", bytes_written: 0 }; },
+		async readBase64() {
+			return { data: "" };
 		},
 	};
 }

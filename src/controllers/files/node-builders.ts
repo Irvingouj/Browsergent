@@ -1,4 +1,4 @@
-import type { FileNode } from "../state/slices/files-slice";
+import type { FileNode } from "../../state/slices/files-slice";
 
 const BINARY_EXTENSIONS = new Set([
 	".png",

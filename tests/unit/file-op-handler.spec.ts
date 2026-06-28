@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import type { FilesController } from "../../src/controllers/files-controller";
+import type { FilesController } from "../../src/controllers/files";
 import { handleFileOp } from "../../src/sidepanel/file-op-handler";
 import type { FileNode } from "../../src/state/slices/files-slice";
 

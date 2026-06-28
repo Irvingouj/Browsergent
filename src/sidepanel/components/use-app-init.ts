@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ExtjsController } from "../../controllers/extjs-controller";
-import { FilesController } from "../../controllers/files-controller";
+import { FilesController } from "../../controllers/files";
 import { SessionController } from "../../controllers/session-controller";
 import { SettingsController } from "../../controllers/settings-controller";
 import { WorkerBridge } from "../../controllers/worker-bridge";

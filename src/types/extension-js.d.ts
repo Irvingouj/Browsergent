@@ -79,8 +79,19 @@ declare module "@pi-oxide/extension-js" {
 		bytes_written: number;
 	}
 
+export interface FsStatResult {
+	path: string;
+	name: string;
+	kind: string;
+	size: number;
+	mime: string | null;
+	created_at: number | null;
+	modified_at: number | null;
+}
+
 	export interface ExtensionSessionFs {
 		exists(params: FsPathParams): Promise<FsExistsResult>;
+		stat(params: FsPathParams): Promise<FsStatResult>;
 		list(params: FsPathParams): Promise<FsListResult>;
 		readText(params: FsPathParams): Promise<FsStringResult>;
 		readBase64(params: FsPathParams): Promise<FsStringResult>;

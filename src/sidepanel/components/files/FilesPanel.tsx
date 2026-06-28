@@ -1,8 +1,8 @@
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { useStore } from "zustand";
-import type { FilesController } from "../../../controllers/files-controller";
-import { findSkillManifest } from "../../../controllers/files-utils";
+import type { FilesController } from "../../../controllers/files";
+import { findSkillManifest } from "../../../controllers/files";
 import { getSkillService } from "../../../skills/skill-service";
 import {
 	selectContextMenu,

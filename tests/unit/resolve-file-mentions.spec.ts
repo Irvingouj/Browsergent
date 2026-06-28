@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { FilesController } from "../../src/controllers/files-controller";
+import { FilesController } from "../../src/controllers/files";
 import {
 	buildAttachmentXmlBlock,
 	buildTaskWithAttachments,
@@ -9,9 +9,9 @@ import {
 	stripFileMentions,
 	truncateFileContent,
 } from "../../src/sidepanel/resolve-file-mentions";
-import type { SkillFsClient } from "../../src/skills/skill-types";
+import type { FsClient } from "../../src/skills/skill-types";
 
-interface MockFs extends SkillFsClient {
+interface MockFs extends FsClient {
 	storage: Map<string, string>;
 }
 
@@ -19,10 +19,10 @@ function createMockFs(): MockFs {
 	const storage = new Map<string, string>();
 	return {
 		storage,
-		async fsExists(path: string): Promise<boolean> {
-			return storage.has(path);
+		async exists(path: string): Promise<{ exists: boolean }> {
+			return { exists: storage.has(path) };
 		},
-		async fsList(dir: string): Promise<{ name: string; kind: string }[]> {
+		async list(dir: string): Promise<{ entries: { name: string; kind: string }[] }> {
 			const entries: { name: string; kind: string }[] = [];
 			for (const path of storage.keys()) {
 				const parent = path.substring(0, path.lastIndexOf("/")) || "/";
@@ -33,21 +33,28 @@ function createMockFs(): MockFs {
 					});
 				}
 			}
-			return entries;
+			return { entries };
 		},
-		async fsReadText(path: string): Promise<string> {
+		async readText(path: string): Promise<{ data: string }> {
 			const data = storage.get(path);
 			if (data === undefined) throw new Error(`Not found: ${path}`);
-			return data;
+			return { data };
 		},
-		async fsWriteText(path: string, data: string): Promise<void> {
+		async writeText(path: string, data: string): Promise<{ path: string; bytes_written: number }> {
 			storage.set(path, data);
+			return { path, bytes_written: data.length };
 		},
-		async fsMkdir(): Promise<void> {},
-		async fsDelete(): Promise<void> {},
-		async fsWriteBase64(): Promise<void> {},
-		async fsReadBase64(): Promise<string> {
-			return "";
+		async mkdir(): Promise<{ ok: true }> {
+			return { ok: true };
+		},
+		async delete(): Promise<{ ok: true }> {
+			return { ok: true };
+		},
+		async writeBase64(): Promise<{ path: string; bytes_written: number }> {
+			return { path: "", bytes_written: 0 };
+		},
+		async readBase64(): Promise<{ data: string }> {
+			return { data: "" };
 		},
 	};
 }

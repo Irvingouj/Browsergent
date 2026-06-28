@@ -1,3 +1,5 @@
+import type { ExtensionJsClient } from "../sidepanel/extension-js-client";
+
 export type SkillScope = "bundled" | "user";
 
 export interface SkillMeta {
@@ -16,25 +18,22 @@ export interface SkillDocument {
 	body: string;
 }
 
-export interface SkillFsListEntry {
-	name: string;
-	kind: string;
-}
 
-export interface SkillFsClient {
-	fsExists(path: string): Promise<boolean>;
-	fsList(path: string): Promise<ReadonlyArray<SkillFsListEntry>>;
-	fsReadText(path: string): Promise<string>;
-	fsWriteText(path: string, data: string): Promise<void>;
-	/** Write binary bytes (base64-encoded) to a file. The FS is type-agnostic. */
-	fsWriteBase64(path: string, base64: string): Promise<void>;
-	/** Read a file as base64. Use for binary content that fsReadText cannot represent. */
-	fsReadBase64(path: string): Promise<string>;
-	fsMkdir(path: string): Promise<void>;
-	fsDelete(path: string): Promise<void>;
-	fsMove(from: string, to: string): Promise<void>;
-	fsCopy(from: string, to: string): Promise<void>;
-}
+/** FS 能力契约:签名全部 Pick 自 ExtensionJsClient,无手写。 */
+export type FsClient = Pick<
+	ExtensionJsClient,
+	| "exists"
+	| "stat"
+	| "list"
+	| "readText"
+	| "readBase64"
+	| "writeText"
+	| "writeBase64"
+	| "mkdir"
+	| "delete"
+	| "move"
+	| "copy"
+>;
 
 export interface SeedManifest {
 	version: string;

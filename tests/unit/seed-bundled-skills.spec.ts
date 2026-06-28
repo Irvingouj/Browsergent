@@ -2,14 +2,14 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { seedBundledSkills } from "../../src/skills/seed-bundled-skills";
 import { SKILLS_SEED_VERSION_PATH } from "../../src/skills/skill-paths";
-import type { SkillFsClient } from "../../src/skills/skill-types";
+import type { FsClient } from "../../src/skills/skill-types";
 
 function sha256(text: string): string {
 	return createHash("sha256").update(text).digest("hex");
 }
 
 interface TrackingFs {
-	fs: SkillFsClient;
+	fs: FsClient;
 	writes: Array<{ path: string; data: string }>;
 	reads: string[];
 	deletes: string[];
@@ -29,11 +29,11 @@ function makeTrackingFs(initial: Record<string, string> = {}): TrackingFs {
 	const reads: string[] = [];
 	const deletes: string[] = [];
 
-	const fs: SkillFsClient = {
-		async fsExists(path: string) {
-			return path in files || dirs.has(path);
+	const fs: FsClient = {
+		async exists(path: string) {
+			return { exists: path in files || dirs.has(path) };
 		},
-		async fsList(path: string) {
+		async list(path: string) {
 			const prefix = path.endsWith("/") ? path : `${path}/`;
 			const names = new Set<string>();
 			for (const key of Object.keys(files)) {
@@ -48,45 +48,50 @@ function makeTrackingFs(initial: Record<string, string> = {}): TrackingFs {
 				const first = rest.split("/")[0];
 				if (first) names.add(first);
 			}
-			return [...names].map((name) => {
+			const entries = [...names].map((name) => {
 				const child = `${prefix}${name}`;
 				const isDir =
 					dirs.has(child) ||
 					Object.keys(files).some((k) => k.startsWith(`${child}/`));
 				return { name, kind: isDir ? "directory" : "file" };
 			});
+			return { entries };
 		},
-		async fsReadText(path: string) {
+		async readText(path: string) {
 			reads.push(path);
 			const content = files[path];
 			if (content === undefined) throw new Error(`missing ${path}`);
-			return content;
+			return { data: content };
 		},
-		async fsWriteText(path: string, data: string) {
+		async writeText(path: string, data: string) {
 			writes.push({ path, data });
 			files[path] = data;
 			const parts = path.split("/").filter(Boolean);
 			for (let i = 1; i < parts.length - 1; i++) {
 				dirs.add(`/${parts.slice(0, i).join("/")}`);
 			}
+			return { path, bytes_written: data.length };
 		},
-		async fsWriteBase64(path: string, base64: string) {
+		async writeBase64(path: string, base64: string) {
 			writes.push({ path, data: base64 });
 			files[path] = base64;
+			return { path, bytes_written: base64.length };
 		},
-		async fsReadBase64(path: string) {
+		async readBase64(path: string) {
 			reads.push(path);
 			const content = files[path];
 			if (content === undefined) throw new Error(`missing ${path}`);
-			return content;
+			return { data: content };
 		},
-		async fsMkdir(path: string) {
+		async mkdir(path: string) {
 			dirs.add(path);
+			return { ok: true } as const;
 		},
-		async fsDelete(path: string) {
+		async delete(path: string) {
 			deletes.push(path);
 			delete files[path];
 			dirs.delete(path);
+			return { ok: true } as const;
 		},
 	};
 

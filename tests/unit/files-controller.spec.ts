@@ -4,10 +4,10 @@ import {
 	FilesController,
 	isTextFile,
 	sanitizeFileName,
-} from "../../src/controllers/files-controller";
-import type { SkillFsClient } from "../../src/skills/skill-types";
+} from "../../src/controllers/files";
+import type { FsClient } from "../../src/skills/skill-types";
 
-interface MockFs extends SkillFsClient {
+interface MockFs extends FsClient {
 	storage: Map<string, string>;
 	logs: string[];
 }
@@ -18,16 +18,16 @@ function createMockFs(): MockFs {
 	return {
 		storage,
 		logs,
-		async fsExists(path: string): Promise<boolean> {
+		async exists(path: string): Promise<{ exists: boolean }> {
 			logs.push(`exists:${path}`);
-			if (storage.has(path)) return true;
+			if (storage.has(path)) return { exists: true };
 			const prefix = path === "/" ? "/" : `${path}/`;
 			for (const key of storage.keys()) {
-				if (key.startsWith(prefix)) return true;
+				if (key.startsWith(prefix)) return { exists: true };
 			}
-			return false;
+			return { exists: false };
 		},
-		async fsList(path: string): Promise<{ name: string; kind: string }[]> {
+		async list(path: string): Promise<{ entries: { name: string; kind: string }[] }> {
 			logs.push(`list:${path}`);
 			const prefix = path === "/" ? "/" : `${path}/`;
 			const seen = new Set<string>();
@@ -46,34 +46,41 @@ function createMockFs(): MockFs {
 					entries.push({ name: firstSeg, kind: "file" });
 				}
 			}
-			return entries;
+			return { entries };
 		},
-		async fsReadText(path: string): Promise<string> {
+		async readText(path: string): Promise<{ data: string }> {
 			logs.push(`read:${path}`);
 			const data = storage.get(path);
 			if (data === undefined) throw new Error(`Not found: ${path}`);
-			return data;
+			return { data };
 		},
-		async fsWriteText(path: string, data: string): Promise<void> {
+		async writeText(path: string, data: string): Promise<{ path: string; bytes_written: number }> {
 			logs.push(`write:${path}`);
 			storage.set(path, data);
+			return { path, bytes_written: data.length };
 		},
-		async fsWriteBase64(path: string, base64: string): Promise<void> {
+		async writeBase64(path: string, base64: string): Promise<{ path: string; bytes_written: number }> {
 			logs.push(`writeBase64:${path}`);
 			storage.set(path, base64);
+			return { path, bytes_written: base64.length };
 		},
-		async fsReadBase64(path: string): Promise<string> {
+		async readBase64(path: string): Promise<{ data: string }> {
 			logs.push(`readBase64:${path}`);
 			const data = storage.get(path);
 			if (data === undefined) throw new Error(`Not found: ${path}`);
-			return data;
+			return { data };
 		},
-		async fsMkdir(path: string): Promise<void> {
+		async mkdir(path: string): Promise<{ ok: true }> {
 			logs.push(`mkdir:${path}`);
+			return { ok: true };
 		},
-		async fsDelete(path: string): Promise<void> {
+		async delete(path: string): Promise<{ ok: true }> {
 			logs.push(`delete:${path}`);
 			storage.delete(path);
+			return { ok: true };
+		},
+		async stat(path: string): Promise<{ path: string; name: string; kind: string; size: number; mime: string | null; created_at: number | null; modified_at: number | null }> {
+			return { path, name: path.substring(path.lastIndexOf("/") + 1), kind: "file", size: (storage.get(path) ?? "").length, mime: null, created_at: null, modified_at: null };
 		},
 	};
 }
@@ -391,12 +398,23 @@ describe("FilesController.listAllFiles", () => {
 		expect(nodes).toEqual([]);
 	});
 
-	test("returns empty array when fsList throws", async () => {
-		fs.fsList = async () => {
+	test("returns empty array when list throws", async () => {
+		fs.list = async () => {
 			throw new Error("opfs error");
 		};
 		const nodes = await ctrl.listAllFiles();
 		expect(nodes).toEqual([]);
+	});
+
+	test("populates file size from stat", async () => {
+		fs.storage.set("/a.txt", "aaa");
+		fs.storage.set("/longer.md", "this is longer content");
+
+		const nodes = await ctrl.listAllFiles();
+		const aNode = nodes.find((n) => n.name === "a.txt");
+		const longerNode = nodes.find((n) => n.name === "longer.md");
+		expect(aNode?.size).toBe(3);
+		expect(longerNode?.size).toBe("this is longer content".length);
 	});
 });
 

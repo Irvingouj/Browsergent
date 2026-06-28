@@ -2,11 +2,11 @@ import {
 	findSkillManifest,
 	isTextFile,
 	sanitizeFileName,
-} from "../controllers/files-utils";
+} from "../controllers/files";
 import { parseFrontmatter } from "./parse-skill-md";
 import { SkillImportError } from "./skill-errors";
 import { SKILLS_USER_ROOT } from "./skill-paths";
-import type { SkillFsClient } from "./skill-types";
+import type { FsClient } from "./skill-types";
 import {
 	validateSkillDescription,
 	validateSkillName,
@@ -19,16 +19,16 @@ export interface SkillImportResult {
 }
 
 async function ensureParentDirs(
-	fs: SkillFsClient,
+	fs: FsClient,
 	filePath: string,
 ): Promise<void> {
 	const parts = filePath.split("/").filter(Boolean);
 	let current = "";
 	for (let i = 0; i < parts.length - 1; i++) {
 		current += `/${parts[i]}`;
-		const exists = await fs.fsExists(current);
+		const { exists } = await fs.exists(current);
 		if (!exists) {
-			await fs.fsMkdir(current);
+			await fs.mkdir(current);
 		}
 	}
 }
@@ -50,7 +50,7 @@ function computeRelativePath(file: File, _skillMd: File): string | null {
 }
 
 export class SkillImportController {
-	constructor(private readonly fs: SkillFsClient) {}
+	constructor(private readonly fs: FsClient) {}
 
 	async importSkill(files: File[]): Promise<SkillImportResult> {
 		const skillMd = findSkillManifest(files);
@@ -101,7 +101,7 @@ export class SkillImportController {
 			const destPath = `${SKILLS_USER_ROOT}/${skillName}/${relPath}`;
 			await ensureParentDirs(this.fs, destPath);
 			const content = await file.text();
-			await this.fs.fsWriteText(destPath, content);
+			await this.fs.writeText(destPath, content);
 		}
 
 		return { name: skillName, fileCount: uniqueFiles.size, warnings };
@@ -116,13 +116,13 @@ export class SkillImportController {
 	}
 
 	private async deleteDirContents(dirPath: string): Promise<void> {
-		const entries = await this.fs.fsList(dirPath);
+		const { entries } = await this.fs.list(dirPath);
 		for (const entry of entries) {
 			const childPath = `${dirPath}/${entry.name}`;
 			if (entry.kind === "directory") {
 				await this.deleteDirContents(childPath);
 			} else {
-				await this.fs.fsDelete(childPath);
+				await this.fs.delete(childPath);
 			}
 		}
 	}

@@ -6,7 +6,7 @@ import {
 	useState,
 } from "preact/hooks";
 import { useStore } from "zustand/react";
-import type { FilesController } from "../../../controllers/files-controller";
+import type { FilesController } from "../../../controllers/files";
 import { getSkillService } from "../../../skills/skill-service";
 import type { SkillMeta } from "../../../skills/skill-types";
 import {
