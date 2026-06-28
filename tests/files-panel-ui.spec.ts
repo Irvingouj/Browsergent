@@ -111,5 +111,81 @@ test("markdown and js previews render formatted content with a drag handle", asy
 		preview.locator('[data-testid="preview-drag-handle"]'),
 	).toBeVisible();
 
+	// Dragging the handle up grows the preview height.
+	const before = await preview.evaluate((el) =>
+		Number((el as HTMLElement).style.height.replace("px", "")),
+	);
+	const handle = preview.locator('[data-testid="preview-drag-handle"]');
+	const box = await handle.boundingBox();
+	expect(box).not.toBeNull();
+	await sidePanel.mouse.move(box!.x + 5, box!.y + 5);
+	await sidePanel.mouse.down();
+	await sidePanel.mouse.move(box!.x + 5, box!.y - 80); // drag up → grow
+	await sidePanel.mouse.up();
+	const after = await preview.evaluate((el) =>
+		Number((el as HTMLElement).style.height.replace("px", "")),
+	);
+	expect(after).toBeGreaterThan(before);
+
+	await close();
+});
+
+test("preview height resets to the per-type default when switching files", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible();
+
+	const PNG_1X1 =
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+	await uploadBinaryViaPanel(sidePanel, "image.png", PNG_1X1, "image/png");
+	await sidePanel.locator("text=image.png").click();
+	const preview = sidePanel.getByTestId("file-preview");
+	await expect(preview.locator("img")).toBeVisible({ timeout: 10000 });
+	const imageHeight = await preview.evaluate((el) =>
+		Number((el as HTMLElement).style.height.replace("px", "")),
+	);
+	expect(imageHeight).toBe(420); // defaultPreviewHeightPx("image")
+
+	await uploadFileViaPanel(sidePanel, "notes.md", "# h\n\nbody", "text/markdown");
+	await sidePanel.getByTestId("file-tree").getByText("notes.md").click();
+	await expect(preview.locator("h1").first()).toBeVisible({ timeout: 10000 });
+	const textHeight = await preview.evaluate((el) =>
+		Number((el as HTMLElement).style.height.replace("px", "")),
+	);
+	expect(textHeight).toBe(240); // defaultPreviewHeightPx("text")
+
+	await close();
+});
+
+test("expand toggle grows the preview to near-full-height and back", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible();
+
+	const PNG_1X1 =
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+	await uploadBinaryViaPanel(sidePanel, "image.png", PNG_1X1, "image/png");
+	await sidePanel.locator("text=image.png").click();
+	const preview = sidePanel.getByTestId("file-preview");
+	await expect(preview.locator("img")).toBeVisible({ timeout: 10000 });
+
+	const vh = await preview.evaluate(() => window.innerHeight);
+	await preview.getByRole("button", { name: "Expand preview" }).click();
+	await expect(
+		preview.getByRole("button", { name: "Collapse preview" }),
+	).toBeVisible();
+	const expandedHeight = await preview.evaluate((el) =>
+		Number((el as HTMLElement).style.height.replace("px", "")),
+	);
+	expect(expandedHeight).toBeCloseTo(vh * 0.8, -2); // maxH, within 100px
+
+	await preview.getByRole("button", { name: "Collapse preview" }).click();
+	const collapsedHeight = await preview.evaluate((el) =>
+		Number((el as HTMLElement).style.height.replace("px", "")),
+	);
+	expect(collapsedHeight).toBe(420); // back to image default
+
 	await close();
 });

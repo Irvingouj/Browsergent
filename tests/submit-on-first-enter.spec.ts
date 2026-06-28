@@ -36,7 +36,7 @@ test("typing then a single Enter submits the typed text", async () => {
 	// — proves submit fired on the first Enter with the live value.
 	expect(mock.requestBodies.length).toBeGreaterThanOrEqual(1);
 	const text = extractFirstUserMessageText(mock.requestBodies[0]);
-	expect(text).toBe("send me once");
+	expect(text.split("\n\n[Current time:", 1)[0]).toBe("send me once");
 
 	await close();
 	mock.server.close();
@@ -60,7 +60,26 @@ test("typing then clicking Run once submits the typed text", async () => {
 
 	expect(mock.requestBodies.length).toBeGreaterThanOrEqual(1);
 	const text = extractFirstUserMessageText(mock.requestBodies[0]);
-	expect(text).toBe("click me once");
+	expect(text.split("\n\n[Current time:", 1)[0]).toBe("click me once");
+
+	await close();
+	mock.server.close();
+});
+
+test("Enter on an empty input is a no-op (no provider request)", async () => {
+	test.setTimeout(60000);
+	const mock = startSimpleMockProvider();
+	const { sidePanel, close } = await launchExtension();
+	await configureMockProvider(sidePanel, mock.url);
+
+	const input = sidePanel.locator('[data-testid="task-input"]');
+	await input.click();
+	await input.press("Enter");
+
+	// Give any errant submit a chance to fire a request.
+	await sidePanel.waitForTimeout(500);
+	expect(mock.requestBodies.length).toBe(0);
+	await expect(sidePanel.getByTestId("agent-status")).toHaveText("idle");
 
 	await close();
 	mock.server.close();

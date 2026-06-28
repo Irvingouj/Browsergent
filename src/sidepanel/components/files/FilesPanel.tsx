@@ -297,7 +297,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 			/>
 			<MoveDialog onMove={handleMove} />
 			{selectedNode && selectedNode.kind === "file" && (
-				<FilePreview node={selectedNode} filesController={filesController} />
+				<FilePreview key={selectedNode.path} node={selectedNode} filesController={filesController} />
 			)}
 			{error && (
 				<div class="px-sm py-xs text-xs text-danger border-t border-danger-soft bg-danger-soft/30">

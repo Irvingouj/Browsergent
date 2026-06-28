@@ -49,6 +49,11 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 	const [height, setHeight] = useState(defaultPreviewHeightPx(kind));
 	const [expanded, setExpanded] = useState(false);
 	const draggingRef = useRef(false);
+	const dragHandlersRef = useRef<{
+		move: ((e: PointerEvent) => void) | null;
+		up: ((e: PointerEvent) => void) | null;
+		pointerId: number | null;
+	}>({ move: null, up: null, pointerId: null });
 
 	// Reset height to the per-type default whenever the selected file changes.
 	useEffect(() => {
@@ -56,6 +61,20 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 		setHeight(defaultPreviewHeightPx(nextKind));
 		setExpanded(false);
 	}, [node.path]);
+
+	// Detach any in-flight drag listeners on unmount (mid-drag file switch /
+	// unmount) so they cannot mutate a stale or unmounted instance.
+	useEffect(
+		() => () => {
+			const h = dragHandlersRef.current;
+			if (h.move && h.up) {
+				window.removeEventListener("pointermove", h.move);
+				window.removeEventListener("pointerup", h.up);
+			}
+			draggingRef.current = false;
+		},
+		[],
+	);
 
 	// Load content by kind.
 	useEffect(() => {
@@ -137,8 +156,9 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 			(ev.target as HTMLElement).releasePointerCapture?.(ev.pointerId);
 			window.removeEventListener("pointermove", onMove);
 			window.removeEventListener("pointerup", onUp);
-			setExpanded((h) => h && false);
+			dragHandlersRef.current = { move: null, up: null, pointerId: null };
 		};
+		dragHandlersRef.current = { move: onMove, up: onUp, pointerId: e.pointerId };
 		window.addEventListener("pointermove", onMove);
 		window.addEventListener("pointerup", onUp);
 		// Dragging overrides the expanded state.
@@ -146,11 +166,9 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 	};
 
 	const toggleExpanded = () => {
-		setExpanded((prev) => {
-			const next = !prev;
-			setHeight(next ? maxH : defaultPreviewHeightPx(kind));
-			return next;
-		});
+		const next = !expanded;
+		setExpanded(next);
+		setHeight(next ? maxH : defaultPreviewHeightPx(kind));
 	};
 
 	const lowerName = node.name.toLowerCase();

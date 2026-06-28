@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	createStreamingMarkdownRenderer,
 	renderMarkdown,
+	renderMarkdownFile,
 } from "../../src/utils/markdown-stream";
 
 describe("renderMarkdown", () => {
@@ -26,6 +27,22 @@ describe("renderMarkdown", () => {
 		);
 		expect(html).toContain('<a href="https://example.com"');
 		expect(html).toContain("<strong>Indeed</strong>");
+	});
+});
+
+describe("renderMarkdownFile", () => {
+	test("does not tokenize /skill: or @[file:] tokens into chips", () => {
+		const html = renderMarkdownFile("see /skill:foo and @[file:f1:notes]");
+		expect(html).not.toContain("mention-chip");
+		expect(html).not.toContain("data-chip-kind");
+		expect(html).toContain("/skill:foo");
+		expect(html).toContain("@[file:f1:notes]");
+	});
+
+	test("renders ordinary markdown (headings, bold)", () => {
+		const html = renderMarkdownFile("# Title\n\n**bold**");
+		expect(html).toContain("msg-heading");
+		expect(html).toContain("<strong>bold</strong>");
 	});
 });
 

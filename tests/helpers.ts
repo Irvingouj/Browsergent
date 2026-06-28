@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -20,7 +21,10 @@ export async function launchExtension(userDataDir?: string): Promise<{
 	sidePanel: Page;
 	close: () => Promise<void>;
 }> {
-	const context = await chromium.launchPersistentContext(userDataDir ?? "", {
+	const actualUserDataDir =
+		userDataDir ?? (await fs.mkdtemp(path.join(os.tmpdir(), "browsergent-e2e-")));
+	const shouldRemoveUserDataDir = userDataDir === undefined;
+	const context = await chromium.launchPersistentContext(actualUserDataDir, {
 		channel: "chromium",
 		headless: true,
 		args: [
@@ -53,7 +57,12 @@ export async function launchExtension(userDataDir?: string): Promise<{
 		context,
 		extensionId,
 		sidePanel,
-		close: async () => await context.close(),
+		close: async () => {
+			await context.close();
+			if (shouldRemoveUserDataDir) {
+				await fs.rm(actualUserDataDir, { recursive: true, force: true });
+			}
+		},
 	};
 }
 
@@ -199,11 +208,21 @@ export async function configureMockProvider(
 ): Promise<void> {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill(apiKey);
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mockUrl);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await expect(sidePanel.getByTestId("settings-list")).toBeVisible();
+
+	const editButtons = sidePanel.locator('[data-testid^="settings-edit-"]');
+	if ((await editButtons.count()) > 0) {
+		await editButtons.first().click();
+	} else {
+		await sidePanel.getByTestId("settings-add-anthropic").click();
+	}
+
+	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
+	await sidePanel.getByTestId("settings-baseurl-input").fill(mockUrl);
+	await sidePanel.getByTestId("settings-apikey-input").fill(apiKey);
+	await sidePanel.getByTestId("settings-done-button").click();
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	await expect(sidePanel.locator('[data-testid="task-input"]')).toBeVisible();
 }
 
 /**
