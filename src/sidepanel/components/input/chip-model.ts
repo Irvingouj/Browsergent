@@ -88,6 +88,14 @@ export interface ReconstructNode {
 	raw: string | null;
 }
 
+export type ReadInputResult =
+	| { ok: true; value: string; offset: number }
+	| {
+			ok: false;
+			code: "E_SELECTION_OUTSIDE";
+			message: string;
+	  };
+
 export function reconstructCanonical(
 	nodes: ReadonlyArray<ReconstructNode>,
 ): string {
@@ -160,24 +168,105 @@ export function nodePositionToOffset(
  * Read the flat node list from a contentEditable element in DOM order.
  * Text nodes become {text, raw:null}; chip spans become {text:null, raw}.
  */
-export function readDomNodes(root: HTMLElement): ReconstructNode[] {
+const blockTags = new Set([
+	"ADDRESS",
+	"ARTICLE",
+	"ASIDE",
+	"BLOCKQUOTE",
+	"DD",
+	"DIV",
+	"DL",
+	"DT",
+	"FIELDSET",
+	"FIGCAPTION",
+	"FIGURE",
+	"FOOTER",
+	"FORM",
+	"H1",
+	"H2",
+	"H3",
+	"H4",
+	"H5",
+	"H6",
+	"HEADER",
+	"HR",
+	"LI",
+	"MAIN",
+	"NAV",
+	"OL",
+	"P",
+	"PRE",
+	"SECTION",
+	"TABLE",
+	"UL",
+]);
+
+function appendText(nodes: ReconstructNode[], text: string): void {
+	if (text.length === 0) return;
+	const last = nodes[nodes.length - 1];
+	if (last?.raw === null) {
+		nodes[nodes.length - 1] = { text: `${last.text ?? ""}${text}`, raw: null };
+		return;
+	}
+	nodes.push({ text, raw: null });
+}
+
+function appendNewline(nodes: ReconstructNode[]): void {
+	const last = nodes[nodes.length - 1];
+	if (last?.raw === null && last.text?.endsWith("\n")) return;
+	appendText(nodes, "\n");
+}
+
+export function readDomNodes(root: ParentNode): ReconstructNode[] {
 	const nodes: ReconstructNode[] = [];
-	root.childNodes.forEach((child) => {
-		if (child.nodeType === Node.TEXT_NODE) {
-			nodes.push({ text: child.textContent ?? "", raw: null });
-			return;
-		}
-		if (child.nodeType === Node.ELEMENT_NODE) {
+	const walk = (parent: ParentNode): void => {
+		parent.childNodes.forEach((child) => {
+			if (child.nodeType === Node.TEXT_NODE) {
+				appendText(nodes, child.textContent ?? "");
+				return;
+			}
+			if (child.nodeType !== Node.ELEMENT_NODE) return;
 			const el = child as HTMLElement;
 			if (el.dataset.raw !== undefined) {
 				nodes.push({ text: null, raw: el.dataset.raw ?? "" });
-			} else if (el.tagName === "BR") {
-				nodes.push({ text: "\n", raw: null });
-			} else {
-				// fallback: treat unknown element as its text content
-				nodes.push({ text: el.textContent ?? "", raw: null });
+				return;
 			}
-		}
-	});
+			if (el.tagName === "BR") {
+				appendNewline(nodes);
+				return;
+			}
+			if (blockTags.has(el.tagName) && nodes.length > 0) appendNewline(nodes);
+			walk(el);
+		});
+	};
+	walk(root);
 	return nodes;
+}
+
+export function readContentEditable(root: HTMLElement): ReadInputResult {
+	const nodes = readDomNodes(root);
+	const value = reconstructCanonical(nodes);
+	const sel = root.ownerDocument.getSelection();
+	if (!sel || sel.rangeCount === 0)
+		return { ok: true, value, offset: value.length };
+
+	const range = sel.getRangeAt(0);
+	if (!root.contains(range.startContainer)) {
+		return {
+			ok: false,
+			code: "E_SELECTION_OUTSIDE",
+			message: "Selection is outside the task input.",
+		};
+	}
+
+	const beforeCaret = range.cloneRange();
+	beforeCaret.selectNodeContents(root);
+	beforeCaret.setEnd(range.startContainer, range.startOffset);
+	const fragmentRoot = root.ownerDocument.createElement("div");
+	fragmentRoot.appendChild(beforeCaret.cloneContents());
+	return {
+		ok: true,
+		value,
+		offset: reconstructCanonical(readDomNodes(fragmentRoot)).length,
+	};
 }

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { launchExtension, readTaskInput } from "./helpers";
 
 // Verifies the post-refactor invariants (input-refactor-plan.md N1-N4):
@@ -31,7 +31,11 @@ async function caretOffset(sidePanel: Page): Promise<number> {
 					} else {
 						const span = child as HTMLElement;
 						const raw = span.getAttribute("data-raw");
-						offset += raw ? (range.startOffset > 0 ? raw.length : 0) : range.startOffset;
+						offset += raw
+							? range.startOffset > 0
+								? raw.length
+								: 0
+							: range.startOffset;
 					}
 					reached = true;
 					return;
@@ -43,7 +47,10 @@ async function caretOffset(sidePanel: Page): Promise<number> {
 					const raw = span.getAttribute("data-raw");
 					if (raw) {
 						offset += raw.length;
-					} else if (range.startContainer === child || (child as Element).contains(range.startContainer)) {
+					} else if (
+						range.startContainer === child ||
+						(child as Element).contains(range.startContainer)
+					) {
 						walk(child);
 					} else {
 						offset += span.textContent?.length ?? 0;
@@ -97,7 +104,9 @@ test("mid-string insertion lands caret after the inserted char", async () => {
 	await input.type("hello");
 	// Move caret to offset 2 (between "he" and "llo").
 	await sidePanel.evaluate(() => {
-		const el = document.querySelector('[data-testid="task-input"]') as HTMLElement;
+		const el = document.querySelector(
+			'[data-testid="task-input"]',
+		) as HTMLElement;
 		const sel = window.getSelection();
 		if (!sel || !el || el.firstChild?.nodeType !== Node.TEXT_NODE) return;
 		const range = document.createRange();
@@ -109,6 +118,34 @@ test("mid-string insertion lands caret after the inserted char", async () => {
 	await input.type("X");
 	expect(await readTaskInput(sidePanel)).toBe("heXllo");
 	expect(await caretOffset(sidePanel)).toBe(3);
+
+	await close();
+});
+
+test("typing after pasted block text keeps line breaks", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+
+	const input = sidePanel.locator('[data-testid="task-input"]');
+	await input.click();
+	await sidePanel.evaluate(() => {
+		const el = document.querySelector(
+			'[data-testid="task-input"]',
+		) as HTMLElement;
+		el.innerHTML = "<div>line one</div><div>line two</div>";
+		const secondLine = el.querySelectorAll("div")[1]?.firstChild;
+		if (!secondLine) throw new Error("missing pasted line");
+		const range = document.createRange();
+		range.setStart(secondLine, "line two".length);
+		range.collapse(true);
+		const sel = window.getSelection();
+		sel?.removeAllRanges();
+		sel?.addRange(range);
+		el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+	});
+	await input.type("!");
+
+	expect(await readTaskInput(sidePanel)).toBe("line one\nline two!");
 
 	await close();
 });

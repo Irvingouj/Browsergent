@@ -1,12 +1,10 @@
 import type { FunctionalComponent, Ref } from "preact";
 import { useCallback, useEffect, useRef } from "preact/hooks";
 import {
-	nodePositionToOffset,
 	offsetToNodePosition,
 	parseBlocks,
-	type ReconstructNode,
+	readContentEditable,
 	readDomNodes,
-	reconstructCanonical,
 } from "./chip-model";
 import type { Draft, Inline } from "./draft-model";
 
@@ -111,57 +109,6 @@ function caretOffset(draft: Draft): number {
 	return n;
 }
 
-/** Read the canonical caret offset from the live contentEditable. */
-function readSelectionOffset(root: HTMLElement): number {
-	const nodes = readDomNodes(root);
-	const sel = root.ownerDocument.getSelection();
-	if (!sel || sel.rangeCount === 0) {
-		return reconstructCanonical(nodes).length;
-	}
-	const range = sel.getRangeAt(0);
-	if (!root.contains(range.startContainer)) {
-		return reconstructCanonical(nodes).length;
-	}
-	return cursorFromRange(root, nodes, range);
-}
-
-function cursorFromRange(
-	root: HTMLElement,
-	nodes: ReadonlyArray<ReconstructNode>,
-	range: Range,
-): number {
-	const { startContainer, startOffset } = range;
-	let nodeIndex = -1;
-	const children = Array.from(root.childNodes);
-	for (let i = 0; i < children.length; i++) {
-		const child = children[i];
-		if (child === undefined) continue;
-		if (child === startContainer) {
-			nodeIndex = i;
-			break;
-		}
-		if (
-			child.nodeType === Node.ELEMENT_NODE &&
-			startContainer.nodeType === Node.TEXT_NODE &&
-			child.contains(startContainer)
-		) {
-			nodeIndex = i;
-			break;
-		}
-	}
-	if (nodeIndex === -1) {
-		return nodes.reduce(
-			(sum, n) => sum + (n.raw?.length ?? n.text?.length ?? 0),
-			0,
-		);
-	}
-	const node = nodes[nodeIndex];
-	if (node && node.raw !== null && node.raw !== undefined) {
-		return nodePositionToOffset(nodes, nodeIndex, startOffset > 0 ? 1 : 0);
-	}
-	return nodePositionToOffset(nodes, nodeIndex, startOffset);
-}
-
 /** Place the caret at a canonical-string offset in the contentEditable. */
 function setCaret(root: HTMLElement, offset: number): void {
 	const nodes = readDomNodes(root);
@@ -251,11 +198,8 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 			) {
 				el.innerHTML = "";
 			}
-			// design: A 路径——只读 DOM 报告给 parent,绝不写回。浏览器是打字期间
-			// 唯一的 DOM 写者;我们读一次 (value, offset),让 parent 重建 Draft。
-			const value = reconstructCanonical(readDomNodes(el));
-			const offset = readSelectionOffset(el);
-			onRead(value, offset);
+			const result = readContentEditable(el);
+			if (result.ok) onRead(result.value, result.offset);
 		},
 		[onRead],
 	);
@@ -306,6 +250,7 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 			<div
 				ref={setRef}
 				contentEditable={!disabled}
+				tabIndex={disabled ? -1 : 0}
 				data-testid="task-input"
 				role="textbox"
 				aria-multiline="true"

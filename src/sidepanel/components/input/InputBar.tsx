@@ -27,6 +27,15 @@ const MAX_INPUT_HEIGHT = 200;
 const INPUT_CLASS =
 	"w-full bg-bg-base border border-border-strong rounded-md px-md py-sm text-text-primary font-sans text-sm outline-none transition-all min-h-[36px] max-h-[200px] overflow-y-auto leading-normal focus:border-accent focus:ring-[3px] focus:ring-accent-soft disabled:opacity-50 disabled:cursor-not-allowed";
 
+type InputState =
+	| { readonly kind: "browser-editing"; readonly draft: Draft }
+	| { readonly kind: "needs-dom-reconcile"; readonly draft: Draft };
+
+function domSyncFor(state: InputState): DomSync {
+	if (state.kind === "browser-editing") return { kind: "idle" };
+	return { kind: "reconcile", draft: state.draft };
+}
+
 interface InputBarProps {
 	isRunning: boolean;
 	onRun: () => void;
@@ -52,28 +61,23 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	const isUploading = chatUpload.kind === "uploading";
 	const uploadError = chatUpload.kind === "error" ? chatUpload.message : null;
 
-	// design: Draft 是屏幕真相(文字 + 光标 zipper)。store.taskDraft 是持久化
-	// 格式,只在提交/外部变化时与 Draft 交换。打字只动 Draft,不碰 store——
-	// 所以没有两个真相源互相回声(那是上一版的病根:lastWrittenRef/revision/...)。
-	const [draft, setDraft] = useState<Draft>(emptyDraft());
-	// design: DomSync 是显式的 tagged state,告诉 ChipInput 何时重写 DOM。
-	// idle = DOM 已正确(打字刚来),别碰。reconcile = 程序化命令改了 Draft,
-	// DOM 过期,必须重写 + 落光标。这取代了 boolean flag 和 revision 计数器。
-	const [domSync, setDomSync] = useState<DomSync>({ kind: "idle" });
+	const [inputState, setInputState] = useState<InputState>({
+		kind: "browser-editing",
+		draft: emptyDraft(),
+	});
+	const draft = inputState.draft;
+	const domSync = domSyncFor(inputState);
 
 	const draftRef = useRef(draft);
-	draftRef.current = draft;
+	draftRef.current = inputState.draft;
 	const getDraft = useCallback((): Draft => draftRef.current, []);
 
-	// design: 外部 taskDraft 变化(submit 后清空 / session 切换)→ 读进 Draft + reconcile。
-	// 因为打字不写 store,这里永远不会被自己的写触发,无回声。
 	useEffect(() => {
-		setDraft((prev) => {
-			const prevValue = serializeDraft(prev);
+		setInputState((prev) => {
+			const prevValue = serializeDraft(prev.draft);
 			if (prevValue === taskInput) return prev;
-			return parseDraft(taskInput);
+			return { kind: "needs-dom-reconcile", draft: parseDraft(taskInput) };
 		});
-		setDomSync({ kind: "reconcile", draft: parseDraft(taskInput) });
 	}, [taskInput]);
 
 	// 打字路径 (A):ChipInput 报告 (value, offset),重建 Draft + 更新 picker mode。
@@ -81,29 +85,33 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	// mode 在下面定义,这里先占 ref 位,mode 变化时同步更新 ref。
 	const onReadRef = useRef<(value: string, offset: number) => void>(() => {});
 	const handleRead = useCallback((value: string, offset: number): void => {
-		setDraft(parseDraftAtOffset(value, offset));
-		setDomSync({ kind: "idle" });
+		setInputState({
+			kind: "browser-editing",
+			draft: parseDraftAtOffset(value, offset),
+		});
 		onReadRef.current(value, offset);
 	}, []);
 
-	// 程序化路径 (B):应用 EditorCommand,更新 Draft,触发 reconcile。
-	const dispatch = useCallback((command: EditorCommand): void => {
-		const result = applyCommand(draftRef.current, command);
-		if (result.kind === "draft-updated") {
-			setDraft(result.draft);
-			setDomSync({ kind: "reconcile", draft: result.draft });
-			// design: 提交路径之外的所有程序化命令也要同步 store,因为
-			// app.tsx 的 handleRun 实时读 store.taskDraft(不是闭包快照)。
-			// 这是单向投影,不是双向同步。
-			browsergentStore.getState().setTaskDraft(serializeDraft(result.draft));
-		} else if (result.kind === "submitted") {
-			browsergentStore.getState().setTaskDraft(result.value);
-			setDraft(result.nextDraft);
-			setDomSync({ kind: "reconcile", draft: result.nextDraft });
-			onRun();
-		}
-		// submit-blocked-empty: 不做任何事(空 draft 不能提交)
-	}, [onRun]);
+	const dispatch = useCallback(
+		(command: EditorCommand): void => {
+			const result = applyCommand(draftRef.current, command);
+			if (result.kind === "draft-updated") {
+				setInputState({
+					kind: "needs-dom-reconcile",
+					draft: result.draft,
+				});
+				browsergentStore.getState().setTaskDraft(serializeDraft(result.draft));
+			} else if (result.kind === "submitted") {
+				browsergentStore.getState().setTaskDraft(result.value);
+				setInputState({
+					kind: "needs-dom-reconcile",
+					draft: result.nextDraft,
+				});
+				onRun();
+			}
+		},
+		[onRun],
+	);
 
 	const mode = useInputMode({
 		filesController,

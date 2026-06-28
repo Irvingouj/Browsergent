@@ -22,7 +22,8 @@ export async function launchExtension(userDataDir?: string): Promise<{
 	close: () => Promise<void>;
 }> {
 	const actualUserDataDir =
-		userDataDir ?? (await fs.mkdtemp(path.join(os.tmpdir(), "browsergent-e2e-")));
+		userDataDir ??
+		(await fs.mkdtemp(path.join(os.tmpdir(), "browsergent-e2e-")));
 	const shouldRemoveUserDataDir = userDataDir === undefined;
 	const context = await chromium.launchPersistentContext(actualUserDataDir, {
 		channel: "chromium",
@@ -241,6 +242,7 @@ export async function readTaskInput(sidePanel: Page): Promise<string> {
 		return sidePanel.evaluate(() => {
 			const el = document.querySelector('[data-testid="task-input"]');
 			if (!el) return "";
+			const blockTags = new Set(["DIV", "P", "LI", "H1", "H2", "H3", "PRE"]);
 			let out = "";
 			const walk = (parent: Node): void => {
 				parent.childNodes.forEach((child) => {
@@ -250,7 +252,13 @@ export async function readTaskInput(sidePanel: Page): Promise<string> {
 						const span = child as HTMLElement;
 						const raw = span.getAttribute("data-raw");
 						if (raw) out += raw;
-						else walk(child);
+						else {
+							if (blockTags.has(span.tagName) && out && !out.endsWith("\n")) {
+								out += "\n";
+							}
+							if (span.tagName === "BR") out += "\n";
+							else walk(child);
+						}
 					}
 				});
 			};
