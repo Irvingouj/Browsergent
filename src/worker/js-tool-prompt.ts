@@ -13,11 +13,11 @@ ALWAYS call get_doc first when you need any page.*, web.*, web.tab.*, chrome.*, 
 - Use \`await page.url()\` and \`await page.title()\` for page metadata.
 - Use \`await page.goto(url)\` to navigate/open a URL when the user asks to go somewhere.
 - When navigating with \`page.goto()\`, always call \`page.snapshot()\` in the same \`run_js\` block to confirm the page loaded.
-- Ref_ids are single-use: they authorize actions after a \`page.snapshot_data()\`. A click or fill on the SAME observed target stays valid; the observation lease is invalidated only when the target is removed, its role/name changes (fingerprint), or the page navigates/scrolls. Multiple clicks and fills on observed targets are safe in ONE cell. Other elements observed in the same snapshot remain valid even if a click elsewhere on the page mutates the DOM.
+- Ref_ids returned by observation APIs (\`page.snapshot()\`, \`page.snapshot_data()\`, \`page.snapshot_query()\`, \`page.find()\`, \`page.dom()\`) authorize actions on those observed targets. A click or fill on the SAME observed target stays valid; the observation lease is invalidated only when the target is removed, its role/name changes (fingerprint), or the page navigates/scrolls. Multiple clicks and fills on observed targets are safe in ONE cell. Other elements observed in the same observation remain valid even if a click elsewhere on the page mutates the DOM.
 - An action receipt with \`ok: true\` and \`dispatched: true\` proves the event was dispatched to an observed target — NOT that the application accepted it. Verify task-level effects (URL, dialog state, results) with a new \`page.snapshot()\` or \`page.snapshot_data()\` before claiming success.
-- \`page.find()\` returns discovery refs that CANNOT be used directly for \`page.click/fill/...\` — always follow \`page.find()\` with \`page.snapshot_data()\` to get actionable refIds before acting.
+- Prefer matching targets by semantic \`role\` and accessible \`name\` over HTML \`tag\`; modern apps often implement buttons as \`div role="button"\`.
 - Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
-- Do not use \`page.evaluate\`, \`chrome.scripting.executeScript\`, or \`tab.evaluate\`; Browsergent forbids arbitrary JS execution outside the sandboxed runtime.
+- Use \`web.tab.evaluate\` when content-script isolated-world JS is the simplest reliable path. Use \`chrome.scripting.executeScript\` when MAIN-world page JS is required.
 - \`page.find()\` results may omit DOM attributes such as \`src\`, \`href\`, and \`alt\`, and may have a null \`refId\`. Inspect the returned shape before relying on those fields.
 - \`page.fetch()\` returns a text body, not binary bytes or base64. Do not use it to save images or other binary files unless a documented binary-safe API provides the bytes.
 - fs.* APIs are accessed through the fs object: \`fs.exists()\`, \`fs.readText()\`, \`fs.writeText()\`, \`fs.list()\`, etc. Call get_doc with namespace='fs' for exact names.
@@ -124,7 +124,7 @@ Search forms — prefer URL navigation:
 - Example for Google Flights one-way: \`https://www.google.com/travel/flights?q=Flights+from+YYZ+to+HKG+on+2026-07-01&curr=CAD\`. Snapshots of the results page are far more stable than form interactions.
 
 Observation lease errors (recovery is always the same):
-- \`E_OBSERVATION_REQUIRED\`: you acted without any \`page.snapshot_data()\` in this tab yet, or the page navigated. Fix: take a new \`page.snapshot_data()\` and use its refIds.
+- \`E_OBSERVATION_REQUIRED\`: you acted without a current observation in this tab, or the page navigated. Fix: take a fresh observation (\`page.snapshot()\`, \`page.snapshot_data()\`, \`page.snapshot_query()\`, \`page.find()\`, or \`page.dom()\`) and use its refIds.
 - \`E_STALE\` (\`reason: not_in_latest_observation | disconnected | fingerprint_changed\`): the refId is from an older observation or the element changed. Fix: re-snapshot and pick a fresh refId.
 - \`E_AMBIGUOUS_TARGET\`: the label matched multiple observed elements. Fix: use a refId instead of a label.
 

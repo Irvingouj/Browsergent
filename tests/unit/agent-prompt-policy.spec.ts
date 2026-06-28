@@ -41,8 +41,10 @@ describe("agent prompt policy", () => {
 		);
 	});
 
-	test("documents single-use observation lease and receipt truthfulness", () => {
-		expect(JS_TOOL_PROMPT).toContain("single-use");
+	test("documents observation lease and receipt truthfulness", () => {
+		expect(JS_TOOL_PROMPT).toContain("Ref_ids returned by observation APIs");
+		expect(JS_TOOL_PROMPT).toContain("page.snapshot_query()");
+		expect(JS_TOOL_PROMPT).toContain("page.find()");
 		expect(JS_TOOL_PROMPT).toContain("dispatched: true");
 		expect(JS_TOOL_PROMPT).toContain("E_OBSERVATION_REQUIRED");
 		expect(SYSTEM_PROMPT).toContain("dispatch confirmations only");
@@ -72,5 +74,11 @@ describe("agent prompt policy", () => {
 		expect(JS_TOOL_PROMPT).toContain("params");
 		expect(JS_TOOL_PROMPT).toContain("/skills/user/my-skill/references");
 		expect(JS_TOOL_PROMPT).toContain("Reuse over rewrite");
+	});
+
+	test("allows page script evaluation escape hatches", () => {
+		expect(SYSTEM_PROMPT).toContain("chrome.scripting.executeScript");
+		expect(JS_TOOL_PROMPT).toContain("web.tab.evaluate");
+		expect(JS_TOOL_PROMPT).not.toContain("forbids arbitrary JS execution");
 	});
 });

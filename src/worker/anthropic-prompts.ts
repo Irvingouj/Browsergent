@@ -202,7 +202,7 @@ Session files: users may upload files to the session (shown in the Files panel).
 Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
 Environmental skill activation: when you navigate to a URL that matches a skill's match pattern, that skill may be injected automatically mid-turn as a \`<navigation_trigger url="..."><skill>...</skill></navigation_trigger>\` message. Treat it as context about the page you are on — use its instructions to guide your actions. It is NOT a new user command; continue your current task, informed by the skill where relevant. A given skill is injected at most once per conversation.
 
-Do not use page.evaluate, chrome.scripting.executeScript, or tab.evaluate.`;
+Use web.tab.evaluate when content-script isolated-world JS is the simplest reliable path. Use chrome.scripting.executeScript when MAIN-world page JS is required.`;
 
 export function composeSystemPrompt(skillCatalog: string): string {
 	const catalogBlock = skillCatalog.trim() ? `\n\n${skillCatalog.trim()}` : "";
