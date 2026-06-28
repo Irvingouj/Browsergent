@@ -394,3 +394,399 @@ describe("SessionController diagnostics", () => {
 		expect((await ctrl.load())?.diagnostics).toEqual(diagnostics);
 	});
 });
+
+describe("SessionController diagnostics trimming", () => {
+	let storage: MemoryStorage;
+
+	beforeEach(() => {
+		storage = new MemoryStorage();
+	});
+
+	test("trims oversized diagnostics array on save", async () => {
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+
+		// Generate many large diagnostic events that exceed the size threshold
+		const hugeText = "x".repeat(6000);
+		const diagnostics: Array<{
+			kind: "model_response";
+			timestamp: number;
+			providerStopReason: string;
+			sdkStopReason: "end";
+			content: Array<{ type: "text"; text: string }>;
+		}> = [];
+		for (let i = 0; i < 150; i++) {
+			diagnostics.push({
+				kind: "model_response",
+				timestamp: i,
+				providerStopReason: "end_turn",
+				sdkStopReason: "end",
+				content: [{ type: "text", text: hugeText }],
+			});
+		}
+
+		await ctrl.save([], [], diagnostics);
+
+		const loaded = await ctrl.load();
+		if (!loaded) throw new Error("missing session");
+		expect(loaded.diagnostics.length).toBeLessThan(diagnostics.length);
+		expect(loaded.diagnostics[0]?.timestamp).toBeGreaterThan(0);
+		expect(loaded.diagnostics[loaded.diagnostics.length - 1]?.timestamp).toBe(
+			149,
+		);
+	});
+
+	test("trims provider_sse_event data in persisted diagnostics", async () => {
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+
+		const hugeData = "raw_sse_chunk_".repeat(2000); // ~28KB
+		const diagnostics = [
+			{
+				kind: "provider_sse_event" as const,
+				timestamp: 1,
+				eventType: "content_block_delta",
+				data: hugeData,
+			},
+			{
+				kind: "provider_sse_remainder" as const,
+				timestamp: 2,
+				data: hugeData,
+			},
+		];
+
+		await ctrl.save([], [], diagnostics);
+
+		const loaded = await ctrl.load();
+		if (!loaded) throw new Error("missing session");
+		const sseEvent = loaded.diagnostics.find(
+			(d): d is (typeof diagnostics)[0] => d.kind === "provider_sse_event",
+		);
+		const remainder = loaded.diagnostics.find(
+			(d): d is (typeof diagnostics)[1] => d.kind === "provider_sse_remainder",
+		);
+		if (!sseEvent) throw new Error("missing SSE event");
+		if (!remainder) throw new Error("missing SSE remainder");
+		expect(sseEvent.data.length).toBeLessThan(hugeData.length);
+		expect(sseEvent.data.length).toBeLessThanOrEqual(10000);
+		expect(sseEvent.data).toContain("[truncated");
+		expect(remainder.data.length).toBeLessThan(hugeData.length);
+		expect(remainder.data.length).toBeLessThanOrEqual(10000);
+		expect(remainder.data).toContain("[truncated");
+	});
+
+	test("trims old persisted provider_sse_event data on load", async () => {
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const id = requireActiveId(ctrl);
+		const hugeData = "raw_sse_chunk_".repeat(2000);
+		await storage.set("sessions", `session_${id}`, {
+			id,
+			messages: [],
+			trace: [],
+			diagnostics: [
+				{
+					kind: "provider_sse_event" as const,
+					timestamp: 1,
+					eventType: "content_block_delta",
+					data: hugeData,
+				},
+			],
+			timestamp: 1,
+			messageCount: 0,
+		});
+
+		const loaded = await ctrl.load();
+
+		const [event] = loaded?.diagnostics ?? [];
+		expect(event?.kind).toBe("provider_sse_event");
+		if (event?.kind !== "provider_sse_event") throw new Error("missing event");
+		expect(event.data.length).toBeLessThan(hugeData.length);
+		expect(event.data.length).toBeLessThanOrEqual(10000);
+		expect(event.data).toContain("[truncated");
+		expect((await ctrl.load())?.diagnostics).toEqual(loaded?.diagnostics);
+	});
+
+	test("init trims oldest non-active sessions when stored sessions are too large", async () => {
+		const activeId = "s11";
+		await storage.set("sessions", "__meta", { activeSessionId: activeId });
+		const hugeText = "x".repeat(6000);
+		for (let i = 0; i < 12; i++) {
+			await storage.set("sessions", `session_s${i}`, {
+				id: `s${i}`,
+				messages: [],
+				trace: [],
+				diagnostics: Array.from({ length: 150 }, (_, j) => ({
+					kind: "model_response" as const,
+					timestamp: j,
+					providerStopReason: "end_turn",
+					sdkStopReason: "end" as const,
+					content: [{ type: "text" as const, text: hugeText }],
+				})),
+				timestamp: i,
+				messageCount: 0,
+			});
+		}
+
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+
+		const { sessions } = await ctrl.listSessions();
+		expect(sessions.some((session) => session.id === activeId)).toBe(true);
+		expect(sessions.some((session) => session.id === "s0")).toBe(false);
+		expect(sessions.length).toBeLessThan(12);
+	});
+
+	test("recovers from storage set failure by dropping diagnostics", async () => {
+		// A storage backend that fails on the first set call with non-empty diagnostics
+		let firstDiagnosticsSet = true;
+		const flakyStorage = new MemoryStorage();
+		const origSet = flakyStorage.set.bind(flakyStorage);
+		flakyStorage.set = async <T>(
+			store: string,
+			key: string,
+			value: T,
+		): Promise<void> => {
+			const diagnosticsValue =
+				typeof value === "object" && value !== null && "diagnostics" in value
+					? (value as Record<string, unknown>).diagnostics
+					: null;
+			if (
+				firstDiagnosticsSet &&
+				Array.isArray(diagnosticsValue) &&
+				diagnosticsValue.length > 0
+			) {
+				firstDiagnosticsSet = false;
+				throw new DOMException("QuotaExceededError", "QuotaExceededError");
+			}
+			return origSet(store, key, value);
+		};
+
+		const ctrl = new SessionController(flakyStorage);
+		await ctrl.init();
+
+		const messages = [
+			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
+		];
+		const trace = [
+			{
+				id: "t1",
+				step: 1,
+				status: "done" as const,
+				toolName: "run_js",
+				timestamp: 1,
+			},
+		];
+		const diagnostics = [
+			{
+				kind: "model_response" as const,
+				timestamp: 1,
+				providerStopReason: "end_turn",
+				sdkStopReason: "end" as const,
+				content: [{ type: "text" as const, text: "some text" }],
+			},
+		];
+
+		await ctrl.save(messages, trace, diagnostics);
+
+		const loaded = await ctrl.load();
+		// Messages and trace must survive
+		expect(loaded?.messages).toEqual(messages);
+		expect(loaded?.trace).toEqual(trace);
+		// Diagnostics should have been dropped on retry
+		expect(loaded?.diagnostics.length).toBe(0);
+	});
+
+	test("drops a single oversized diagnostic event entirely", async () => {
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+
+		const hugeBody = "x".repeat(600_000);
+		const diagnostics = [
+			{
+				kind: "provider_request" as const,
+				timestamp: 1,
+				body: hugeBody,
+			},
+		];
+
+		await ctrl.save([], [], diagnostics);
+
+		const loaded = await ctrl.load();
+		if (!loaded) throw new Error("missing session");
+		expect(loaded.diagnostics.length).toBe(0);
+	});
+
+	test("does not truncate data exactly at threshold", async () => {
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+
+		const exactData = "y".repeat(10000);
+		const diagnostics = [
+			{
+				kind: "provider_sse_event" as const,
+				timestamp: 1,
+				eventType: "content_block_delta",
+				data: exactData,
+			},
+		];
+
+		await ctrl.save([], [], diagnostics);
+
+		const loaded = await ctrl.load();
+		if (!loaded) throw new Error("missing session");
+		expect(loaded.diagnostics.length).toBe(1);
+		const event = loaded.diagnostics[0];
+		if (event?.kind !== "provider_sse_event") throw new Error("missing event");
+		expect(event.data).toBe(exactData);
+		expect(event.data).not.toContain("[truncated");
+		expect(event.data.length).toBe(10000);
+	});
+
+	test("createSession trims oldest non-active sessions when over budget", async () => {
+		const activeId = "keep-me";
+		await storage.set("sessions", "__meta", { activeSessionId: activeId });
+		const hugeText = "x".repeat(6000);
+		// Seed enough sessions to be under budget after init but pushable over by adding more.
+		for (let i = 0; i < 12; i++) {
+			await storage.set("sessions", `session_s${i}`, {
+				id: `s${i}`,
+				messages: [],
+				trace: [],
+				diagnostics: Array.from({ length: 150 }, (_, j) => ({
+					kind: "model_response" as const,
+					timestamp: j,
+					providerStopReason: "end_turn",
+					sdkStopReason: "end" as const,
+					content: [{ type: "text" as const, text: hugeText }],
+				})),
+				timestamp: i,
+				messageCount: 0,
+			});
+		}
+
+		const ctrl = new SessionController(storage);
+		await ctrl.init(); // trims down to budget
+
+		// Push back over budget by re-seeding large sessions the controller does not yet know about.
+		for (let i = 100; i < 112; i++) {
+			await storage.set("sessions", `session_late${i}`, {
+				id: `late${i}`,
+				messages: [],
+				trace: [],
+				diagnostics: Array.from({ length: 150 }, () => ({
+					kind: "model_response" as const,
+					timestamp: i,
+					providerStopReason: "end_turn",
+					sdkStopReason: "end" as const,
+					content: [{ type: "text" as const, text: hugeText }],
+				})),
+				timestamp: i,
+				messageCount: 0,
+			});
+		}
+
+		const before = (await ctrl.listSessions()).sessions.length;
+		await ctrl.createSession();
+		const after = (await ctrl.listSessions()).sessions.length;
+
+		// createSession must have evicted some non-active session to bring the store under budget.
+		expect(after).toBeLessThan(before);
+		// The originally-active session is NOT protected after createSession (meta moved to the new id),
+		// but the newly-created session IS present.
+		const ids = (await ctrl.listSessions()).sessions.map((s) => s.id);
+		expect(ctrl.getActiveSessionId()).not.toBeNull();
+		expect(ids).toContain(ctrl.getActiveSessionId());
+	});
+
+	test("already-truncated provider_sse_remainder is not re-truncated", async () => {
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const id = requireActiveId(ctrl);
+		// A remainder event whose data already ends with the truncated marker.
+		const alreadyTruncated = `${"partial_".repeat(500)}... [truncated 4999964 bytes]`;
+		await storage.set("sessions", `session_${id}`, {
+			id,
+			messages: [],
+			trace: [],
+			diagnostics: [
+				{
+					kind: "provider_sse_remainder" as const,
+					timestamp: 1,
+					data: alreadyTruncated,
+				},
+			],
+			timestamp: 1,
+			messageCount: 0,
+		});
+
+		const first = await ctrl.load();
+		const second = await ctrl.load();
+
+		const [event] = first?.diagnostics ?? [];
+		expect(event?.kind).toBe("provider_sse_remainder");
+		if (event?.kind !== "provider_sse_remainder")
+			throw new Error("missing event");
+		// Data preserved verbatim — no double truncation.
+		expect(event.data).toBe(alreadyTruncated);
+		// Second load is stable (idempotent — not flagged as changed again).
+		expect(second?.diagnostics).toEqual(first?.diagnostics);
+	});
+
+	test("load returns data even when normalization write-back fails", async () => {
+		const failOnce = { value: false };
+		const flaky = new MemoryStorage();
+		const origSet = flaky.set.bind(flaky);
+		flaky.set = async <T>(
+			store: string,
+			key: string,
+			value: T,
+		): Promise<void> => {
+			// Fail the write-back set (the one inside loadForId), which is fire-and-forget.
+			const diags =
+				typeof value === "object" && value !== null && "diagnostics" in value
+					? (value as Record<string, unknown>).diagnostics
+					: null;
+			if (
+				failOnce.value &&
+				store === "sessions" &&
+				key.startsWith("session_") &&
+				Array.isArray(diags) &&
+				diags.length > 0
+			) {
+				failOnce.value = false;
+				throw new DOMException("QuotaExceededError", "QuotaExceededError");
+			}
+			return origSet(store, key, value);
+		};
+
+		const ctrl = new SessionController(flaky);
+		await ctrl.init();
+		const id = requireActiveId(ctrl);
+		const hugeData = "raw_sse_chunk_".repeat(2000);
+		await flaky.set("sessions", `session_${id}`, {
+			id,
+			messages: [{ id: "m1", kind: "user" as const, text: "hi", timestamp: 1 }],
+			trace: [],
+			diagnostics: [
+				{
+					kind: "provider_sse_event" as const,
+					timestamp: 1,
+					eventType: "content_block_delta",
+					data: hugeData,
+				},
+			],
+			timestamp: 1,
+			messageCount: 1,
+		});
+
+		// load() must still return data even though the write-back set throws.
+		failOnce.value = true;
+		const loaded = await ctrl.load();
+		expect(loaded).not.toBeNull();
+		expect(loaded?.messages.length).toBe(1);
+		expect(loaded?.diagnostics.length).toBe(1);
+		const [ev] = loaded?.diagnostics ?? [];
+		expect(ev?.kind).toBe("provider_sse_event");
+	});
+});
