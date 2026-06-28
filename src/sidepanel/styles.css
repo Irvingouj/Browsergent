@@ -460,3 +460,44 @@ body,
 	margin: 0 1px;
 	line-height: 1.4;
 }
+
+/* File preview pane reuses message-bubble markdown/code styles,
+   scoped tighter to fit the preview panel. */
+.file-preview-body.message-bubble {
+	padding: 0.5rem;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	background: transparent;
+}
+.file-preview-body.message-bubble .code-block {
+	margin: 0;
+}
+.file-preview-body .prose-preview {
+	max-width: none;
+}
+.preview-drag-handle {
+	cursor: ns-resize;
+	touch-action: none;
+}
+
+/* Slide-up entry animation when the preview panel mounts. */
+@keyframes preview-slide-up {
+	from {
+		transform: translateY(16px);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+.file-preview-panel {
+	animation: preview-slide-up 0.18s ease-out;
+	/* Smooth height transitions on expand/collapse and file switch.
+	   Disabled during active drag (see .preview-resizing). */
+	transition: height 0.18s ease-out;
+}
+.file-preview-panel.preview-resizing {
+	transition: none;
+	animation: none;
+}

@@ -1,15 +1,41 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand";
-import type { FilesController } from "../../../controllers/files-controller";
-import { classifyMedia, resolveMime } from "../../../controllers/media-types";
+import type { FilesController } from "../../../controllers/files";
+import {
+	classifyMedia,
+	defaultPreviewHeightPx,
+	resolveMime,
+} from "../../../controllers/media-types";
 import type { MediaKind } from "../../../controllers/media-types";
 import { selectSelectedFileId } from "../../../state/selectors";
 import type { FileNode } from "../../../state/slices/files-slice";
 import { browsergentStore } from "../../../state/store";
+import { renderMarkdownFile } from "../../../utils/markdown-stream";
+import { highlightCode } from "../../../utils/syntax-highlight";
 
 interface FilePreviewProps {
 	node: FileNode;
 	filesController: FilesController;
+}
+
+const MIN_H = 80;
+
+const CODE_EXTS: Record<string, true> = {
+	".js": true,
+	".jsx": true,
+	".ts": true,
+	".tsx": true,
+	".mjs": true,
+	".cjs": true,
+};
+function codeLang(name: string): string {
+	const lower = name.toLowerCase();
+	if (lower.endsWith(".ts") || lower.endsWith(".tsx")) return "ts";
+	return "js";
+}
+
+function isMarkdown(name: string): boolean {
+	return /\.md$/i.test(name) || /\.markdown$/i.test(name);
 }
 
 export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
@@ -19,9 +45,22 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 	const [mediaKind, setMediaKind] = useState<MediaKind | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
+	const kind = classifyMedia(node.name, node.mime);
+	const [height, setHeight] = useState(defaultPreviewHeightPx(kind));
+	const [expanded, setExpanded] = useState(false);
+	const draggingRef = useRef(false);
+
+	// Reset height to the per-type default whenever the selected file changes.
 	useEffect(() => {
-		const kind = classifyMedia(node.name, node.mime);
-		if (!selectedFileId || kind === "binary") {
+		const nextKind = classifyMedia(node.name, node.mime);
+		setHeight(defaultPreviewHeightPx(nextKind));
+		setExpanded(false);
+	}, [node.path]);
+
+	// Load content by kind.
+	useEffect(() => {
+		const loadKind = classifyMedia(node.name, node.mime);
+		if (!selectedFileId || loadKind === "binary") {
 			setContent(null);
 			setMediaUrl(null);
 			setMediaKind(null);
@@ -29,7 +68,7 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 			return;
 		}
 		let cancelled = false;
-		if (kind === "text") {
+		if (loadKind === "text") {
 			filesController
 				.readFileText(node.path)
 				.then((text: string) => {
@@ -55,14 +94,13 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 				.then((b64: string) => {
 					if (!cancelled) {
 						if (mime === undefined) {
-							// Should not happen post-classify, but guard against surprises.
 							setContent(null);
 							setMediaUrl(null);
 							setMediaKind(null);
 							return;
 						}
 						setMediaUrl(`data:${mime};base64,${b64}`);
-						setMediaKind(kind);
+						setMediaKind(loadKind);
 						setContent(null);
 						setError(null);
 					}
@@ -82,26 +120,127 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 		};
 	}, [selectedFileId, node, filesController]);
 
-	const kind = classifyMedia(node.name, node.mime);
+	const maxH = typeof window !== "undefined" ? window.innerHeight * 0.8 : 600;
+
+	const onHandlePointerDown = (e: PointerEvent) => {
+		(e.target as HTMLElement).setPointerCapture(e.pointerId);
+		draggingRef.current = true;
+		const startY = e.clientY;
+		const startHeight = height;
+		const onMove = (ev: PointerEvent) => {
+			if (!draggingRef.current) return;
+			const next = startHeight + (startY - ev.clientY);
+			setHeight(Math.max(MIN_H, Math.min(next, maxH)));
+		};
+		const onUp = (ev: PointerEvent) => {
+			draggingRef.current = false;
+			(ev.target as HTMLElement).releasePointerCapture?.(ev.pointerId);
+			window.removeEventListener("pointermove", onMove);
+			window.removeEventListener("pointerup", onUp);
+			setExpanded((h) => h && false);
+		};
+		window.addEventListener("pointermove", onMove);
+		window.addEventListener("pointerup", onUp);
+		// Dragging overrides the expanded state.
+		setExpanded(false);
+	};
+
+	const toggleExpanded = () => {
+		setExpanded((prev) => {
+			const next = !prev;
+			setHeight(next ? maxH : defaultPreviewHeightPx(kind));
+			return next;
+		});
+	};
+
+	const lowerName = node.name.toLowerCase();
+	const renderTextBody = () => {
+		if (content === null) return null;
+		if (isMarkdown(lowerName)) {
+			return (
+				<div
+					class="file-preview-body message-bubble prose-preview"
+					dangerouslySetInnerHTML={{ __html: renderMarkdownFile(content) }}
+				/>
+			);
+		}
+		const ext = lowerName.slice(lowerName.lastIndexOf("."));
+		if (CODE_EXTS[ext]) {
+			return (
+				<pre class="file-preview-body message-bubble text-xs font-mono whitespace-pre-wrap break-all">
+					<code
+						dangerouslySetInnerHTML={{
+							__html: highlightCode(content, codeLang(node.name)),
+						}}
+					/>
+				</pre>
+			);
+		}
+		return (
+			<pre class="text-xs font-mono text-text-secondary whitespace-pre-wrap break-all leading-relaxed">
+				{content}
+			</pre>
+		);
+	};
 
 	return (
 		<div
 			data-testid="file-preview"
-			class="border-t border-border bg-bg-surface/50"
+			class="flex flex-col overflow-hidden border-t border-border bg-bg-surface/50 flex-shrink-0"
+			style={{ height: `${height}px` }}
 		>
-			<div class="px-sm py-xs border-b border-border flex items-center justify-between">
-				<span class="text-xs font-medium text-text-secondary truncate">
-					{node.name}
-				</span>
+			<div class="flex-shrink-0 px-sm py-xs border-b border-border flex items-center justify-between gap-xs">
+				<div
+					data-testid="preview-drag-handle"
+					class="preview-drag-handle flex items-center gap-xs flex-1 min-w-0"
+					onPointerDown={onHandlePointerDown}
+				>
+					<svg
+						width="10"
+						height="14"
+						viewBox="0 0 10 14"
+						class="text-text-muted flex-shrink-0"
+						aria-hidden="true"
+					>
+						<circle cx="3" cy="3" r="1" fill="currentColor" />
+						<circle cx="7" cy="3" r="1" fill="currentColor" />
+						<circle cx="3" cy="7" r="1" fill="currentColor" />
+						<circle cx="7" cy="7" r="1" fill="currentColor" />
+						<circle cx="3" cy="11" r="1" fill="currentColor" />
+						<circle cx="7" cy="11" r="1" fill="currentColor" />
+					</svg>
+					<span class="text-xs font-medium text-text-secondary truncate">
+						{node.name}
+					</span>
+				</div>
 				<span class="text-[10px] text-text-muted flex-shrink-0">
 					{node.size ?? 0} bytes
 				</span>
+				<button
+					type="button"
+					onClick={toggleExpanded}
+					class="flex-shrink-0 text-text-muted hover:text-text-primary"
+					aria-label={expanded ? "Collapse preview" : "Expand preview"}
+					title={expanded ? "Collapse preview" : "Expand preview"}
+				>
+					<svg
+						width="12"
+						height="12"
+						viewBox="0 0 12 12"
+						class={`transition-transform ${expanded ? "rotate-180" : ""}`}
+					>
+						<path
+							d="M2 4l4 4 4-4"
+							stroke="currentColor"
+							stroke-width="1.5"
+							fill="none"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
 			</div>
-			<div
-				class={`p-sm overflow-auto ${
-					kind === "text" ? "max-h-[200px]" : "max-h-[400px]"
-				}`}
-			>
+			<div class="flex-1 overflow-auto p-sm">
 				{kind === "binary" ? (
 					<p class="text-sm text-text-muted">
 						{node.name} — {node.size ?? 0} bytes (preview not available)
@@ -113,27 +252,21 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 						<img
 							src={mediaUrl}
 							alt={node.name}
-							class="max-w-full max-h-[380px] object-contain mx-auto"
+							class="max-w-full max-h-full object-contain mx-auto"
 						/>
 					) : mediaKind === "video" ? (
-						<video
-							src={mediaUrl}
-							controls
-							class="max-w-full max-h-[380px] mx-auto"
-						/>
+						<video src={mediaUrl} controls class="max-w-full max-h-full mx-auto" />
 					) : mediaKind === "audio" ? (
 						<audio src={mediaUrl} controls class="w-full" />
 					) : (
 						<iframe
 							src={mediaUrl}
 							title={node.name}
-							class="w-full h-[380px] border border-border"
+							class="w-full h-full border border-border"
 						/>
 					)
 				) : content !== null ? (
-					<pre class="text-xs font-mono text-text-secondary whitespace-pre-wrap break-all leading-relaxed">
-						{content}
-					</pre>
+					renderTextBody()
 				) : (
 					<div class="flex items-center gap-xs text-xs text-text-muted">
 						<svg

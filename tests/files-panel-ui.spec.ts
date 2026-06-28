@@ -30,11 +30,16 @@ test("files panel shows tabs, previews, and preserves selection across tab switc
 	await expect(sidePanel.locator("text=notes.md")).toBeVisible({
 		timeout: 10000,
 	});
-	await sidePanel.locator("text=notes.md").click();
+	await sidePanel.getByTestId("file-tree").getByText("notes.md").click();
 	await expect(sidePanel.getByTestId("file-preview")).toContainText(
 		"Markdown preview body.",
 		{ timeout: 10000 },
 	);
+
+	// Markdown renders as formatted HTML (h1), not raw source.
+	await expect(
+		sidePanel.getByTestId("file-preview").locator("h1").first(),
+	).toContainText("Preview heading", { timeout: 10000 });
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
 	await expect(sidePanel.getByTestId("files-panel")).not.toBeVisible();
@@ -74,6 +79,37 @@ test("video file renders an inline <video controls> preview", async () => {
 	const video = sidePanel.getByTestId("file-preview").locator("video");
 	await expect(video).toBeVisible({ timeout: 10000 });
 	await expect(video).toHaveAttribute("controls");
+
+	await close();
+});
+
+test("markdown and js previews render formatted content with a drag handle", async () => {
+	test.setTimeout(60000);
+	const { sidePanel, close } = await launchExtension();
+
+	await sidePanel.getByRole("button", { name: "Files" }).click();
+	await expect(sidePanel.getByTestId("files-panel")).toBeVisible();
+
+	// JS file: highlightCode wraps tokens in .token-* spans.
+	await uploadFileViaPanel(
+		sidePanel,
+		"app.js",
+		"const greet = function () { return 'hi'; };",
+		"text/javascript",
+	);
+	await expect(sidePanel.locator("text=app.js")).toBeVisible({
+		timeout: 10000,
+	});
+	await sidePanel.locator("text=app.js").click();
+	const preview = sidePanel.getByTestId("file-preview");
+	// keyword (const) or function-def token must be present.
+	await expect(
+		preview.locator("[class^='token-']").first(),
+	).toBeVisible({ timeout: 10000 });
+	// Drag handle present.
+	await expect(
+		preview.locator('[data-testid="preview-drag-handle"]'),
+	).toBeVisible();
 
 	await close();
 });

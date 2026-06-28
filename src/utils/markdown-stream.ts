@@ -203,6 +203,11 @@ function safeParseMarkdown(text: string): string {
 	}
 }
 
+/** Render markdown for file preview (no chat-chip tokenization). */
+export function renderMarkdownFile(text: string): string {
+	return safeParseMarkdown(text);
+}
+
 /**
  * Render markdown with @[file:...], @[tab:...], and /skill:... tokens
  * displayed as inline styled chips.

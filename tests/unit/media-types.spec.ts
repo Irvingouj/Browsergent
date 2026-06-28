@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { classifyMedia, resolveMime } from "../../src/controllers/media-types";
+import {
+	classifyMedia,
+	defaultPreviewHeightPx,
+	resolveMime,
+} from "../../src/controllers/media-types";
 
 describe("resolveMime", () => {
 	test("prefers explicit mime over extension", () => {
@@ -70,5 +74,41 @@ describe("classifyMedia", () => {
 
 	test("explicit application/pdf via mime", () => {
 		expect(classifyMedia("report.bin", "application/pdf")).toBe("pdf");
+	});
+});
+
+
+describe("defaultPreviewHeightPx", () => {
+	test("returns a positive height for every kind", () => {
+		expect(defaultPreviewHeightPx("image")).toBeGreaterThan(0);
+		expect(defaultPreviewHeightPx("video")).toBeGreaterThan(0);
+		expect(defaultPreviewHeightPx("pdf")).toBeGreaterThan(0);
+		expect(defaultPreviewHeightPx("audio")).toBeGreaterThan(0);
+		expect(defaultPreviewHeightPx("text")).toBeGreaterThan(0);
+		expect(defaultPreviewHeightPx("binary")).toBeGreaterThan(0);
+	});
+
+	test("pdf/image/video are taller than audio", () => {
+		const tall = defaultPreviewHeightPx("pdf");
+		expect(tall).toBeGreaterThan(defaultPreviewHeightPx("audio"));
+		expect(defaultPreviewHeightPx("image")).toBeGreaterThan(
+			defaultPreviewHeightPx("audio"),
+		);
+		expect(defaultPreviewHeightPx("video")).toBeGreaterThan(
+			defaultPreviewHeightPx("audio"),
+		);
+	});
+
+	test("binary is the smallest", () => {
+		const bin = defaultPreviewHeightPx("binary");
+		for (const kind of [
+			"image",
+			"video",
+			"pdf",
+			"audio",
+			"text",
+		] as const) {
+			expect(defaultPreviewHeightPx(kind)).toBeGreaterThan(bin);
+		}
 	});
 });
