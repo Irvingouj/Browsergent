@@ -94,7 +94,10 @@ describe("run_js tool error handling", () => {
 		});
 		const tools = makeTools(runJs);
 		const handler = getRunJsHandler(tools);
-		await handler({ code: "page.snapshot()", params: { url: "https://x", n: 3 } });
+		await handler({
+			code: "page.snapshot()",
+			params: { url: "https://x", n: 3 },
+		});
 		expect(runJs).toHaveBeenCalledTimes(1);
 		const executedCode = runJs.mock.calls[0][0] as string;
 		expect(executedCode.startsWith("globalThis._params = ")).toBe(true);

@@ -12,7 +12,12 @@ export interface UrlState {
 
 export type UrlListener = (state: UrlState) => void;
 
-const FORBIDDEN_SCHEMES = ["chrome://", "chrome-extension://", "edge://", "about:"];
+const FORBIDDEN_SCHEMES = [
+	"chrome://",
+	"chrome-extension://",
+	"edge://",
+	"about:",
+];
 
 export function isSteerableUrl(url: string): boolean {
 	if (!url) return false;

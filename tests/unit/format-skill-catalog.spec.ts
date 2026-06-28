@@ -52,7 +52,9 @@ describe("format-skill-catalog", () => {
 	});
 
 	test("includes <match> element when skill has match field", () => {
-		const catalog = formatSkillCatalog([{ ...bundled, match: "linkedin.com/jobs/*" }]);
+		const catalog = formatSkillCatalog([
+			{ ...bundled, match: "linkedin.com/jobs/*" },
+		]);
 		expect(catalog).toContain("<match>linkedin.com/jobs/*</match>");
 	});
 

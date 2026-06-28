@@ -1,8 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import {
-	UrlTracker,
-	isSteerableUrl,
-} from "../../src/sidepanel/url-tracker";
+import { isSteerableUrl, UrlTracker } from "../../src/sidepanel/url-tracker";
 
 describe("isSteerableUrl", () => {
 	test("rejects chrome:// and extension URLs", () => {

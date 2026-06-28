@@ -17,31 +17,49 @@ function meta(match: string | undefined): SkillMeta {
 
 describe("globMatch", () => {
 	test("matches an exact string case-insensitively", () => {
-		expect(globMatch("example.com/jobs", "https://Example.com/jobs")).toBe(true);
+		expect(globMatch("example.com/jobs", "https://Example.com/jobs")).toBe(
+			true,
+		);
 	});
 
 	test("matches * across path separators", () => {
 		expect(
-			globMatch("linkedin.com/jobs/search*", "https://www.linkedin.com/jobs/search/?keywords=rust"),
+			globMatch(
+				"linkedin.com/jobs/search*",
+				"https://www.linkedin.com/jobs/search/?keywords=rust",
+			),
 		).toBe(true);
 	});
 
 	test("matches subdomain wildcards", () => {
-		expect(globMatch("*.linkedin.com/*", "https://www.linkedin.com/jobs")).toBe(true);
+		expect(globMatch("*.linkedin.com/*", "https://www.linkedin.com/jobs")).toBe(
+			true,
+		);
 	});
 
 	test("matches path-segment wildcards", () => {
-		expect(globMatch("github.com/*/pull/*", "https://github.com/foo/bar/pull/123")).toBe(true);
+		expect(
+			globMatch("github.com/*/pull/*", "https://github.com/foo/bar/pull/123"),
+		).toBe(true);
 	});
 	test("matches when the pattern is a prefix of the url", () => {
 		// Unanchored matching: "example.com/jobs" is a valid prefix and should hit.
-		expect(globMatch("example.com/jobs", "https://example.com/jobs/extra")).toBe(true);
+		expect(
+			globMatch("example.com/jobs", "https://example.com/jobs/extra"),
+		).toBe(true);
 	});
 
 	test("does not match the domain substring inside another host's path", () => {
 		// Host-boundary anchor: "linkedin.com/*" must NOT hit evil.com/linkedin.com/x.
-		expect(globMatch("linkedin.com/*", "https://evil.com/linkedin.com/x")).toBe(false);
-		expect(globMatch("linkedin.com/*", "https://blog.example.com/post/linkedin.com/")).toBe(false);
+		expect(globMatch("linkedin.com/*", "https://evil.com/linkedin.com/x")).toBe(
+			false,
+		);
+		expect(
+			globMatch(
+				"linkedin.com/*",
+				"https://blog.example.com/post/linkedin.com/",
+			),
+		).toBe(false);
 	});
 
 	test("does not match unrelated hosts", () => {
@@ -61,10 +79,17 @@ describe("globMatch", () => {
 });
 
 describe("matchSkillsToUrl", () => {
-	const skills = [meta("linkedin.com/jobs/*"), meta("github.com/*/pull/*"), meta(undefined)];
+	const skills = [
+		meta("linkedin.com/jobs/*"),
+		meta("github.com/*/pull/*"),
+		meta(undefined),
+	];
 
 	test("returns only skills whose match glob hits the url", () => {
-		const matched = matchSkillsToUrl(skills, "https://www.linkedin.com/jobs/search");
+		const matched = matchSkillsToUrl(
+			skills,
+			"https://www.linkedin.com/jobs/search",
+		);
 		expect(matched).toHaveLength(1);
 		expect(matched[0]!.name).toBe("skill-linkedin.com/jobs/*");
 	});

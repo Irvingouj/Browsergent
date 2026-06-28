@@ -480,7 +480,6 @@ export function createAgentTools(
 					code = `globalThis._params = ${JSON.stringify(parsed.data.params)};\n${code}`;
 				}
 
-
 				try {
 					const result = await runJs(code);
 					const traceId = getCurrentTraceId();
