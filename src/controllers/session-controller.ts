@@ -42,6 +42,12 @@ type DiagnosticsNormalization =
 	| { kind: "unchanged"; diagnostics: AgentDiagnosticEvent[] }
 	| { kind: "changed"; diagnostics: AgentDiagnosticEvent[] };
 
+type SessionCleanup = {
+	data: SessionData;
+	bytes: number;
+	changed: boolean;
+};
+
 export interface ListSessionsResult {
 	sessions: SessionListItem[];
 	prunedIds: string[];
@@ -93,11 +99,20 @@ function trimOversizedDiagnostics(
 	if (diagnostics.length === 0) return diagnostics;
 	if (estimateJsonSize(diagnostics) <= maxBytes) return diagnostics;
 
-	for (let keep = diagnostics.length; keep > 0; keep--) {
-		if (estimateJsonSize(diagnostics.slice(-keep)) <= maxBytes)
-			return diagnostics.slice(-keep);
+	let low = 0;
+	let high = diagnostics.length;
+	let best = 0;
+	while (low <= high) {
+		const keep = Math.floor((low + high) / 2);
+		const size = keep === 0 ? 2 : estimateJsonSize(diagnostics.slice(-keep));
+		if (size <= maxBytes) {
+			best = keep;
+			low = keep + 1;
+		} else {
+			high = keep - 1;
+		}
 	}
-	return [];
+	return best === 0 ? [] : diagnostics.slice(-best);
 }
 
 function normalizeDiagnostics(
@@ -215,11 +230,13 @@ export class SessionController {
 				continue;
 			}
 			const cleanup = this.cleanupStoredSession(data);
-			await this.storage.set(
-				SESSION_STORE,
-				`${SESSION_PREFIX}${cleanup.data.id}`,
-				cleanup.data,
-			);
+			if (cleanup.changed) {
+				await this.storage.set(
+					SESSION_STORE,
+					`${SESSION_PREFIX}${cleanup.data.id}`,
+					cleanup.data,
+				);
+			}
 			sessions.push({ ...cleanup.data, bytes: cleanup.bytes });
 		}
 
@@ -238,28 +255,32 @@ export class SessionController {
 		}
 	}
 
-	private cleanupStoredSession(raw: SessionData): {
-		data: SessionData;
-		bytes: number;
-	} {
+	private cleanupStoredSession(raw: SessionData): SessionCleanup {
 		const messages = Array.isArray(raw.messages)
 			? raw.messages.filter(isChatMessage)
 			: [];
 		const trace = Array.isArray(raw.trace)
 			? raw.trace.filter(isAgentTraceEntry)
 			: [];
-		const diagnostics = Array.isArray(raw.diagnostics)
-			? normalizeDiagnostics(raw.diagnostics.filter(isAgentDiagnosticEvent))
-					.diagnostics
+		const rawDiagnostics = Array.isArray(raw.diagnostics)
+			? raw.diagnostics.filter(isAgentDiagnosticEvent)
 			: [];
+		const normalized = normalizeDiagnostics(rawDiagnostics);
 		const data: SessionData = {
 			...raw,
 			messages,
 			trace,
-			diagnostics,
+			diagnostics: normalized.diagnostics,
 			messageCount: messages.length,
 		};
-		return { data, bytes: estimateJsonSize(data) };
+		const changed =
+			messages.length !== (Array.isArray(raw.messages) ? raw.messages.length : 0) ||
+			trace.length !== (Array.isArray(raw.trace) ? raw.trace.length : 0) ||
+			rawDiagnostics.length !==
+				(Array.isArray(raw.diagnostics) ? raw.diagnostics.length : 0) ||
+			normalized.kind === "changed" ||
+			raw.messageCount !== messages.length;
+		return { data, bytes: estimateJsonSize(data), changed };
 	}
 
 	private async loadForId(id: string): Promise<{

@@ -6,10 +6,14 @@ import { launchExtension } from "./helpers";
 test("manifest grants host access for normal web pages", async () => {
 	const manifestPath = path.resolve("dist/manifest.json");
 	const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
+		action?: { default_icon?: Record<string, string> };
 		host_permissions?: string[];
+		icons?: Record<string, string>;
 	};
 
 	expect(manifest.host_permissions).toEqual(["http://*/*", "https://*/*"]);
+	expect(manifest.icons?.["128"]).toBe("icons/icon-128.png");
+	expect(manifest.action?.default_icon?.["32"]).toBe("icons/icon-32.png");
 });
 
 test("extension loads and side panel opens", async () => {
@@ -38,21 +42,21 @@ test("side panel has task input and run button", async () => {
 test("settings panel stores API key", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-anthropic").click();
 
-	const apiKeyInput = sidePanel.locator('input[type="password"]');
+	const apiKeyInput = sidePanel.getByTestId("settings-apikey-input");
 	await expect(apiKeyInput).toBeVisible();
 
 	await apiKeyInput.fill("test-key-123");
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
+	await sidePanel.getByTestId("settings-done-button").click();
 
-	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await expect(sidePanel.getByTestId("settings-apikey-input")).not.toBeVisible();
 
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await expect(sidePanel.locator('input[type="password"]')).toHaveValue(
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.locator('[data-testid^="settings-edit-"]').first().click();
+	await expect(sidePanel.getByTestId("settings-apikey-input")).toHaveValue(
 		"test-key-123",
 	);
 

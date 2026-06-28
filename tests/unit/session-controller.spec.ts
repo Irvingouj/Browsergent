@@ -537,6 +537,53 @@ describe("SessionController diagnostics trimming", () => {
 		expect(sessions.length).toBeLessThan(12);
 	});
 
+	test("init does not rewrite already-clean sessions", async () => {
+		const activeId = "clean";
+		await storage.set("sessions", "__meta", { activeSessionId: activeId });
+		await storage.set("sessions", `session_${activeId}`, {
+			id: activeId,
+			messages: [],
+			trace: [],
+			diagnostics: [],
+			timestamp: 1,
+			messageCount: 0,
+		});
+		let sessionWrites = 0;
+		const origSet = storage.set.bind(storage);
+		storage.set = async <T>(
+			store: string,
+			key: string,
+			value: T,
+		): Promise<void> => {
+			if (store === "sessions" && key.startsWith("session_")) sessionWrites++;
+			return origSet(store, key, value);
+		};
+
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+
+		expect(sessionWrites).toBe(0);
+	});
+
+	test("trims many persisted diagnostics without dropping the newest event", async () => {
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		const diagnostics = Array.from({ length: 6000 }, (_, i) => ({
+			kind: "model_response" as const,
+			timestamp: i,
+			providerStopReason: "end_turn",
+			sdkStopReason: "end" as const,
+			content: [{ type: "text" as const, text: `chunk-${i}` }],
+		}));
+
+		await ctrl.save([], [], diagnostics);
+
+		const loaded = await ctrl.load();
+		if (!loaded) throw new Error("missing session");
+		expect(loaded.diagnostics.length).toBeLessThan(diagnostics.length);
+		expect(loaded.diagnostics.at(-1)?.timestamp).toBe(5999);
+	});
+
 	test("recovers from storage set failure by dropping diagnostics", async () => {
 		// A storage backend that fails on the first set call with non-empty diagnostics
 		let firstDiagnosticsSet = true;
