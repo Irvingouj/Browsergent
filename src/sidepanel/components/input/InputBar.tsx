@@ -93,7 +93,8 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 			setDraft(result.draft);
 			setDomSync({ kind: "reconcile", draft: result.draft });
 			// design: 提交路径之外的所有程序化命令也要同步 store,因为
-			// app.tsx 的 handleRun 读 taskInput。这是单向投影,不是双向同步。
+			// app.tsx 的 handleRun 实时读 store.taskDraft(不是闭包快照)。
+			// 这是单向投影,不是双向同步。
 			browsergentStore.getState().setTaskDraft(serializeDraft(result.draft));
 		} else if (result.kind === "submitted") {
 			browsergentStore.getState().setTaskDraft(result.value);
@@ -321,7 +322,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						type="button"
 						data-testid="run-button"
 						aria-label="Run task"
-						onClick={onRun}
+						onClick={() => dispatch({ kind: "submit" })}
 						class="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all bg-text-primary text-bg-base hover:bg-text-secondary active:bg-text-muted"
 					>
 						<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">

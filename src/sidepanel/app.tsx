@@ -5,7 +5,7 @@ import {
 	buildExportSnapshot,
 	exportConversation,
 } from "../controllers/export-controller";
-import { isTextFile } from "../controllers/files-controller";
+import { isTextFile } from "../controllers/files"
 import {
 	buildSkillXmlBlock,
 	parseSkillActivation,
@@ -27,7 +27,6 @@ import {
 	selectSessions,
 	selectSettingsOpen,
 	selectSkillDiagnostics,
-	selectTaskDraft,
 	selectTraceEntries,
 } from "../state/selectors";
 import { browsergentStore } from "../state/store";
@@ -121,7 +120,6 @@ const App: FunctionalComponent = () => {
 	const status = useStore(browsergentStore, selectAgentStatus);
 	const statusReason = useStore(browsergentStore, selectAgentStatusReason);
 	const retryState = useStore(browsergentStore, selectRetryState);
-	const taskInput = useStore(browsergentStore, selectTaskDraft);
 	const activeProvider = useStore(browsergentStore, selectActiveProvider);
 	const showSettings = useStore(browsergentStore, selectSettingsOpen);
 	const sessionPanelOpen = useStore(browsergentStore, selectSessionPanelOpen);
@@ -218,7 +216,7 @@ const App: FunctionalComponent = () => {
 	}, [bridgeRef]);
 
 	const handleRun = useCallback(async () => {
-		const task = taskInput.trim();
+		const task = browsergentStore.getState().ui.taskDraft.trim();
 		if (!task) return;
 		if (!activeProvider?.apiKey) {
 			browsergentStore.getState().setActiveTab("settings");
@@ -425,7 +423,6 @@ const App: FunctionalComponent = () => {
 				: { kind: "anthropic", apiKey: "", model: "" },
 		});
 	}, [
-		taskInput,
 		activeProvider,
 		sessionControllerRef,
 		bridgeRef,
