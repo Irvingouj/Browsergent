@@ -1,6 +1,6 @@
 # Browsergent
 
-[![License: Fair BYOK](https://img.shields.io/badge/License-Fair%20BYOK-blue)](./LICENSE)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)](./LICENSE)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Rust → WASM](https://img.shields.io/badge/Rust-WASM-CE422B?logo=rust&logoColor=white)](https://rustwasm.github.io/)
@@ -153,4 +153,4 @@ Contributions are welcome. Before opening a PR:
 
 ## License
 
-Browsergent Fair BYOK License — see [LICENSE](./LICENSE). MIT-style with BYOK and no-LLM-resale conditions.
+Dual licensed under MIT or Apache-2.0 — see [LICENSE](./LICENSE).
