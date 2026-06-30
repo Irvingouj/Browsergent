@@ -19,9 +19,13 @@ test("manifest grants host access for normal web pages", async () => {
 test("extension loads and side panel opens", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	await expect(sidePanel.locator("text=Browsergent")).toBeVisible();
 	await expect(
 		sidePanel.getByRole("button", { name: "More options" }),
+	).toBeVisible();
+	await expect(sidePanel.getByRole("button", { name: "Chat" })).toBeVisible();
+	await expect(sidePanel.getByRole("button", { name: "Files" })).toBeVisible();
+	await expect(
+		sidePanel.getByRole("button", { name: "Settings" }),
 	).toBeVisible();
 
 	await close();
@@ -55,7 +59,7 @@ test("settings panel stores API key", async () => {
 		sidePanel.getByTestId("settings-apikey-input"),
 	).not.toBeVisible();
 
-	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	await sidePanel.getByRole("button", { name: "Chat", exact: true }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.locator('[data-testid^="settings-edit-"]').first().click();
 	await expect(sidePanel.getByTestId("settings-apikey-input")).toHaveValue(

@@ -307,9 +307,7 @@ test("file_read on missing file returns E_FILE_NOT_FOUND error in trace", async 
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("read missing file");
+	await typeTask(sidePanel, "read missing file");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	const traceEntry = sidePanel.locator('[data-testid="trace-entry"]').first();
@@ -360,9 +358,7 @@ test("panel delete on directory row removes directory and descendants", async ()
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("write two files into sub/");
+	await typeTask(sidePanel, "write two files into sub/");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(

@@ -124,11 +124,25 @@ test("two prompts keep all messages visible and prior transcript included in sec
 	const secondRequest = mock.requestBodies[1] as {
 		messages: Array<{ role: string; content: unknown }>;
 	};
-	expect(secondRequest.messages).toEqual([
-		{ role: "user", content: "task one" },
-		{ role: "assistant", content: [{ type: "text", text: "First response" }] },
-		{ role: "user", content: "task two" },
-	]);
+
+	// The app appends `[Current time: …]` to each user task as a footnote
+	// (stable system prompt for prefix caching). Match by prefix + suffix.
+	expect(secondRequest.messages.length).toBe(3);
+	const userMsgs = secondRequest.messages.filter((m) => m.role === "user");
+	expect(userMsgs.length).toBe(2);
+	for (const msg of userMsgs) {
+		expect(typeof msg.content).toBe("string");
+		const c = msg.content as string;
+		expect(c.startsWith("task ")).toBe(true);
+		expect(c).toMatch(/\[Current time: .+\]$/);
+	}
+	const assistantMsg = secondRequest.messages.find(
+		(m) => m.role === "assistant",
+	);
+	expect(assistantMsg).toEqual({
+		role: "assistant",
+		content: [{ type: "text", text: "First response" }],
+	});
 
 	await close();
 	mock.server.close();
@@ -203,9 +217,7 @@ test("text before run_js tool call continues after run_js tool result", async ()
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("what page are we at");
+	await typeTask(sidePanel, "what page are we at");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Checked.")).toBeVisible({

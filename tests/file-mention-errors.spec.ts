@@ -3,6 +3,7 @@ import {
 	configureMockProvider,
 	launchExtension,
 	startSimpleMockProvider,
+	typeTask,
 } from "./helpers";
 
 test("missing file mention shows system error and does not call provider", async () => {
@@ -11,10 +12,7 @@ test("missing file mention shows system error and does not call provider", async
 	const { sidePanel, close } = await launchExtension();
 
 	await configureMockProvider(sidePanel, mock.url);
-
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("Check @[file:nonexistent-id:missing.txt] please");
+	await typeTask(sidePanel, "Check @[file:nonexistent-id:missing.txt] please");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(

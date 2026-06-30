@@ -226,7 +226,7 @@ export async function configureMockProvider(
 		await sidePanel.getByTestId("settings-model-input").fill(model);
 	}
 	await sidePanel.getByTestId("settings-done-button").click();
-	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	await sidePanel.getByRole("button", { name: "Chat", exact: true }).click();
 	await expect(sidePanel.locator('[data-testid="task-input"]')).toBeVisible();
 }
 

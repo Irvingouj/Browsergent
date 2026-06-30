@@ -3,6 +3,7 @@ import {
 	configureMockProvider,
 	launchExtension,
 	startMockAnthropicServer,
+	typeTask,
 } from "./helpers";
 
 // --- Mock Anthropic SSE helpers (same pattern as file-tools.spec.ts) ---
@@ -328,9 +329,7 @@ test("deletes a non-empty directory via context menu Delete button", async () =>
 		await configureMockProvider(sidePanel, mock.url);
 
 		// Ask agent to create todir/inner.md (this creates both dir and file)
-		await sidePanel
-			.locator('[data-testid="task-input"]')
-			.fill("create todir/inner.md");
+		await typeTask(sidePanel, "create todir/inner.md");
 		await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 		await expect(sidePanel.getByTestId("agent-status")).toHaveText("done", {

@@ -5,6 +5,7 @@ import {
 	launchExtension,
 	readTaskInput,
 	startMockAnthropicServer,
+	typeTask,
 } from "./helpers";
 
 const MSG_START = (id: string) =>
@@ -222,9 +223,7 @@ test("non-existent tabId produces a clear error, not silent failure", async () =
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("do something @[tab:999:ghost]");
+	await typeTask(sidePanel, "do something @[tab:999:ghost]");
 
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

@@ -3,6 +3,7 @@ import {
 	configureMockProvider,
 	launchExtension,
 	startMockAnthropicServer,
+	typeTask,
 } from "./helpers";
 
 test("agent continues after tool error and trace shows error status", async () => {
@@ -40,10 +41,7 @@ test("agent continues after tool error and trace shows error status", async () =
 
 	await configureMockProvider(sidePanel, mock.url);
 
-	// Start a run
-	await sidePanel
-		.locator('[data-testid="task-input"]')
-		.fill("test tool error recovery");
+	await typeTask(sidePanel, "test tool error recovery");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Model should eventually respond (second response after tool error)
