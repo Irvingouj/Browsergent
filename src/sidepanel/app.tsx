@@ -581,11 +581,7 @@ const App: FunctionalComponent = () => {
 			class="flex flex-col h-screen bg-bg-base relative overflow-hidden"
 		>
 			{/* Header */}
-			<div class="relative z-10 flex items-center justify-between px-md py-sm bg-bg-surface/85 backdrop-blur-[22px] border-b border-border">
-				<div class="flex items-center gap-sm text-sm font-semibold tracking-normal text-text-primary">
-					<span class="w-2 h-2 rounded-full bg-accent text-accent animate-pulse-glow" />
-					Browsergent
-				</div>
+			<div class="relative z-10 flex items-center justify-end px-md py-sm bg-bg-surface/85 backdrop-blur-[22px] border-b border-border">
 				<div class="flex items-center gap-sm">
 					<div class="flex items-center rounded-full bg-bg-muted border border-border overflow-hidden p-[2px]">
 						<button
