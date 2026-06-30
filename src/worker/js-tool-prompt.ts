@@ -19,7 +19,7 @@ ALWAYS call get_doc first when you need any page.*, web.*, web.tab.*, chrome.*, 
 - Use page.* for target-tab automation. Use sidepanel.* only when explicitly controlling Browsergent's side panel.
 - Use \`web.tab.evaluate\` when content-script isolated-world JS is the simplest reliable path. Use \`chrome.scripting.executeScript\` when MAIN-world page JS is required.
 - \`page.find()\` results may omit DOM attributes such as \`src\`, \`href\`, and \`alt\`, and may have a null \`refId\`. Inspect the returned shape before relying on those fields.
-- \`page.fetch()\` returns a text body, not binary bytes or base64. Do not use it to save images or other binary files unless a documented binary-safe API provides the bytes.
+- \`page.fetch()\` / \`web.tab.fetch()\` return binary responses as base64, which can be written with \`fs.writeBase64\`. This only works for fetchable URLs. \`chrome.downloads\` entries do not expose file bytes, and \`blob:\` URLs are only fetchable in the document context that created them.
 - fs.* APIs are accessed through the fs object: \`fs.exists()\`, \`fs.readText()\`, \`fs.writeText()\`, \`fs.list()\`, etc. Call get_doc with namespace='fs' for exact names.
 
 ## Execution model
@@ -54,6 +54,7 @@ Beyond snapshot/click/fill, the runtime exposes these namespaces. Call get_doc w
 - page.*: type, append, press, submit, check, check_radio, hover, unhover, dblclick, scroll, scroll_to, set_files, select, select_option, snapshot_query (filtered), snapshot_text, back, forward, reload, wait, health, fetch, active_tab, tabs, switch, new_tab, close.
 - web.tab.*: the full page.* action set scoped to a tabId, plus list, get, find, query, current, create, activate, close, wait_for_load. Prefer web.tab.* when the task names a specific tab.
 - web.sleep(ms): the only timer API (no setTimeout/setInterval).
+- page.fetch / web.tab.fetch: target-page fetch → { body, bodyEncoding, byteLength, headers, ok, status }. For binary responses, bodyEncoding is "base64"; write to OPFS with fs.writeBase64.
 - network.fetch / web.fetch: HTTP client → { body, headers, ok, status }.
 - fs.*: exists, stat, list, mkdir, delete, copy, move, read, readText, readBase64, readRange, write, writeText, writeBase64, append, appendText, appendBase64, update, hash.
 - clipboard.read / clipboard.write: system clipboard.
@@ -62,7 +63,12 @@ Beyond snapshot/click/fill, the runtime exposes these namespaces. Call get_doc w
 - chrome.*: downloads, bookmarks, cookies, history, notifications, tabs, windows, scripting, sessions, alarms, action, contextMenus, declarativeNetRequest, desktopCapture, identity, idle, management, offscreen, pageCapture, permissions, runtime, sidePanel, system, tabGroups, topSites, browsingData.
 - sidepanel.*: act on Browsergent's own side panel. Use only when explicitly controlling the side panel.
 
-Match the task to the API before reaching for manual DOM workarounds: file downloads → chrome.downloads; form submission → page.submit/web.tab.submit; file uploads → page.set_files/web.tab.set_files; radio buttons → page.check_radio/web.tab.check_radio; API/data retrieval → network.fetch; clipboard → clipboard.*; cookies/bookmarks/history → chrome.*.
+Match the task to the API before reaching for manual DOM workarounds: host-browser downloads → chrome.downloads; OPFS downloads from fetchable URLs → page.fetch/web.tab.fetch + fs.writeBase64; form submission → page.submit/web.tab.submit; file uploads → page.set_files/web.tab.set_files; radio buttons → page.check_radio/web.tab.check_radio; API/data retrieval → network.fetch; clipboard → clipboard.*; cookies/bookmarks/history → chrome.*.
+
+Download boundary:
+- \`chrome.downloads\` can start/list host downloads, but cannot read downloaded file bytes or import them into OPFS.
+- To save bytes to OPFS, fetch/capture the bytes before Chrome's download manager takes over, then call \`fs.writeBase64\`.
+- Do not use \`page.fetch\` on \`chrome.downloads.search()[0].finalUrl\` when it is a \`blob:\` URL; that blob belongs to the creating page context and may already be expired.
 
 ## Common patterns
 Current page:

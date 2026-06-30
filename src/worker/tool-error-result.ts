@@ -4,6 +4,7 @@ export interface ToolErrorEnvelope {
 	message: string;
 	hint: string;
 	stack?: string;
+	details?: Record<string, unknown>;
 }
 
 /**
@@ -25,9 +26,11 @@ export function formatToolError(
 	message: string,
 	hint: string,
 	stack?: string,
+	details?: Record<string, unknown>,
 ): string {
 	const envelope: ToolErrorEnvelope = { _is_error: true, code, message, hint };
 	if (isStackUseful(stack)) envelope.stack = stack;
+	if (details) envelope.details = details;
 	return JSON.stringify(envelope);
 }
 
@@ -51,6 +54,9 @@ export function parseToolErrorEnvelope(text: string): ToolErrorEnvelope | null {
 			if (isStackUseful(rec.stack)) {
 				envelope.stack = rec.stack;
 			}
+			if (typeof rec.details === "object" && rec.details !== null) {
+				envelope.details = rec.details as Record<string, unknown>;
+			}
 			return envelope;
 		}
 		return null;
@@ -66,6 +72,9 @@ export function isToolErrorEnvelope(text: string): boolean {
 export function renderToolOutput(text: string): string {
 	const envelope = parseToolErrorEnvelope(text);
 	if (!envelope) return text;
+	const detailsSection = envelope.details
+		? `\nDetails:\n${JSON.stringify(envelope.details, null, 2)}`
+		: "";
 	const stackSection = envelope.stack ? `\nStack:\n${envelope.stack}` : "";
-	return `[${envelope.code}] ${envelope.message}\nRecovery: ${envelope.hint}${stackSection}`;
+	return `[${envelope.code}] ${envelope.message}\nRecovery: ${envelope.hint}${detailsSection}${stackSection}`;
 }
