@@ -28,6 +28,7 @@ export interface SettingsSlice {
 	settingsSaveStarted(): void;
 	settingsSaved(next: SettingsState): void;
 	settingsSaveFailed(error: BrowsergentError): void;
+	settingsErrorDismissed(): void;
 }
 
 export function createSettingsSlice(
@@ -43,7 +44,9 @@ export function createSettingsSlice(
 			set({ settings: next });
 		},
 		providersChanged(providers) {
-			set((state) => ({ settings: { ...state.settings, providers } }));
+			set((state) => ({
+				settings: { ...state.settings, providers, error: undefined },
+			}));
 		},
 		activeProviderChanged(id) {
 			set((state) => ({
@@ -60,6 +63,9 @@ export function createSettingsSlice(
 			set((state) => ({
 				settings: { ...state.settings, error, loaded: true },
 			}));
+		},
+		settingsErrorDismissed() {
+			set((state) => ({ settings: { ...state.settings, error: undefined } }));
 		},
 	};
 }

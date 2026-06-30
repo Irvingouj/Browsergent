@@ -38,9 +38,10 @@ export class SettingsController {
 			});
 		} catch (err) {
 			browsergentStore.getState().settingsSaveFailed({
-				code: "E_BAD_SETTINGS",
+				code: "E_SETTINGS_PERSIST",
 				message: err instanceof Error ? err.message : String(err),
 				source: "settings",
+				details: { operation: "save" },
 			});
 		}
 	}

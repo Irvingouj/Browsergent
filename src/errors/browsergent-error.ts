@@ -6,7 +6,8 @@ export type ErrorSource =
 	| "js"
 	| "chrome"
 	| "content_script"
-	| "settings";
+	| "settings"
+	| "session";
 
 export type BrowsergentErrorCode =
 	| "E_NO_API_KEY"
@@ -22,6 +23,11 @@ export type BrowsergentErrorCode =
 	| "E_PROTOCOL"
 	| "E_AGENT_RUN"
 	| "E_UNKNOWN"
+	| "E_SETTINGS_PERSIST"
+	| "E_SESSION_STORE"
+	| "E_NETWORK"
+	| "E_PROVIDER_AUTH"
+	| "E_PROVIDER_NOT_FOUND"
 	| "agent_error";
 
 export interface BrowsergentError {

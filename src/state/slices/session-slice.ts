@@ -1,4 +1,5 @@
 import type { StoreApi } from "zustand/vanilla";
+import type { BrowsergentError } from "../../errors/browsergent-error";
 import type { BrowsergentStore } from "../store";
 
 export interface SessionListItem {
@@ -12,6 +13,7 @@ export interface SessionState {
 	sessions: SessionListItem[];
 	activeSessionId: string | null;
 	sessionPanelOpen: boolean;
+	error?: BrowsergentError;
 }
 
 export interface SessionSlice {
@@ -22,6 +24,8 @@ export interface SessionSlice {
 	sessionTitleUpdated(id: string, title: string): void;
 	sessionDeleted(id: string): void;
 	sessionCreated(id: string): void;
+	sessionStoreFailed(error: BrowsergentError): void;
+	sessionErrorDismissed(): void;
 }
 
 export function createSessionSlice(
@@ -84,6 +88,12 @@ export function createSessionSlice(
 					},
 				};
 			});
+		},
+		sessionStoreFailed(error) {
+			set((state) => ({ session: { ...state.session, error } }));
+		},
+		sessionErrorDismissed() {
+			set((state) => ({ session: { ...state.session, error: undefined } }));
 		},
 	};
 }

@@ -2,9 +2,11 @@ import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { SettingsController } from "../../controllers/settings-controller";
+import type { BrowsergentError } from "../../errors/browsergent-error";
 import {
 	selectActiveProviderId,
 	selectProviders,
+	selectSettingsError,
 	selectSettingsLoaded,
 } from "../../state/selectors";
 import type { ProviderConfig } from "../../state/slices/settings-slice";
@@ -48,9 +50,25 @@ function persist(
 	providers: ProviderConfig[],
 	activeProviderId: string | null,
 ): void {
-	controller?.save({ providers, activeProviderId }).catch((err: unknown) => {
-		console.warn("Settings save failed:", err);
-	});
+	controller?.save({ providers, activeProviderId });
+}
+
+function SettingsErrorBanner({ error }: { error: BrowsergentError }) {
+	return (
+		<div
+			data-testid="settings-error"
+			class="flex items-start gap-sm rounded-md border border-error bg-error/10 px-sm py-xs text-xs text-error"
+		>
+			<span class="flex-1">{error.message}</span>
+			<button
+				type="button"
+				class="text-error/70 hover:text-error cursor-pointer"
+				onClick={() => browsergentStore.getState().settingsErrorDismissed()}
+			>
+				×
+			</button>
+		</div>
+	);
 }
 
 export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
@@ -60,6 +78,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	const providers = useStore(browsergentStore, selectProviders);
 	const activeProviderId = useStore(browsergentStore, selectActiveProviderId);
 	const loaded = useStore(browsergentStore, selectSettingsLoaded);
+	const error = useStore(browsergentStore, selectSettingsError);
 	// Track which config is being edited; null = list view.
 	const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -164,6 +183,8 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						← Back
 					</button>
 				</div>
+
+				{error && <SettingsErrorBanner error={error} />}
 
 				<label>
 					<span class={LABEL_CLASS}>Name</span>
@@ -291,6 +312,8 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 			<div class="flex items-center justify-between">
 				<span class="text-sm font-semibold text-text-primary">Providers</span>
 			</div>
+
+			{error && <SettingsErrorBanner error={error} />}
 
 			{providers.length === 0 ? (
 				<div class="text-xs text-text-muted py-md">

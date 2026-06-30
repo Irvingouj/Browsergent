@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { SessionController } from "../../controllers/session-controller";
+import type { BrowsergentError } from "../../errors/browsergent-error";
 import {
 	selectActiveProvider,
 	selectActiveSessionId,
@@ -26,12 +27,23 @@ function isLocalhost(url: string): boolean {
 	}
 }
 
-/** Thrown on a non-OK title-gen response; carries the status for retry gating. */
-class TitleHttpError extends Error {
-	constructor(readonly status: number) {
-		super(`title request failed: ${status}`);
-		this.name = "TitleHttpError";
-	}
+/** Classify a non-OK title-gen HTTP response as a typed BrowsergentError. */
+export function classifyTitleResponse(
+	status: number,
+	body: string,
+): BrowsergentError {
+	const code =
+		status === 401 || status === 403
+			? "E_PROVIDER_AUTH"
+			: status === 404
+				? "E_PROVIDER_NOT_FOUND"
+				: "E_NETWORK";
+	return {
+		code,
+		message: `Title request failed (${status})`,
+		source: "settings",
+		details: { status, upstream: body.slice(0, 500) },
+	};
 }
 
 /** POST a title-generation request shaped for the provider's wire format. */
@@ -72,7 +84,8 @@ async function requestTitle(
 		signal,
 	});
 	if (!resp.ok) {
-		throw new TitleHttpError(resp.status);
+		const body = await resp.text().catch(() => "");
+		throw classifyTitleResponse(resp.status, body);
 	}
 
 	const raw: unknown = await resp.json();
@@ -167,9 +180,9 @@ export function useTitleGeneration(
 						return;
 					} catch (err) {
 						// Only retry on transient server errors; bail on 4xx/other immediately.
-						const status =
-							err instanceof TitleHttpError ? err.status : undefined;
-						if (status === undefined || !retryableStatus.has(status)) return;
+						const status = (err as BrowsergentError).details?.status;
+						if (typeof status !== "number" || !retryableStatus.has(status))
+							return;
 						if (attempt >= maxRetries) return;
 					}
 				}

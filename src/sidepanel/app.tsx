@@ -23,6 +23,7 @@ import {
 	selectMessageIds,
 	selectMessagesById,
 	selectRetryState,
+	selectSessionError,
 	selectSessionPanelOpen,
 	selectSessions,
 	selectSettingsOpen,
@@ -125,6 +126,7 @@ const App: FunctionalComponent = () => {
 	const sessionPanelOpen = useStore(browsergentStore, selectSessionPanelOpen);
 	const _sessions = useStore(browsergentStore, selectSessions);
 	const _activeSessionId = useStore(browsergentStore, selectActiveSessionId);
+	const sessionError = useStore(browsergentStore, selectSessionError);
 	const activeTab = useStore(browsergentStore, selectActiveTab);
 	const skillDiagnostics = useStore(browsergentStore, selectSkillDiagnostics);
 	const skillIssueTitle = skillDiagnostics
@@ -160,6 +162,18 @@ const App: FunctionalComponent = () => {
 		if (!el) return;
 		el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 	}, [messages, trace]);
+
+	// Surface session storage failures via the existing system-message channel.
+	useEffect(() => {
+		if (!sessionError) return;
+		browsergentStore.getState().appendSystemMessage({
+			kind: "system",
+			id: crypto.randomUUID(),
+			text: `Session storage error: ${sessionError.message}`,
+			timestamp: Date.now(),
+		});
+		browsergentStore.getState().sessionErrorDismissed();
+	}, [sessionError]);
 
 	// Subscribe to URL changes: match environmental skills, dispatch when
 	// running, stage when idle.

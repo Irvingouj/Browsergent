@@ -75,12 +75,14 @@ export const selectActiveProvider = (
 	return providers.find((p) => p.id === activeProviderId) ?? null;
 };
 export const selectSettingsLoaded = (s: BrowsergentStore) => s.settings.loaded;
+export const selectSettingsError = (s: BrowsergentStore) => s.settings.error;
 export const selectSettingsOpen = (s: BrowsergentStore) => s.ui.settingsOpen;
 export const selectSessionPanelOpen = (s: BrowsergentStore) =>
 	s.session.sessionPanelOpen;
 export const selectSessions = (s: BrowsergentStore) => s.session.sessions;
 export const selectActiveSessionId = (s: BrowsergentStore) =>
 	s.session.activeSessionId;
+export const selectSessionError = (s: BrowsergentStore) => s.session.error;
 export const selectExtjsStatus = (s: BrowsergentStore) => s.extjs.status;
 export const selectSkillDiagnostics = (s: BrowsergentStore) =>
 	s.skills.diagnostics;

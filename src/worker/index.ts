@@ -40,6 +40,11 @@ const VALID_ERROR_CODES = new Set<string>([
 	"E_PROTOCOL",
 	"E_AGENT_RUN",
 	"E_UNKNOWN",
+	"E_SETTINGS_PERSIST",
+	"E_SESSION_STORE",
+	"E_NETWORK",
+	"E_PROVIDER_AUTH",
+	"E_PROVIDER_NOT_FOUND",
 	"agent_error",
 ]);
 

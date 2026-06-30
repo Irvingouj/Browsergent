@@ -5,6 +5,7 @@ import {
 } from "../protocol/worker-guards";
 
 import type { SessionListItem } from "../state/slices/session-slice";
+import { browsergentStore } from "../state/store";
 import type { StorageBackend } from "../storage/storage-backend";
 import type {
 	AgentDiagnosticEvent,
@@ -137,6 +138,7 @@ function normalizeDiagnostics(
 
 export class SessionController {
 	private saveTimer: ReturnType<typeof setTimeout> | null = null;
+	private saveFailedReported = false;
 	private meta: SessionMeta | null = null;
 	hydrated = false;
 
@@ -212,7 +214,12 @@ export class SessionController {
 			if (!activeId) return null;
 			return await this.loadForId(activeId);
 		} catch (err) {
-			console.warn("Session load failed:", err);
+			browsergentStore.getState().sessionStoreFailed({
+				code: "E_SESSION_STORE",
+				message: err instanceof Error ? err.message : String(err),
+				source: "session",
+				details: { operation: "load" },
+			});
 			return null;
 		}
 	}
@@ -317,7 +324,12 @@ export class SessionController {
 			this.storage
 				.set(SESSION_STORE, `${SESSION_PREFIX}${id}`, patched)
 				.catch((err) => {
-					console.warn("Session normalization write-back failed:", err);
+					browsergentStore.getState().sessionStoreFailed({
+						code: "E_SESSION_STORE",
+						message: err instanceof Error ? err.message : String(err),
+						source: "session",
+						details: { operation: "save" },
+					});
 				});
 		}
 
@@ -379,15 +391,29 @@ export class SessionController {
 				key,
 				buildSnapshot(trimmedDiagnostics),
 			);
+			this.saveFailedReported = false;
 		} catch (err) {
+			if (this.saveFailedReported) return;
+			this.saveFailedReported = true;
 			if (trimmedDiagnostics.length === 0) {
-				console.warn("Session save failed:", err);
+				browsergentStore.getState().sessionStoreFailed({
+					code: "E_SESSION_STORE",
+					message: err instanceof Error ? err.message : String(err),
+					source: "session",
+					details: { operation: "save" },
+				});
 				return;
 			}
 			try {
 				await this.storage.set(SESSION_STORE, key, buildSnapshot([]));
 			} catch (retryErr) {
-				console.warn("Session save retry also failed:", retryErr);
+				browsergentStore.getState().sessionStoreFailed({
+					code: "E_SESSION_STORE",
+					message:
+						retryErr instanceof Error ? retryErr.message : String(retryErr),
+					source: "session",
+					details: { operation: "save", retry: true },
+				});
 			}
 		}
 	}
@@ -404,7 +430,12 @@ export class SessionController {
 				await this.storage.remove(SESSION_STORE, OLD_SESSION_KEY);
 			}
 		} catch (err) {
-			console.warn("Session clear failed:", err);
+			browsergentStore.getState().sessionStoreFailed({
+				code: "E_SESSION_STORE",
+				message: err instanceof Error ? err.message : String(err),
+				source: "session",
+				details: { operation: "clear" },
+			});
 		}
 	}
 
