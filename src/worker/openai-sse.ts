@@ -19,6 +19,20 @@ import type { LlmStream } from "./llm-streamer";
 import { isOpenAIStreamChunk } from "./openai-types";
 import { toStopReason } from "./openai-wire";
 
+function deferred<T>(): {
+	promise: Promise<T>;
+	resolve: (value: T | PromiseLike<T>) => void;
+	reject: (reason?: unknown) => void;
+} {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, resolve, reject };
+}
+
 export function createOpenAIStream(
 	body: ReadableStream,
 	model: string,
@@ -45,7 +59,7 @@ export function createOpenAIStream(
 	let chunkResolve: ((value: IteratorResult<LlmChunk>) => void) | null = null;
 	let streamDone = false;
 
-	const resultPromise = Promise.withResolvers<LlmResult>();
+	const resultPromise = deferred<LlmResult>();
 	const resultResolve = resultPromise.resolve;
 	const resultReject = resultPromise.reject;
 
@@ -273,8 +287,7 @@ export function createOpenAIStream(
 				continue;
 			}
 			if (streamDone) return;
-			const { promise, resolve } =
-				Promise.withResolvers<IteratorResult<LlmChunk>>();
+			const { promise, resolve } = deferred<IteratorResult<LlmChunk>>();
 			chunkResolve = resolve;
 			const item = await promise;
 			if (item.done) return;

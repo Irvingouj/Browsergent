@@ -132,12 +132,25 @@ function classifyError(
 		code?: string | null;
 		stack?: string | null;
 		name?: string | null;
+		hint?: string | null;
+		recovery?: string[] | null;
+		details?: Record<string, unknown> | null;
 	},
 	cellCode?: string,
-): { code: string; hint: string; stack?: string } {
+): {
+	code: string;
+	hint: string;
+	stack?: string;
+	details?: Record<string, unknown>;
+} {
 	const stack = isStackUseful(source.stack) ? source.stack : undefined;
 	const base = classifyErrorBase(source, cellCode);
-	return stack ? { ...base, stack } : base;
+	const details = source.details ?? undefined;
+	return {
+		...base,
+		...(stack ? { stack } : {}),
+		...(details ? { details } : {}),
+	};
 }
 
 function classifyErrorBase(
@@ -146,6 +159,7 @@ function classifyErrorBase(
 		message?: string;
 		code?: string | null;
 		name?: string | null;
+		hint?: string | null;
 	},
 	jsSource?: string,
 ): { code: string; hint: string } {
@@ -214,6 +228,21 @@ function classifyErrorBase(
 		return {
 			code: errCode,
 			hint: "The operation timed out. The page may be slow or the selector may not appear.",
+		};
+	if (errCode === "E_FETCH_BLOB_URL")
+		return {
+			code: errCode,
+			hint: "Blob URLs are scoped to the document context that created them and may expire after Chrome downloads them. Do not fetch chrome.downloads finalUrl blob URLs; capture the bytes before download or fetch the underlying HTTP export endpoint, then write them with fs.writeBase64.",
+		};
+	if (errCode === "E_FETCH")
+		return {
+			code: errCode,
+			hint: "The target page fetch failed before any response was available. Check the URL, scheme, page origin, CORS/auth requirements, and whether the URL is fetchable from the active document.",
+		};
+	if (source.hint)
+		return {
+			code: errCode ?? "E_JS_RUNTIME",
+			hint: source.hint,
 		};
 	// QuickJS strips the message from engine-thrown TypeErrors, so an empty-message
 	// runtime error is opaque. When the failing cell used page.* (which targets the
@@ -491,13 +520,22 @@ export function createAgentTools(
 							action?: string | null;
 							code?: string | null;
 							stack?: string | null;
+							hint?: string | null;
+							recovery?: string[] | null;
+							details?: Record<string, unknown> | null;
 						};
-						const { code: errCode, hint, stack } = classifyError(err, code);
+						const {
+							code: errCode,
+							hint,
+							stack,
+							details,
+						} = classifyError(err, code);
 						return formatToolError(
 							errCode,
 							`${tracePrefix}${formatJsRunResult(result)}`,
 							hint,
 							stack,
+							details,
 						);
 					}
 					const formatted = formatJsRunResult(result);

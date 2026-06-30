@@ -24,8 +24,10 @@ describe("agent prompt policy", () => {
 		expect(JS_TOOL_PROMPT).toContain(
 			"`page.find()` results may omit DOM attributes",
 		);
-		expect(JS_TOOL_PROMPT).toContain("`page.fetch()` returns a text body");
-		expect(JS_TOOL_PROMPT).toContain("binary-safe API");
+		expect(JS_TOOL_PROMPT).toContain("return binary responses as base64");
+		expect(JS_TOOL_PROMPT).toContain("fs.writeBase64");
+		expect(JS_TOOL_PROMPT).toContain("blob:");
+		expect(JS_TOOL_PROMPT).toContain("chrome.downloads");
 	});
 
 	test("documents file attachment tokens", () => {

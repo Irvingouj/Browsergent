@@ -245,6 +245,44 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const envelope = expectErrorEnvelope(result as string);
 		expect(envelope.stack).toBeUndefined();
 	});
+
+	test("blob fetch errors tell the agent not to fetch chrome.downloads blob finalUrl", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: null,
+				message:
+					"[page_fetch] (E_FETCH_BLOB_URL): fetch failed for blob URL blob:https://example.com/id: TypeError: Failed to fetch",
+				line: null,
+				action: "page_fetch",
+				code: "E_FETCH_BLOB_URL",
+				stack: null,
+				details: {
+					url: "blob:https://example.com/id",
+					scheme: "blob",
+					errorName: "TypeError",
+					errorMessage: "Failed to fetch",
+				},
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const handler = getRunJsHandler(makeTools(runJs));
+		const result = await handler({
+			code: "await page.fetch({ url: 'blob:https://example.com/id' });",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_FETCH_BLOB_URL");
+		expect(envelope.hint).toContain("chrome.downloads finalUrl");
+		expect(envelope.hint).toContain("fs.writeBase64");
+		expect(envelope.details).toMatchObject({
+			url: "blob:https://example.com/id",
+			errorName: "TypeError",
+			errorMessage: "Failed to fetch",
+		});
+	});
+
 	test("empty-message TypeError on page.* code yields tab-targeting hint", async () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
