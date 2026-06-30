@@ -1,4 +1,4 @@
-import type { FilesController } from "../controllers/files"
+import type { FilesController } from "../controllers/files";
 import { escapeXmlAttr, escapeXmlText } from "../skills/validate-skill-meta";
 import { truncateWithMarker } from "../utils/truncate";
 import { stripTabMentions } from "./resolve-tab-mentions";

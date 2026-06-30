@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand";
 import type { FilesController } from "../../../controllers/files";
+import type { MediaKind } from "../../../controllers/media-types";
 import {
 	classifyMedia,
 	defaultPreviewHeightPx,
 	resolveMime,
 } from "../../../controllers/media-types";
-import type { MediaKind } from "../../../controllers/media-types";
 import { selectSelectedFileId } from "../../../state/selectors";
 import type { FileNode } from "../../../state/slices/files-slice";
 import { browsergentStore } from "../../../state/store";
@@ -158,7 +158,11 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 			window.removeEventListener("pointerup", onUp);
 			dragHandlersRef.current = { move: null, up: null, pointerId: null };
 		};
-		dragHandlersRef.current = { move: onMove, up: onUp, pointerId: e.pointerId };
+		dragHandlersRef.current = {
+			move: onMove,
+			up: onUp,
+			pointerId: e.pointerId,
+		};
 		window.addEventListener("pointermove", onMove);
 		window.addEventListener("pointerup", onUp);
 		// Dragging overrides the expanded state.
@@ -273,7 +277,11 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 							class="max-w-full max-h-full object-contain mx-auto"
 						/>
 					) : mediaKind === "video" ? (
-						<video src={mediaUrl} controls class="max-w-full max-h-full mx-auto" />
+						<video
+							src={mediaUrl}
+							controls
+							class="max-w-full max-h-full mx-auto"
+						/>
 					) : mediaKind === "audio" ? (
 						<audio src={mediaUrl} controls class="w-full" />
 					) : (

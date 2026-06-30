@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-	CLOSED_MODE,
 	interpretKey,
 	resolveInputMode,
 } from "../../src/sidepanel/components/input/input-mode";

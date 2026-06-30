@@ -11,9 +11,9 @@ import type { SkillImportResult } from "./skill-import-controller";
 import { SkillImportController } from "./skill-import-controller";
 import { SkillRegistry } from "./skill-registry";
 import type {
+	FsClient,
 	LoadSkillOptions,
 	SkillDiagnostic,
-	FsClient,
 	SkillMeta,
 } from "./skill-types";
 

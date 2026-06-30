@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
-	type Draft,
-	assertNever,
 	applyCommand,
+	assertNever,
+	type Draft,
 	emptyDraft,
 	parseDraft,
 	parseDraftAtOffset,
@@ -29,7 +29,10 @@ describe("applyCommand — insert-chip", () => {
 			left: [{ kind: "text", value: "hi " }],
 			right: [],
 		};
-		const result = applyCommand(draft, { kind: "insert-chip", inline: fileChip });
+		const result = applyCommand(draft, {
+			kind: "insert-chip",
+			inline: fileChip,
+		});
 		expect(result).toEqual({
 			kind: "draft-updated",
 			draft: {
@@ -44,7 +47,10 @@ describe("applyCommand — insert-chip", () => {
 			left: [{ kind: "text", value: "ab" }],
 			right: [{ kind: "text", value: "cd" }],
 		};
-		const result = applyCommand(draft, { kind: "insert-chip", inline: fileChip });
+		const result = applyCommand(draft, {
+			kind: "insert-chip",
+			inline: fileChip,
+		});
 		expect(result).toEqual({
 			kind: "draft-updated",
 			draft: {
@@ -147,14 +153,18 @@ describe("parseDraftAtOffset", () => {
 		const canonical = "ab@[file:f1:r.md]cd";
 		const d = parseDraftAtOffset(canonical, 2);
 		expect(serializeDraft({ left: d.left, right: [] })).toBe("ab");
-		expect(serializeDraft({ left: [], right: d.right })).toBe("@[file:f1:r.md]cd");
+		expect(serializeDraft({ left: [], right: d.right })).toBe(
+			"@[file:f1:r.md]cd",
+		);
 	});
 
 	test("offset at chip boundary: after chip", () => {
 		const canonical = "ab@[file:f1:r.md]cd";
 		const after = 2 + "@[file:f1:r.md]".length;
 		const d = parseDraftAtOffset(canonical, after);
-		expect(serializeDraft({ left: d.left, right: [] })).toBe("ab@[file:f1:r.md]");
+		expect(serializeDraft({ left: d.left, right: [] })).toBe(
+			"ab@[file:f1:r.md]",
+		);
 		expect(serializeDraft({ left: [], right: d.right })).toBe("cd");
 	});
 
@@ -169,7 +179,9 @@ describe("parseDraftAtOffset", () => {
 		const canonical = "ab@[file:f1:r.md]cd";
 		// offset 17 inside chip (2..18), nearer end
 		const d = parseDraftAtOffset(canonical, 17);
-		expect(serializeDraft({ left: d.left, right: [] })).toBe("ab@[file:f1:r.md]");
+		expect(serializeDraft({ left: d.left, right: [] })).toBe(
+			"ab@[file:f1:r.md]",
+		);
 	});
 
 	test("offset past end clamps to end", () => {

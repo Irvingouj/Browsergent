@@ -274,7 +274,8 @@ export class SessionController {
 			messageCount: messages.length,
 		};
 		const changed =
-			messages.length !== (Array.isArray(raw.messages) ? raw.messages.length : 0) ||
+			messages.length !==
+				(Array.isArray(raw.messages) ? raw.messages.length : 0) ||
 			trace.length !== (Array.isArray(raw.trace) ? raw.trace.length : 0) ||
 			rawDiagnostics.length !==
 				(Array.isArray(raw.diagnostics) ? raw.diagnostics.length : 0) ||

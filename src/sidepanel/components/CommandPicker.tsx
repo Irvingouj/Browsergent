@@ -14,7 +14,6 @@ interface CommandPickerProps {
 	activeIndex: number;
 	onSelect: (item: CommandPickerItem) => void;
 	onActiveIndexChange: (index: number) => void;
-	onDismiss: () => void;
 	emptyMessage?: string;
 }
 
@@ -30,7 +29,6 @@ export const CommandPicker: FunctionalComponent<CommandPickerProps> = ({
 	activeIndex,
 	onSelect,
 	onActiveIndexChange,
-	onDismiss,
 	emptyMessage,
 }) => {
 	const listRef = useRef<HTMLDivElement>(null);

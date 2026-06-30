@@ -79,10 +79,16 @@ export type ApplyResult =
  * Pure reducer. Exhaustive switch over EditorCommand; adding a variant
  * without handling it is a compile error (assertNever).
  */
-export function applyCommand(draft: Draft, command: EditorCommand): ApplyResult {
+export function applyCommand(
+	draft: Draft,
+	command: EditorCommand,
+): ApplyResult {
 	switch (command.kind) {
 		case "insert-chip":
-			return { kind: "draft-updated", draft: insertInline(draft, command.inline) };
+			return {
+				kind: "draft-updated",
+				draft: insertInline(draft, command.inline),
+			};
 
 		case "replace-from-history":
 			return { kind: "draft-updated", draft: command.draft };

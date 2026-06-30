@@ -6,7 +6,15 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["**", "!!**/dist", "!!**/test-results", "!!**/vendor"]
+		"includes": [
+			"**",
+			"!!**/dist",
+			"!!**/test-results",
+			"!!**/vendor",
+			"!example.html",
+			"!problematic-conversation.json",
+			"!smoke/sites"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -26,7 +34,8 @@
 				"useKeyWithClickEvents": "off",
 				"useSemanticElements": "off",
 				"noAutofocus": "off",
-				"noSvgWithoutTitle": "off"
+				"noSvgWithoutTitle": "off",
+				"useMediaCaption": "off"
 			}
 		}
 	},

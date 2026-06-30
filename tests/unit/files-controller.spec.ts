@@ -27,7 +27,9 @@ function createMockFs(): MockFs {
 			}
 			return { exists: false };
 		},
-		async list(path: string): Promise<{ entries: { name: string; kind: string }[] }> {
+		async list(
+			path: string,
+		): Promise<{ entries: { name: string; kind: string }[] }> {
 			logs.push(`list:${path}`);
 			const prefix = path === "/" ? "/" : `${path}/`;
 			const seen = new Set<string>();
@@ -54,12 +56,18 @@ function createMockFs(): MockFs {
 			if (data === undefined) throw new Error(`Not found: ${path}`);
 			return { data };
 		},
-		async writeText(path: string, data: string): Promise<{ path: string; bytes_written: number }> {
+		async writeText(
+			path: string,
+			data: string,
+		): Promise<{ path: string; bytes_written: number }> {
 			logs.push(`write:${path}`);
 			storage.set(path, data);
 			return { path, bytes_written: data.length };
 		},
-		async writeBase64(path: string, base64: string): Promise<{ path: string; bytes_written: number }> {
+		async writeBase64(
+			path: string,
+			base64: string,
+		): Promise<{ path: string; bytes_written: number }> {
 			logs.push(`writeBase64:${path}`);
 			storage.set(path, base64);
 			return { path, bytes_written: base64.length };
@@ -79,8 +87,24 @@ function createMockFs(): MockFs {
 			storage.delete(path);
 			return { ok: true };
 		},
-		async stat(path: string): Promise<{ path: string; name: string; kind: string; size: number; mime: string | null; created_at: number | null; modified_at: number | null }> {
-			return { path, name: path.substring(path.lastIndexOf("/") + 1), kind: "file", size: (storage.get(path) ?? "").length, mime: null, created_at: null, modified_at: null };
+		async stat(path: string): Promise<{
+			path: string;
+			name: string;
+			kind: string;
+			size: number;
+			mime: string | null;
+			created_at: number | null;
+			modified_at: number | null;
+		}> {
+			return {
+				path,
+				name: path.substring(path.lastIndexOf("/") + 1),
+				kind: "file",
+				size: (storage.get(path) ?? "").length,
+				mime: null,
+				created_at: null,
+				modified_at: null,
+			};
 		},
 	};
 }

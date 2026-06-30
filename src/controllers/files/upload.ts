@@ -1,7 +1,11 @@
 import type { FsClient } from "../../skills/skill-types";
 import type { FileNode } from "../../state/slices/files-slice";
-import { buildFileNode } from "./node-builders";
-import { fileToBase64, isTextFile, sanitizeFileName } from "./node-builders";
+import {
+	buildFileNode,
+	fileToBase64,
+	isTextFile,
+	sanitizeFileName,
+} from "./node-builders";
 
 type UploadPlan =
 	| { kind: "text"; file: File; path: string; name: string; parentId?: string }
@@ -44,8 +48,20 @@ async function planUpload(fs: FsClient, file: File): Promise<UploadPlan> {
 		dirSegments.length > 0 ? `/${dirSegments.join("/")}` : undefined;
 
 	return isTextFile(name)
-		? { kind: "text", file, path, name, ...(parentId !== undefined ? { parentId } : {}) }
-		: { kind: "binary", file, path, name, ...(parentId !== undefined ? { parentId } : {}) };
+		? {
+				kind: "text",
+				file,
+				path,
+				name,
+				...(parentId !== undefined ? { parentId } : {}),
+			}
+		: {
+				kind: "binary",
+				file,
+				path,
+				name,
+				...(parentId !== undefined ? { parentId } : {}),
+			};
 }
 
 async function writeTextNode(

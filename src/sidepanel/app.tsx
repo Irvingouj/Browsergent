@@ -5,7 +5,7 @@ import {
 	buildExportSnapshot,
 	exportConversation,
 } from "../controllers/export-controller";
-import { isTextFile } from "../controllers/files"
+import { isTextFile } from "../controllers/files";
 import {
 	buildSkillXmlBlock,
 	parseSkillActivation,
@@ -422,12 +422,7 @@ const App: FunctionalComponent = () => {
 					}
 				: { kind: "anthropic", apiKey: "", model: "" },
 		});
-	}, [
-		activeProvider,
-		sessionControllerRef,
-		bridgeRef,
-		filesControllerRef,
-	]);
+	}, [activeProvider, sessionControllerRef, bridgeRef, filesControllerRef]);
 
 	const handleStop = useCallback(() => {
 		const runId = browsergentStore.getState().agent.activeRunId;

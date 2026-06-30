@@ -24,6 +24,8 @@ import {
 	tabsToPickerItems,
 } from "../../detect-mention-state";
 import { type CommandPickerItem, filterPickerItems } from "../CommandPicker";
+import type { Draft, EditorCommand } from "./draft-model";
+import { parseDraftAtOffset, serializeDraft } from "./draft-model";
 import {
 	CLOSED_MODE,
 	type InputMode,
@@ -31,8 +33,6 @@ import {
 	type KeyActionCtx,
 	resolveInputMode,
 } from "./input-mode";
-import type { Draft, EditorCommand } from "./draft-model";
-import { parseDraftAtOffset, serializeDraft } from "./draft-model";
 
 export function skillsToPickerItems(
 	skills: ReadonlyArray<SkillMeta>,
@@ -211,7 +211,8 @@ export function useInputMode({
 			// cursor offset = sum of left lengths (zipper gap)
 			let cursor = 0;
 			for (const inline of draft.left) {
-				cursor += inline.kind === "text" ? inline.value.length : inline.raw.length;
+				cursor +=
+					inline.kind === "text" ? inline.value.length : inline.raw.length;
 			}
 			const caretAtStart = cursor === 0;
 			const caretAtEnd = cursor === value.length;
@@ -277,7 +278,11 @@ export function useInputMode({
 							setMode((prev) =>
 								prev.kind === "history"
 									? prev
-									: { kind: "history", index: lastIdx, savedDraft: currentDraft },
+									: {
+											kind: "history",
+											index: lastIdx,
+											savedDraft: currentDraft,
+										},
 							);
 							if (msg) {
 								dispatch({
@@ -355,7 +360,8 @@ export function useInputMode({
 			const value = serializeDraft(draft);
 			let cursor = 0;
 			for (const inline of draft.left) {
-				cursor += inline.kind === "text" ? inline.value.length : inline.raw.length;
+				cursor +=
+					inline.kind === "text" ? inline.value.length : inline.raw.length;
 			}
 			const currentState = modeRef.current;
 			const startIndex =

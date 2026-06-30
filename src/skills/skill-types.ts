@@ -18,7 +18,6 @@ export interface SkillDocument {
 	body: string;
 }
 
-
 /** FS 能力契约:签名全部 Pick 自 ExtensionJsClient,无手写。 */
 export type FsClient = Pick<
 	ExtensionJsClient,

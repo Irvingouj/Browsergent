@@ -51,7 +51,9 @@ test("settings panel stores API key", async () => {
 	await apiKeyInput.fill("test-key-123");
 	await sidePanel.getByTestId("settings-done-button").click();
 
-	await expect(sidePanel.getByTestId("settings-apikey-input")).not.toBeVisible();
+	await expect(
+		sidePanel.getByTestId("settings-apikey-input"),
+	).not.toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
 	await sidePanel.getByRole("button", { name: "Settings" }).click();

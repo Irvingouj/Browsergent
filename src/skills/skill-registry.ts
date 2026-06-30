@@ -10,9 +10,9 @@ import {
 	skillMdPath,
 } from "./skill-paths";
 import type {
+	FsClient,
 	SkillDiagnostic,
 	SkillDocument,
-	FsClient,
 	SkillListResult,
 	SkillMeta,
 	SkillScope,

@@ -1,5 +1,5 @@
-import type { FilesController } from "../controllers/files"
-import { isTextFile } from "../controllers/files"
+import type { FilesController } from "../controllers/files";
+import { isTextFile } from "../controllers/files";
 import type {
 	FileOp,
 	FileOpListEntry,

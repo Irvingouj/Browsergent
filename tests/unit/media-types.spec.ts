@@ -77,7 +77,6 @@ describe("classifyMedia", () => {
 	});
 });
 
-
 describe("defaultPreviewHeightPx", () => {
 	test("returns a positive height for every kind", () => {
 		expect(defaultPreviewHeightPx("image")).toBeGreaterThan(0);
@@ -101,13 +100,7 @@ describe("defaultPreviewHeightPx", () => {
 
 	test("binary is the smallest", () => {
 		const bin = defaultPreviewHeightPx("binary");
-		for (const kind of [
-			"image",
-			"video",
-			"pdf",
-			"audio",
-			"text",
-		] as const) {
+		for (const kind of ["image", "video", "pdf", "audio", "text"] as const) {
 			expect(defaultPreviewHeightPx(kind)).toBeGreaterThan(bin);
 		}
 	});

@@ -18,10 +18,7 @@ export interface SkillImportResult {
 	warnings: string[];
 }
 
-async function ensureParentDirs(
-	fs: FsClient,
-	filePath: string,
-): Promise<void> {
+async function ensureParentDirs(fs: FsClient, filePath: string): Promise<void> {
 	const parts = filePath.split("/").filter(Boolean);
 	let current = "";
 	for (let i = 0; i < parts.length - 1; i++) {

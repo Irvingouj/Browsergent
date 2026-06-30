@@ -292,10 +292,6 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 							activeIndex={mode.activeIndex}
 							onSelect={mode.applySelection}
 							onActiveIndexChange={(i) => mode.setActiveIndex(i)}
-							onDismiss={() => {
-								// Dismiss via key is handled by interpretKey; this
-								// callback is only for external dismiss.
-							}}
 							emptyMessage={mode.emptyMessage}
 						/>
 					) : null}

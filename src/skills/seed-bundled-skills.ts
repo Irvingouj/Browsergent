@@ -39,10 +39,7 @@ async function readSeedVersion(fs: FsClient): Promise<string | null> {
 		return null;
 	}
 }
-async function ensureParentDirs(
-	fs: FsClient,
-	filePath: string,
-): Promise<void> {
+async function ensureParentDirs(fs: FsClient, filePath: string): Promise<void> {
 	const parts = filePath.split("/").filter(Boolean);
 	let current = "";
 	for (let i = 0; i < parts.length - 1; i++) {
@@ -54,10 +51,7 @@ async function ensureParentDirs(
 	}
 }
 
-async function listAllFiles(
-	fs: FsClient,
-	root: string,
-): Promise<string[]> {
+async function listAllFiles(fs: FsClient, root: string): Promise<string[]> {
 	const files: string[] = [];
 	const { exists: rootExists } = await fs.exists(root);
 	if (!rootExists) return files;

@@ -1,3 +1,4 @@
+import type { FsListEntry } from "@pi-oxide/extension-js";
 import type { FsClient } from "../../skills/skill-types";
 import type { FileNode } from "../../state/slices/files-slice";
 import { buildDirectoryNode, buildFileNode } from "./node-builders";
@@ -14,7 +15,11 @@ function toListedChild(
 	parentId?: string,
 ): ListedChild | null {
 	const path = joinChildPath(root, entry.name);
-	const base = { name: entry.name, path, ...(parentId !== undefined ? { parentId } : {}) };
+	const base = {
+		name: entry.name,
+		path,
+		...(parentId !== undefined ? { parentId } : {}),
+	};
 	return entry.kind === "directory"
 		? { kind: "directory", ...base }
 		: entry.kind === "file"
@@ -23,10 +28,7 @@ function toListedChild(
 }
 
 /** Stat a file node to populate size/mime; tolerate stat failures (leaves fields unset). */
-async function fillStat(
-	fs: FsClient,
-	node: FileNode,
-): Promise<FileNode> {
+async function fillStat(fs: FsClient, node: FileNode): Promise<FileNode> {
 	try {
 		const { size, mime } = await fs.stat(node.path);
 		const next: FileNode = { ...node, size };
@@ -46,7 +48,7 @@ export async function listDirectChildren(
 	fs: FsClient,
 	dirPath: string,
 ): Promise<FileNode[]> {
-	let entries;
+	let entries: FsListEntry[] = [];
 	try {
 		({ entries } = await fs.list(dirPath));
 	} catch {
@@ -75,7 +77,7 @@ async function scanRecursive(
 	root: string,
 	parentId: string | undefined,
 ): Promise<FileNode[]> {
-	let entries;
+	let entries: FsListEntry[] = [];
 	try {
 		({ entries } = await fs.list(root));
 	} catch {

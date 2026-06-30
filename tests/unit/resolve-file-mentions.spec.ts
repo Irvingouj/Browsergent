@@ -22,7 +22,9 @@ function createMockFs(): MockFs {
 		async exists(path: string): Promise<{ exists: boolean }> {
 			return { exists: storage.has(path) };
 		},
-		async list(dir: string): Promise<{ entries: { name: string; kind: string }[] }> {
+		async list(
+			dir: string,
+		): Promise<{ entries: { name: string; kind: string }[] }> {
 			const entries: { name: string; kind: string }[] = [];
 			for (const path of storage.keys()) {
 				const parent = path.substring(0, path.lastIndexOf("/")) || "/";
@@ -40,7 +42,10 @@ function createMockFs(): MockFs {
 			if (data === undefined) throw new Error(`Not found: ${path}`);
 			return { data };
 		},
-		async writeText(path: string, data: string): Promise<{ path: string; bytes_written: number }> {
+		async writeText(
+			path: string,
+			data: string,
+		): Promise<{ path: string; bytes_written: number }> {
 			storage.set(path, data);
 			return { path, bytes_written: data.length };
 		},

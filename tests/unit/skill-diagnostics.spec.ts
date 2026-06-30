@@ -43,10 +43,18 @@ function makeFs(files: Record<string, string>): FsClient {
 			if (content === undefined) throw new Error(`missing ${path}`);
 			return { data: content };
 		},
-		async writeText() { return { ok: true as const }; },
-		async mkdir() { return { ok: true as const }; },
-		async delete() { return { ok: true as const }; },
-		async writeBase64() { return { path: "", bytes_written: 0 }; },
+		async writeText() {
+			return { ok: true as const };
+		},
+		async mkdir() {
+			return { ok: true as const };
+		},
+		async delete() {
+			return { ok: true as const };
+		},
+		async writeBase64() {
+			return { path: "", bytes_written: 0 };
+		},
 		async readBase64() {
 			return { data: "" };
 		},

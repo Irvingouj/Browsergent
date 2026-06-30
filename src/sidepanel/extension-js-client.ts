@@ -166,7 +166,7 @@ export class ExtensionJsClient implements FsClient {
 			return op(this.session.fs)(params);
 		}, label);
 	}
-// Reads: no onFsMutation. Return session.fs.* wrapped results directly.
+	// Reads: no onFsMutation. Return session.fs.* wrapped results directly.
 	exists(path: string): Promise<FsExistsResult> {
 		return this.fsCall((fs) => fs.exists, { path }, "exists failed");
 	}
@@ -185,41 +185,64 @@ export class ExtensionJsClient implements FsClient {
 
 	// Writes: fire onFsMutation after success.
 	async writeText(path: string, data: string): Promise<FsWriteResult> {
-		const result = await this.fsCall((fs) => fs.writeText, { path, data }, "writeText failed");
+		const result = await this.fsCall(
+			(fs) => fs.writeText,
+			{ path, data },
+			"writeText failed",
+		);
 		this.onFsMutation?.();
 		return result;
 	}
 
 	async writeBase64(path: string, base64: string): Promise<FsWriteResult> {
-		const result = await this.fsCall((fs) => fs.writeBase64, { path, data: base64 }, "writeBase64 failed");
+		const result = await this.fsCall(
+			(fs) => fs.writeBase64,
+			{ path, data: base64 },
+			"writeBase64 failed",
+		);
 		this.onFsMutation?.();
 		return result;
 	}
 
 	async mkdir(path: string): Promise<FsBoolResult> {
-		const result = await this.fsCall((fs) => fs.mkdir, { path }, "mkdir failed");
+		const result = await this.fsCall(
+			(fs) => fs.mkdir,
+			{ path },
+			"mkdir failed",
+		);
 		this.onFsMutation?.();
 		return result;
 	}
 
 	async delete(path: string): Promise<FsBoolResult> {
-		const result = await this.fsCall((fs) => fs.delete, { path }, "delete failed");
+		const result = await this.fsCall(
+			(fs) => fs.delete,
+			{ path },
+			"delete failed",
+		);
 		this.onFsMutation?.();
 		return result;
 	}
 
 	async move(from: string, to: string): Promise<FsBoolResult> {
-		const result = await this.fsCall((fs) => fs.move, { from, to }, "move failed");
+		const result = await this.fsCall(
+			(fs) => fs.move,
+			{ from, to },
+			"move failed",
+		);
 		this.onFsMutation?.();
 		return result;
 	}
 
 	async copy(from: string, to: string): Promise<FsBoolResult> {
-		const result = await this.fsCall((fs) => fs.copy, { from, to }, "copy failed");
+		const result = await this.fsCall(
+			(fs) => fs.copy,
+			{ from, to },
+			"copy failed",
+		);
 		this.onFsMutation?.();
 		return result;
 	}
-
 
 	private enqueue<T>(fn: () => Promise<T>, errorLabel: string): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
