@@ -137,11 +137,20 @@ function classifyError(
 		details?: Record<string, unknown> | null;
 	},
 	cellCode?: string,
-): { code: string; hint: string; stack?: string; details?: Record<string, unknown> } {
+): {
+	code: string;
+	hint: string;
+	stack?: string;
+	details?: Record<string, unknown>;
+} {
 	const stack = isStackUseful(source.stack) ? source.stack : undefined;
 	const base = classifyErrorBase(source, cellCode);
 	const details = source.details ?? undefined;
-	return { ...base, ...(stack ? { stack } : {}), ...(details ? { details } : {}) };
+	return {
+		...base,
+		...(stack ? { stack } : {}),
+		...(details ? { details } : {}),
+	};
 }
 
 function classifyErrorBase(
@@ -515,10 +524,12 @@ export function createAgentTools(
 							recovery?: string[] | null;
 							details?: Record<string, unknown> | null;
 						};
-						const { code: errCode, hint, stack, details } = classifyError(
-							err,
-							code,
-						);
+						const {
+							code: errCode,
+							hint,
+							stack,
+							details,
+						} = classifyError(err, code);
 						return formatToolError(
 							errCode,
 							`${tracePrefix}${formatJsRunResult(result)}`,

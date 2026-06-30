@@ -43,6 +43,20 @@ const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 8000;
 const JITTER_RATIO = 0.25;
 
+function deferred<T>(): {
+	promise: Promise<T>;
+	resolve: (value: T | PromiseLike<T>) => void;
+	reject: (reason?: unknown) => void;
+} {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, resolve, reject };
+}
+
 function computeBackoff(attempt: number): number {
 	const exp = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), MAX_DELAY_MS);
 	const jitter = exp * JITTER_RATIO * (Math.random() * 2 - 1);
@@ -59,7 +73,7 @@ function parseRetryAfter(header: string | null): number | undefined {
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-	const { promise, resolve, reject } = Promise.withResolvers<void>();
+	const { promise, resolve, reject } = deferred<void>();
 	if (ms <= 0) {
 		resolve();
 		return promise;
