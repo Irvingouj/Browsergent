@@ -11,15 +11,35 @@
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { focusTargetTab, launchExtension } from "./helpers";
+import {
+	configureMockProvider,
+	focusTargetTab,
+	launchExtension,
+	typeTask,
+} from "./helpers";
 
 function readRc(): Record<string, string> {
 	try {
 		const out = execSync("cat ~/rc.deepseek.rc", { encoding: "utf8" });
 		const vars: Record<string, string> = {};
 		for (const line of out.split("\n")) {
-			const m = line.match(/^\s*export\s+([A-Z_]+)="(.*)"\s*$/);
-			if (m) vars[m[1]] = m[2];
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith("#")) continue;
+			// Strip optional "export " prefix, then split on first "="
+			const withoutExport = trimmed.replace(/^export\s+/, "");
+			const i = withoutExport.indexOf("=");
+			if (i === -1) continue;
+			const key = withoutExport.slice(0, i).trim();
+			if (!key) continue;
+			let value = withoutExport.slice(i + 1).trim();
+			// Strip surrounding single or double quotes
+			if (
+				(value.startsWith('"') && value.endsWith('"')) ||
+				(value.startsWith("'") && value.endsWith("'"))
+			) {
+				value = value.slice(1, -1);
+			}
+			vars[key] = value;
 		}
 		return vars;
 	} catch {
@@ -30,8 +50,12 @@ function readRc(): Record<string, string> {
 const RC = readRc();
 const DEEPSEEK_API_KEY =
 	RC.DEEPSEEK_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? "";
-const DEEPSEEK_BASE_URL = "https://api.deepseek.com/anthropic";
-const DEEPSEEK_MODEL = "deepseek-v4-pro[1m]";
+const DEEPSEEK_BASE_URL =
+	process.env.DEEPSEEK_BASE_URL ||
+	RC.DEEPSEEK_BASE_URL ||
+	"https://api.deepseek.com/anthropic";
+const DEEPSEEK_MODEL =
+	process.env.DEEPSEEK_MODEL || RC.DEEPSEEK_MODEL || "deepseek-chat";
 
 // The agent is told verbatim what to run; we match on the marker string so model
 // variability in surrounding scaffolding doesn't break the assertions.
@@ -63,18 +87,12 @@ test.describe("real deepseek", () => {
 		});
 		await focusTargetTab(target);
 
-		// Configure DeepSeek provider via the settings modal.
-		await sidePanel.getByRole("button", { name: "More options" }).click();
-		await sidePanel.getByRole("button", { name: "Open settings" }).click();
-		await sidePanel.locator('input[type="password"]').fill(DEEPSEEK_API_KEY);
-		await sidePanel
-			.locator('input[type="text"]')
-			.nth(0)
-			.fill(DEEPSEEK_BASE_URL);
-		await sidePanel.locator('input[type="text"]').nth(1).fill(DEEPSEEK_MODEL);
-		await sidePanel.getByRole("button", { name: "Save settings" }).click();
-		await sidePanel.locator('[data-testid="close-session-panel"]').click();
-		await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+		await configureMockProvider(
+			sidePanel,
+			DEEPSEEK_BASE_URL,
+			DEEPSEEK_API_KEY,
+			DEEPSEEK_MODEL,
+		);
 
 		// Intercept Anthropic requests to capture the full conversation.
 		const apiRequests: Array<{
@@ -101,7 +119,7 @@ test.describe("real deepseek", () => {
 			}
 		});
 
-		await sidePanel.locator('[data-testid="task-input"]').fill(TASK_PROMPT);
+		await typeTask(sidePanel, TASK_PROMPT);
 		await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 		const traceEntry = sidePanel.locator("[data-testid='trace-entry']").first();
@@ -157,17 +175,12 @@ test.describe("real deepseek", () => {
 		});
 		await focusTargetTab(target);
 
-		await sidePanel.getByRole("button", { name: "More options" }).click();
-		await sidePanel.getByRole("button", { name: "Open settings" }).click();
-		await sidePanel.locator('input[type="password"]').fill(DEEPSEEK_API_KEY);
-		await sidePanel
-			.locator('input[type="text"]')
-			.nth(0)
-			.fill(DEEPSEEK_BASE_URL);
-		await sidePanel.locator('input[type="text"]').nth(1).fill(DEEPSEEK_MODEL);
-		await sidePanel.getByRole("button", { name: "Save settings" }).click();
-		await sidePanel.locator('[data-testid="close-session-panel"]').click();
-		await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+		await configureMockProvider(
+			sidePanel,
+			DEEPSEEK_BASE_URL,
+			DEEPSEEK_API_KEY,
+			DEEPSEEK_MODEL,
+		);
 
 		// Intercept Anthropic requests to capture the full conversation.
 		const apiRequests: Array<{
@@ -201,7 +214,7 @@ test.describe("real deepseek", () => {
 			"```",
 			"The ReferenceError is intentional. Do not catch it. Do not retry. Do not add anything else.",
 		].join("\n");
-		await sidePanel.locator('[data-testid="task-input"]').fill(refTask);
+		await typeTask(sidePanel, refTask);
 		await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 		const traceEntry = sidePanel.locator("[data-testid='trace-entry']").first();

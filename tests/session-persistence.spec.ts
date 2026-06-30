@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension, startMockAnthropicServer } from "./helpers";
+import {
+	configureMockProvider,
+	launchExtension,
+	startMockAnthropicServer,
+	typeTask,
+} from "./helpers";
 
 test("chat messages accumulate across multiple runs", async () => {
 	const mock = startMockAnthropicServer({
@@ -29,24 +34,17 @@ test("chat messages accumulate across multiple runs", async () => {
 
 	const { sidePanel, close } = await launchExtension();
 
-	// Configure settings
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await configureMockProvider(sidePanel, mock.url);
 
 	// First run
-	await sidePanel.locator('[data-testid="task-input"]').fill("first task");
+	await typeTask(sidePanel, "first task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=First response")).toBeVisible({
 		timeout: 10000,
 	});
 
 	// Second run
-	await sidePanel.locator('[data-testid="task-input"]').fill("second task");
+	await typeTask(sidePanel, "second task");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Second response")).toBeVisible({
 		timeout: 10000,

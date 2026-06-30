@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension, startMockAnthropicServer } from "./helpers";
+import {
+	configureMockProvider,
+	launchExtension,
+	startMockAnthropicServer,
+} from "./helpers";
 
 test("agent continues after tool error and trace shows error status", async () => {
 	const msgId = "msg-test-1";
@@ -34,14 +38,7 @@ test("agent continues after tool error and trace shows error status", async () =
 
 	const { sidePanel, close } = await launchExtension();
 
-	// Configure settings
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("test-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await configureMockProvider(sidePanel, mock.url);
 
 	// Start a run
 	await sidePanel

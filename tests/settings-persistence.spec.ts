@@ -4,33 +4,27 @@ import { launchExtension } from "./helpers";
 test("settings save and load within a session", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("sk-test-key");
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-anthropic").click();
+	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test-key");
 	await sidePanel
-		.locator('input[type="text"]')
-		.nth(0)
+		.getByTestId("settings-baseurl-input")
 		.fill("https://custom.example.com");
-	await sidePanel
-		.locator('input[type="text"]')
-		.nth(1)
-		.fill("claude-test-model");
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
+	await sidePanel.getByTestId("settings-model-input").fill("claude-test-model");
+	await sidePanel.getByTestId("settings-done-button").click();
 
-	// Wait for settings to close
-	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await expect(sidePanel.getByTestId("settings-list")).toBeVisible();
 
-	// Re-open settings and verify values are loaded
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await expect(sidePanel.locator('input[type="password"]')).toHaveValue(
+	await sidePanel.getByRole("button", { name: "Chat" }).click();
+	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.locator('[data-testid^="settings-edit-"]').first().click();
+	await expect(sidePanel.getByTestId("settings-apikey-input")).toHaveValue(
 		"sk-test-key",
 	);
-	await expect(sidePanel.locator('input[type="text"]').nth(0)).toHaveValue(
+	await expect(sidePanel.getByTestId("settings-baseurl-input")).toHaveValue(
 		"https://custom.example.com",
 	);
-	await expect(sidePanel.locator('input[type="text"]').nth(1)).toHaveValue(
+	await expect(sidePanel.getByTestId("settings-model-input")).toHaveValue(
 		"claude-test-model",
 	);
 

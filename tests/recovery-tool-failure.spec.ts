@@ -6,6 +6,7 @@ import {
 	focusTargetTab,
 	launchExtension,
 	startMockAnthropicServer,
+	typeTask,
 } from "./helpers";
 
 // Fixture: clicking Swap replaces the Target button with a new one (same
@@ -121,7 +122,7 @@ test("tool stale ref — retry after fresh snapshot", async () => {
 	await configureMockProvider(sidePanel, mock.url, "fake-key");
 	await focusTargetTab(testPage);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("click stale");
+	await typeTask(sidePanel, "click stale");
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 

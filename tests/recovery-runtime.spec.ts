@@ -3,6 +3,7 @@ import {
 	configureMockProvider,
 	launchExtension,
 	startMockAnthropicServer,
+	typeTask,
 } from "./helpers";
 
 function makeTextStream(text: string) {
@@ -42,7 +43,7 @@ test("tool compile error — agent surfaces error and completes", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url, "fake-key");
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("syntax error");
+	await typeTask(sidePanel, "syntax error");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Compile error surfaces as a failed trace entry
@@ -81,7 +82,7 @@ test("runtime corrupted — session rebuilds and health check passes", async () 
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url, "fake-key");
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("crash runtime");
+	await typeTask(sidePanel, "crash runtime");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Runtime error surfaces as a failed trace entry

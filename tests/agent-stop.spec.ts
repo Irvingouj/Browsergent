@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension } from "./helpers";
+import { launchExtension, typeTask } from "./helpers";
 
 test("stop button appears when agent would be running", async () => {
 	const { sidePanel, close } = await launchExtension();
@@ -10,13 +10,12 @@ test("stop button appears when agent would be running", async () => {
 	).not.toBeVisible();
 
 	// Type a task
-	await sidePanel.locator('[data-testid="task-input"]').fill("test task");
+	await typeTask(sidePanel, "test task");
 
 	// After clicking Run, we need an API key - it should show settings
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
-	// Should prompt for API key
-	await expect(sidePanel.locator("text=Anthropic API Key")).toBeVisible();
+	await expect(sidePanel.getByText("No provider configured")).toBeVisible();
 
 	await close();
 });

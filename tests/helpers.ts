@@ -206,6 +206,7 @@ export async function configureMockProvider(
 	sidePanel: Page,
 	mockUrl: string,
 	apiKey = "test-key",
+	model?: string,
 ): Promise<void> {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	await sidePanel.getByRole("button", { name: "Open settings" }).click();
@@ -221,9 +222,18 @@ export async function configureMockProvider(
 	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
 	await sidePanel.getByTestId("settings-baseurl-input").fill(mockUrl);
 	await sidePanel.getByTestId("settings-apikey-input").fill(apiKey);
+	if (model !== undefined) {
+		await sidePanel.getByTestId("settings-model-input").fill(model);
+	}
 	await sidePanel.getByTestId("settings-done-button").click();
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
 	await expect(sidePanel.locator('[data-testid="task-input"]')).toBeVisible();
+}
+
+export async function typeTask(sidePanel: Page, text: string): Promise<void> {
+	const input = sidePanel.locator('[data-testid="task-input"]');
+	await input.click();
+	await input.type(text);
 }
 
 /**

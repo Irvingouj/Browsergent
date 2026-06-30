@@ -15,6 +15,27 @@ const noopContext = {
 	tools: [],
 };
 
+function sseBody(text: string): ReadableStream<Uint8Array> {
+	const encoder = new TextEncoder();
+	return new ReadableStream({
+		start(controller) {
+			controller.enqueue(
+				encoder.encode(
+					[
+						`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+						`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
+						`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text } })}\n\n`,
+						`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+						`event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 0 } })}\n\n`,
+						`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`,
+					].join(""),
+				),
+			);
+			controller.close();
+		},
+	});
+}
+
 describe("AnthropicProvider", () => {
 	test("returns error stream on 401 Unauthorized", async () => {
 		const provider = new AnthropicProvider({
@@ -191,6 +212,46 @@ describe("AnthropicProvider", () => {
 			maxAttempts: 3,
 			status: 429,
 			recoverable: true,
+		});
+		vi.useRealTimers();
+	});
+
+	test("recovers after retryable 503", async () => {
+		vi.useFakeTimers();
+		const provider = new AnthropicProvider({
+			apiKey: "key",
+			model: "claude-3-haiku-20240307",
+		});
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 503,
+				text: async () => "overloaded",
+				headers: mockHeaders("0"),
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				body: sseBody("Recovered"),
+				headers: mockHeaders(),
+			});
+		global.fetch = fetchMock;
+
+		const promise = provider.call(noopContext);
+		await vi.advanceTimersByTimeAsync(1);
+
+		const stream = await promise;
+		const chunks: unknown[] = [];
+		for await (const chunk of stream.chunks) {
+			chunks.push(chunk);
+		}
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(chunks).toContainEqual({
+			kind: "text_delta",
+			text: "Recovered",
+		});
+		expect(await stream.result).toMatchObject({
+			Ok: { stop_reason: "end_turn" },
 		});
 		vi.useRealTimers();
 	});

@@ -3,6 +3,7 @@ import {
 	configureMockProvider,
 	launchExtension,
 	startMockAnthropicServer,
+	typeTask,
 	uploadFileViaPanel,
 } from "./helpers";
 
@@ -107,7 +108,7 @@ test("file_list and file_read tools return session file content", async () => {
 	await expect(sidePanel.locator("text=notes.txt")).toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	await sidePanel.locator('[data-testid="task-input"]').fill("read the file");
+	await typeTask(sidePanel, "read the file");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	const listTrace = sidePanel.locator(
@@ -165,7 +166,7 @@ test("file_edit tool modifies file content in OPFS", async () => {
 	await expect(sidePanel.locator("text=notes.txt")).toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	await sidePanel.locator('[data-testid="task-input"]').fill("edit the file");
+	await typeTask(sidePanel, "edit the file");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(
@@ -213,7 +214,7 @@ test("file_delete tool removes file from session", async () => {
 	await expect(sidePanel.locator("text=notes.txt")).toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	await sidePanel.locator('[data-testid="task-input"]').fill("delete the file");
+	await typeTask(sidePanel, "delete the file");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(
@@ -259,7 +260,7 @@ test("file_write creates a file visible in the Files panel", async () => {
 	const { sidePanel, close } = await launchExtension();
 	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("create out.md");
+	await typeTask(sidePanel, "create out.md");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(

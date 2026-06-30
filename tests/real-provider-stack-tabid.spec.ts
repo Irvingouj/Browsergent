@@ -11,6 +11,7 @@ import {
 	focusTargetTab,
 	launchExtension,
 	startMockAnthropicServer,
+	typeTask,
 } from "./helpers";
 
 const PROBE_CODE = `
@@ -142,7 +143,7 @@ test("wasm probe: tabId + error stack content", async () => {
 	});
 	await configureMockProvider(sidePanel, mock.url, "test-key");
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("run probe");
+	await typeTask(sidePanel, "run probe");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Wait for the trace entry to appear and complete.

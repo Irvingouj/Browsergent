@@ -59,6 +59,43 @@ async function injectExtensionJsContentScript(
 	await page.addScriptTag({ content: `(function(){${plain}})()` });
 }
 
+async function dispatchRegistryCall(
+	page: import("@playwright/test").Page,
+	action: string,
+	params: Record<string, unknown> = {},
+): Promise<unknown> {
+	return page.evaluate(
+		({ action: act, params: callParams }) => {
+			const listeners = (window as unknown as Record<string, unknown>)
+				.__testListeners as Array<
+				(
+					msg: unknown,
+					sender: unknown,
+					sendResponse: (r: unknown) => void,
+				) => void
+			>;
+			return Promise.all(
+				listeners.map(
+					(listener, index) =>
+						new Promise<unknown>((resolve) => {
+							listener(
+								{
+									type: "registryCall",
+									action: act,
+									params: callParams,
+									id: `test-${index}`,
+								},
+								{ id: "test-extension-id" },
+								(response: unknown) => resolve(response),
+							);
+						}),
+				),
+			).then((results) => results[0]);
+		},
+		{ action, params },
+	);
+}
+
 test("extension-js content script initializes on page", async () => {
 	const { context, close } = await launchExtension();
 	const testPage = await createTestPage(context, TEST_FORM_HTML);
@@ -97,6 +134,109 @@ test("extension-js content script assigns data-ref-id attributes", async () => {
 	for (const refId of refIds) {
 		expect(refId).toMatch(/^e\d+$/);
 	}
+
+	await close();
+});
+
+test("extension-js content script observes and activates Gmail-style jsaction controls", async () => {
+	const { context, close } = await launchExtension();
+	const testPage = await createTestPage(
+		context,
+		`
+		<!DOCTYPE html>
+		<html>
+		<body>
+			<div id="archive" jsaction="click:mail.archive" aria-label="Archive"></div>
+			<div id="status">idle</div>
+			<script>
+				const archive = document.getElementById('archive');
+				archive.addEventListener('mousedown', () => {
+					document.getElementById('status').textContent = 'mousedown';
+				});
+			</script>
+		</body>
+		</html>
+		`,
+	);
+	await mockChromeRuntimeOnMessage(testPage);
+	await injectExtensionJsContentScript(testPage);
+
+	const snapshot = (await dispatchRegistryCall(
+		testPage,
+		"page_snapshot_data",
+	)) as {
+		ok: boolean;
+		value?: { nodes?: Array<{ name?: string; refId?: string }> };
+	};
+	expect(snapshot.ok).toBe(true);
+	const archive = snapshot.value?.nodes?.find(
+		(node) => node.name === "Archive",
+	);
+	expect(archive?.refId).toMatch(/^e\d+$/);
+
+	const click = (await dispatchRegistryCall(testPage, "page_click", {
+		refId: archive?.refId,
+	})) as { ok: boolean };
+	expect(click.ok).toBe(true);
+	await expect(testPage.locator("#status")).toHaveText("mousedown");
+
+	await close();
+});
+
+test("extension-js content script does not mark covered clickables as actionable", async () => {
+	const { context, close } = await launchExtension();
+	const testPage = await createTestPage(
+		context,
+		`
+		<!DOCTYPE html>
+		<html>
+		<body>
+			<div
+				id="covered"
+				jsaction="click:mail.archive"
+				aria-label="Archive"
+				style="position:absolute; left:20px; top:20px; width:120px; height:40px; z-index:1"
+			></div>
+			<div
+				id="top"
+				role="button"
+				aria-label="Overlay"
+				style="position:absolute; left:20px; top:20px; width:120px; height:40px; z-index:2"
+			></div>
+		</body>
+		</html>
+		`,
+	);
+	await mockChromeRuntimeOnMessage(testPage);
+	await injectExtensionJsContentScript(testPage);
+
+	const snapshot = (await dispatchRegistryCall(
+		testPage,
+		"page_snapshot_data",
+	)) as {
+		ok: boolean;
+		value?: {
+			nodes?: Array<{
+				name?: string;
+				actionable?: boolean;
+				recommendedAction?: string;
+			}>;
+		};
+	};
+	expect(snapshot.ok).toBe(true);
+	const archive = snapshot.value?.nodes?.find(
+		(node) => node.name === "Archive",
+	);
+	const overlay = snapshot.value?.nodes?.find(
+		(node) => node.name === "Overlay",
+	);
+
+	expect(archive).toBeDefined();
+	expect(archive?.actionable).not.toBe(true);
+	expect(overlay).toMatchObject({
+		actionable: true,
+		recommendedAction: "click",
+	});
 
 	await close();
 });

@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension, startMockAnthropicServer } from "./helpers";
+import {
+	configureMockProvider,
+	launchExtension,
+	startMockAnthropicServer,
+	typeTask,
+} from "./helpers";
 
 test("agent shows error when API returns 401", async () => {
 	const mock = startMockAnthropicServer({
@@ -45,15 +50,9 @@ test("agent shows error when API returns 401", async () => {
 
 	const { sidePanel, close } = await launchExtension();
 
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("bad-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await expect(sidePanel.locator('input[type="password"]')).not.toBeVisible();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
+	await configureMockProvider(sidePanel, mock.url, "bad-key");
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("test error");
+	await typeTask(sidePanel, "test error");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	// Status should show error

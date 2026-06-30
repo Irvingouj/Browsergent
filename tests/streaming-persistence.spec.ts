@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension, startMockAnthropicServer } from "./helpers";
+import {
+	configureMockProvider,
+	launchExtension,
+	startMockAnthropicServer,
+	typeTask,
+} from "./helpers";
 
 test("mocked streaming emits delayed chunks and partial text appears before final chunk", async () => {
 	const mock = startMockAnthropicServer({
@@ -19,15 +24,9 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 	});
 
 	const { sidePanel, close } = await launchExtension();
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("say hello");
+	await typeTask(sidePanel, "say hello");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Hello")).toBeVisible({ timeout: 5000 });
@@ -57,15 +56,9 @@ test("final streamed response is one assistant message", async () => {
 	});
 
 	const { sidePanel, close } = await launchExtension();
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("one message");
+	await typeTask(sidePanel, "one message");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Single assistant message")).toBeVisible({
@@ -106,21 +99,15 @@ test("two prompts keep all messages visible and prior transcript included in sec
 	});
 
 	const { sidePanel, close } = await launchExtension();
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("task one");
+	await typeTask(sidePanel, "task one");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=First response")).toBeVisible({
 		timeout: 5000,
 	});
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("task two");
+	await typeTask(sidePanel, "task two");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 	await expect(sidePanel.locator("text=Second response")).toBeVisible({
 		timeout: 5000,
@@ -164,15 +151,9 @@ test("stop preserves partial streamed text", async () => {
 	});
 
 	const { sidePanel, close } = await launchExtension();
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("stop me");
+	await typeTask(sidePanel, "stop me");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Partial")).toBeVisible({
@@ -220,13 +201,7 @@ test("text before run_js tool call continues after run_js tool result", async ()
 	});
 
 	const { sidePanel, close } = await launchExtension();
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await configureMockProvider(sidePanel, mock.url);
 
 	await sidePanel
 		.locator('[data-testid="task-input"]')
@@ -269,15 +244,9 @@ test("get_doc tool returns JS API docs and continues the agent turn", async () =
 	});
 
 	const { sidePanel, close } = await launchExtension();
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await sidePanel.locator('input[type="password"]').fill("fake-key");
-	await sidePanel.locator('input[type="text"]').nth(0).fill(mock.url);
-	await sidePanel.getByRole("button", { name: "Save settings" }).click();
-	await sidePanel.locator('[data-testid="close-session-panel"]').click();
-	await expect(sidePanel.getByTestId("new-session-button")).not.toBeVisible();
+	await configureMockProvider(sidePanel, mock.url);
 
-	await sidePanel.locator('[data-testid="task-input"]').fill("check js docs");
+	await typeTask(sidePanel, "check js docs");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Docs loaded.")).toBeVisible({
