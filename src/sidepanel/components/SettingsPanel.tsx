@@ -1,5 +1,5 @@
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { SettingsController } from "../../controllers/settings-controller";
 import type { BrowsergentError } from "../../errors/browsergent-error";
@@ -19,6 +19,7 @@ import {
 	PROVIDER_DEFAULTS,
 	type ProviderPreset,
 } from "../../worker/provider-defaults";
+import { testConnection } from "./test-connection"
 
 const INPUT_CLASS =
 	"w-full bg-bg-muted border border-border rounded-md px-md py-sm text-text-primary font-mono text-xs outline-none transition-all focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim";
@@ -83,6 +84,41 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const editing = providers.find((p) => p.id === editingId) ?? null;
+
+	// Ephemeral Test Connection result for the provider being edited. Not in
+	// the global store: it's per-edit-session UI state, distinct from the
+	// persisted-settings error shown by SettingsErrorBanner.
+	const [testState, setTestState] = useState<
+		| { status: "idle" }
+		| { status: "testing" }
+		| { status: "ok" }
+		| { status: "error"; error: BrowsergentError }
+	>({ status: "idle" });
+	const abortRef = useRef<AbortController | null>(null);
+
+	// Reset the indicator whenever the user starts editing a different provider
+	// or leaves the edit view — a stale result from provider A must not cling
+	// to provider B's form.
+	useEffect(() => {
+		abortRef.current?.abort();
+		abortRef.current = null;
+		setTestState({ status: "idle" });
+	}, [editingId]);
+
+	const runTestConnection = useCallback(async () => {
+		if (!editing) return;
+		abortRef.current?.abort();
+		const controller = new AbortController();
+		abortRef.current = controller;
+		setTestState({ status: "testing" });
+		const result = await testConnection(editing, controller.signal);
+		if (controller.signal.aborted) return;
+		if (result.ok) {
+			setTestState({ status: "ok" });
+		} else {
+			setTestState({ status: "error", error: result.error });
+		}
+	}, [editing]);
 
 	useEffect(() => {
 		if (editingId && !providers.some((p) => p.id === editingId)) {
@@ -272,6 +308,47 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						class={INPUT_CLASS}
 					/>
 				</label>
+
+				<div class="flex flex-col gap-xs">
+					<button
+						type="button"
+						data-testid="settings-test-connection-button"
+						onClick={() => void runTestConnection()}
+						disabled={testState.status === "testing"}
+						class="self-start px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
+					>
+						{testState.status === "testing" ? "Testing…" : "Test Connection"}
+					</button>
+
+					{testState.status === "ok" && (
+						<div
+							data-testid="settings-test-result"
+							class="flex items-center gap-xs rounded-md border border-success bg-success/10 px-sm py-xs text-xs text-success"
+						>
+							<span>●</span>
+							<span>Connection successful</span>
+						</div>
+					)}
+
+					{testState.status === "error" && (
+						<div
+							data-testid="settings-test-result"
+							class="flex items-start gap-sm rounded-md border border-error bg-error/10 px-sm py-xs text-xs text-error"
+						>
+							<span class="flex-1">
+								<span class="font-mono">[{testState.error.code}]</span>{" "}
+								{testState.error.message}
+							</span>
+							<button
+								type="button"
+								class="text-error/70 hover:text-error cursor-pointer"
+								onClick={() => setTestState({ status: "idle" })}
+							>
+								×
+							</button>
+						</div>
+					)}
+				</div>
 
 				<div class="flex gap-sm mt-sm">
 					<button

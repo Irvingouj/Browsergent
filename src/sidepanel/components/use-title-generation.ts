@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { SessionController } from "../../controllers/session-controller";
+import { classifyProviderResponse } from "../../errors/classify-provider-response";
 import type { BrowsergentError } from "../../errors/browsergent-error";
 import {
 	selectActiveProvider,
@@ -12,6 +13,7 @@ import type { ProviderConfig } from "../../state/slices/settings-slice";
 import { browsergentStore } from "../../state/store";
 import type { ChatMessage } from "../../types/messages";
 import { defaultBaseUrlFor } from "../../worker/provider-defaults";
+import { buildProviderRequest } from "../../worker/provider-request";
 
 function isLocalhost(url: string): boolean {
 	try {
@@ -32,18 +34,7 @@ export function classifyTitleResponse(
 	status: number,
 	body: string,
 ): BrowsergentError {
-	const code =
-		status === 401 || status === 403
-			? "E_PROVIDER_AUTH"
-			: status === 404
-				? "E_PROVIDER_NOT_FOUND"
-				: "E_NETWORK";
-	return {
-		code,
-		message: `Title request failed (${status})`,
-		source: "settings",
-		details: { status, upstream: body.slice(0, 500) },
-	};
+	return classifyProviderResponse(status, body, "Title");
 }
 
 /** POST a title-generation request shaped for the provider's wire format. */
@@ -52,23 +43,7 @@ async function requestTitle(
 	prompt: string,
 	signal: AbortSignal,
 ): Promise<string | null> {
-	const base = (provider.baseUrl || defaultBaseUrlFor(provider.kind)).replace(
-		/\/$/,
-		"",
-	);
-	const url =
-		provider.kind === "anthropic"
-			? `${base}/v1/messages`
-			: `${base}/v1/chat/completions`;
-
-	const headers: Record<string, string> = {
-		"Content-Type": "application/json",
-	};
-	if (provider.kind === "anthropic") {
-		headers["x-api-key"] = provider.apiKey;
-	} else {
-		headers.Authorization = `Bearer ${provider.apiKey}`;
-	}
+	const { url, headers } = buildProviderRequest(provider);
 
 	// Body is identical across kinds; the wire differences are URL + auth + response shape.
 	const body = {
