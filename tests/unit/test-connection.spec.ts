@@ -149,11 +149,11 @@ describe("testConnection", () => {
 		const controller = new AbortController();
 		// Real fetch rejects with AbortError when the signal aborts.
 		global.fetch = vi.fn().mockImplementation(() => {
-			const { promise, reject } = Promise.withResolvers<Response>();
-			controller.signal.addEventListener("abort", () => {
-				reject(new DOMException("Aborted", "AbortError"));
+			return new Promise<Response>((_resolve, reject) => {
+				controller.signal.addEventListener("abort", () => {
+					reject(new DOMException("Aborted", "AbortError"));
+				});
 			});
-			return promise;
 		}) as never;
 		const pending = testConnection(anthropic, controller.signal);
 		controller.abort();
