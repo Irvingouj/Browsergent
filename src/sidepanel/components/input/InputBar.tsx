@@ -277,10 +277,10 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				</div>
 			)}
 			<div
-			class={[
-				"relative z-10 px-md py-sm bg-bg-surface border-t border-border flex gap-sm items-end transition-colors shrink-0",
-				isDragOver ? "bg-accent-soft" : "",
-			].join(" ")}
+				class={[
+					"relative z-10 px-md py-sm bg-bg-surface border-t border-border flex gap-sm items-end transition-colors shrink-0",
+					isDragOver ? "bg-accent-soft" : "",
+				].join(" ")}
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}

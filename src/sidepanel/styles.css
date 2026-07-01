@@ -501,3 +501,58 @@ body,
 	transition: none;
 	animation: none;
 }
+
+/* Settings panel transitions. */
+@keyframes settings-view-in {
+	from {
+		transform: translateY(16px);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+.settings-edit-view {
+	animation: settings-view-in 0.22s ease-out;
+}
+.settings-list-view {
+	animation: settings-view-in 0.16s ease-out;
+}
+
+@keyframes settings-row-in {
+	from {
+		transform: translateY(-4px);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+.settings-provider-row {
+	animation: settings-row-in 0.14s ease-out both;
+}
+
+@keyframes settings-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(2px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+.settings-fade-in {
+	animation: settings-fade-in 0.14s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings-edit-view,
+	.settings-list-view,
+	.settings-provider-row,
+	.settings-fade-in {
+		animation: none;
+	}
+}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import type { ProviderConfig } from "../../src/state/slices/settings-slice";
 import { testConnection } from "../../src/sidepanel/components/test-connection";
+import type { ProviderConfig } from "../../src/state/slices/settings-slice";
 
 const anthropic: ProviderConfig = {
 	id: "p1",
@@ -46,13 +46,19 @@ function mockFetchNetwork(error: unknown): void {
 describe("testConnection", () => {
 	test("2xx → ok", async () => {
 		mockFetchOk();
-		const result = await testConnection(anthropic, new AbortController().signal);
+		const result = await testConnection(
+			anthropic,
+			new AbortController().signal,
+		);
 		expect(result).toEqual({ ok: true });
 	});
 
 	test("401 → E_PROVIDER_AUTH", async () => {
 		mockFetchStatus(401, "invalid key");
-		const result = await testConnection(anthropic, new AbortController().signal);
+		const result = await testConnection(
+			anthropic,
+			new AbortController().signal,
+		);
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.error.code).toBe("E_PROVIDER_AUTH");
@@ -63,21 +69,30 @@ describe("testConnection", () => {
 
 	test("404 → E_PROVIDER_NOT_FOUND", async () => {
 		mockFetchStatus(404, "model not found");
-		const result = await testConnection(anthropic, new AbortController().signal);
+		const result = await testConnection(
+			anthropic,
+			new AbortController().signal,
+		);
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.error.code).toBe("E_PROVIDER_NOT_FOUND");
 	});
 
 	test("500 → E_NETWORK", async () => {
 		mockFetchStatus(500, "boom");
-		const result = await testConnection(anthropic, new AbortController().signal);
+		const result = await testConnection(
+			anthropic,
+			new AbortController().signal,
+		);
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.error.code).toBe("E_NETWORK");
 	});
 
 	test("network throw → E_NETWORK with message", async () => {
 		mockFetchNetwork(new TypeError("fetch failed"));
-		const result = await testConnection(anthropic, new AbortController().signal);
+		const result = await testConnection(
+			anthropic,
+			new AbortController().signal,
+		);
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.error.code).toBe("E_NETWORK");
@@ -100,10 +115,8 @@ describe("testConnection", () => {
 	test("openai kind posts to /v1/chat/completions with Bearer auth", async () => {
 		mockFetchOk();
 		await testConnection(openai, new AbortController().signal);
-		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
-			string,
-			RequestInit,
-		];
+		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
+			.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://api.openai.com/v1/chat/completions");
 		const headers = init.headers as Record<string, string>;
 		expect(headers.Authorization).toBe("Bearer sk-test");
@@ -113,10 +126,8 @@ describe("testConnection", () => {
 	test("anthropic kind posts to /v1/messages with x-api-key", async () => {
 		mockFetchOk();
 		await testConnection(anthropic, new AbortController().signal);
-		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
-			string,
-			RequestInit,
-		];
+		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
+			.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://api.anthropic.com/v1/messages");
 		const headers = init.headers as Record<string, string>;
 		expect(headers["x-api-key"]).toBe("sk-test");
@@ -129,10 +140,8 @@ describe("testConnection", () => {
 			{ ...anthropic, baseUrl: "https://api.anthropic.com/" },
 			new AbortController().signal,
 		);
-		const [url] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
-			string,
-			RequestInit,
-		];
+		const [url] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
+			.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://api.anthropic.com/v1/messages");
 	});
 

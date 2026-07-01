@@ -137,7 +137,9 @@ test("Test Connection error result can be dismissed with the × button", async (
 	await expect(result).toBeVisible();
 
 	// Dismiss the inline error.
-	await sidePanel.locator('[data-testid="settings-test-result"] button').click();
+	await sidePanel
+		.locator('[data-testid="settings-test-result"] button')
+		.click();
 	await expect(sidePanel.getByTestId("settings-test-result")).toHaveCount(0);
 
 	await close();

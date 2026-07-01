@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { SessionController } from "../../controllers/session-controller";
-import { classifyProviderResponse } from "../../errors/classify-provider-response";
 import type { BrowsergentError } from "../../errors/browsergent-error";
+import { classifyProviderResponse } from "../../errors/classify-provider-response";
 import {
 	selectActiveProvider,
 	selectActiveSessionId,

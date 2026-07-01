@@ -9,8 +9,10 @@
 		"includes": [
 			"**",
 			"!!**/dist",
+			"!!**/.worktrees",
 			"!!**/test-results",
 			"!!**/vendor",
+			"!archive/CLAUDE.md",
 			"!example.html",
 			"!problematic-conversation.json",
 			"!smoke/sites"
