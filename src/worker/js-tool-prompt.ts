@@ -126,7 +126,7 @@ Opaque TypeError after a click / from setTimeout:
 
 Search forms — prefer URL navigation:
 - For sites that support URL-parameterised search (Google Flights, Kayak, Skyscanner, etc.), build the search URL directly and navigate to it rather than filling the form element-by-element. This skips fragile dropdown/date-picker interactions entirely.
-- To navigate a specific tab by URL: first \`await web.tab.activate(tabId)\`, then in a SEPARATE cell \`await page.goto("https://...search-url...")\` (page.goto targets the now-active tab), then snapshot. There is no \`web.tab.goto\` — \`page.goto\` is the navigation API and follows the active tab set by \`web.tab.activate\`.
+- To navigate a specific tab by URL, prefer \`await web.tab.goto({ tabId, url: "https://...search-url..." })\`, then snapshot that tab with \`await web.tab.snapshot(tabId)\`. Do not activate a tab just to call \`page.goto\`.
 - Example for Google Flights one-way: \`https://www.google.com/travel/flights?q=Flights+from+YYZ+to+HKG+on+2026-07-01&curr=CAD\`. Snapshots of the results page are far more stable than form interactions.
 
 Observation lease errors (recovery is always the same):
