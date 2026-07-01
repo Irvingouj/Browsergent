@@ -95,8 +95,10 @@ test("Test Connection shows the in-flight Testing… state and disables the butt
 	const { sidePanel, close } = await launchExtension();
 
 	// A route that never fulfills until we say so — keeps the request in flight.
-	const { promise: inFlight, resolve: resolveRequest } =
-		Promise.withResolvers<void>();
+	let resolveRequest: () => void = () => {};
+	const inFlight = new Promise<void>((resolve) => {
+		resolveRequest = resolve;
+	});
 	await sidePanel.route("**/v1/messages", async (route) => {
 		await inFlight;
 		route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
@@ -137,7 +139,9 @@ test("Test Connection error result can be dismissed with the × button", async (
 	await expect(result).toBeVisible();
 
 	// Dismiss the inline error.
-	await sidePanel.locator('[data-testid="settings-test-result"] button').click();
+	await sidePanel
+		.locator('[data-testid="settings-test-result"] button')
+		.click();
 	await expect(sidePanel.getByTestId("settings-test-result")).toHaveCount(0);
 
 	await close();

@@ -19,7 +19,7 @@ import {
 	PROVIDER_DEFAULTS,
 	type ProviderPreset,
 } from "../../worker/provider-defaults";
-import { testConnection } from "./test-connection"
+import { testConnection } from "./test-connection";
 
 const INPUT_CLASS =
 	"w-full bg-bg-muted border border-border rounded-md px-md py-sm text-text-primary font-mono text-xs outline-none transition-all focus:border-accent focus:ring-[3px] focus:ring-accent-soft placeholder:text-text-dim";
@@ -203,7 +203,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	if (editing) {
 		return (
 			<div
-				class="flex-1 overflow-auto p-md flex flex-col gap-md"
+				class="settings-edit-view flex-1 overflow-auto p-md flex flex-col gap-md"
 				data-testid="settings-edit"
 			>
 				<div class="flex items-center justify-between">
@@ -323,7 +323,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 					{testState.status === "ok" && (
 						<div
 							data-testid="settings-test-result"
-							class="flex items-center gap-xs rounded-md border border-success bg-success/10 px-sm py-xs text-xs text-success"
+							class="settings-fade-in flex items-center gap-xs rounded-md border border-success bg-success/10 px-sm py-xs text-xs text-success"
 						>
 							<span>●</span>
 							<span>Connection successful</span>
@@ -333,7 +333,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 					{testState.status === "error" && (
 						<div
 							data-testid="settings-test-result"
-							class="flex items-start gap-sm rounded-md border border-error bg-error/10 px-sm py-xs text-xs text-error"
+							class="settings-fade-in flex items-start gap-sm rounded-md border border-error bg-error/10 px-sm py-xs text-xs text-error"
 						>
 							<span class="flex-1">
 								<span class="font-mono">[{testState.error.code}]</span>{" "}
@@ -383,7 +383,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	// --- List view ---
 	return (
 		<div
-			class="flex-1 overflow-auto p-md flex flex-col gap-md"
+			class="settings-list-view flex-1 overflow-auto p-md flex flex-col gap-md"
 			data-testid="settings-list"
 		>
 			<div class="flex items-center justify-between">
@@ -403,7 +403,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						return (
 							<div
 								key={p.id}
-								class={`rounded-md border p-sm flex items-center gap-sm ${isActive ? "border-accent bg-accent-soft" : "border-border bg-bg-muted"}`}
+								class={`settings-provider-row rounded-md border p-sm flex items-center gap-sm ${isActive ? "border-accent bg-accent-soft" : "border-border bg-bg-muted"}`}
 							>
 								<button
 									type="button"

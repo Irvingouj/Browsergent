@@ -11,9 +11,10 @@ import { defaultBaseUrlFor } from "./provider-defaults";
  * that can silently drift. Callers keep their own response handling —
  * title-gen parses the JSON body, the diagnostic intentionally does not.
  */
-export function buildProviderRequest(
-	provider: ProviderConfig,
-): { url: string; headers: Record<string, string> } {
+export function buildProviderRequest(provider: ProviderConfig): {
+	url: string;
+	headers: Record<string, string>;
+} {
 	const base = (provider.baseUrl || defaultBaseUrlFor(provider.kind)).replace(
 		/\/$/,
 		"",

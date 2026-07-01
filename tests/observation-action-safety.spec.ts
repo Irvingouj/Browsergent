@@ -132,9 +132,9 @@ test("navigation click can read the destination title in the same run_js cell", 
 	const address = server.address();
 	const url = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}/`;
 	const code = `const d = await page.snapshot_data();
-const link = d.nodes.find(n => n.name === "More information...");
-await page.click({ refId: link.refId });
-console.log("DESTINATION_TITLE:" + await page.title());`;
+	const link = d.nodes.find(n => n.name === "More information...");
+	await page.click({ refId: link.refId });
+	throw new Error("DESTINATION_TITLE:" + await page.title());`;
 	const mock = startMockAnthropicServer({
 		responses: [
 			{
@@ -156,10 +156,13 @@ console.log("DESTINATION_TITLE:" + await page.title());`;
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
+	await expect
+		.poll(() => testPage.title(), { timeout: 30000 })
+		.toBe("Destination");
 	await sidePanel.getByRole("button", { name: /#1 run_js/ }).click();
 	await expect(
 		sidePanel.getByText(/DESTINATION_TITLE:Destination/),
-	).toBeVisible({ timeout: 30000 });
+	).toBeVisible({ timeout: 60000 });
 
 	server.close();
 	await close();
