@@ -67,6 +67,18 @@ const steps = [
       <p class="fineprint">
         BYOK · Anthropic-compatible · Chrome MV3 · MIT / Apache-2.0
       </p>
+      <figure class="demo">
+        <video
+          src="/demo.mp4"
+          poster="/demo-poster.jpg"
+          controls
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        ></video>
+        <figcaption>30-second demo · type a task → agent reasons, acts, recovers.</figcaption>
+      </figure>
     </div>
   </section>
 
@@ -167,6 +179,24 @@ npm run build`}</code></pre>
     margin-top: 1.25rem;
     color: var(--fg-subtle);
     font-size: 0.85rem;
+  }
+  .demo {
+    margin: 2.5rem 0 0;
+    width: 100%;
+    max-width: 880px;
+  }
+  .demo video {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    background: #000;
+    display: block;
+  }
+  .demo figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--fg-subtle);
   }
   .muted { color: var(--fg-muted); }
   .lead.center { margin-left: auto; margin-right: auto; text-align: center; }
