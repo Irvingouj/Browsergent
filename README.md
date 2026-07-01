@@ -8,7 +8,7 @@
 
 **Claude Code for the browser** — an AI agent that lives in a Chrome side panel, sees web pages, and acts on them autonomously.
 
-> ⚠️ **Experimental (v0.1).** Browsergent is an early project. It can navigate, click, fill, and read pages, but it will make mistakes on complex flows. Always review its actions before relying on results.
+> ⚠️ **Experimental (v0.1).** Browsergent is an exploratory project. Its current philosophy is to expose everything the Chrome extension can access to the agent so we can learn the boundary of browser-agent capability. The agent may be able to read page content, cookies, auth headers, request/response metadata, and other browser-accessible data. Always review its actions and avoid using it on accounts or pages where that level of access is unacceptable. Security controls will be introduced later as the capability boundary becomes clearer.
 
 Type a task in plain English. The agent reasons with an LLM, generates JavaScript, runs it against the current page, observes the result, and iterates until the task is done — just like Claude Code, but for browser automation.
 
