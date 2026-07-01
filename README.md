@@ -8,7 +8,7 @@
 
 **Claude Code for the browser** — an AI agent that lives in a Chrome side panel, sees web pages, and acts on them autonomously.
 
-<video src="https://github.com/Irvingouj/Browsergent/raw/main/media/demo.mp4" width="100%" controls muted playsinline></video>
+<video src="http://browsergent.com/demo.mp4" width="100%" controls muted playsinline></video>
 
 > A 30-second demo: type a task, watch the agent reason, act, and recover.
 
