@@ -595,7 +595,7 @@ const App: FunctionalComponent = () => {
 			class="flex flex-col h-screen bg-bg-base relative overflow-hidden"
 		>
 			{/* Header */}
-			<div class="relative z-10 flex items-center justify-end px-md py-sm bg-bg-surface/85 backdrop-blur-[22px] border-b border-border">
+			<div class="relative z-10 flex items-center justify-end px-md py-sm bg-bg-surface/85 backdrop-blur-[22px] border-b border-border shrink-0">
 				<div class="flex items-center gap-sm">
 					<div class="flex items-center rounded-full bg-bg-muted border border-border overflow-hidden p-[2px]">
 						<button
@@ -710,7 +710,7 @@ const App: FunctionalComponent = () => {
 			</div>
 
 			{/* Status bar */}
-			<div class="relative z-10 px-md py-xs bg-bg-base border-t border-border flex items-center gap-sm font-mono text-[10px] text-text-dim tracking-wider uppercase">
+			<div class="relative z-10 px-md py-xs bg-bg-base border-t border-border flex items-center gap-sm font-mono text-[10px] text-text-dim tracking-wider uppercase shrink-0">
 				<span
 					class={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(retryState !== null, status)}`}
 				/>
