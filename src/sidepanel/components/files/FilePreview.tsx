@@ -47,7 +47,7 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 
 	const kind = classifyMedia(node.name, node.mime);
 	const [height, setHeight] = useState(defaultPreviewHeightPx(kind));
-	const [expanded, setExpanded] = useState(false);
+
 	const draggingRef = useRef(false);
 	const dragHandlersRef = useRef<{
 		move: ((e: PointerEvent) => void) | null;
@@ -59,7 +59,6 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 	useEffect(() => {
 		const nextKind = classifyMedia(node.name, node.mime);
 		setHeight(defaultPreviewHeightPx(nextKind));
-		setExpanded(false);
 	}, [node.path]);
 
 	// Detach any in-flight drag listeners on unmount (mid-drag file switch /
@@ -165,14 +164,6 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 		};
 		window.addEventListener("pointermove", onMove);
 		window.addEventListener("pointerup", onUp);
-		// Dragging overrides the expanded state.
-		setExpanded(false);
-	};
-
-	const toggleExpanded = () => {
-		const next = !expanded;
-		setExpanded(next);
-		setHeight(next ? maxH : defaultPreviewHeightPx(kind));
 	};
 
 	const lowerName = node.name.toLowerCase();
@@ -240,24 +231,18 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 				</span>
 				<button
 					type="button"
-					onClick={toggleExpanded}
+					onClick={() => browsergentStore.getState().setSelectedFileId(null)}
 					class="flex-shrink-0 text-text-muted hover:text-text-primary"
-					aria-label={expanded ? "Collapse preview" : "Expand preview"}
-					title={expanded ? "Collapse preview" : "Expand preview"}
+					aria-label="Close preview"
+					title="Close preview"
 				>
-					<svg
-						width="12"
-						height="12"
-						viewBox="0 0 12 12"
-						class={`transition-transform ${expanded ? "rotate-180" : ""}`}
-					>
+					<svg width="12" height="12" viewBox="0 0 12 12">
 						<path
-							d="M2 4l4 4 4-4"
+							d="M3 3l6 6M9 3l-6 6"
 							stroke="currentColor"
 							stroke-width="1.5"
 							fill="none"
 							stroke-linecap="round"
-							stroke-linejoin="round"
 						/>
 					</svg>
 				</button>
