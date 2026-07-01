@@ -1,72 +1,36 @@
 ---
 import Base from "../layouts/Base.astro";
-import { SITE, DOWNLOADS } from "../site";
-
-const features = [
-  {
-    title: "Plain-English tasks",
-    body: "Type what you want. The agent reasons with Claude, plans steps, and recovers from errors on its own.",
-  },
-  {
-    title: "Sees the page",
-    body: "An accessibility-tree snapshot gives the model structured elements — refs, roles, labels — not pixels.",
-  },
-  {
-    title: "Acts through run_js",
-    body: "The LLM's only tool is run_js. It writes JS that calls page.* APIs; it never touches the DOM or Chrome directly.",
-  },
-  {
-    title: "Bring your own key",
-    body: "No inference markup. Point at Anthropic, DeepSeek, GLM, or any Anthropic-compatible endpoint.",
-  },
-  {
-    title: "Skill-aware",
-    body: "Activate reusable skills with /skill: and attach session files with @[file:…] — composed into the prompt.",
-  },
-  {
-    title: "Inspectable by design",
-    body: "Every step is traced: the generated JS, the result, the error. Nothing happens in a black box.",
-  },
-];
+import { SITE } from "../site";
 
 const steps = [
-  {
-    n: "01",
-    title: "You describe the task",
-    body: "“Find the cheapest direct flight from SFO to JFK next Friday and fill the search form.”",
-  },
-  {
-    n: "02",
-    title: "The agent reasons + generates JS",
-    body: "It snapshots the page, plans, and emits JavaScript via its run_js tool — no direct browser access.",
-  },
-  {
-    n: "03",
-    title: "The runtime executes page.* commands",
-    body: "@pi-oxide/extension-js runs the JS and dispatches typed BrowserCommands to the active tab.",
-  },
-  {
-    n: "04",
-    title: "It observes + iterates",
-    body: "The result feeds back to the model. It adjusts, retries on error, and stops when the task is done.",
-  },
+  { n: "01", label: "You describe the task" },
+  { n: "02", label: "Agent generates JS" },
+  { n: "03", label: "Runtime runs page.*" },
+  { n: "04", label: "Observes & iterates" },
+];
+
+const features = [
+  "Plain-English tasks",
+  "Sees the page",
+  "Acts via run_js",
+  "Bring your own key",
+  "Skill-aware",
+  "Fully traceable",
 ];
 ---
 
 <Base>
-  <!-- Hero -->
   <section class="hero">
     <div class="container">
       <p class="eyebrow">Experimental · v{SITE.latestVersion}</p>
-      <h1>{SITE.tagline}.<br /><span class="muted">An AI agent that lives in your Chrome side panel.</span></h1>
-      <p class="lead">{SITE.description}</p>
+      <h1>Claude Code for the browser.</h1>
+      <p class="sub">An AI agent that lives in your side panel.</p>
       <div class="cta-row">
         <a class="btn btn-primary" href="/download">Download for Chrome →</a>
         <a class="btn btn-secondary" href={SITE.repo}>View on GitHub</a>
       </div>
-      <p class="fineprint">
-        BYOK · Anthropic-compatible · Chrome MV3 · MIT / Apache-2.0
-      </p>
+      <p class="fineprint">BYOK · Anthropic-compatible · Chrome MV3</p>
+
       <figure class="demo">
         <video
           src="/demo.mp4"
@@ -77,80 +41,42 @@ const steps = [
           playsinline
           preload="metadata"
         ></video>
-        <figcaption>30-second demo · type a task → agent reasons, acts, recovers.</figcaption>
+        <figcaption>30-second demo — type a task, watch it work.</figcaption>
       </figure>
     </div>
   </section>
 
-  <!-- How it works -->
-  <section class="section">
-    <div class="container">
-      <p class="eyebrow">How it works</p>
-      <h2>LLM reasons. JavaScript acts.</h2>
-      <p class="lead">The model never touches the DOM or Chrome APIs. It writes JavaScript; a sandboxed runtime turns that into typed page.* commands against the active tab.</p>
-      <div class="grid grid-2" style="margin-top:2.5rem">
-        {steps.map((s) => (
-          <div class="card step">
-            <span class="step-n">{s.n}</span>
-            <h3>{s.title}</h3>
-            <p class="muted">{s.body}</p>
-          </div>
-        ))}
+  <section class="band">
+    <div class="container split">
+      <div class="col">
+        <h2>LLM reasons.<br />JavaScript acts.</h2>
+        <ol class="steps">
+          {steps.map((s) => (
+            <li><span class="n">{s.n}</span> {s.label}</li>
+          ))}
+        </ol>
       </div>
-      <pre class="arch" data-lang="architecture"><code>{`Side Panel (Chat UI)
-  │  postMessage
-  ▼
-Web Worker
-  ├─ pi-host-web WASM   (state machine, context projection)
-  ├─ LLM call           (reasoning — Anthropic Messages API)
-  │     └─ only tool: run_js → generates JS
-  │           │
-  │           ▼
-  └─ relayExtjsExecution(code)
-        │
-        ▼
-@pi-oxide/extension-js  →  chrome.tabs.* / content script
-        │
-        ▼
-Active http(s) tab  (snapshot · click · fill · scroll · observe)`}</code></pre>
-    </div>
-  </section>
-
-  <!-- Features -->
-  <section class="section">
-    <div class="container">
-      <p class="eyebrow">What it does</p>
-      <h2>Built for transparent browser automation.</h2>
-      <div class="grid grid-3" style="margin-top:2.5rem">
-        {features.map((f) => (
-          <div class="card">
-            <h3>{f.title}</h3>
-            <p class="muted">{f.body}</p>
-          </div>
-        ))}
+      <div class="col">
+        <h2>What it does.</h2>
+        <ul class="chips">
+          {features.map((f) => (<li>{f}</li>))}
+        </ul>
       </div>
     </div>
   </section>
 
-  <!-- Quick start -->
-  <section class="section">
+  <section class="quick">
     <div class="container">
-      <p class="eyebrow">Quick start</p>
-      <h2>Run it from source in a minute.</h2>
       <pre><code>{`git clone ${SITE.repo}.git
-cd Browsergent
-npm install
-npm run build`}</code></pre>
-      <p class="muted">Then open <code>chrome://extensions</code>, enable <strong>Developer mode</strong>, and <strong>Load unpacked</strong> the <code>dist/</code> directory. Or grab the prebuilt release on the <a href="/download">download page</a>.</p>
+cd Browsergent && npm install && npm run build`}</code></pre>
+      <p class="hint">Then load <code>dist/</code> in <code>chrome://extensions</code> with Developer mode on.</p>
     </div>
   </section>
 
-  <!-- CTA -->
-  <section class="section cta-band">
-    <div class="container center">
+  <section class="cta">
+    <div class="container">
       <h2>Try Browsergent.</h2>
-      <p class="lead center">Experimental v{SITE.latestVersion}. Bring your own API key — no signup, no inference markup.</p>
-      <div class="cta-row center">
+      <div class="cta-row">
         <a class="btn btn-primary" href="/download">Get the extension</a>
         <a class="btn btn-secondary" href="/docs">Read the docs</a>
       </div>
@@ -160,31 +86,25 @@ npm run build`}</code></pre>
 
 <style>
   .hero {
-    padding: 6rem 0 4rem;
+    padding: 4.5rem 0 2.5rem;
     text-align: center;
   }
   .hero .container { display: flex; flex-direction: column; align-items: center; }
-  .hero h1 { max-width: 18ch; margin-bottom: 1.25rem; }
-  .hero .muted { color: var(--fg-muted); }
-  .hero .lead { text-align: center; max-width: 62ch; }
+  .hero h1 { max-width: 16ch; margin-bottom: 0.5rem; }
+  .sub { font-size: 1.15rem; color: var(--fg-muted); margin-bottom: 1.5rem; }
   .cta-row {
     display: flex;
-    gap: 0.85rem;
+    gap: 0.75rem;
     justify-content: center;
-    margin-top: 1.75rem;
     flex-wrap: wrap;
   }
-  .cta-row.center { justify-content: center; }
   .fineprint {
-    margin-top: 1.25rem;
+    margin-top: 1rem;
     color: var(--fg-subtle);
-    font-size: 0.85rem;
+    font-size: 0.82rem;
   }
-  .demo {
-    margin: 2.5rem 0 0;
-    width: 100%;
-    max-width: 880px;
-  }
+
+  .demo { margin: 2.25rem 0 0; width: 100%; max-width: 880px; }
   .demo video {
     width: 100%;
     border: 1px solid var(--border);
@@ -194,26 +114,51 @@ npm run build`}</code></pre>
     display: block;
   }
   .demo figcaption {
-    margin-top: 0.6rem;
-    font-size: 0.85rem;
+    margin-top: 0.55rem;
+    font-size: 0.82rem;
     color: var(--fg-subtle);
   }
-  .muted { color: var(--fg-muted); }
-  .lead.center { margin-left: auto; margin-right: auto; text-align: center; }
-  .center { text-align: center; }
-  .center .container { display: flex; flex-direction: column; align-items: center; }
 
-  .step { position: relative; padding-left: 3.25rem; }
-  .step-n {
-    position: absolute;
-    top: 1.35rem;
-    left: 1.5rem;
-    font-family: "SF Mono", Menlo, monospace;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--accent);
+  .band { padding: 3rem 0; border-top: 1px solid var(--border); }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+  @media (max-width: 720px) { .split { grid-template-columns: 1fr; gap: 2rem; } }
+  .band h2 { font-size: 1.35rem; margin-bottom: 1rem; }
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .steps li {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--fg);
+    font-size: 0.98rem;
   }
-  .arch { margin-top: 2rem; font-size: 0.82rem; line-height: 1.5; }
+  .steps li:last-child { border-bottom: none; }
+  .steps .n {
+    font-family: "SF Mono", Menlo, monospace;
+    color: var(--accent);
+    font-weight: 700;
+    margin-right: 0.75rem;
+    font-size: 0.85rem;
+  }
+  .chips { list-style: none; padding: 0; margin: 0; }
+  .chips li {
+    display: inline-block;
+    margin: 0 0.4rem 0.5rem 0;
+    padding: 0.4rem 0.85rem;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.9rem;
+    color: var(--fg);
+  }
 
-  .cta-band { background: var(--bg-subtle); }
+  .quick { padding: 2.5rem 0; border-top: 1px solid var(--border); }
+  .quick pre { margin: 0 0 0.75rem; }
+  .hint { color: var(--fg-muted); font-size: 0.9rem; margin: 0; }
+
+  .cta {
+    padding: 3.5rem 0;
+    text-align: center;
+    background: var(--bg-subtle);
+    border-top: 1px solid var(--border);
+  }
+  .cta h2 { margin-bottom: 1.25rem; }
 </style>
