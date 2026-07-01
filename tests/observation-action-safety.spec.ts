@@ -156,10 +156,13 @@ console.log("DESTINATION_TITLE:" + await page.title());`;
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
+	await expect
+		.poll(() => testPage.title(), { timeout: 30000 })
+		.toBe("Destination");
 	await sidePanel.getByRole("button", { name: /#1 run_js/ }).click();
 	await expect(
 		sidePanel.getByText(/DESTINATION_TITLE:Destination/),
-	).toBeVisible({ timeout: 30000 });
+	).toBeVisible({ timeout: 60000 });
 
 	server.close();
 	await close();
