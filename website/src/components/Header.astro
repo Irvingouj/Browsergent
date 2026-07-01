@@ -1,0 +1,75 @@
+---
+import { SITE, NAV } from "../site";
+
+const path = Astro.url.pathname;
+// Treat "/docs/..." as active under the Docs nav item.
+const isActive = (href: string) =>
+  href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
+---
+
+<header class="site-header">
+  <div class="container bar">
+    <a href="/" class="brand" aria-label={`${SITE.name} home`}>
+      <span class="brand-mark" aria-hidden="true">◆</span>
+      <span class="brand-name">{SITE.name}</span>
+    </a>
+    <nav aria-label="Primary">
+      {NAV.map((item) => (
+        <a href={item.href} class={isActive(item.href) ? "active" : ""}>
+          {item.label}
+        </a>
+      ))}
+      <a href={SITE.repo} class="ghost">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: saturate(180%) blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    color: var(--fg);
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+  .brand:hover { text-decoration: none; }
+  .brand-mark { color: var(--accent); }
+  nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  nav a {
+    color: var(--fg-muted);
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+  nav a:hover { color: var(--fg); text-decoration: none; }
+  nav a.active { color: var(--fg); }
+  nav a.ghost {
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 0.35rem 0.85rem;
+  }
+  nav a.ghost:hover { background: var(--bg-subtle); }
+  @media (max-width: 640px) {
+    nav { gap: 1rem; }
+    nav a { font-size: 0.88rem; }
+  }
+</style>

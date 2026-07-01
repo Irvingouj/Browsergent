@@ -1,0 +1,44 @@
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install
+        working-directory: website
+        run: npm ci || npm install
+
+      - name: Build
+        working-directory: website
+        run: npm run build
+
+      # release.yml publishes update.xml to the gh-pages branch for Chrome
+      # auto-update. We preserve it so the two workflows don't clobber each
+      # other. If release.yml is ever changed, revisit this keep_files list.
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: website/dist
+          publish_branch: gh-pages
+          keep_files: true
+          destination_dir: ./

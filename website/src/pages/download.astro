@@ -1,0 +1,96 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE, DOWNLOADS } from "../site";
+---
+
+<Base
+  title="Download"
+  description={`Download Browsergent v${SITE.latestVersion} — prebuilt Chrome extension (zip or signed crx) or build from source.`}
+>
+  <section class="section" style="border-top:none; padding-top:4rem">
+    <div class="container container-prose">
+      <p class="eyebrow">Download</p>
+      <h1>Get Browsergent.</h1>
+      <p class="lead">
+        Latest release: <span class="badge">v{SITE.latestVersion}</span> ·
+        Chrome MV3 · MIT / Apache-2.0
+      </p>
+
+      <div class="grid grid-2" style="margin-top:2.5rem">
+        <div class="card option">
+          <h3>Prebuilt .zip <span class="muted">— recommended</span></h3>
+          <p class="muted">
+            Unzip, then <strong>Load unpacked</strong> the folder in
+            <code>chrome://extensions</code> with Developer mode on. Easiest
+            path; you can read every file.
+          </p>
+          <a class="btn btn-primary" href={DOWNLOADS.zip} download>
+            Download .zip ↓
+          </a>
+        </div>
+
+        <div class="card option">
+          <h3>Signed .crx</h3>
+          <p class="muted">
+            Drag the <code>.crx</code> onto <code>chrome://extensions</code> to
+            install. Pinned to a stable extension ID via the release signing key.
+          </p>
+          <a class="btn btn-secondary" href={DOWNLOADS.crx} download>
+            Download .crx ↓
+          </a>
+        </div>
+      </div>
+
+      <p class="muted fallback">
+        Links broken or looking for another version? See the
+        <a href={DOWNLOADS.latestRelease}>latest release on GitHub →</a>
+      </p>
+
+      <section>
+        <h2>Install from the .zip</h2>
+        <ol>
+          <li>Download and unzip the file above.</li>
+          <li>Open <code>chrome://extensions</code> in Chrome.</li>
+          <li>Toggle <strong>Developer mode</strong> (top-right).</li>
+          <li>Click <strong>Load unpacked</strong> and select the unzipped folder.</li>
+          <li>Open the Browsergent side panel and add your API key in <strong>Settings</strong>.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Build from source</h2>
+        <pre><code>{`git clone ${SITE.repo}.git
+cd Browsergent
+npm install
+npm run build
+# then Load unpacked → dist/`}</code></pre>
+        <p class="muted">
+          See the <a href="/docs">docs</a> for configuration and the
+          <a href={`${SITE.repo}/blob/main/docs/ARCHITECTURE.md`}>architecture
+          guide</a> for how it works inside.
+        </p>
+      </section>
+
+      <section>
+        <h2>Before you run it</h2>
+        <p class="muted">
+          Browsergent is <strong>experimental (v0.1)</strong>. It exposes
+          everything the extension can access to the agent &mdash; page content,
+          cookies, auth headers &mdash; so we can learn the capability boundary.
+          Always review its actions and avoid running it on accounts where that
+          access is unacceptable. There is no built-in spend limit; the agent
+          will keep calling the model until the task ends or you stop it.
+        </p>
+      </section>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .option { display: flex; flex-direction: column; gap: 0.5rem; }
+  .option .btn { align-self: flex-start; margin-top: 0.5rem; }
+  .muted { color: var(--fg-muted); }
+  .fallback { margin-top: 1.5rem; font-size: 0.9rem; }
+  .lead { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .prose section { margin-top: 2.5rem; }
+</style>

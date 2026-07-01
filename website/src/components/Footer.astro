@@ -1,0 +1,69 @@
+---
+import { SITE } from "../site";
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="row">
+      <div class="col">
+        <div class="brand">
+          <span class="mark" aria-hidden="true">◆</span> {SITE.name}
+        </div>
+        <p class="muted">{SITE.tagline}. Experimental.</p>
+      </div>
+      <div class="col">
+        <h4>Project</h4>
+        <a href={SITE.repo}>GitHub</a>
+        <a href={SITE.releases}>Releases</a>
+        <a href={SITE.issues}>Issues</a>
+      </div>
+      <div class="col">
+        <h4>Site</h4>
+        <a href="/docs">Docs</a>
+        <a href="/download">Download</a>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© {year} {SITE.name}. MIT OR Apache-2.0.</span>
+      <span class="muted">{SITE.domain}</span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    padding: 3rem 0 2rem;
+    margin-top: 4rem;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr; gap: 1.5rem; }
+  }
+  .brand { font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+  .mark { color: var(--accent); }
+  .muted { color: var(--fg-subtle); font-size: 0.9rem; margin: 0.4rem 0 0; }
+  .col { display: flex; flex-direction: column; gap: 0.5rem; }
+  .col h4 { margin: 0 0 0.25rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-subtle); }
+  .col a { color: var(--fg-muted); font-size: 0.95rem; }
+  .col a:hover { color: var(--fg); text-decoration: none; }
+  .legal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--fg-muted);
+  }
+  @media (max-width: 640px) {
+    .legal { flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+  }
+</style>

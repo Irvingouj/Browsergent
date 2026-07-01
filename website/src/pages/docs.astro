@@ -1,0 +1,141 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../site";
+---
+
+<Base
+  title="Docs"
+  description="How Browsergent works: the agent loop, the run_js tool, page.* command protocol, configuration, and limits."
+>
+  <article class="container container-prose prose">
+    <header class="doc-head">
+      <p class="eyebrow">Documentation</p>
+      <h1>How Browsergent works</h1>
+      <p class="lead">
+        Browsergent is an AI agent for the browser. You give it a task in plain
+        English; it reasons with an LLM, generates JavaScript, runs that JS in a
+        sandboxed runtime, observes the result, and iterates until the task is
+        done.
+      </p>
+    </header>
+
+    <section>
+      <h2>The core principle</h2>
+      <p>
+        <strong>LLM does reasoning, JS does acting.</strong> The model&rsquo;s
+        only browser tool is <code>run_js</code>. It never calls Chrome APIs or
+        touches the DOM directly &mdash; it writes JavaScript, and the
+        <code>@pi-oxide/extension-js</code> runtime turns that into typed
+        <code>page.*</code> commands executed against the active tab.
+      </p>
+      <p>
+        The brain is a Rust state machine compiled to WASM
+        (<code>@pi-oxide/pi-host-web</code>) running in a Web Worker. The LLM is
+        called over the Anthropic Messages API. Side effects happen only through
+        the typed command protocol.
+      </p>
+    </section>
+
+    <section>
+      <h2>The agent loop</h2>
+      <ol>
+        <li><strong>Observe</strong> — snapshot the active tab into a structured element list (refs, roles, labels).</li>
+        <li><strong>Reason</strong> — send the task + history + snapshot to the LLM.</li>
+        <li><strong>Act</strong> — the model returns JavaScript via <code>run_js</code>; the runtime dispatches <code>page.*</code> commands.</li>
+        <li><strong>Observe again</strong> — the result feeds back into the next turn.</li>
+        <li><strong>Stop</strong> — the model signals completion or you stop the run.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>The command protocol</h2>
+      <p>
+        Every browser action is a typed <code>BrowserCommand</code>. A few
+        examples:
+      </p>
+      <pre><code>{`type BrowserCommand =
+  | { kind: "page.snapshot"; options?: SnapshotOptions }
+  | { kind: "page.click";   refId: RefId }
+  | { kind: "page.fill";    refId: RefId; text: string }
+  | { kind: "page.select";  refId: RefId; value: string }
+  | { kind: "page.scroll";  direction: "up" | "down" }
+  | { kind: "page.goto";    url: string }
+  | { kind: "page.wait";    ms: number };`}</code></pre>
+      <p>
+        Results are <code>BrowserResult</code> &mdash; an <code>ok</code> value
+        or a typed error with a machine-readable <code>code</code> (e.g.
+        <code>E_STALE</code>, <code>E_NOT_FOUND</code>). The model sees errors
+        and recovers.
+      </p>
+    </section>
+
+    <section>
+      <h2>Configuration</h2>
+      <p>Open <strong>Settings</strong> in the side panel and provide:</p>
+      <table>
+        <thead><tr><th>Field</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td>API Key</td><td><code>sk-ant-api03-…</code></td></tr>
+          <tr><td>Base URL</td><td><code>https://api.anthropic.com</code></td></tr>
+          <tr><td>Model</td><td><code>claude-sonnet-4-6</code></td></tr>
+        </tbody>
+      </table>
+      <p>
+        Compatible providers: <strong>Anthropic</strong>,
+        <strong>DeepSeek</strong> (<code>api.deepseek.com/anthropic</code>),
+        <strong>z.ai / GLM</strong>, or any endpoint implementing the Anthropic
+        Messages API. Your key stays in the browser &mdash; it&rsquo;s only ever
+        sent to the base URL you configure.
+      </p>
+    </section>
+
+    <section>
+      <h2>Skills &amp; files</h2>
+      <ul>
+        <li><code>/skill:&lt;name&gt;</code> activates a reusable skill at compose time &mdash; its instructions are folded into the prompt.</li>
+        <li><code>@[file:name.ext]</code> attaches a session file (stored in OPFS) into the task.</li>
+        <li>The <strong>Files</strong> panel lets you upload, edit, and manage session files.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Known limitations</h2>
+      <ul>
+        <li><strong>Chrome only.</strong> MV3 side panel + content scripts; not ported to Firefox/Safari.</li>
+        <li><strong>Anthropic Messages API only.</strong> OpenAI-native function-calling isn&rsquo;t supported on the wire.</li>
+        <li><strong>No headless mode.</strong> It drives your real tab.</li>
+        <li><strong>Context-bound.</strong> Long sessions are compacted, but very long tasks may lose earlier detail.</li>
+        <li><strong>Single tab.</strong> The agent operates on one active tab at a time.</li>
+        <li><strong>Stale refIds.</strong> Snapshot refs (<code>eNNN</code>) are single-use within an observation &mdash; reusing one is the most common failure.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Experimental &amp; safety</h2>
+      <p>
+        Browsergent is <strong>v0.1 experimental</strong>. Its current
+        philosophy is to expose everything the Chrome extension can access so we
+        can learn the boundary of browser-agent capability. It may read page
+        content, cookies, auth headers, and request/response metadata. Always
+        review its actions and avoid using it on accounts where that level of
+        access is unacceptable.
+      </p>
+    </section>
+
+    <section>
+      <h2>Going deeper</h2>
+      <ul>
+        <li><a href={SITE.repo}>Source on GitHub</a></li>
+        <li><a href={`${SITE.repo}/blob/main/docs/ARCHITECTURE.md`}>Architecture (docs/ARCHITECTURE.md)</a></li>
+        <li><a href={`${SITE.repo}/blob/main/AGENTS.md`}>Contributor conventions (AGENTS.md)</a></li>
+        <li><a href="/download">Download the latest release →</a></li>
+      </ul>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .doc-head { margin: 3.5rem 0 2.5rem; }
+  .doc-head h1 { margin-bottom: 0.75rem; }
+  .prose section { margin-top: 2.5rem; }
+</style>

@@ -61,5 +61,5 @@ jobs:
           deploy_key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
           publish_dir: release
           publish_branch: gh-pages
-          keep_files: false
+          keep_files: true
           destination_dir: ./
