@@ -15,7 +15,8 @@
 			"!archive/CLAUDE.md",
 			"!example.html",
 			"!problematic-conversation.json",
-			"!smoke/sites"
+			"!smoke/sites",
+			"!website"
 		]
 	},
 	"formatter": {
