@@ -16,8 +16,9 @@ test("add an Anthropic provider and verify it persists across navigation", async
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-ant-test");
 	await sidePanel
 		.getByTestId("settings-baseurl-input")
-		.fill("https://api.anthropic.com");
+		.fill("https://api.anthropic.com/v1/messages");
 	await sidePanel.getByTestId("settings-model-input").fill("claude-sonnet-4-6");
+	await sidePanel.getByTestId("settings-add-model-button").click();
 	await sidePanel.getByTestId("settings-name-input").fill("My Anthropic");
 	await sidePanel.getByTestId("settings-done-button").click();
 
@@ -42,7 +43,6 @@ test("edit an existing provider's fields and verify the change", async () => {
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
 	await sidePanel.getByTestId("settings-add-anthropic").click();
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-original");
-	await sidePanel.getByTestId("settings-model-input").fill("claude-original");
 	await sidePanel.getByTestId("settings-done-button").click();
 
 	// Edit it
@@ -51,6 +51,10 @@ test("edit an existing provider's fields and verify the change", async () => {
 
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-updated");
 	await sidePanel.getByTestId("settings-model-input").fill("claude-updated");
+	await sidePanel.getByTestId("settings-add-model-button").click();
+	await sidePanel
+		.getByTestId("settings-default-model-select")
+		.selectOption({ label: "claude-updated" });
 	await sidePanel.getByTestId("settings-name-input").fill("Updated Provider");
 	await sidePanel.getByTestId("settings-done-button").click();
 
@@ -62,9 +66,9 @@ test("edit an existing provider's fields and verify the change", async () => {
 	await expect(sidePanel.getByTestId("settings-apikey-input")).toHaveValue(
 		"sk-updated",
 	);
-	await expect(sidePanel.getByTestId("settings-model-input")).toHaveValue(
-		"claude-updated",
-	);
+	await expect(
+		sidePanel.getByTestId("settings-default-model-select"),
+	).toContainText("claude-updated");
 	await expect(sidePanel.getByTestId("settings-name-input")).toHaveValue(
 		"Updated Provider",
 	);
@@ -87,8 +91,9 @@ test("add an OpenAI-compatible provider", async () => {
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-openai-test");
 	await sidePanel
 		.getByTestId("settings-baseurl-input")
-		.fill("https://api.openai.com");
+		.fill("https://api.openai.com/v1/chat/completions");
 	await sidePanel.getByTestId("settings-model-input").fill("gpt-4o");
+	await sidePanel.getByTestId("settings-add-model-button").click();
 	await sidePanel.getByTestId("settings-name-input").fill("My OpenAI");
 	await sidePanel.getByTestId("settings-done-button").click();
 
