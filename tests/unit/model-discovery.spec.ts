@@ -199,4 +199,28 @@ describe("discoverProviderModels", () => {
 			controller.signal,
 		);
 	});
+	test("filters out non-language models (embeddings, tts, whisper, dall-e)", async () => {
+		global.fetch = vi.fn().mockResolvedValue(
+			jsonResp({ data: [
+				{ id: "gpt-4o" },
+				{ id: "gpt-4o-mini" },
+				{ id: "text-embedding-3-small" },
+				{ id: "tts-1" },
+				{ id: "whisper-1" },
+				{ id: "dall-e-3" },
+				{ id: "text-moderation-latest" },
+				{ id: "omni-moderation-latest" },
+				{ id: "sora-2" },
+				{ id: "gpt-image-1" },
+				{ id: "o3-mini" },
+			] }),
+		);
+		const result = await discoverProviderModels(openai, "max_completion_tokens");
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			const modelIds = result.models.map((m) => m.model).sort();
+			expect(modelIds).toEqual(["gpt-4o", "gpt-4o-mini", "o3-mini"]);
+		}
+	});
+
 });

@@ -103,23 +103,24 @@ interface NormalizedModel {
 	created: number;
 }
 
-const NON_LANGUAGE_PREFIXES = [
-	"text-embedding",
-	"text-davinci",
-	"whisper",
-	"tts",
-	"dall-e",
-	"text-moderate",
-	"text-search",
-	"text-similarity",
-	"ft:",
-	"omni-moderate",
-	"audio",
+// Chat-completions-capable model ID prefixes. Allowlist is more robust than
+// denylist — new non-chat models (image, video, audio) won't leak through.
+// gpt-image-* is the one false positive (starts with "gpt" but is image gen).
+const CHAT_MODEL_PREFIXES = [
+	"gpt", // gpt-5, gpt-4o, gpt-4.1, gpt-4o-mini, gpt-oss-*
+	"o1", // o1, o1-mini, o1-pro
+	"o3", // o3, o3-mini, o3-pro
+	"o4", // o4-mini
+	"chatgpt", // chatgpt-4o-latest
 ] as const;
+
+const NON_CHAT_GPT_PREFIXES = ["gpt-image"] as const;
 
 function isLanguageModel(id: string): boolean {
 	const lower = id.toLowerCase();
-	return !NON_LANGUAGE_PREFIXES.some((p) => lower.startsWith(p));
+	const matchesChatPrefix = CHAT_MODEL_PREFIXES.some((p) => lower.startsWith(p));
+	if (!matchesChatPrefix) return false;
+	return !NON_CHAT_GPT_PREFIXES.some((p) => lower.startsWith(p));
 }
 
 function parseOpenAIModels(json: unknown): NormalizedModel[] {
