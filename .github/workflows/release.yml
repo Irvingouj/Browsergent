@@ -63,3 +63,20 @@ jobs:
           publish_branch: gh-pages
           keep_files: true
           destination_dir: ./
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci || npm install
+
+      - name: Build website
+        working-directory: website
+        run: npm run build
+
+      - name: Deploy website to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: website/dist
+          publish_branch: gh-pages
+          keep_files: true
+          destination_dir: ./
