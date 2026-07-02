@@ -38,7 +38,6 @@ function anthropicConfig(): ProviderConfig {
 				id: "m1",
 				name: "claude-sonnet-4-6",
 				model: "claude-sonnet-4-6",
-				tokenLimitParam: "max_tokens",
 			},
 		],
 	};

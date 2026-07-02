@@ -33,7 +33,6 @@ import {
 import { defaultModelForProvider } from "../state/slices/settings-slice";
 import { browsergentStore } from "../state/store";
 import type { ChatMessage } from "../types/messages";
-import { getPreset } from "../worker/provider-registry";
 import { WireFormat } from "../worker/provider-schema";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
@@ -448,17 +447,12 @@ const App: FunctionalComponent = () => {
 						apiKey: activeProvider.apiKey,
 						chatEndpointUrl: activeProvider.chatEndpointUrl,
 						model: activeModel?.model ?? "",
-						tokenLimitParam:
-							activeModel?.tokenLimitParam ??
-							getPreset(activeProvider.providerId)?.tokenLimitParam ??
-							"max_tokens",
 					}
 				: {
 						wireFormat: WireFormat.AnthropicMessages,
 						apiKey: "",
 						chatEndpointUrl: "",
 						model: "",
-						tokenLimitParam: "max_tokens",
 					},
 		});
 	}, [activeProvider, sessionControllerRef, bridgeRef, filesControllerRef]);

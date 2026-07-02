@@ -8,18 +8,16 @@
  */
 
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";
-import type { AgentDiagnosticEvent, TokenLimitParam } from "../types/messages";
+import type { AgentDiagnosticEvent } from "../types/messages";
 import type { LlmStream } from "./llm-streamer";
 import { createOpenAIStream } from "./openai-sse";
 import type { OpenAIRequestBody } from "./openai-types";
 import { toOpenAIMessages, toOpenAITools } from "./openai-wire";
-import { buildTokenLimit } from "./provider-request";
 
 export interface OpenAIConfig {
 	apiKey: string;
 	model: string;
 	chatEndpointUrl: string;
-	tokenLimitParam: TokenLimitParam;
 }
 
 function isRetryableError(err: unknown): boolean {
@@ -89,7 +87,7 @@ export class OpenAIProvider {
 				? { tools: toOpenAITools(context.tools) }
 				: {}),
 			stream: true,
-			...buildTokenLimit(this.config.tokenLimitParam, 4096),
+			max_completion_tokens: 4096,
 		};
 		this.onDiagnostic({
 			kind: "provider_request",

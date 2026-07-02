@@ -54,7 +54,6 @@ async function requestTitle(
 		wireFormat: provider.wireFormat,
 		apiKey: provider.apiKey,
 		chatEndpointUrl: provider.chatEndpointUrl,
-		tokenLimitParam: model.tokenLimitParam,
 	});
 
 	const body = buildProviderChatBody(request, model.model, 20, [

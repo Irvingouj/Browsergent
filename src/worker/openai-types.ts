@@ -1,5 +1,3 @@
-import type { ChatCompletionTokenLimit } from "./provider-request";
-
 /**
  * OpenAI Chat Completions wire-format types — never exported beyond the worker folder.
  * Applies to OpenAI and any OpenAI-compatible endpoint (DeepSeek, OpenRouter, Groq,
@@ -37,7 +35,8 @@ export type OpenAIRequestBody = {
 	messages: OpenAIMessage[];
 	tools?: OpenAIToolDefinition[];
 	stream: boolean;
-} & ChatCompletionTokenLimit;
+	max_completion_tokens?: number;
+};
 
 /**
  * One streamed chunk: `data: {...}`. `choices[0].delta` carries incremental

@@ -3,7 +3,7 @@
  */
 
 import type { AgentModel } from "@pi-oxide/pi-host-web";
-import type { AgentDiagnosticEvent, TokenLimitParam } from "../types/messages";
+import type { AgentDiagnosticEvent } from "../types/messages";
 import { WireFormat } from "../types/messages";
 import type { AnthropicConfig } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
@@ -15,7 +15,6 @@ export interface RuntimeProvider {
 	apiKey: string;
 	chatEndpointUrl: string;
 	model: string;
-	tokenLimitParam: TokenLimitParam;
 }
 
 export function createProviderModel(
@@ -36,7 +35,6 @@ export function createProviderModel(
 				apiKey: provider.apiKey,
 				chatEndpointUrl: provider.chatEndpointUrl,
 				model: provider.model,
-				tokenLimitParam: provider.tokenLimitParam,
 			};
 			return createOpenAIModel(config, onDiagnostic);
 		}

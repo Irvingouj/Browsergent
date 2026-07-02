@@ -27,7 +27,6 @@ describe("OpenAIProvider", () => {
 			apiKey: "bad",
 			model: "gpt-4o-mini",
 			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
-			tokenLimitParam: "max_completion_tokens",
 		});
 		global.fetch = vi.fn().mockResolvedValue({
 			ok: false,
@@ -57,7 +56,6 @@ describe("OpenAIProvider", () => {
 			apiKey: "sk-test",
 			model: "gpt-4o",
 			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
-			tokenLimitParam: "max_completion_tokens",
 		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -83,7 +81,6 @@ describe("OpenAIProvider", () => {
 			apiKey: "k",
 			model: "m",
 			chatEndpointUrl: "https://api.deepseek.com/chat/completions",
-			tokenLimitParam: "max_tokens",
 		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -101,8 +98,7 @@ describe("OpenAIProvider", () => {
 		expect(url).toBe("https://api.deepseek.com/chat/completions");
 		const init = fetchMock.mock.calls[0]?.[1] as { body?: string };
 		const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
-		expect(body.max_tokens).toBe(4096);
-		expect(body.max_completion_tokens).toBeUndefined();
+		expect(body.max_completion_tokens).toBe(4096);
 	});
 
 	test("preserves endpoint URL trailing slash", async () => {
@@ -110,7 +106,6 @@ describe("OpenAIProvider", () => {
 			apiKey: "k",
 			model: "m",
 			chatEndpointUrl: "https://api.deepseek.com/chat/completions/",
-			tokenLimitParam: "max_tokens",
 		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -133,7 +128,6 @@ describe("OpenAIProvider", () => {
 			apiKey: "k",
 			model: "m",
 			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
-			tokenLimitParam: "max_completion_tokens",
 		});
 		global.fetch = vi
 			.fn()
@@ -148,7 +142,6 @@ describe("OpenAIProvider", () => {
 			apiKey: "k",
 			model: "gpt-4o",
 			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
-			tokenLimitParam: "max_completion_tokens",
 		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -185,7 +178,6 @@ describe("OpenAIProvider", () => {
 		const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
 		expect(body.stream).toBe(true);
 		expect(body.max_completion_tokens).toBe(4096);
-		expect(body.max_tokens).toBeUndefined();
 		expect(body.model).toBe("gpt-4o");
 		expect(body.tools).toEqual([
 			{
@@ -207,7 +199,6 @@ describe("OpenAIProvider", () => {
 			apiKey: "k",
 			model: "m",
 			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
-			tokenLimitParam: "max_completion_tokens",
 		});
 		global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
 		const stream = await provider.call(noopContext);
@@ -228,7 +219,6 @@ describe("OpenAIProvider", () => {
 				apiKey: "k",
 				model: "m",
 				chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
-				tokenLimitParam: "max_completion_tokens",
 			},
 			onDiagnostic,
 		);

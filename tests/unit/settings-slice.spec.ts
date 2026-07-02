@@ -19,13 +19,11 @@ function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
 				id: "m1",
 				name: "first",
 				model: "first",
-				tokenLimitParam: "max_tokens",
 			},
 			{
 				id: "m2",
 				name: "second",
 				model: "second",
-				tokenLimitParam: "max_tokens",
 			},
 		],
 		...overrides,

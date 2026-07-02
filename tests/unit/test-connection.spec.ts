@@ -16,7 +16,6 @@ const anthropic: ProviderConfig = {
 			id: "m1",
 			name: "claude-sonnet-4-20250514",
 			model: "claude-sonnet-4-20250514",
-			tokenLimitParam: "max_tokens",
 		},
 	],
 };
@@ -35,7 +34,6 @@ const openai: ProviderConfig = {
 			id: "m2",
 			name: "gpt-4o",
 			model: "gpt-4o",
-			tokenLimitParam: "max_completion_tokens",
 		},
 	],
 };
@@ -142,33 +140,7 @@ describe("testConnection", () => {
 		expect(headers.Authorization).toBe("Bearer sk-test");
 		expect(headers["x-api-key"]).toBeUndefined();
 		const body = JSON.parse(String(init.body)) as Record<string, unknown>;
-		expect(body.max_completion_tokens).toBe(1);
-		expect(body.max_tokens).toBeUndefined();
-	});
-
-	test("openai-compatible token parameter can use max_tokens", async () => {
-		mockFetchOk();
-		await testConnection(
-			{
-				...openai,
-				chatEndpointUrl: "https://api.deepseek.com/chat/completions",
-				models: [
-					{
-						id: "m2",
-						name: "deepseek-chat",
-						model: "deepseek-chat",
-						tokenLimitParam: "max_tokens",
-					},
-				],
-			},
-			new AbortController().signal,
-		);
-		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
-			.mock.calls[0] as [string, RequestInit];
-		expect(url).toBe("https://api.deepseek.com/chat/completions");
-		const body = JSON.parse(String(init.body)) as Record<string, unknown>;
-		expect(body.max_tokens).toBe(1);
-		expect(body.max_completion_tokens).toBeUndefined();
+		expect(body.max_completion_tokens).toBe(100);
 	});
 
 	test("anthropic kind posts to /v1/messages with x-api-key", async () => {

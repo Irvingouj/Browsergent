@@ -2,19 +2,17 @@
 
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { FileOp, FileOpResult } from "../worker/file-op-relay";
-import type { TokenLimitParam, WireFormat } from "../worker/provider-schema";
+import type { WireFormat } from "../worker/provider-schema";
 import type { CellResult } from "./extjs-utils";
 
 export type {
 	ProviderConfig,
 	ProviderModelConfig,
 	ProviderPreset,
-	TokenLimitParam,
 } from "../worker/provider-schema";
 export {
 	ProviderId,
 	providerIdSchema,
-	tokenLimitParamSchema,
 	WireFormat,
 	wireFormatSchema,
 } from "../worker/provider-schema";
@@ -57,9 +55,7 @@ export interface WorkerSettings {
 	apiKey: string;
 	chatEndpointUrl: string;
 	model: string;
-	tokenLimitParam: TokenLimitParam;
 }
-
 // --- Worker -> Panel ---
 
 export type WorkerToPanel =

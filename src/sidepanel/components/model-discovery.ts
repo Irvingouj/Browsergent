@@ -2,7 +2,6 @@ import type {
 	ProviderConfig,
 	ProviderModelConfig,
 } from "../../state/slices/settings-slice";
-import type { TokenLimitParam } from "../../types/messages";
 import { authHeadersFor } from "../../worker/provider-request";
 import { parseModelsResponse } from "../../worker/provider-schema";
 
@@ -12,7 +11,6 @@ export type ModelDiscoveryResult =
 
 export async function discoverProviderModels(
 	provider: ProviderConfig,
-	tokenLimitParam: TokenLimitParam,
 	signal?: AbortSignal,
 ): Promise<ModelDiscoveryResult> {
 	if (!provider.apiKey) return { ok: false, error: "API key is empty" };
@@ -46,11 +44,7 @@ export async function discoverProviderModels(
 	}
 
 	const json: unknown = await resp.json().catch(() => null);
-	const models = parseModelsResponse(
-		json,
-		provider.wireFormat,
-		tokenLimitParam,
-	);
+	const models = parseModelsResponse(json, provider.wireFormat);
 	if (models.length === 0) {
 		return { ok: false, error: "No language models found" };
 	}

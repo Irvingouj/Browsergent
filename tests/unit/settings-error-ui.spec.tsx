@@ -31,7 +31,6 @@ vi.mock("zustand/react", () => ({
 								id: "m1",
 								name: "claude-test",
 								model: "claude-test",
-								tokenLimitParam: "max_tokens",
 							},
 						],
 					},

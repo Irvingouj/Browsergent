@@ -39,7 +39,6 @@ function modelsFromPreset(preset: ProviderPreset): {
 				id,
 				name: preset.defaultModel,
 				model: preset.defaultModel,
-				tokenLimitParam: preset.tokenLimitParam,
 			},
 		],
 		defaultModelId: id,
@@ -180,15 +179,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		const controller = new AbortController();
 		discoveryAbortRef.current = controller;
 		setDiscoveryState({ status: "loading" });
-		const tokenLimitParam =
-			getPreset(editing.providerId)?.tokenLimitParam ??
-			editing.models[0]?.tokenLimitParam ??
-			"max_completion_tokens";
-		const result = await discoverProviderModels(
-			editing,
-			tokenLimitParam,
-			controller.signal,
-		);
+		const result = await discoverProviderModels(editing, controller.signal);
 		if (controller.signal.aborted) return;
 		if (!result.ok) {
 			setDiscoveryState({ status: "error", message: result.error });
@@ -225,9 +216,6 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 				id: crypto.randomUUID(),
 				name: value,
 				model: value,
-				tokenLimitParam:
-					getPreset(provider.providerId)?.tokenLimitParam ??
-					"max_completion_tokens",
 			};
 			updateProvider(provider.id, {
 				models: [...provider.models, nextModel],
@@ -519,29 +507,31 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						</select>
 					</label>
 
-					<div class="flex gap-sm">
-						<input
-							type="text"
-							data-testid="settings-model-input"
-							value={modelDraft}
-							placeholder="model id"
-							onInput={(e) =>
-								setModelDraft((e.target as HTMLInputElement).value)
-							}
-							class={INPUT_CLASS}
-						/>
-						<button
-							type="button"
-							data-testid="settings-add-model-button"
-							onClick={() => {
-								addModel(editing, modelDraft);
-								setModelDraft("");
-							}}
-							class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary whitespace-nowrap"
-						>
-							Add
-						</button>
-					</div>
+					{editing.providerId === ProviderId.Custom && (
+						<div class="flex gap-sm">
+							<input
+								type="text"
+								data-testid="settings-model-input"
+								value={modelDraft}
+								placeholder="model id"
+								onInput={(e) =>
+									setModelDraft((e.target as HTMLInputElement).value)
+								}
+								class={INPUT_CLASS}
+							/>
+							<button
+								type="button"
+								data-testid="settings-add-model-button"
+								onClick={() => {
+									addModel(editing, modelDraft);
+									setModelDraft("");
+								}}
+								class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary whitespace-nowrap"
+							>
+								Add
+							</button>
+						</div>
+					)}
 				</div>
 
 				<label>

@@ -52,10 +52,9 @@ export async function testConnection(
 		wireFormat: provider.wireFormat,
 		apiKey: provider.apiKey,
 		chatEndpointUrl: provider.chatEndpointUrl,
-		tokenLimitParam: model.tokenLimitParam,
 	});
 
-	const body = buildProviderChatBody(request, model.model, 1, [
+	const body = buildProviderChatBody(request, model.model, 100, [
 		{ role: "user", content: "ping" },
 	]);
 

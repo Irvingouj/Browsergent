@@ -2,17 +2,11 @@
  * Type-first domain model. Every shape that crosses a trust boundary
  * (IndexedDB persistence, provider HTTP responses) is defined as a Zod
  * schema first; the TypeScript type is derived from the schema via z.infer.
- *
- * Rules:
- * - No `unknown` anywhere. External data enters through a .parse() call.
- * - No optional fields unless the data is genuinely optional. "Empty string"
- *   is a valid value for a required string — it means "not yet set".
- * - `null` only where null is a legal persisted value.
  */
 
 import { z } from "zod";
 
-// ── Enums (const objects, not TS enums — better for Zod + tree-shaking) ───
+// ── Enums ────────────────────────────────────────────────────────────────
 
 export const WireFormat = {
 	AnthropicMessages: "anthropic-messages",
@@ -38,19 +32,12 @@ export const providerIdSchema = z.enum([
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
-export const tokenLimitParamSchema = z.enum([
-	"max_tokens",
-	"max_completion_tokens",
-]);
-export type TokenLimitParam = z.infer<typeof tokenLimitParamSchema>;
-
 // ── Persisted domain model (stored in IndexedDB) ─────────────────────────
 
 export const providerModelConfigSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
 	model: z.string().min(1),
-	tokenLimitParam: tokenLimitParamSchema,
 });
 export type ProviderModelConfig = z.infer<typeof providerModelConfigSchema>;
 
@@ -76,7 +63,6 @@ export interface ProviderPreset {
 	chatEndpointUrl: string;
 	modelsEndpointUrl: string;
 	defaultModel: string;
-	tokenLimitParam: TokenLimitParam;
 }
 
 // ── Provider /models endpoint response schemas ───────────────────────────
@@ -105,20 +91,16 @@ interface NormalizedModel {
 
 // Chat-completions-capable model ID prefixes. Allowlist is more robust than
 // denylist — new non-chat models (image, video, audio) won't leak through.
-// gpt-image-* is the one false positive (starts with "gpt" but is image gen).
-const CHAT_MODEL_PREFIXES = [
-	"gpt", // gpt-5, gpt-4o, gpt-4.1, gpt-4o-mini, gpt-oss-*
-	"o1", // o1, o1-mini, o1-pro
-	"o3", // o3, o3-mini, o3-pro
-	"o4", // o4-mini
-	"chatgpt", // chatgpt-4o-latest
-] as const;
+// gpt-image-* excluded as the one false positive (starts with "gpt").
+const CHAT_MODEL_PREFIXES = ["gpt", "o1", "o3", "o4", "chatgpt"] as const;
 
 const NON_CHAT_GPT_PREFIXES = ["gpt-image"] as const;
 
 function isLanguageModel(id: string): boolean {
 	const lower = id.toLowerCase();
-	const matchesChatPrefix = CHAT_MODEL_PREFIXES.some((p) => lower.startsWith(p));
+	const matchesChatPrefix = CHAT_MODEL_PREFIXES.some((p) =>
+		lower.startsWith(p),
+	);
 	if (!matchesChatPrefix) return false;
 	return !NON_CHAT_GPT_PREFIXES.some((p) => lower.startsWith(p));
 }
@@ -169,7 +151,6 @@ function sortByLatest(models: NormalizedModel[]): NormalizedModel[] {
 export function parseModelsResponse(
 	json: unknown,
 	wireFormat: WireFormat,
-	tokenLimitParam: TokenLimitParam,
 ): ProviderModelConfig[] {
 	const raw =
 		wireFormat === WireFormat.AnthropicMessages
@@ -179,6 +160,5 @@ export function parseModelsResponse(
 		id: crypto.randomUUID(),
 		name: m.displayName,
 		model: m.id,
-		tokenLimitParam,
 	}));
 }

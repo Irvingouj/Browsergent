@@ -16,7 +16,6 @@ const anthropic: ProviderConfig = {
 			id: "m1",
 			name: "claude-sonnet-4-20250514",
 			model: "claude-sonnet-4-20250514",
-			tokenLimitParam: "max_tokens",
 		},
 	],
 };
@@ -35,7 +34,6 @@ const openai: ProviderConfig = {
 			id: "m2",
 			name: "gpt-4o",
 			model: "gpt-4o",
-			tokenLimitParam: "max_completion_tokens",
 		},
 	],
 };
@@ -57,7 +55,7 @@ function jsonResp(data: unknown, status = 200): Response {
 describe("discoverProviderModels", () => {
 
 	test("rejects empty API key", async () => {
-		const result = await discoverProviderModels({ ...anthropic, apiKey: "" }, "max_tokens");
+		const result = await discoverProviderModels({ ...anthropic, apiKey: "" });
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe("API key is empty");
 	});
@@ -66,7 +64,7 @@ describe("discoverProviderModels", () => {
 		const result = await discoverProviderModels({
 			...anthropic,
 			modelsEndpointUrl: "",
-		}, "max_tokens");
+		},);
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe(
 			"Models endpoint URL is empty",
@@ -75,7 +73,7 @@ describe("discoverProviderModels", () => {
 
 	test("returns network error when fetch rejects", async () => {
 		globalThis.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
-		const result = await discoverProviderModels(anthropic, "max_tokens");
+		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toContain("Network error");
 	});
@@ -84,7 +82,7 @@ describe("discoverProviderModels", () => {
 		globalThis.fetch = vi
 			.fn()
 			.mockResolvedValue(jsonResp({ error: "bad" }, 401));
-		const result = await discoverProviderModels(anthropic, "max_tokens");
+		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toContain("401");
 	});
@@ -98,13 +96,12 @@ describe("discoverProviderModels", () => {
 				],
 			}),
 		);
-		const result = await discoverProviderModels(anthropic, "max_tokens");
+		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.models).toHaveLength(2);
 			expect(result.models[0]?.name).toBe("Claude 3 Opus");
 			expect(result.models[0]?.model).toBe("claude-3-opus");
-			expect(result.models[0]?.tokenLimitParam).toBe("max_tokens");
 			expect(result.models[1]?.name).toBe("claude-3-haiku");
 		}
 	});
@@ -114,7 +111,7 @@ describe("discoverProviderModels", () => {
 			.fn()
 			.mockResolvedValue(jsonResp({ data: [{ id: "gpt-4o" }] }));
 		globalThis.fetch = fetchMock;
-		await discoverProviderModels(openai, "max_completion_tokens");
+		await discoverProviderModels(openai);
 		const [, init] = fetchMock.mock.calls[0] ?? [];
 		const headers = (init as { headers?: Record<string, string> } | undefined)
 			?.headers;
@@ -127,7 +124,7 @@ describe("discoverProviderModels", () => {
 			.fn()
 			.mockResolvedValue(jsonResp({ data: [{ id: "claude-3" }] }));
 		globalThis.fetch = fetchMock;
-		await discoverProviderModels(anthropic, "max_tokens");
+		await discoverProviderModels(anthropic);
 		const [, init] = fetchMock.mock.calls[0] ?? [];
 		const headers = (init as { headers?: Record<string, string> } | undefined)
 			?.headers;
@@ -137,7 +134,7 @@ describe("discoverProviderModels", () => {
 
 	test("returns No models found when data is empty", async () => {
 		globalThis.fetch = vi.fn().mockResolvedValue(jsonResp({ data: [] }));
-		const result = await discoverProviderModels(anthropic, "max_tokens");
+		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe("No language models found");
 	});
@@ -149,14 +146,14 @@ describe("discoverProviderModels", () => {
 				headers: { "Content-Type": "text/plain" },
 			}),
 		);
-		const result = await discoverProviderModels(anthropic, "max_tokens");
+		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe("No language models found");
 	});
 
 	test("returns No models found when data field is missing", async () => {
 		globalThis.fetch = vi.fn().mockResolvedValue(jsonResp({ foo: "bar" }));
-		const result = await discoverProviderModels(anthropic, "max_tokens");
+		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe("No language models found");
 	});
@@ -172,19 +169,9 @@ describe("discoverProviderModels", () => {
 				],
 			}),
 		);
-		const result = await discoverProviderModels(anthropic, "max_tokens");
+		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.models).toHaveLength(1);
-	});
-
-	test("uses tokenLimitParam from provider defaults for openai", async () => {
-		globalThis.fetch = vi
-			.fn()
-			.mockResolvedValue(jsonResp({ data: [{ id: "gpt-4o" }] }));
-		const result = await discoverProviderModels(openai, "max_completion_tokens");
-		expect(result.ok).toBe(true);
-		if (result.ok)
-			expect(result.models[0]?.tokenLimitParam).toBe("max_completion_tokens");
 	});
 
 	test("passes abort signal to fetch", async () => {
@@ -193,7 +180,7 @@ describe("discoverProviderModels", () => {
 			.mockResolvedValue(jsonResp({ data: [{ id: "m" }] }));
 		globalThis.fetch = fetchMock;
 		const controller = new AbortController();
-		await discoverProviderModels(anthropic, "max_tokens", controller.signal);
+		await discoverProviderModels(anthropic, controller.signal);
 		const [, init] = fetchMock.mock.calls[0] ?? [];
 		expect((init as { signal?: AbortSignal } | undefined)?.signal).toBe(
 			controller.signal,
@@ -215,7 +202,7 @@ describe("discoverProviderModels", () => {
 				{ id: "o3-mini" },
 			] }),
 		);
-		const result = await discoverProviderModels(openai, "max_completion_tokens");
+		const result = await discoverProviderModels(openai);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			const modelIds = result.models.map((m) => m.model).sort();
