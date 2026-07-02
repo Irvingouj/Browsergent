@@ -125,7 +125,7 @@ class MockAnthropicServer {
 		return {
 			ok: true,
 			status: 200,
-			body: this.plan!(this.capturedBodies.length - 1),
+			body: this.plan?.(this.capturedBodies.length - 1),
 		};
 	});
 
@@ -136,12 +136,12 @@ class MockAnthropicServer {
 		const systemStable =
 			this.capturedBodies.length <= 1 ||
 			this.capturedBodies.every(
-				(b) => b.system === this.capturedBodies[0]!.system,
+				(b) => b.system === this.capturedBodies[0]?.system,
 			);
 		const messagePrefixStable: boolean[] = [];
 		for (let i = 1; i < this.capturedBodies.length; i++) {
-			const prev = this.capturedBodies[i - 1]!.messages;
-			const cur = this.capturedBodies[i]!.messages;
+			const prev = this.capturedBodies[i - 1]?.messages;
+			const cur = this.capturedBodies[i]?.messages;
 			let stable = true;
 			for (let j = 0; j < prev.length; j++) {
 				if (JSON.stringify(cur[j]) !== JSON.stringify(prev[j])) {
@@ -331,7 +331,7 @@ describe("prefix cache: multi-turn wire stability", () => {
 		expect(messagePrefixStable).toEqual([true, true, true]);
 
 		// Tool results survive untruncated in the last request
-		const lastMessages = server.capturedBodies[3]!.messages as Array<{
+		const lastMessages = server.capturedBodies[3]?.messages as Array<{
 			content: unknown;
 		}>;
 		const allJson = JSON.stringify(lastMessages);
@@ -366,7 +366,7 @@ describe("prefix cache: multi-turn wire stability", () => {
 		expect(systemStable).toBe(true);
 		expect(messagePrefixStable).toEqual([true, true]);
 		// Verify the catalog is actually present in the system prompt
-		expect(server.capturedBodies[0]!.system).toContain("capability-check");
+		expect(server.capturedBodies[0]?.system).toContain("capability-check");
 	});
 
 	test("tools array is byte-identical across turns", async () => {
@@ -387,9 +387,9 @@ describe("prefix cache: multi-turn wire stability", () => {
 			turns.push(assistantMsg(`Reply ${t}`));
 		}
 
-		const tools0 = JSON.stringify(server.capturedBodies[0]!.tools);
+		const tools0 = JSON.stringify(server.capturedBodies[0]?.tools);
 		for (let i = 1; i < server.capturedBodies.length; i++) {
-			expect(JSON.stringify(server.capturedBodies[i]!.tools)).toBe(tools0);
+			expect(JSON.stringify(server.capturedBodies[i]?.tools)).toBe(tools0);
 		}
 	});
 });

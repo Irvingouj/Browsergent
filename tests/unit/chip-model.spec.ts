@@ -96,7 +96,7 @@ describe("offsetToNodePosition / nodePositionToOffset round-trip", () => {
 	test("offset inside leading text node maps to a text position", () => {
 		const pos = offsetToNodePosition(nodes, 2);
 		expect(pos).toEqual({ nodeIndex: 0, offsetInNode: 2 });
-		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(
+		expect(nodePositionToOffset(nodes, pos?.nodeIndex, pos?.offsetInNode)).toBe(
 			2,
 		);
 	});
@@ -105,7 +105,7 @@ describe("offsetToNodePosition / nodePositionToOffset round-trip", () => {
 		// offset 3 = start of chip = end of "ab "
 		const pos = offsetToNodePosition(nodes, 3);
 		expect(pos).toEqual({ nodeIndex: 0, offsetInNode: 3 });
-		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(
+		expect(nodePositionToOffset(nodes, pos?.nodeIndex, pos?.offsetInNode)).toBe(
 			3,
 		);
 	});
@@ -122,7 +122,7 @@ describe("offsetToNodePosition / nodePositionToOffset round-trip", () => {
 		// offset 20 = " de" char 1
 		const pos = offsetToNodePosition(nodes, 20);
 		expect(pos).toEqual({ nodeIndex: 2, offsetInNode: 1 });
-		expect(nodePositionToOffset(nodes, pos!.nodeIndex, pos!.offsetInNode)).toBe(
+		expect(nodePositionToOffset(nodes, pos?.nodeIndex, pos?.offsetInNode)).toBe(
 			20,
 		);
 	});

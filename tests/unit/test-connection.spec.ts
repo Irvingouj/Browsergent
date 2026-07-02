@@ -161,8 +161,8 @@ describe("testConnection", () => {
 			},
 			new AbortController().signal,
 		);
-		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
-			.calls[0] as [string, RequestInit];
+		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
+			.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://api.deepseek.com/chat/completions");
 		const body = JSON.parse(String(init.body)) as Record<string, unknown>;
 		expect(body.max_tokens).toBe(1);
