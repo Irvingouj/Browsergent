@@ -18,8 +18,6 @@ const tag = `v${v}`;
 export const DOWNLOADS = {
   // Source zip built by the release workflow.
   zip: `${SITE.releases}/download/${tag}/browsergent-${v}.zip`,
-  // Signed CRX for drag-and-drop install.
-  crx: `${SITE.releases}/download/${tag}/browsergent-${v}.crx`,
   // Latest release page (version-agnostic fallback).
   latestRelease: `${SITE.releases}/latest`,
 } as const;

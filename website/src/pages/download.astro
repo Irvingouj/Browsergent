@@ -5,7 +5,7 @@ import { SITE, DOWNLOADS } from "../site";
 
 <Base
   title="Download"
-  description={`Download Browsergent v${SITE.latestVersion} — prebuilt Chrome extension (zip or signed crx) or build from source.`}
+  description={`Download Browsergent v${SITE.latestVersion} — prebuilt Chrome extension zip or build from source.`}
 >
   <section class="section" style="border-top:none; padding-top:4rem">
     <div class="container container-prose">
@@ -16,7 +16,7 @@ import { SITE, DOWNLOADS } from "../site";
         Chrome MV3 · MIT / Apache-2.0
       </p>
 
-      <div class="grid grid-2" style="margin-top:2.5rem">
+      <div class="grid" style="margin-top:2.5rem">
         <div class="card option">
           <h3>Prebuilt .zip <span class="muted">— recommended</span></h3>
           <p class="muted">
@@ -26,17 +26,6 @@ import { SITE, DOWNLOADS } from "../site";
           </p>
           <a class="btn btn-primary" href={DOWNLOADS.zip} download>
             Download .zip ↓
-          </a>
-        </div>
-
-        <div class="card option">
-          <h3>Signed .crx</h3>
-          <p class="muted">
-            Drag the <code>.crx</code> onto <code>chrome://extensions</code> to
-            install. Pinned to a stable extension ID via the release signing key.
-          </p>
-          <a class="btn btn-secondary" href={DOWNLOADS.crx} download>
-            Download .crx ↓
           </a>
         </div>
       </div>
