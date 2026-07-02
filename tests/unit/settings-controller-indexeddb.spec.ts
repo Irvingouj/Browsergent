@@ -13,9 +13,18 @@ function anthropicConfig(
 		id: "p1",
 		name: "Anthropic",
 		kind: "anthropic",
-		baseUrl: "https://api.anthropic.com",
+		chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+		modelsEndpointUrl: "https://api.anthropic.com/v1/models",
 		apiKey: "",
-		model: "claude-sonnet-4-6",
+		defaultModelId: "m1",
+		models: [
+			{
+				id: "m1",
+				name: "claude-sonnet-4-6",
+				model: "claude-sonnet-4-6",
+				tokenLimitParam: "max_tokens",
+			},
+		],
 		...overrides,
 	};
 }
@@ -69,6 +78,28 @@ describe("SettingsController with IndexedDB", () => {
 		expect(state.loaded).toBe(true);
 	});
 
+	test("load() normalizes stale pre-refactor providers missing models/defaultModelId", async () => {
+		const stale = [
+			{
+				id: "p1",
+				name: "Old",
+				kind: "anthropic",
+				apiKey: "sk-old",
+				baseUrl: "https://api.anthropic.com",
+				model: "claude-3",
+			},
+		];
+		await storage.set("settings", "providers", stale);
+
+		await controller.load();
+
+		const state = browsergentStore.getState().settings;
+		expect(state.providers).toHaveLength(1);
+		expect(state.providers[0]?.models).toEqual([]);
+		expect(state.providers[0]?.defaultModelId).toBe("");
+		expect(state.providers[0]?.chatEndpointUrl).toBe("");
+	});
+
 	test("save() persists providers and active id", async () => {
 		const providers = [anthropicConfig({ id: "p1", apiKey: "sk-new-key" })];
 		await controller.save({ providers, activeProviderId: "p1" });
@@ -88,9 +119,18 @@ describe("SettingsController with IndexedDB", () => {
 				id: "p2",
 				name: "OpenAI",
 				kind: "openai" as const,
-				baseUrl: "https://api.openai.com",
+				chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+				modelsEndpointUrl: "https://api.openai.com/v1/models",
 				apiKey: "sk-oai",
-				model: "gpt-4o",
+				defaultModelId: "m2",
+				models: [
+					{
+						id: "m2",
+						name: "gpt-4o",
+						model: "gpt-4o",
+						tokenLimitParam: "max_completion_tokens",
+					},
+				],
 			},
 		];
 		await controller.save({ providers, activeProviderId: "p2" });
