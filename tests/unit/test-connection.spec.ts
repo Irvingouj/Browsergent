@@ -6,18 +6,36 @@ const anthropic: ProviderConfig = {
 	id: "p1",
 	name: "Anthropic",
 	kind: "anthropic",
-	baseUrl: "https://api.anthropic.com",
+	chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+	modelsEndpointUrl: "https://api.anthropic.com/v1/models",
 	apiKey: "sk-test",
-	model: "claude-sonnet-4-20250514",
+	defaultModelId: "m1",
+	models: [
+		{
+			id: "m1",
+			name: "claude-sonnet-4-20250514",
+			model: "claude-sonnet-4-20250514",
+			tokenLimitParam: "max_tokens",
+		},
+	],
 };
 
 const openai: ProviderConfig = {
 	id: "p2",
 	name: "OpenAI",
 	kind: "openai",
-	baseUrl: "https://api.openai.com",
+	chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+	modelsEndpointUrl: "https://api.openai.com/v1/models",
 	apiKey: "sk-test",
-	model: "gpt-4o",
+	defaultModelId: "m2",
+	models: [
+		{
+			id: "m2",
+			name: "gpt-4o",
+			model: "gpt-4o",
+			tokenLimitParam: "max_completion_tokens",
+		},
+	],
 };
 
 const realFetch = global.fetch;
@@ -121,6 +139,34 @@ describe("testConnection", () => {
 		const headers = init.headers as Record<string, string>;
 		expect(headers.Authorization).toBe("Bearer sk-test");
 		expect(headers["x-api-key"]).toBeUndefined();
+		const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+		expect(body.max_completion_tokens).toBe(1);
+		expect(body.max_tokens).toBeUndefined();
+	});
+
+	test("openai-compatible token parameter can use max_tokens", async () => {
+		mockFetchOk();
+		await testConnection(
+			{
+				...openai,
+				chatEndpointUrl: "https://api.deepseek.com/chat/completions",
+				models: [
+					{
+						id: "m2",
+						name: "deepseek-chat",
+						model: "deepseek-chat",
+						tokenLimitParam: "max_tokens",
+					},
+				],
+			},
+			new AbortController().signal,
+		);
+		const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
+			.calls[0] as [string, RequestInit];
+		expect(url).toBe("https://api.deepseek.com/chat/completions");
+		const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+		expect(body.max_tokens).toBe(1);
+		expect(body.max_completion_tokens).toBeUndefined();
 	});
 
 	test("anthropic kind posts to /v1/messages with x-api-key", async () => {
@@ -131,18 +177,22 @@ describe("testConnection", () => {
 		expect(url).toBe("https://api.anthropic.com/v1/messages");
 		const headers = init.headers as Record<string, string>;
 		expect(headers["x-api-key"]).toBe("sk-test");
+		expect(headers["anthropic-version"]).toBe("2023-06-01");
 		expect(headers.Authorization).toBeUndefined();
 	});
 
-	test("baseUrl trailing slash is trimmed", async () => {
+	test("endpoint URL is used exactly", async () => {
 		mockFetchOk();
 		await testConnection(
-			{ ...anthropic, baseUrl: "https://api.anthropic.com/" },
+			{
+				...anthropic,
+				chatEndpointUrl: "https://api.example.com/custom/messages/",
+			},
 			new AbortController().signal,
 		);
 		const [url] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock
 			.calls[0] as [string, RequestInit];
-		expect(url).toBe("https://api.anthropic.com/v1/messages");
+		expect(url).toBe("https://api.example.com/custom/messages/");
 	});
 
 	test("abort → E_NETWORK with aborted detail", async () => {

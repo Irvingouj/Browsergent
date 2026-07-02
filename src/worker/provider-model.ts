@@ -7,7 +7,11 @@
  */
 
 import type { AgentModel } from "@pi-oxide/pi-host-web";
-import type { AgentDiagnosticEvent, ProviderKind } from "../types/messages";
+import type {
+	AgentDiagnosticEvent,
+	ProviderKind,
+	TokenLimitParam,
+} from "../types/messages";
 import type { AnthropicConfig } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
 import type { OpenAIConfig } from "./openai";
@@ -15,10 +19,10 @@ import { createOpenAIModel } from "./openai-model";
 
 export interface RuntimeProvider {
 	kind: ProviderKind;
-
 	apiKey: string;
-	baseUrl?: string;
+	chatEndpointUrl: string;
 	model: string;
+	tokenLimitParam: TokenLimitParam;
 }
 
 export function createProviderModel(
@@ -26,19 +30,23 @@ export function createProviderModel(
 	onDiagnostic: (event: AgentDiagnosticEvent) => void = () => {},
 ): AgentModel {
 	switch (provider.kind) {
-		case "anthropic": {
+		case "anthropic":
+		case "anthropic-compatible": {
 			const config: AnthropicConfig = {
 				apiKey: provider.apiKey,
-				baseUrl: provider.baseUrl,
+				chatEndpointUrl: provider.chatEndpointUrl,
 				model: provider.model,
 			};
 			return createAnthropicModel(config, onDiagnostic);
 		}
-		case "openai": {
+		case "openai":
+		case "deepseek":
+		case "openai-compatible": {
 			const config: OpenAIConfig = {
 				apiKey: provider.apiKey,
-				baseUrl: provider.baseUrl,
+				chatEndpointUrl: provider.chatEndpointUrl,
 				model: provider.model,
+				tokenLimitParam: provider.tokenLimitParam,
 			};
 			return createOpenAIModel(config, onDiagnostic);
 		}

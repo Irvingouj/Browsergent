@@ -261,6 +261,7 @@ describe("prefix cache: multi-turn wire stability", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "test",
 			model: "test-model",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const turns: AgentMessage[] = [];
@@ -292,6 +293,7 @@ describe("prefix cache: multi-turn wire stability", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "test",
 			model: "test-model",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const messages: AgentMessage[] = [
@@ -347,6 +349,7 @@ describe("prefix cache: multi-turn wire stability", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "test",
 			model: "test-model",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const system = composeSystemPrompt("## available_skills\ncapability-check");
@@ -374,6 +377,7 @@ describe("prefix cache: multi-turn wire stability", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "test",
 			model: "test-model",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const turns: AgentMessage[] = [];

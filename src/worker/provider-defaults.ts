@@ -8,31 +8,62 @@
  * `ProviderKind` without an entry, so callers need no `!` / fallback.
  */
 
-import type { ProviderKind } from "../types/messages";
+import type { ProviderKind, TokenLimitParam } from "../types/messages";
 
 export interface ProviderPreset {
 	label: string;
-	baseUrl: string;
-	model: string;
+	chatEndpointUrl: string;
+	modelsEndpointUrl?: string;
+	defaultModel: string;
+	tokenLimitParam: TokenLimitParam;
 }
 
 export const PROVIDER_DEFAULTS: Record<ProviderKind, ProviderPreset> = {
 	anthropic: {
 		label: "Anthropic",
-		baseUrl: "https://api.anthropic.com",
-		model: "claude-sonnet-4-20250514",
+		chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+		modelsEndpointUrl: "https://api.anthropic.com/v1/models",
+		defaultModel: "claude-sonnet-4-20250514",
+		tokenLimitParam: "max_tokens",
 	},
 	openai: {
 		label: "OpenAI",
-		baseUrl: "https://api.openai.com",
-		model: "gpt-4o",
+		chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+		modelsEndpointUrl: "https://api.openai.com/v1/models",
+		defaultModel: "gpt-4o",
+		tokenLimitParam: "max_completion_tokens",
+	},
+	deepseek: {
+		label: "DeepSeek",
+		chatEndpointUrl: "https://api.deepseek.com/chat/completions",
+		modelsEndpointUrl: "https://api.deepseek.com/models",
+		defaultModel: "deepseek-chat",
+		tokenLimitParam: "max_tokens",
+	},
+	"openai-compatible": {
+		label: "OpenAI-compatible",
+		chatEndpointUrl: "",
+		modelsEndpointUrl: "",
+		defaultModel: "",
+		tokenLimitParam: "max_tokens",
+	},
+	"anthropic-compatible": {
+		label: "Anthropic-compatible",
+		chatEndpointUrl: "",
+		modelsEndpointUrl: "",
+		defaultModel: "",
+		tokenLimitParam: "max_tokens",
 	},
 };
 
-export function defaultBaseUrlFor(kind: ProviderKind): string {
-	return PROVIDER_DEFAULTS[kind].baseUrl;
+export function defaultChatEndpointUrlFor(kind: ProviderKind): string {
+	return PROVIDER_DEFAULTS[kind].chatEndpointUrl;
 }
 
 export function defaultModelFor(kind: ProviderKind): string {
-	return PROVIDER_DEFAULTS[kind].model;
+	return PROVIDER_DEFAULTS[kind].defaultModel;
+}
+
+export function defaultTokenLimitParamFor(kind: ProviderKind): TokenLimitParam {
+	return PROVIDER_DEFAULTS[kind].tokenLimitParam;
 }

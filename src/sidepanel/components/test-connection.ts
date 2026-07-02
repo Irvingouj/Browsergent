@@ -1,7 +1,14 @@
 import type { BrowsergentError } from "../../errors/browsergent-error";
 import { classifyProviderResponse } from "../../errors/classify-provider-response";
-import type { ProviderConfig } from "../../state/slices/settings-slice";
-import { buildProviderRequest } from "../../worker/provider-request";
+import {
+	defaultModelForProvider,
+	type ProviderConfig,
+} from "../../state/slices/settings-slice";
+import { defaultTokenLimitParamFor } from "../../worker/provider-defaults";
+import {
+	buildProviderChatBody,
+	buildProviderRequest,
+} from "../../worker/provider-request";
 
 export type ConnectionResult =
 	| { ok: true }
@@ -30,20 +37,35 @@ export async function testConnection(
 			},
 		};
 	}
+	const model = defaultModelForProvider(provider);
+	if (!model) {
+		return {
+			ok: false,
+			error: {
+				code: "E_PROVIDER_NOT_FOUND",
+				message: "No model configured",
+				source: "settings",
+			},
+		};
+	}
 
-	const { url, headers } = buildProviderRequest(provider);
+	const request = buildProviderRequest({
+		kind: provider.kind,
+		apiKey: provider.apiKey,
+		chatEndpointUrl: provider.chatEndpointUrl,
+		tokenLimitParam:
+			model.tokenLimitParam ?? defaultTokenLimitParamFor(provider.kind),
+	});
 
-	const body = {
-		model: provider.model,
-		max_tokens: 1,
-		messages: [{ role: "user", content: "ping" }],
-	};
+	const body = buildProviderChatBody(request, model.model, 1, [
+		{ role: "user", content: "ping" },
+	]);
 
 	let resp: Response;
 	try {
-		resp = await fetch(url, {
+		resp = await fetch(request.url, {
 			method: "POST",
-			headers,
+			headers: request.headers,
 			body: JSON.stringify(body),
 			signal,
 		});

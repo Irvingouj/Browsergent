@@ -26,6 +26,8 @@ describe("OpenAIProvider", () => {
 		const provider = new OpenAIProvider({
 			apiKey: "bad",
 			model: "gpt-4o-mini",
+			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+			tokenLimitParam: "max_completion_tokens",
 		});
 		global.fetch = vi.fn().mockResolvedValue({
 			ok: false,
@@ -50,9 +52,13 @@ describe("OpenAIProvider", () => {
 			},
 		});
 	});
-
 	test("uses Authorization: Bearer header", async () => {
-		const provider = new OpenAIProvider({ apiKey: "sk-test", model: "gpt-4o" });
+		const provider = new OpenAIProvider({
+			apiKey: "sk-test",
+			model: "gpt-4o",
+			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+			tokenLimitParam: "max_completion_tokens",
+		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
 			body: new ReadableStream({
@@ -72,11 +78,12 @@ describe("OpenAIProvider", () => {
 		expect(headers?.["Content-Type"]).toBe("application/json");
 	});
 
-	test("posts to {baseUrl}/v1/chat/completions", async () => {
+	test("posts to configured endpoint URL exactly", async () => {
 		const provider = new OpenAIProvider({
 			apiKey: "k",
 			model: "m",
-			baseUrl: "https://api.deepseek.com",
+			chatEndpointUrl: "https://api.deepseek.com/chat/completions",
+			tokenLimitParam: "max_tokens",
 		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -91,14 +98,19 @@ describe("OpenAIProvider", () => {
 
 		await provider.call(noopContext);
 		const url = fetchMock.mock.calls[0]?.[0] as string;
-		expect(url).toBe("https://api.deepseek.com/v1/chat/completions");
+		expect(url).toBe("https://api.deepseek.com/chat/completions");
+		const init = fetchMock.mock.calls[0]?.[1] as { body?: string };
+		const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
+		expect(body.max_tokens).toBe(4096);
+		expect(body.max_completion_tokens).toBeUndefined();
 	});
 
-	test("strips trailing slash from baseUrl", async () => {
+	test("preserves endpoint URL trailing slash", async () => {
 		const provider = new OpenAIProvider({
 			apiKey: "k",
 			model: "m",
-			baseUrl: "https://api.deepseek.com/",
+			chatEndpointUrl: "https://api.deepseek.com/chat/completions/",
+			tokenLimitParam: "max_tokens",
 		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -113,11 +125,16 @@ describe("OpenAIProvider", () => {
 
 		await provider.call(noopContext);
 		const url = fetchMock.mock.calls[0]?.[0] as string;
-		expect(url).toBe("https://api.deepseek.com/v1/chat/completions");
+		expect(url).toBe("https://api.deepseek.com/chat/completions/");
 	});
 
 	test("returns error stream when response has no body", async () => {
-		const provider = new OpenAIProvider({ apiKey: "k", model: "m" });
+		const provider = new OpenAIProvider({
+			apiKey: "k",
+			model: "m",
+			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+			tokenLimitParam: "max_completion_tokens",
+		});
 		global.fetch = vi
 			.fn()
 			.mockResolvedValue({ ok: true, body: null, headers: mockHeaders() });
@@ -127,7 +144,12 @@ describe("OpenAIProvider", () => {
 	});
 
 	test("includes messages and tools in request body, stream:true", async () => {
-		const provider = new OpenAIProvider({ apiKey: "k", model: "gpt-4o" });
+		const provider = new OpenAIProvider({
+			apiKey: "k",
+			model: "gpt-4o",
+			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+			tokenLimitParam: "max_completion_tokens",
+		});
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
 			body: new ReadableStream({
@@ -162,7 +184,8 @@ describe("OpenAIProvider", () => {
 		const init = fetchMock.mock.calls[0]?.[1] as { body?: string };
 		const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
 		expect(body.stream).toBe(true);
-		expect(body.max_tokens).toBe(4096);
+		expect(body.max_completion_tokens).toBe(4096);
+		expect(body.max_tokens).toBeUndefined();
 		expect(body.model).toBe("gpt-4o");
 		expect(body.tools).toEqual([
 			{
@@ -180,7 +203,12 @@ describe("OpenAIProvider", () => {
 	});
 
 	test("returns error stream on network error when fetch rejects", async () => {
-		const provider = new OpenAIProvider({ apiKey: "k", model: "m" });
+		const provider = new OpenAIProvider({
+			apiKey: "k",
+			model: "m",
+			chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+			tokenLimitParam: "max_completion_tokens",
+		});
 		global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
 		const stream = await provider.call(noopContext);
 		const result = await stream.result;
@@ -196,7 +224,12 @@ describe("OpenAIProvider", () => {
 		const future = new Date(Date.now() + 10_000).toUTCString();
 		const onDiagnostic = vi.fn();
 		const providerWithDiag = new OpenAIProvider(
-			{ apiKey: "k", model: "m" },
+			{
+				apiKey: "k",
+				model: "m",
+				chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
+				tokenLimitParam: "max_completion_tokens",
+			},
 			onDiagnostic,
 		);
 		global.fetch = vi.fn().mockResolvedValue({

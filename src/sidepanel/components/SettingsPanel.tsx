@@ -11,7 +11,7 @@ import {
 } from "../../state/selectors";
 import type { ProviderConfig } from "../../state/slices/settings-slice";
 import { browsergentStore } from "../../state/store";
-import type { ProviderKind } from "../../types/messages";
+import type { ProviderKind, TokenLimitParam } from "../../types/messages";
 
 // `satisfies Record<ProviderKind,…>` guarantees every kind has a preset, so
 // indexing is total — no `!` / fallback needed anywhere.
@@ -19,6 +19,7 @@ import {
 	PROVIDER_DEFAULTS,
 	type ProviderPreset,
 } from "../../worker/provider-defaults";
+import { discoverProviderModels } from "./model-discovery";
 import { testConnection } from "./test-connection";
 
 const INPUT_CLASS =
@@ -31,15 +32,37 @@ interface SettingsPanelProps {
 	onExportConversation: () => void;
 }
 
+function modelsFromPreset(preset: ProviderPreset): {
+	models: ProviderConfig["models"];
+	defaultModelId: string;
+} {
+	if (!preset.defaultModel) return { models: [], defaultModelId: "" };
+	const id = crypto.randomUUID();
+	return {
+		models: [
+			{
+				id,
+				name: preset.defaultModel,
+				model: preset.defaultModel,
+				tokenLimitParam: preset.tokenLimitParam,
+			},
+		],
+		defaultModelId: id,
+	};
+}
+
 function newProviderConfig(kind: ProviderKind): ProviderConfig {
 	const preset = PROVIDER_DEFAULTS[kind];
+	const { models, defaultModelId } = modelsFromPreset(preset);
 	return {
 		id: crypto.randomUUID(),
 		name: preset.label,
 		kind,
-		baseUrl: preset.baseUrl,
 		apiKey: "",
-		model: preset.model,
+		chatEndpointUrl: preset.chatEndpointUrl,
+		modelsEndpointUrl: preset.modelsEndpointUrl,
+		defaultModelId,
+		models,
 	};
 }
 function presetFor(kind: ProviderKind): ProviderPreset {
@@ -94,15 +117,27 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		| { status: "ok" }
 		| { status: "error"; error: BrowsergentError }
 	>({ status: "idle" });
+	const [discoveryState, setDiscoveryState] = useState<
+		| { status: "idle" }
+		| { status: "loading" }
+		| { status: "ok"; count: number }
+		| { status: "error"; message: string }
+	>({ status: "idle" });
+	const [modelDraft, setModelDraft] = useState("");
 	const abortRef = useRef<AbortController | null>(null);
+	const discoveryAbortRef = useRef<AbortController | null>(null);
 
 	// Reset the indicator whenever the user starts editing a different provider
 	// or leaves the edit view — a stale result from provider A must not cling
 	// to provider B's form.
 	useEffect(() => {
 		abortRef.current?.abort();
+		discoveryAbortRef.current?.abort();
 		abortRef.current = null;
+		discoveryAbortRef.current = null;
 		setTestState({ status: "idle" });
+		setDiscoveryState({ status: "idle" });
+		setModelDraft("");
 	}, [editingId]);
 
 	const runTestConnection = useCallback(async () => {
@@ -133,6 +168,76 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 			persist(settingsController, next, activeProviderId);
 		},
 		[providers, activeProviderId, settingsController],
+	);
+
+	const runModelDiscovery = useCallback(async () => {
+		if (!editing) return;
+		discoveryAbortRef.current?.abort();
+		const controller = new AbortController();
+		discoveryAbortRef.current = controller;
+		setDiscoveryState({ status: "loading" });
+		const result = await discoverProviderModels(editing, controller.signal);
+		if (controller.signal.aborted) return;
+		if (!result.ok) {
+			setDiscoveryState({ status: "error", message: result.error });
+			return;
+		}
+
+		const current = browsergentStore
+			.getState()
+			.settings.providers.find((p) => p.id === editing.id);
+		if (!current) return;
+		const byModel = new Map(current.models.map((m) => [m.model, m]));
+		const discoveredModelStrings = new Set(result.models.map((m) => m.model));
+		const merged = [
+			...result.models.map((model) => ({
+				...model,
+				id: byModel.get(model.model)?.id ?? model.id,
+			})),
+			...current.models.filter((m) => !discoveredModelStrings.has(m.model)),
+		];
+		const defaultStillExists = merged.some(
+			(m) => m.id === current.defaultModelId,
+		);
+		updateProvider(editing.id, {
+			models: merged,
+			defaultModelId: defaultStillExists
+				? current.defaultModelId
+				: (merged[0]?.id ?? ""),
+		});
+		setDiscoveryState({ status: "ok", count: merged.length });
+	}, [editing, updateProvider]);
+
+	const addModel = useCallback(
+		(provider: ProviderConfig, model: string) => {
+			const value = model.trim();
+			if (!value || provider.models.some((m) => m.model === value)) return;
+			const nextModel = {
+				id: crypto.randomUUID(),
+				name: value,
+				model: value,
+				tokenLimitParam: presetFor(provider.kind).tokenLimitParam,
+			};
+			updateProvider(provider.id, {
+				models: [...provider.models, nextModel],
+				defaultModelId: provider.defaultModelId || nextModel.id,
+			});
+		},
+		[updateProvider],
+	);
+
+	const deleteModel = useCallback(
+		(provider: ProviderConfig, modelId: string) => {
+			const nextModels = provider.models.filter((m) => m.id !== modelId);
+			updateProvider(provider.id, {
+				models: nextModels,
+				defaultModelId:
+					provider.defaultModelId === modelId
+						? (nextModels[0]?.id ?? "")
+						: provider.defaultModelId,
+			});
+		},
+		[updateProvider],
 	);
 
 	const addProvider = useCallback(
@@ -166,11 +271,22 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		(id: string) => {
 			const src = providers.find((p) => p.id === id);
 			if (!src) return;
+			const copiedModels = src.models.map((model) => ({
+				...model,
+				id: crypto.randomUUID(),
+			}));
+			const sourceDefaultIndex = src.models.findIndex(
+				(model) => model.id === src.defaultModelId,
+			);
 			const copy: ProviderConfig = {
 				...src,
 				id: crypto.randomUUID(),
 				name: `${src.name} (copy)`,
 				apiKey: "",
+				models: copiedModels,
+				defaultModelId:
+					copiedModels[sourceDefaultIndex >= 0 ? sourceDefaultIndex : 0]?.id ??
+					"",
 			};
 			const next = [...providers, copy];
 			browsergentStore.getState().providersChanged(next);
@@ -244,34 +360,45 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						value={editing.kind}
 						onInput={(e) => {
 							const raw = (e.target as HTMLSelectElement).value;
-							if (raw !== "anthropic" && raw !== "openai") return;
+							if (
+								raw !== "anthropic" &&
+								raw !== "openai" &&
+								raw !== "deepseek" &&
+								raw !== "openai-compatible" &&
+								raw !== "anthropic-compatible"
+							)
+								return;
 							const kind = raw;
 							const preset = presetFor(kind);
+							const { models, defaultModelId } = modelsFromPreset(preset);
 							updateProvider(editing.id, {
 								kind,
-								baseUrl: preset.baseUrl,
-								model: preset.model,
+								chatEndpointUrl: preset.chatEndpointUrl,
+								modelsEndpointUrl: preset.modelsEndpointUrl,
+								defaultModelId,
+								models,
 							});
 						}}
 						class={INPUT_CLASS}
 					>
-						<option value="anthropic">Anthropic (/v1/messages)</option>
-						<option value="openai">
-							OpenAI-compatible (/v1/chat/completions)
-						</option>
+						<option value="anthropic">Anthropic</option>
+						<option value="openai">OpenAI</option>
+						<option value="deepseek">DeepSeek</option>
+						<option value="openai-compatible">OpenAI-compatible</option>
+						<option value="anthropic-compatible">Anthropic-compatible</option>
 					</select>
 				</label>
 
 				<label>
-					<span class={LABEL_CLASS}>Base URL</span>
+					<span class={LABEL_CLASS}>Endpoint URL</span>
 					<input
 						type="text"
 						data-testid="settings-baseurl-input"
-						value={editing.baseUrl}
-						placeholder={presetFor(editing.kind).baseUrl}
+						value={editing.chatEndpointUrl}
+						placeholder={presetFor(editing.kind).chatEndpointUrl}
 						onInput={(e) =>
 							updateProvider(editing.id, {
-								baseUrl: (e.target as HTMLInputElement).value,
+								chatEndpointUrl: (e.target as HTMLInputElement).value,
 							})
 						}
 						class={INPUT_CLASS}
@@ -279,20 +406,159 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 				</label>
 
 				<label>
-					<span class={LABEL_CLASS}>Model</span>
+					<span class={LABEL_CLASS}>Models endpoint URL</span>
 					<input
 						type="text"
-						data-testid="settings-model-input"
-						value={editing.model}
-						placeholder={presetFor(editing.kind).model}
+						data-testid="settings-models-endpoint-input"
+						value={editing.modelsEndpointUrl ?? ""}
+						placeholder={presetFor(editing.kind).modelsEndpointUrl ?? ""}
 						onInput={(e) =>
 							updateProvider(editing.id, {
-								model: (e.target as HTMLInputElement).value,
+								modelsEndpointUrl: (e.target as HTMLInputElement).value,
 							})
 						}
 						class={INPUT_CLASS}
 					/>
 				</label>
+
+				{(editing.kind === "anthropic" ||
+					editing.kind === "openai" ||
+					editing.kind === "deepseek") && (
+					<div class="flex flex-col gap-xs">
+						<button
+							type="button"
+							data-testid="settings-fetch-models-button"
+							onClick={() => void runModelDiscovery()}
+							disabled={discoveryState.status === "loading"}
+							class="self-start px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
+						>
+							{discoveryState.status === "loading"
+								? "Fetching…"
+								: "Fetch models"}
+						</button>
+						{discoveryState.status === "ok" && (
+							<span
+								data-testid="settings-fetch-models-result"
+								class="text-xs text-success"
+							>
+								Loaded {discoveryState.count} models
+							</span>
+						)}
+						{discoveryState.status === "error" && (
+							<span
+								data-testid="settings-fetch-models-result"
+								class="text-xs text-error"
+							>
+								{discoveryState.message}
+							</span>
+						)}
+					</div>
+				)}
+
+				<div class="flex flex-col gap-sm">
+					<label>
+						<span class={LABEL_CLASS}>Default model</span>
+						<select
+							data-testid="settings-default-model-select"
+							value={editing.defaultModelId}
+							onInput={(e) => {
+								updateProvider(editing.id, {
+									defaultModelId: (e.target as HTMLSelectElement).value,
+								});
+							}}
+							class={INPUT_CLASS}
+						>
+							{editing.models.length === 0 ? (
+								<option value="">No model configured</option>
+							) : (
+								editing.models.map((model) => (
+									<option key={model.id} value={model.id}>
+										{model.name || model.model}
+									</option>
+								))
+							)}
+						</select>
+					</label>
+
+					<div class="flex gap-sm">
+						<input
+							type="text"
+							data-testid="settings-model-input"
+							value={modelDraft}
+							placeholder="model id"
+							onInput={(e) =>
+								setModelDraft((e.target as HTMLInputElement).value)
+							}
+							class={INPUT_CLASS}
+						/>
+						<button
+							type="button"
+							data-testid="settings-add-model-button"
+							onClick={() => {
+								addModel(editing, modelDraft);
+								setModelDraft("");
+							}}
+							class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary whitespace-nowrap"
+						>
+							Add
+						</button>
+					</div>
+
+					<div class="flex flex-col gap-xs">
+						{editing.models.map((model) => (
+							<div
+								key={model.id}
+								class="rounded-md border border-border bg-bg-muted p-sm flex items-center gap-sm"
+							>
+								<span class="flex-1 min-w-0 text-xs font-mono text-text-primary truncate">
+									{model.model}
+								</span>
+								{editing.kind !== "anthropic" &&
+									editing.kind !== "anthropic-compatible" && (
+										<select
+											data-testid={`settings-model-token-param-${model.id}`}
+											value={
+												model.tokenLimitParam ??
+												presetFor(editing.kind).tokenLimitParam
+											}
+											onInput={(e) => {
+												const raw = (e.target as HTMLSelectElement).value;
+												if (
+													raw !== "max_tokens" &&
+													raw !== "max_completion_tokens"
+												)
+													return;
+												updateProvider(editing.id, {
+													models: editing.models.map((m) =>
+														m.id === model.id
+															? {
+																	...m,
+																	tokenLimitParam: raw as TokenLimitParam,
+																}
+															: m,
+													),
+												});
+											}}
+											class="bg-bg-muted border border-border rounded-md px-xs py-xs text-text-primary font-mono text-[10px] outline-none"
+										>
+											<option value="max_completion_tokens">
+												max_completion_tokens
+											</option>
+											<option value="max_tokens">max_tokens</option>
+										</select>
+									)}
+								<button
+									type="button"
+									data-testid={`settings-delete-model-${model.id}`}
+									onClick={() => deleteModel(editing, model.id)}
+									class="text-xs text-error cursor-pointer px-xs"
+								>
+									Delete
+								</button>
+							</div>
+						))}
+					</div>
+				</div>
 
 				<label>
 					<span class={LABEL_CLASS}>API Key</span>
@@ -421,7 +687,10 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 										)}
 									</div>
 									<div class="text-[10px] text-text-muted font-mono">
-										{p.kind} · {p.model || "(no model)"}
+										{p.kind} ·{" "}
+										{p.models.find((m) => m.id === p.defaultModelId)?.model ??
+											p.models[0]?.model ??
+											"(no model)"}
 									</div>
 								</button>
 								<button
@@ -453,7 +722,31 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 					onClick={() => addProvider("openai")}
 					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
 				>
+					+ OpenAI
+				</button>
+				<button
+					type="button"
+					data-testid="settings-add-deepseek"
+					onClick={() => addProvider("deepseek")}
+					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
+				>
+					+ DeepSeek
+				</button>
+				<button
+					type="button"
+					data-testid="settings-add-openai-compatible"
+					onClick={() => addProvider("openai-compatible")}
+					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
+				>
 					+ OpenAI-compatible
+				</button>
+				<button
+					type="button"
+					data-testid="settings-add-anthropic-compatible"
+					onClick={() => addProvider("anthropic-compatible")}
+					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
+				>
+					+ Anthropic-compatible
 				</button>
 			</div>
 

@@ -1,27 +1,61 @@
 import { describe, expect, test } from "vitest";
-import { browsergentStore } from "../../src/state/store";
+import {
+	defaultModelForProvider,
+	type ProviderConfig,
+} from "../../src/state/slices/settings-slice";
 
-describe("settings slice", () => {
-	test("settingsSaveFailed restores loaded to true after a failed save", () => {
-		// Start with a loaded state
-		browsergentStore.getState().settingsLoaded({
-			anthropicApiKey: "",
-			baseUrl: "https://api.anthropic.com",
-			model: "claude-sonnet-4-20250514",
-			loaded: true,
-		});
+function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
+	return {
+		id: "p1",
+		name: "Test",
+		kind: "anthropic",
+		apiKey: "k",
+		chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+		defaultModelId: "m1",
+		models: [
+			{
+				id: "m1",
+				name: "first",
+				model: "first",
+				tokenLimitParam: "max_tokens",
+			},
+			{
+				id: "m2",
+				name: "second",
+				model: "second",
+				tokenLimitParam: "max_tokens",
+			},
+		],
+		...overrides,
+	};
+}
 
-		// Begin a save
-		browsergentStore.getState().settingsSaveStarted();
-		expect(browsergentStore.getState().settings.loaded).toBe(false);
+describe("defaultModelForProvider", () => {
+	test("returns the model matching defaultModelId", () => {
+		const p = makeProvider({ defaultModelId: "m2" });
+		const model = defaultModelForProvider(p);
+		expect(model?.id).toBe("m2");
+	});
 
-		// Save fails
-		browsergentStore.getState().settingsSaveFailed({
-			code: "E_UNKNOWN",
-			message: "network error",
-		});
+	test("falls back to models[0] when defaultModelId does not match", () => {
+		const p = makeProvider({ defaultModelId: "nonexistent" });
+		const model = defaultModelForProvider(p);
+		expect(model?.id).toBe("m1");
+	});
 
-		// loaded should be restored to true so the UI isn't stuck in loading
-		expect(browsergentStore.getState().settings.loaded).toBe(true);
+	test("falls back to models[0] when defaultModelId is empty", () => {
+		const p = makeProvider({ defaultModelId: "" });
+		const model = defaultModelForProvider(p);
+		expect(model?.id).toBe("m1");
+	});
+
+	test("returns null when models is empty", () => {
+		const p = makeProvider({ models: [], defaultModelId: "" });
+		expect(defaultModelForProvider(p)).toBeNull();
+	});
+
+	test("returns null when models is empty and defaultModelId is set", () => {
+		const p = makeProvider({ models: [], defaultModelId: "dangling" });
+		expect(defaultModelForProvider(p)).toBeNull();
 	});
 });

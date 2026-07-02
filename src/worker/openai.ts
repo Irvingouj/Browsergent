@@ -8,16 +8,18 @@
  */
 
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";
-import type { AgentDiagnosticEvent } from "../types/messages";
+import type { AgentDiagnosticEvent, TokenLimitParam } from "../types/messages";
 import type { LlmStream } from "./llm-streamer";
 import { createOpenAIStream } from "./openai-sse";
+import type { OpenAIRequestBody } from "./openai-types";
 import { toOpenAIMessages, toOpenAITools } from "./openai-wire";
-import { defaultBaseUrlFor } from "./provider-defaults";
+import { buildTokenLimit } from "./provider-request";
 
 export interface OpenAIConfig {
 	apiKey: string;
 	model: string;
-	baseUrl?: string;
+	chatEndpointUrl: string;
+	tokenLimitParam: TokenLimitParam;
 }
 
 function isRetryableError(err: unknown): boolean {
@@ -78,20 +80,17 @@ export class OpenAIProvider {
 	) {}
 
 	async call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream> {
-		const baseUrl = (
-			this.config.baseUrl ?? defaultBaseUrlFor("openai")
-		).replace(/\/$/, "");
+		const url = this.config.chatEndpointUrl.trim();
 
-		const body = {
+		const body: OpenAIRequestBody = {
 			model: this.config.model,
 			messages: toOpenAIMessages(context.messages, context.system_prompt),
 			...(context.tools.length > 0
 				? { tools: toOpenAITools(context.tools) }
 				: {}),
 			stream: true,
-			max_tokens: 4096,
+			...buildTokenLimit(this.config.tokenLimitParam, 4096),
 		};
-		const url = `${baseUrl}/v1/chat/completions`;
 		this.onDiagnostic({
 			kind: "provider_request",
 			timestamp: Date.now(),

@@ -7,10 +7,7 @@ import { WorkerBridge } from "../../controllers/worker-bridge";
 import { browsergentStore } from "../../state/store";
 import { IndexedDBStorage } from "../../storage/indexeddb-storage";
 import { MemoryStorage } from "../../storage/memory-storage";
-import {
-	migrateFromChromeStorage,
-	migrateLegacySingleProvider,
-} from "../../storage/migrate";
+import { migrateFromChromeStorage } from "../../storage/migrate";
 import type { StorageBackend } from "../../storage/storage-backend";
 import { ExtensionJsClient } from "../extension-js-client";
 import { handleFileOp } from "../file-op-handler";
@@ -48,7 +45,6 @@ export function useAppInit(): AppInitResult {
 					return;
 				}
 				await migrateFromChromeStorage(storage);
-				await migrateLegacySingleProvider(storage);
 				if (cancelled) {
 					storage.close();
 					return;

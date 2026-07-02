@@ -1,15 +1,34 @@
 import type { StoreApi } from "zustand/vanilla";
 import type { BrowsergentError } from "../../errors/browsergent-error";
-import type { ProviderKind } from "../../types/messages";
+import type { ProviderKind, TokenLimitParam } from "../../types/messages";
 import type { BrowsergentStore } from "../store";
+
+export interface ProviderModelConfig {
+	id: string;
+	name: string;
+	model: string;
+	tokenLimitParam?: TokenLimitParam;
+}
 
 export interface ProviderConfig {
 	id: string;
 	name: string;
 	kind: ProviderKind;
-	baseUrl: string;
 	apiKey: string;
-	model: string;
+	chatEndpointUrl: string;
+	modelsEndpointUrl?: string;
+	defaultModelId: string;
+	models: ProviderModelConfig[];
+}
+
+export function defaultModelForProvider(
+	provider: ProviderConfig,
+): ProviderModelConfig | null {
+	return (
+		provider.models.find((m) => m.id === provider.defaultModelId) ??
+		provider.models[0] ??
+		null
+	);
 }
 
 export interface SettingsState {

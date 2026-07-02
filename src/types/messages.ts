@@ -7,7 +7,13 @@ import type { CellResult } from "./extjs-utils";
 export type { BrowsergentError };
 
 /** Wire-format kind for an LLM provider. */
-export type ProviderKind = "anthropic" | "openai";
+export type ProviderKind =
+	| "anthropic"
+	| "openai"
+	| "deepseek"
+	| "openai-compatible"
+	| "anthropic-compatible";
+export type TokenLimitParam = "max_tokens" | "max_completion_tokens";
 
 // --- Panel -> Worker ---
 
@@ -45,8 +51,9 @@ export type PanelToWorker =
 export interface WorkerSettings {
 	kind: ProviderKind;
 	apiKey: string;
-	baseUrl?: string;
+	chatEndpointUrl: string;
 	model: string;
+	tokenLimitParam: TokenLimitParam;
 }
 
 // --- Worker -> Panel ---

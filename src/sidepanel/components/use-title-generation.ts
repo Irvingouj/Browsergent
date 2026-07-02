@@ -9,11 +9,20 @@ import {
 	selectAgentStatus,
 	selectSessions,
 } from "../../state/selectors";
-import type { ProviderConfig } from "../../state/slices/settings-slice";
+import {
+	defaultModelForProvider,
+	type ProviderConfig,
+} from "../../state/slices/settings-slice";
 import { browsergentStore } from "../../state/store";
 import type { ChatMessage } from "../../types/messages";
-import { defaultBaseUrlFor } from "../../worker/provider-defaults";
-import { buildProviderRequest } from "../../worker/provider-request";
+import {
+	defaultChatEndpointUrlFor,
+	defaultTokenLimitParamFor,
+} from "../../worker/provider-defaults";
+import {
+	buildProviderChatBody,
+	buildProviderRequest,
+} from "../../worker/provider-request";
 
 function isLocalhost(url: string): boolean {
 	try {
@@ -43,18 +52,23 @@ async function requestTitle(
 	prompt: string,
 	signal: AbortSignal,
 ): Promise<string | null> {
-	const { url, headers } = buildProviderRequest(provider);
+	const model = defaultModelForProvider(provider);
+	if (!model) return null;
+	const request = buildProviderRequest({
+		kind: provider.kind,
+		apiKey: provider.apiKey,
+		chatEndpointUrl: provider.chatEndpointUrl,
+		tokenLimitParam:
+			model.tokenLimitParam ?? defaultTokenLimitParamFor(provider.kind),
+	});
 
-	// Body is identical across kinds; the wire differences are URL + auth + response shape.
-	const body = {
-		model: provider.model,
-		max_tokens: 20,
-		messages: [{ role: "user", content: prompt }],
-	};
+	const body = buildProviderChatBody(request, model.model, 20, [
+		{ role: "user", content: prompt },
+	]);
 
-	const resp = await fetch(url, {
+	const resp = await fetch(request.url, {
 		method: "POST",
-		headers,
+		headers: request.headers,
 		body: JSON.stringify(body),
 		signal,
 	});
@@ -116,7 +130,8 @@ export function useTitleGeneration(
 			// No provider configured, or localhost endpoint (no network): skip.
 			if (!activeProvider?.apiKey) return;
 			const provider = activeProvider;
-			const base = provider.baseUrl || defaultBaseUrlFor(provider.kind);
+			const base =
+				provider.chatEndpointUrl || defaultChatEndpointUrlFor(provider.kind);
 			if (isLocalhost(base)) {
 				titleGeneratedForSession.current.add(targetSessionId);
 				return;

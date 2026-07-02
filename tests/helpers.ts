@@ -220,10 +220,16 @@ export async function configureMockProvider(
 	}
 
 	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
-	await sidePanel.getByTestId("settings-baseurl-input").fill(mockUrl);
+	await sidePanel
+		.getByTestId("settings-baseurl-input")
+		.fill(`${mockUrl}/v1/messages`);
 	await sidePanel.getByTestId("settings-apikey-input").fill(apiKey);
 	if (model !== undefined) {
 		await sidePanel.getByTestId("settings-model-input").fill(model);
+		await sidePanel.getByTestId("settings-add-model-button").click();
+		await sidePanel
+			.getByTestId("settings-default-model-select")
+			.selectOption({ label: model });
 	}
 	await sidePanel.getByTestId("settings-done-button").click();
 	await sidePanel.getByRole("button", { name: "Chat", exact: true }).click();

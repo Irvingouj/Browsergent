@@ -214,5 +214,5 @@ Use load_skill to load skill instructions from the available_skills catalog when
 export interface AnthropicConfig {
 	apiKey: string;
 	model: string;
-	baseUrl?: string;
+	chatEndpointUrl: string;
 }

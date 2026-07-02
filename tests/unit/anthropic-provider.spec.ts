@@ -41,6 +41,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "bad-key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		global.fetch = vi.fn().mockResolvedValue({
@@ -77,6 +78,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const fetchMock = vi.fn().mockResolvedValue({
@@ -118,6 +120,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const fetchMock = vi.fn().mockResolvedValue({
@@ -150,6 +153,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const fetchMock = vi.fn().mockResolvedValue({
@@ -181,7 +185,11 @@ describe("AnthropicProvider", () => {
 		vi.useFakeTimers();
 		const diagnostics: AgentDiagnosticEvent[] = [];
 		const provider = new AnthropicProvider(
-			{ apiKey: "key", model: "claude-3-haiku-20240307" },
+			{
+				apiKey: "key",
+				model: "claude-3-haiku-20240307",
+				chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+			},
 			(e) => diagnostics.push(e),
 		);
 
@@ -221,6 +229,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 		const fetchMock = vi
 			.fn()
@@ -260,7 +269,11 @@ describe("AnthropicProvider", () => {
 		vi.useFakeTimers();
 		const diagnostics: AgentDiagnosticEvent[] = [];
 		const provider = new AnthropicProvider(
-			{ apiKey: "key", model: "claude-3-haiku-20240307" },
+			{
+				apiKey: "key",
+				model: "claude-3-haiku-20240307",
+				chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+			},
 			(e) => diagnostics.push(e),
 		);
 
@@ -292,6 +305,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		global.fetch = vi.fn().mockResolvedValue({
@@ -321,6 +335,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		global.fetch = vi.fn().mockRejectedValue(new Error("Network failure"));
@@ -344,6 +359,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
@@ -366,11 +382,11 @@ describe("AnthropicProvider", () => {
 		vi.useRealTimers();
 	});
 
-	test("uses Fireworks Authorization header when baseUrl includes fireworks.ai", async () => {
+	test("uses Fireworks Authorization header when chatEndpointUrl includes fireworks.ai", async () => {
 		const provider = new AnthropicProvider({
 			apiKey: "fw-key",
 			model: "accounts/fireworks/models/llama-v3p1-8b-instruct",
-			baseUrl: "https://api.fireworks.ai",
+			chatEndpointUrl: "https://api.fireworks.ai/v1/messages",
 		});
 
 		const fetchSpy = vi.fn().mockResolvedValue({
@@ -399,10 +415,11 @@ describe("AnthropicProvider", () => {
 		);
 	});
 
-	test("uses Anthropic x-api-key header when baseUrl is default", async () => {
+	test("uses Anthropic x-api-key header when chatEndpointUrl is default", async () => {
 		const provider = new AnthropicProvider({
 			apiKey: "anthropic-key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const fetchSpy = vi.fn().mockResolvedValue({
@@ -436,6 +453,7 @@ describe("AnthropicProvider", () => {
 		const provider = new AnthropicProvider({
 			apiKey: "key",
 			model: "claude-3-haiku-20240307",
+			chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		});
 
 		const fetchSpy = vi.fn().mockResolvedValue({
