@@ -16,10 +16,6 @@ import {
 import { browsergentStore } from "../../state/store";
 import type { ChatMessage } from "../../types/messages";
 import {
-	defaultChatEndpointUrlFor,
-	defaultTokenLimitParamFor,
-} from "../../worker/provider-defaults";
-import {
 	buildProviderChatBody,
 	buildProviderRequest,
 } from "../../worker/provider-request";
@@ -55,11 +51,10 @@ async function requestTitle(
 	const model = defaultModelForProvider(provider);
 	if (!model) return null;
 	const request = buildProviderRequest({
-		kind: provider.kind,
+		wireFormat: provider.wireFormat,
 		apiKey: provider.apiKey,
 		chatEndpointUrl: provider.chatEndpointUrl,
-		tokenLimitParam:
-			model.tokenLimitParam ?? defaultTokenLimitParamFor(provider.kind),
+		tokenLimitParam: model.tokenLimitParam,
 	});
 
 	const body = buildProviderChatBody(request, model.model, 20, [
@@ -130,9 +125,7 @@ export function useTitleGeneration(
 			// No provider configured, or localhost endpoint (no network): skip.
 			if (!activeProvider?.apiKey) return;
 			const provider = activeProvider;
-			const base =
-				provider.chatEndpointUrl || defaultChatEndpointUrlFor(provider.kind);
-			if (isLocalhost(base)) {
+			if (!provider.chatEndpointUrl || isLocalhost(provider.chatEndpointUrl)) {
 				titleGeneratedForSession.current.add(targetSessionId);
 				return;
 			}

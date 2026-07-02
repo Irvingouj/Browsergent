@@ -27,10 +27,20 @@ function anthropicConfig(): ProviderConfig {
 	return {
 		id: "p1",
 		name: "Anthropic",
-		kind: "anthropic",
-		baseUrl: "https://api.anthropic.com",
+		providerId: "anthropic",
+		wireFormat: "anthropic-messages",
+		chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+		modelsEndpointUrl: "https://api.anthropic.com/v1/models",
 		apiKey: "sk-test",
-		model: "claude-sonnet-4-6",
+		defaultModelId: "m1",
+		models: [
+			{
+				id: "m1",
+				name: "claude-sonnet-4-6",
+				model: "claude-sonnet-4-6",
+				tokenLimitParam: "max_tokens",
+			},
+		],
 	};
 }
 

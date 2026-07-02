@@ -5,7 +5,8 @@ import type { ProviderConfig } from "../../src/state/slices/settings-slice";
 const anthropic: ProviderConfig = {
 	id: "p1",
 	name: "Anthropic",
-	kind: "anthropic",
+	providerId: "anthropic",
+	wireFormat: "anthropic-messages",
 	chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 	modelsEndpointUrl: "https://api.anthropic.com/v1/models",
 	apiKey: "sk-test",
@@ -23,7 +24,8 @@ const anthropic: ProviderConfig = {
 const openai: ProviderConfig = {
 	id: "p2",
 	name: "OpenAI",
-	kind: "openai",
+	providerId: "openai",
+	wireFormat: "openai-chat-completions",
 	chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
 	modelsEndpointUrl: "https://api.openai.com/v1/models",
 	apiKey: "sk-test",

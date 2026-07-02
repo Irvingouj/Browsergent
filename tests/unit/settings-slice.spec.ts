@@ -8,9 +8,11 @@ function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
 	return {
 		id: "p1",
 		name: "Test",
-		kind: "anthropic",
+		providerId: "anthropic",
+		wireFormat: "anthropic-messages",
 		apiKey: "k",
 		chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+		modelsEndpointUrl: "",
 		defaultModelId: "m1",
 		models: [
 			{

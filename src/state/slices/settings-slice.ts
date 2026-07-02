@@ -1,25 +1,12 @@
 import type { StoreApi } from "zustand/vanilla";
 import type { BrowsergentError } from "../../errors/browsergent-error";
-import type { ProviderKind, TokenLimitParam } from "../../types/messages";
+import type {
+	ProviderConfig,
+	ProviderModelConfig,
+} from "../../worker/provider-schema";
 import type { BrowsergentStore } from "../store";
 
-export interface ProviderModelConfig {
-	id: string;
-	name: string;
-	model: string;
-	tokenLimitParam?: TokenLimitParam;
-}
-
-export interface ProviderConfig {
-	id: string;
-	name: string;
-	kind: ProviderKind;
-	apiKey: string;
-	chatEndpointUrl: string;
-	modelsEndpointUrl?: string;
-	defaultModelId: string;
-	models: ProviderModelConfig[];
-}
+export type { ProviderConfig, ProviderModelConfig };
 
 export function defaultModelForProvider(
 	provider: ProviderConfig,
@@ -41,7 +28,6 @@ export interface SettingsState {
 export interface SettingsSlice {
 	settings: SettingsState;
 	settingsLoaded(next: SettingsState): void;
-	/** Patch the in-memory providers list (UI edits); persistence is the controller's job. */
 	providersChanged(providers: ProviderConfig[]): void;
 	activeProviderChanged(id: string | null): void;
 	settingsSaveStarted(): void;

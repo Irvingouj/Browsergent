@@ -33,7 +33,8 @@ import {
 import { defaultModelForProvider } from "../state/slices/settings-slice";
 import { browsergentStore } from "../state/store";
 import type { ChatMessage } from "../types/messages";
-import { defaultTokenLimitParamFor } from "../worker/provider-defaults";
+import { getPreset } from "../worker/provider-registry";
+import { WireFormat } from "../worker/provider-schema";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
 import { InputBar } from "./components/input/InputBar";
@@ -443,16 +444,17 @@ const App: FunctionalComponent = () => {
 			activatedSkills,
 			settings: activeProvider
 				? {
-						kind: activeProvider.kind,
+						wireFormat: activeProvider.wireFormat,
 						apiKey: activeProvider.apiKey,
 						chatEndpointUrl: activeProvider.chatEndpointUrl,
 						model: activeModel?.model ?? "",
 						tokenLimitParam:
 							activeModel?.tokenLimitParam ??
-							defaultTokenLimitParamFor(activeProvider.kind),
+							getPreset(activeProvider.providerId)?.tokenLimitParam ??
+							"max_tokens",
 					}
 				: {
-						kind: "anthropic",
+						wireFormat: WireFormat.AnthropicMessages,
 						apiKey: "",
 						chatEndpointUrl: "",
 						model: "",

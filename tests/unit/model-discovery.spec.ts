@@ -5,7 +5,8 @@ import type { ProviderConfig } from "../../src/state/slices/settings-slice";
 const anthropic: ProviderConfig = {
 	id: "p1",
 	name: "Anthropic",
-	kind: "anthropic",
+	providerId: "anthropic",
+	wireFormat: "anthropic-messages",
 	chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 	modelsEndpointUrl: "https://api.anthropic.com/v1/models",
 	apiKey: "sk-test",
@@ -23,7 +24,8 @@ const anthropic: ProviderConfig = {
 const openai: ProviderConfig = {
 	id: "p2",
 	name: "OpenAI",
-	kind: "openai",
+	providerId: "openai",
+	wireFormat: "openai-chat-completions",
 	chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
 	modelsEndpointUrl: "https://api.openai.com/v1/models",
 	apiKey: "sk-test",
@@ -53,20 +55,9 @@ function jsonResp(data: unknown, status = 200): Response {
 }
 
 describe("discoverProviderModels", () => {
-	test("rejects unsupported provider kinds", async () => {
-		const unsupported: ProviderConfig = {
-			...anthropic,
-			kind: "openai-compatible",
-		};
-		const result = await discoverProviderModels(unsupported);
-		expect(result.ok).toBe(false);
-		expect(result.ok === false && result.error).toBe(
-			"Model discovery is not supported",
-		);
-	});
 
 	test("rejects empty API key", async () => {
-		const result = await discoverProviderModels({ ...anthropic, apiKey: "" });
+		const result = await discoverProviderModels({ ...anthropic, apiKey: "" }, "max_tokens");
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe("API key is empty");
 	});
@@ -75,7 +66,7 @@ describe("discoverProviderModels", () => {
 		const result = await discoverProviderModels({
 			...anthropic,
 			modelsEndpointUrl: "",
-		});
+		}, "max_tokens");
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe(
 			"Models endpoint URL is empty",
@@ -84,7 +75,7 @@ describe("discoverProviderModels", () => {
 
 	test("returns network error when fetch rejects", async () => {
 		globalThis.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
-		const result = await discoverProviderModels(anthropic);
+		const result = await discoverProviderModels(anthropic, "max_tokens");
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toContain("Network error");
 	});
@@ -93,7 +84,7 @@ describe("discoverProviderModels", () => {
 		globalThis.fetch = vi
 			.fn()
 			.mockResolvedValue(jsonResp({ error: "bad" }, 401));
-		const result = await discoverProviderModels(anthropic);
+		const result = await discoverProviderModels(anthropic, "max_tokens");
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toContain("401");
 	});
@@ -107,7 +98,7 @@ describe("discoverProviderModels", () => {
 				],
 			}),
 		);
-		const result = await discoverProviderModels(anthropic);
+		const result = await discoverProviderModels(anthropic, "max_tokens");
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.models).toHaveLength(2);
@@ -123,7 +114,7 @@ describe("discoverProviderModels", () => {
 			.fn()
 			.mockResolvedValue(jsonResp({ data: [{ id: "gpt-4o" }] }));
 		globalThis.fetch = fetchMock;
-		await discoverProviderModels(openai);
+		await discoverProviderModels(openai, "max_completion_tokens");
 		const [, init] = fetchMock.mock.calls[0] ?? [];
 		const headers = (init as { headers?: Record<string, string> } | undefined)
 			?.headers;
@@ -136,7 +127,7 @@ describe("discoverProviderModels", () => {
 			.fn()
 			.mockResolvedValue(jsonResp({ data: [{ id: "claude-3" }] }));
 		globalThis.fetch = fetchMock;
-		await discoverProviderModels(anthropic);
+		await discoverProviderModels(anthropic, "max_tokens");
 		const [, init] = fetchMock.mock.calls[0] ?? [];
 		const headers = (init as { headers?: Record<string, string> } | undefined)
 			?.headers;
@@ -146,9 +137,9 @@ describe("discoverProviderModels", () => {
 
 	test("returns No models found when data is empty", async () => {
 		globalThis.fetch = vi.fn().mockResolvedValue(jsonResp({ data: [] }));
-		const result = await discoverProviderModels(anthropic);
+		const result = await discoverProviderModels(anthropic, "max_tokens");
 		expect(result.ok).toBe(false);
-		expect(result.ok === false && result.error).toBe("No models found");
+		expect(result.ok === false && result.error).toBe("No language models found");
 	});
 
 	test("returns No models found when response is malformed JSON", async () => {
@@ -158,16 +149,16 @@ describe("discoverProviderModels", () => {
 				headers: { "Content-Type": "text/plain" },
 			}),
 		);
-		const result = await discoverProviderModels(anthropic);
+		const result = await discoverProviderModels(anthropic, "max_tokens");
 		expect(result.ok).toBe(false);
-		expect(result.ok === false && result.error).toBe("No models found");
+		expect(result.ok === false && result.error).toBe("No language models found");
 	});
 
 	test("returns No models found when data field is missing", async () => {
 		globalThis.fetch = vi.fn().mockResolvedValue(jsonResp({ foo: "bar" }));
-		const result = await discoverProviderModels(anthropic);
+		const result = await discoverProviderModels(anthropic, "max_tokens");
 		expect(result.ok).toBe(false);
-		expect(result.ok === false && result.error).toBe("No models found");
+		expect(result.ok === false && result.error).toBe("No language models found");
 	});
 
 	test("skips items without string id", async () => {
@@ -181,7 +172,7 @@ describe("discoverProviderModels", () => {
 				],
 			}),
 		);
-		const result = await discoverProviderModels(anthropic);
+		const result = await discoverProviderModels(anthropic, "max_tokens");
 		expect(result.ok).toBe(true);
 		if (result.ok) expect(result.models).toHaveLength(1);
 	});
@@ -190,7 +181,7 @@ describe("discoverProviderModels", () => {
 		globalThis.fetch = vi
 			.fn()
 			.mockResolvedValue(jsonResp({ data: [{ id: "gpt-4o" }] }));
-		const result = await discoverProviderModels(openai);
+		const result = await discoverProviderModels(openai, "max_completion_tokens");
 		expect(result.ok).toBe(true);
 		if (result.ok)
 			expect(result.models[0]?.tokenLimitParam).toBe("max_completion_tokens");
@@ -202,7 +193,7 @@ describe("discoverProviderModels", () => {
 			.mockResolvedValue(jsonResp({ data: [{ id: "m" }] }));
 		globalThis.fetch = fetchMock;
 		const controller = new AbortController();
-		await discoverProviderModels(anthropic, controller.signal);
+		await discoverProviderModels(anthropic, "max_tokens", controller.signal);
 		const [, init] = fetchMock.mock.calls[0] ?? [];
 		expect((init as { signal?: AbortSignal } | undefined)?.signal).toBe(
 			controller.signal,

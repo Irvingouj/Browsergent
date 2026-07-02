@@ -2,18 +2,22 @@
 
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { FileOp, FileOpResult } from "../worker/file-op-relay";
+import type { TokenLimitParam, WireFormat } from "../worker/provider-schema";
 import type { CellResult } from "./extjs-utils";
 
-export type { BrowsergentError };
-
-/** Wire-format kind for an LLM provider. */
-export type ProviderKind =
-	| "anthropic"
-	| "openai"
-	| "deepseek"
-	| "openai-compatible"
-	| "anthropic-compatible";
-export type TokenLimitParam = "max_tokens" | "max_completion_tokens";
+export type {
+	ProviderConfig,
+	ProviderModelConfig,
+	ProviderPreset,
+	TokenLimitParam,
+} from "../worker/provider-schema";
+export {
+	ProviderId,
+	providerIdSchema,
+	tokenLimitParamSchema,
+	WireFormat,
+	wireFormatSchema,
+} from "../worker/provider-schema";
 
 // --- Panel -> Worker ---
 
@@ -49,7 +53,7 @@ export type PanelToWorker =
 	  };
 
 export interface WorkerSettings {
-	kind: ProviderKind;
+	wireFormat: WireFormat;
 	apiKey: string;
 	chatEndpointUrl: string;
 	model: string;

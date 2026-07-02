@@ -1,46 +1,23 @@
-import type { ProviderConfig } from "../state/slices/settings-slice";
 import { browsergentStore } from "../state/store";
 import type { StorageBackend } from "../storage/storage-backend";
+import type { ProviderConfig } from "../worker/provider-schema";
+import { providerConfigSchema } from "../worker/provider-schema";
 
 export interface SettingsValues {
 	providers: ProviderConfig[];
 	activeProviderId: string | null;
 }
 
-function nonNull<T>(value: T | null): value is T {
-	return value !== null;
-}
-
-/**
- * Stale storage may hold the pre-refactor provider shape ({kind, baseUrl,
- * apiKey, model} with no models[]/defaultModelId/chatEndpointUrl). Normalize
- * so the rest of the app never sees a malformed ProviderConfig. Returns null
- * if the entry is too broken to recover.
- */
-function normalizeProvider(raw: ProviderConfig): ProviderConfig | null {
-	if (!raw || typeof raw !== "object" || !raw.id || !raw.kind) return null;
-	const models = Array.isArray(raw.models)
-		? raw.models.filter(
-				(m): m is NonNullable<typeof m> =>
-					m !== null && typeof m === "object" && !!m.id,
-			)
-		: [];
-	return {
-		...raw,
-		chatEndpointUrl: raw.chatEndpointUrl ?? "",
-		modelsEndpointUrl: raw.modelsEndpointUrl ?? "",
-		defaultModelId: raw.defaultModelId ?? "",
-		models,
-	};
-}
-
 export class SettingsController {
 	constructor(private readonly storage: StorageBackend) {}
 
 	async load(): Promise<void> {
-		const raw =
-			(await this.storage.get<ProviderConfig[]>("settings", "providers")) ?? [];
-		const providers = raw.map(normalizeProvider).filter(nonNull);
+		const raw: unknown =
+			(await this.storage.get("settings", "providers")) ?? [];
+		const providers = (Array.isArray(raw) ? raw : [])
+			.map((item) => providerConfigSchema.safeParse(item))
+			.filter((r): r is { success: true; data: ProviderConfig } => r.success)
+			.map((r) => r.data);
 		const activeProviderId =
 			(await this.storage.get<string | null>("settings", "activeProviderId")) ??
 			null;

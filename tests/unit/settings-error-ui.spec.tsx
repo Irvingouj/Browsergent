@@ -20,9 +20,11 @@ vi.mock("zustand/react", () => ({
 					{
 						id: "p1",
 						name: "Anthropic",
-						kind: "anthropic",
+						providerId: "anthropic",
+						wireFormat: "anthropic-messages",
 						apiKey: "sk-test-key",
 						chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+						modelsEndpointUrl: "",
 						defaultModelId: "m1",
 						models: [
 							{

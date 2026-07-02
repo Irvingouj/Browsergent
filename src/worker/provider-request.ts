@@ -1,11 +1,12 @@
-import type { ProviderKind, TokenLimitParam } from "../types/messages";
+import type { TokenLimitParam } from "../types/messages";
+import { WireFormat } from "../types/messages";
 
 export type ChatCompletionTokenLimit =
 	| { max_tokens: number; max_completion_tokens?: never }
 	| { max_tokens?: never; max_completion_tokens: number };
 
 export interface ProviderChatMessage {
-	role: "user";
+	role: string;
 	content: string;
 }
 
@@ -29,73 +30,51 @@ export type ProviderRequest =
 	  };
 
 export interface ProviderRequestConfig {
-	kind: ProviderKind;
+	wireFormat: WireFormat;
 	apiKey: string;
 	chatEndpointUrl: string;
 	tokenLimitParam: TokenLimitParam;
 }
 
-function providerWire(kind: ProviderKind): ProviderRequest["wire"] {
-	switch (kind) {
-		case "anthropic":
-		case "anthropic-compatible":
-			return "anthropic";
-		case "openai":
-		case "deepseek":
-		case "openai-compatible":
-			return "openai";
-	}
-}
-
-/**
- * Auth headers only (no Content-Type) — used by GET requests like model
- * discovery. Same dispatch as buildProviderRequest so a new kind is one edit.
- */
 export function authHeadersFor(
-	kind: ProviderKind,
+	wireFormat: WireFormat,
 	apiKey: string,
 ): Record<string, string> {
-	if (providerWire(kind) === "anthropic") {
-		return { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+	switch (wireFormat) {
+		case WireFormat.AnthropicMessages:
+			return { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+		case WireFormat.OpenAIChatCompletions:
+			return { Authorization: `Bearer ${apiKey}` };
 	}
-	return { Authorization: `Bearer ${apiKey}` };
 }
 
-/**
- * Shared provider-request scaffolding: exact endpoint URL fallback and the
- * x-api-key vs Authorization: Bearer auth dispatch.
- *
- * Consumed by title-generation and the Test Connection diagnostic so a future
- * provider kind (or a base-URL rule change) is a one-spot edit, not two places
- * that can silently drift. Callers keep their own response handling —
- * title-gen parses the JSON body, the diagnostic intentionally does not.
- */
 export function buildProviderRequest(
 	provider: ProviderRequestConfig,
 ): ProviderRequest {
 	const url = provider.chatEndpointUrl.trim();
-	const wire = providerWire(provider.kind);
-	if (wire === "anthropic") {
-		return {
-			wire,
-			url,
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": provider.apiKey,
-				"anthropic-version": "2023-06-01",
-			},
-			tokenLimitParam: "max_tokens",
-		};
+	const headers = authHeadersFor(provider.wireFormat, provider.apiKey);
+	switch (provider.wireFormat) {
+		case WireFormat.AnthropicMessages:
+			return {
+				wire: "anthropic",
+				url,
+				headers: {
+					"Content-Type": "application/json",
+					...headers,
+				},
+				tokenLimitParam: "max_tokens",
+			};
+		case WireFormat.OpenAIChatCompletions:
+			return {
+				wire: "openai",
+				url,
+				headers: {
+					"Content-Type": "application/json",
+					...headers,
+				},
+				tokenLimitParam: provider.tokenLimitParam,
+			};
 	}
-	return {
-		wire,
-		url,
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${provider.apiKey}`,
-		},
-		tokenLimitParam: provider.tokenLimitParam,
-	};
 }
 
 export function buildTokenLimit(

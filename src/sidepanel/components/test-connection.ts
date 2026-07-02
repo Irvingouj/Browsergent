@@ -4,7 +4,6 @@ import {
 	defaultModelForProvider,
 	type ProviderConfig,
 } from "../../state/slices/settings-slice";
-import { defaultTokenLimitParamFor } from "../../worker/provider-defaults";
 import {
 	buildProviderChatBody,
 	buildProviderRequest,
@@ -50,11 +49,10 @@ export async function testConnection(
 	}
 
 	const request = buildProviderRequest({
-		kind: provider.kind,
+		wireFormat: provider.wireFormat,
 		apiKey: provider.apiKey,
 		chatEndpointUrl: provider.chatEndpointUrl,
-		tokenLimitParam:
-			model.tokenLimitParam ?? defaultTokenLimitParamFor(provider.kind),
+		tokenLimitParam: model.tokenLimitParam,
 	});
 
 	const body = buildProviderChatBody(request, model.model, 1, [

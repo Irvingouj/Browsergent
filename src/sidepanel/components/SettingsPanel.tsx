@@ -11,14 +11,13 @@ import {
 } from "../../state/selectors";
 import type { ProviderConfig } from "../../state/slices/settings-slice";
 import { browsergentStore } from "../../state/store";
-import type { ProviderKind, TokenLimitParam } from "../../types/messages";
-
-// `satisfies Record<ProviderKind,…>` guarantees every kind has a preset, so
-// indexing is total — no `!` / fallback needed anywhere.
 import {
-	PROVIDER_DEFAULTS,
-	type ProviderPreset,
-} from "../../worker/provider-defaults";
+	ProviderId,
+	tokenLimitParamSchema,
+	WireFormat,
+} from "../../types/messages";
+import { getPreset } from "../../worker/provider-registry";
+import type { ProviderPreset } from "../../worker/provider-schema";
 import { discoverProviderModels } from "./model-discovery";
 import { testConnection } from "./test-connection";
 
@@ -50,23 +49,33 @@ function modelsFromPreset(preset: ProviderPreset): {
 		defaultModelId: id,
 	};
 }
-
-function newProviderConfig(kind: ProviderKind): ProviderConfig {
-	const preset = PROVIDER_DEFAULTS[kind];
-	const { models, defaultModelId } = modelsFromPreset(preset);
+function newProviderConfig(providerId: ProviderId): ProviderConfig {
+	const preset = getPreset(providerId);
+	if (preset) {
+		const { models, defaultModelId } = modelsFromPreset(preset);
+		return {
+			id: crypto.randomUUID(),
+			name: preset.label,
+			providerId,
+			wireFormat: preset.wireFormat,
+			apiKey: "",
+			chatEndpointUrl: preset.chatEndpointUrl,
+			modelsEndpointUrl: preset.modelsEndpointUrl,
+			defaultModelId,
+			models,
+		};
+	}
 	return {
 		id: crypto.randomUUID(),
-		name: preset.label,
-		kind,
+		name: "Custom",
+		providerId,
+		wireFormat: WireFormat.OpenAIChatCompletions,
 		apiKey: "",
-		chatEndpointUrl: preset.chatEndpointUrl,
-		modelsEndpointUrl: preset.modelsEndpointUrl,
-		defaultModelId,
-		models,
+		chatEndpointUrl: "",
+		modelsEndpointUrl: "",
+		defaultModelId: "",
+		models: [],
 	};
-}
-function presetFor(kind: ProviderKind): ProviderPreset {
-	return PROVIDER_DEFAULTS[kind];
 }
 
 function persist(
@@ -160,7 +169,6 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 			setEditingId(null);
 		}
 	}, [editingId, providers]);
-
 	const updateProvider = useCallback(
 		(id: string, patch: Partial<ProviderConfig>) => {
 			const next = providers.map((p) => (p.id === id ? { ...p, ...patch } : p));
@@ -176,7 +184,15 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		const controller = new AbortController();
 		discoveryAbortRef.current = controller;
 		setDiscoveryState({ status: "loading" });
-		const result = await discoverProviderModels(editing, controller.signal);
+		const tokenLimitParam =
+			getPreset(editing.providerId)?.tokenLimitParam ??
+			editing.models[0]?.tokenLimitParam ??
+			"max_completion_tokens";
+		const result = await discoverProviderModels(
+			editing,
+			tokenLimitParam,
+			controller.signal,
+		);
 		if (controller.signal.aborted) return;
 		if (!result.ok) {
 			setDiscoveryState({ status: "error", message: result.error });
@@ -196,14 +212,11 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 			})),
 			...current.models.filter((m) => !discoveredModelStrings.has(m.model)),
 		];
-		const defaultStillExists = merged.some(
-			(m) => m.id === current.defaultModelId,
-		);
+		// Models come back sorted latest-first from discovery. Always default
+		// to the newest model — that's the whole point of the fetch button.
 		updateProvider(editing.id, {
 			models: merged,
-			defaultModelId: defaultStillExists
-				? current.defaultModelId
-				: (merged[0]?.id ?? ""),
+			defaultModelId: merged[0]?.id ?? "",
 		});
 		setDiscoveryState({ status: "ok", count: merged.length });
 	}, [editing, updateProvider]);
@@ -216,7 +229,9 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 				id: crypto.randomUUID(),
 				name: value,
 				model: value,
-				tokenLimitParam: presetFor(provider.kind).tokenLimitParam,
+				tokenLimitParam:
+					getPreset(provider.providerId)?.tokenLimitParam ??
+					"max_completion_tokens",
 			};
 			updateProvider(provider.id, {
 				models: [...provider.models, nextModel],
@@ -241,8 +256,10 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	);
 
 	const addProvider = useCallback(
-		(kind: ProviderKind) => {
-			const config = newProviderConfig(kind);
+		(providerId: ProviderId, wireFormat?: WireFormat) => {
+			const config = wireFormat
+				? { ...newProviderConfig(providerId), wireFormat }
+				: newProviderConfig(providerId);
 			const next = [...providers, config];
 			browsergentStore.getState().providersChanged(next);
 			// First provider auto-activates.
@@ -354,27 +371,53 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 				</label>
 
 				<label>
-					<span class={LABEL_CLASS}>Wire format</span>
+					<span class={LABEL_CLASS}>Provider</span>
 					<select
 						data-testid="settings-kind-select"
-						value={editing.kind}
+						value={
+							editing.providerId === ProviderId.Custom
+								? editing.wireFormat === WireFormat.AnthropicMessages
+									? "anthropic-compatible"
+									: "openai-compatible"
+								: editing.providerId
+						}
 						onInput={(e) => {
 							const raw = (e.target as HTMLSelectElement).value;
-							if (
-								raw !== "anthropic" &&
-								raw !== "openai" &&
-								raw !== "deepseek" &&
-								raw !== "openai-compatible" &&
-								raw !== "anthropic-compatible"
-							)
-								return;
-							const kind = raw;
-							const preset = presetFor(kind);
-							const { models, defaultModelId } = modelsFromPreset(preset);
+							let providerId: ProviderId;
+							let wireFormat: WireFormat;
+							switch (raw) {
+								case "anthropic":
+									providerId = ProviderId.Anthropic;
+									wireFormat = WireFormat.AnthropicMessages;
+									break;
+								case "openai":
+									providerId = ProviderId.OpenAI;
+									wireFormat = WireFormat.OpenAIChatCompletions;
+									break;
+								case "deepseek":
+									providerId = ProviderId.DeepSeek;
+									wireFormat = WireFormat.OpenAIChatCompletions;
+									break;
+								case "openai-compatible":
+									providerId = ProviderId.Custom;
+									wireFormat = WireFormat.OpenAIChatCompletions;
+									break;
+								case "anthropic-compatible":
+									providerId = ProviderId.Custom;
+									wireFormat = WireFormat.AnthropicMessages;
+									break;
+								default:
+									return;
+							}
+							const preset = getPreset(providerId);
+							const { models, defaultModelId } = preset
+								? modelsFromPreset(preset)
+								: { models: [], defaultModelId: "" };
 							updateProvider(editing.id, {
-								kind,
-								chatEndpointUrl: preset.chatEndpointUrl,
-								modelsEndpointUrl: preset.modelsEndpointUrl,
+								providerId,
+								wireFormat,
+								chatEndpointUrl: preset?.chatEndpointUrl ?? "",
+								modelsEndpointUrl: preset?.modelsEndpointUrl ?? "",
 								defaultModelId,
 								models,
 							});
@@ -382,9 +425,11 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						class={INPUT_CLASS}
 					>
 						<option value="anthropic">Anthropic</option>
-						<option value="openai">OpenAI</option>
+						<option value="openai">OpenAI (Chat Completions)</option>
 						<option value="deepseek">DeepSeek</option>
-						<option value="openai-compatible">OpenAI-compatible</option>
+						<option value="openai-compatible">
+							OpenAI-compatible (Chat Completions)
+						</option>
 						<option value="anthropic-compatible">Anthropic-compatible</option>
 					</select>
 				</label>
@@ -395,7 +440,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						type="text"
 						data-testid="settings-baseurl-input"
 						value={editing.chatEndpointUrl}
-						placeholder={presetFor(editing.kind).chatEndpointUrl}
+						placeholder={getPreset(editing.providerId)?.chatEndpointUrl ?? ""}
 						onInput={(e) =>
 							updateProvider(editing.id, {
 								chatEndpointUrl: (e.target as HTMLInputElement).value,
@@ -411,7 +456,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						type="text"
 						data-testid="settings-models-endpoint-input"
 						value={editing.modelsEndpointUrl ?? ""}
-						placeholder={presetFor(editing.kind).modelsEndpointUrl ?? ""}
+						placeholder={getPreset(editing.providerId)?.modelsEndpointUrl ?? ""}
 						onInput={(e) =>
 							updateProvider(editing.id, {
 								modelsEndpointUrl: (e.target as HTMLInputElement).value,
@@ -421,9 +466,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 					/>
 				</label>
 
-				{(editing.kind === "anthropic" ||
-					editing.kind === "openai" ||
-					editing.kind === "deepseek") && (
+				{editing.providerId !== ProviderId.Custom && (
 					<div class="flex flex-col gap-xs">
 						<button
 							type="button"
@@ -513,40 +556,37 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 								<span class="flex-1 min-w-0 text-xs font-mono text-text-primary truncate">
 									{model.model}
 								</span>
-								{editing.kind !== "anthropic" &&
-									editing.kind !== "anthropic-compatible" && (
-										<select
-											data-testid={`settings-model-token-param-${model.id}`}
-											value={
-												model.tokenLimitParam ??
-												presetFor(editing.kind).tokenLimitParam
-											}
-											onInput={(e) => {
-												const raw = (e.target as HTMLSelectElement).value;
-												if (
-													raw !== "max_tokens" &&
-													raw !== "max_completion_tokens"
-												)
-													return;
-												updateProvider(editing.id, {
-													models: editing.models.map((m) =>
-														m.id === model.id
-															? {
-																	...m,
-																	tokenLimitParam: raw as TokenLimitParam,
-																}
-															: m,
-													),
-												});
-											}}
-											class="bg-bg-muted border border-border rounded-md px-xs py-xs text-text-primary font-mono text-[10px] outline-none"
-										>
-											<option value="max_completion_tokens">
-												max_completion_tokens
-											</option>
-											<option value="max_tokens">max_tokens</option>
-										</select>
-									)}
+								{editing.wireFormat !== WireFormat.AnthropicMessages && (
+									<select
+										data-testid={`settings-model-token-param-${model.id}`}
+										value={model.tokenLimitParam}
+										onInput={(e) => {
+											const raw = (e.target as HTMLSelectElement).value;
+											if (
+												raw !== "max_tokens" &&
+												raw !== "max_completion_tokens"
+											)
+												return;
+											updateProvider(editing.id, {
+												models: editing.models.map((m) =>
+													m.id === model.id
+														? {
+																...m,
+																tokenLimitParam:
+																	tokenLimitParamSchema.parse(raw),
+															}
+														: m,
+												),
+											});
+										}}
+										class="bg-bg-muted border border-border rounded-md px-xs py-xs text-text-primary font-mono text-[10px] outline-none"
+									>
+										<option value="max_completion_tokens">
+											max_completion_tokens
+										</option>
+										<option value="max_tokens">max_tokens</option>
+									</select>
+								)}
 								<button
 									type="button"
 									data-testid={`settings-delete-model-${model.id}`}
@@ -687,7 +727,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 										)}
 									</div>
 									<div class="text-[10px] text-text-muted font-mono">
-										{p.kind} ·{" "}
+										{p.providerId} ·{" "}
 										{p.models.find((m) => m.id === p.defaultModelId)?.model ??
 											p.models[0]?.model ??
 											"(no model)"}
@@ -711,7 +751,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 				<button
 					type="button"
 					data-testid="settings-add-anthropic"
-					onClick={() => addProvider("anthropic")}
+					onClick={() => addProvider(ProviderId.Anthropic)}
 					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
 				>
 					+ Anthropic
@@ -719,15 +759,15 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 				<button
 					type="button"
 					data-testid="settings-add-openai"
-					onClick={() => addProvider("openai")}
+					onClick={() => addProvider(ProviderId.OpenAI)}
 					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
 				>
-					+ OpenAI
+					+ OpenAI (Chat Completions)
 				</button>
 				<button
 					type="button"
 					data-testid="settings-add-deepseek"
-					onClick={() => addProvider("deepseek")}
+					onClick={() => addProvider(ProviderId.DeepSeek)}
 					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
 				>
 					+ DeepSeek
@@ -735,15 +775,17 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 				<button
 					type="button"
 					data-testid="settings-add-openai-compatible"
-					onClick={() => addProvider("openai-compatible")}
+					onClick={() => addProvider(ProviderId.Custom)}
 					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
 				>
-					+ OpenAI-compatible
+					+ OpenAI-compatible (Chat Completions)
 				</button>
 				<button
 					type="button"
 					data-testid="settings-add-anthropic-compatible"
-					onClick={() => addProvider("anthropic-compatible")}
+					onClick={() =>
+						addProvider(ProviderId.Custom, WireFormat.AnthropicMessages)
+					}
 					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
 				>
 					+ Anthropic-compatible

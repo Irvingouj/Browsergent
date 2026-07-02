@@ -12,7 +12,8 @@ function anthropicConfig(
 	return {
 		id: "p1",
 		name: "Anthropic",
-		kind: "anthropic",
+		providerId: "anthropic",
+		wireFormat: "anthropic-messages",
 		chatEndpointUrl: "https://api.anthropic.com/v1/messages",
 		modelsEndpointUrl: "https://api.anthropic.com/v1/models",
 		apiKey: "",
@@ -78,7 +79,7 @@ describe("SettingsController with IndexedDB", () => {
 		expect(state.loaded).toBe(true);
 	});
 
-	test("load() normalizes stale pre-refactor providers missing models/defaultModelId", async () => {
+	test("load() skips stale pre-refactor providers that fail validation", async () => {
 		const stale = [
 			{
 				id: "p1",
@@ -94,10 +95,7 @@ describe("SettingsController with IndexedDB", () => {
 		await controller.load();
 
 		const state = browsergentStore.getState().settings;
-		expect(state.providers).toHaveLength(1);
-		expect(state.providers[0]?.models).toEqual([]);
-		expect(state.providers[0]?.defaultModelId).toBe("");
-		expect(state.providers[0]?.chatEndpointUrl).toBe("");
+		expect(state.providers).toHaveLength(0);
 	});
 
 	test("save() persists providers and active id", async () => {
@@ -118,7 +116,8 @@ describe("SettingsController with IndexedDB", () => {
 			{
 				id: "p2",
 				name: "OpenAI",
-				kind: "openai" as const,
+				providerId: "openai",
+				wireFormat: "openai-chat-completions",
 				chatEndpointUrl: "https://api.openai.com/v1/chat/completions",
 				modelsEndpointUrl: "https://api.openai.com/v1/models",
 				apiKey: "sk-oai",
@@ -137,6 +136,6 @@ describe("SettingsController with IndexedDB", () => {
 
 		const stored = await storage.get<ProviderConfig[]>("settings", "providers");
 		expect(stored).toHaveLength(2);
-		expect(stored?.[1]?.kind).toBe("openai");
+		expect(stored?.[1]?.providerId).toBe("openai");
 	});
 });
