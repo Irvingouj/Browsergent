@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Browsergent",
-	"version": "0.3.2",
+	"version": "0.4.0",
 	"permissions": [
 		"activeTab",
 		"alarms",
