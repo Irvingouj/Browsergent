@@ -11,11 +11,7 @@ import {
 } from "../../state/selectors";
 import type { ProviderConfig } from "../../state/slices/settings-slice";
 import { browsergentStore } from "../../state/store";
-import {
-	ProviderId,
-	tokenLimitParamSchema,
-	WireFormat,
-} from "../../types/messages";
+import { ProviderId, WireFormat } from "../../types/messages";
 import { getPreset } from "../../worker/provider-registry";
 import type { ProviderPreset } from "../../worker/provider-schema";
 import { discoverProviderModels } from "./model-discovery";
@@ -241,7 +237,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		[updateProvider],
 	);
 
-	const deleteModel = useCallback(
+	const _deleteModel = useCallback(
 		(provider: ProviderConfig, modelId: string) => {
 			const nextModels = provider.models.filter((m) => m.id !== modelId);
 			updateProvider(provider.id, {
@@ -545,58 +541,6 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 						>
 							Add
 						</button>
-					</div>
-
-					<div class="flex flex-col gap-xs">
-						{editing.models.map((model) => (
-							<div
-								key={model.id}
-								class="rounded-md border border-border bg-bg-muted p-sm flex items-center gap-sm"
-							>
-								<span class="flex-1 min-w-0 text-xs font-mono text-text-primary truncate">
-									{model.model}
-								</span>
-								{editing.wireFormat !== WireFormat.AnthropicMessages && (
-									<select
-										data-testid={`settings-model-token-param-${model.id}`}
-										value={model.tokenLimitParam}
-										onInput={(e) => {
-											const raw = (e.target as HTMLSelectElement).value;
-											if (
-												raw !== "max_tokens" &&
-												raw !== "max_completion_tokens"
-											)
-												return;
-											updateProvider(editing.id, {
-												models: editing.models.map((m) =>
-													m.id === model.id
-														? {
-																...m,
-																tokenLimitParam:
-																	tokenLimitParamSchema.parse(raw),
-															}
-														: m,
-												),
-											});
-										}}
-										class="bg-bg-muted border border-border rounded-md px-xs py-xs text-text-primary font-mono text-[10px] outline-none"
-									>
-										<option value="max_completion_tokens">
-											max_completion_tokens
-										</option>
-										<option value="max_tokens">max_tokens</option>
-									</select>
-								)}
-								<button
-									type="button"
-									data-testid={`settings-delete-model-${model.id}`}
-									onClick={() => deleteModel(editing, model.id)}
-									class="text-xs text-error cursor-pointer px-xs"
-								>
-									Delete
-								</button>
-							</div>
-						))}
 					</div>
 				</div>
 
