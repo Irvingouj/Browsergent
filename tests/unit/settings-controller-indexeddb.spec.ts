@@ -149,7 +149,14 @@ test("load() drops stale providers with a pre-refactor shape", async () => {
 	});
 	// Stale shape from an older schema: kind/baseUrl/model, no providerId/wireFormat.
 	await storage2.set("settings", "providers", [
-		{ id: "stale", name: "Old", kind: "anthropic", baseUrl: "x", apiKey: "k", model: "m" },
+		{
+			id: "stale",
+			name: "Old",
+			kind: "anthropic",
+			baseUrl: "x",
+			apiKey: "k",
+			model: "m",
+		},
 		anthropicConfig({ id: "good", apiKey: "sk-good" }),
 	]);
 	await storage2.set("settings", "activeProviderId", "stale");

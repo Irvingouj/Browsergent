@@ -53,7 +53,6 @@ function jsonResp(data: unknown, status = 200): Response {
 }
 
 describe("discoverProviderModels", () => {
-
 	test("rejects empty API key", async () => {
 		const result = await discoverProviderModels({ ...anthropic, apiKey: "" });
 		expect(result.ok).toBe(false);
@@ -64,7 +63,7 @@ describe("discoverProviderModels", () => {
 		const result = await discoverProviderModels({
 			...anthropic,
 			modelsEndpointUrl: "",
-		},);
+		});
 		expect(result.ok).toBe(false);
 		expect(result.ok === false && result.error).toBe(
 			"Models endpoint URL is empty",
@@ -136,7 +135,9 @@ describe("discoverProviderModels", () => {
 		globalThis.fetch = vi.fn().mockResolvedValue(jsonResp({ data: [] }));
 		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
-		expect(result.ok === false && result.error).toBe("No language models found");
+		expect(result.ok === false && result.error).toBe(
+			"No language models found",
+		);
 	});
 
 	test("returns No models found when response is malformed JSON", async () => {
@@ -148,14 +149,18 @@ describe("discoverProviderModels", () => {
 		);
 		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
-		expect(result.ok === false && result.error).toBe("No language models found");
+		expect(result.ok === false && result.error).toBe(
+			"No language models found",
+		);
 	});
 
 	test("returns No models found when data field is missing", async () => {
 		globalThis.fetch = vi.fn().mockResolvedValue(jsonResp({ foo: "bar" }));
 		const result = await discoverProviderModels(anthropic);
 		expect(result.ok).toBe(false);
-		expect(result.ok === false && result.error).toBe("No language models found");
+		expect(result.ok === false && result.error).toBe(
+			"No language models found",
+		);
 	});
 
 	test("skips items without string id", async () => {
@@ -187,21 +192,25 @@ describe("discoverProviderModels", () => {
 		);
 	});
 	test("filters out non-language models (embeddings, tts, whisper, dall-e)", async () => {
-		global.fetch = vi.fn().mockResolvedValue(
-			jsonResp({ data: [
-				{ id: "gpt-4o" },
-				{ id: "gpt-4o-mini" },
-				{ id: "text-embedding-3-small" },
-				{ id: "tts-1" },
-				{ id: "whisper-1" },
-				{ id: "dall-e-3" },
-				{ id: "text-moderation-latest" },
-				{ id: "omni-moderation-latest" },
-				{ id: "sora-2" },
-				{ id: "gpt-image-1" },
-				{ id: "o3-mini" },
-			] }),
-		);
+		global.fetch = vi
+			.fn()
+			.mockResolvedValue(
+				jsonResp({
+					data: [
+						{ id: "gpt-4o" },
+						{ id: "gpt-4o-mini" },
+						{ id: "text-embedding-3-small" },
+						{ id: "tts-1" },
+						{ id: "whisper-1" },
+						{ id: "dall-e-3" },
+						{ id: "text-moderation-latest" },
+						{ id: "omni-moderation-latest" },
+						{ id: "sora-2" },
+						{ id: "gpt-image-1" },
+						{ id: "o3-mini" },
+					],
+				}),
+			);
 		const result = await discoverProviderModels(openai);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
@@ -210,4 +219,27 @@ describe("discoverProviderModels", () => {
 		}
 	});
 
+	test("DeepSeek models are not filtered out by the OpenAI allowlist", async () => {
+		const deepseek: ProviderConfig = {
+			...openai,
+			id: "p3",
+			name: "DeepSeek",
+			providerId: "deepseek",
+			chatEndpointUrl: "https://api.deepseek.com/chat/completions",
+			modelsEndpointUrl: "https://api.deepseek.com/models",
+		};
+		global.fetch = vi
+			.fn()
+			.mockResolvedValue(
+				jsonResp({
+					data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }],
+				}),
+			);
+		const result = await discoverProviderModels(deepseek);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			const modelIds = result.models.map((m) => m.model).sort();
+			expect(modelIds).toEqual(["deepseek-chat", "deepseek-reasoner"]);
+		}
+	});
 });

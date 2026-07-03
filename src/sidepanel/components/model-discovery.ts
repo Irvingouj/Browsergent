@@ -44,7 +44,11 @@ export async function discoverProviderModels(
 	}
 
 	const json: unknown = await resp.json().catch(() => null);
-	const models = parseModelsResponse(json, provider.wireFormat);
+	const models = parseModelsResponse(
+		json,
+		provider.wireFormat,
+		provider.providerId,
+	);
 	if (models.length === 0) {
 		return { ok: false, error: "No language models found" };
 	}
