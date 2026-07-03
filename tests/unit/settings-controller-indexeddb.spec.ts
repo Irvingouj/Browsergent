@@ -137,3 +137,28 @@ describe("SettingsController with IndexedDB", () => {
 		expect(stored?.[1]?.providerId).toBe("openai");
 	});
 });
+
+test("load() drops stale providers with a pre-refactor shape", async () => {
+	const storage2 = new IndexedDBStorage();
+	await storage2.init();
+	const controller2 = new SettingsController(storage2);
+	browsergentStore.getState().settingsLoaded({
+		providers: [],
+		activeProviderId: null,
+		loaded: false,
+	});
+	// Stale shape from an older schema: kind/baseUrl/model, no providerId/wireFormat.
+	await storage2.set("settings", "providers", [
+		{ id: "stale", name: "Old", kind: "anthropic", baseUrl: "x", apiKey: "k", model: "m" },
+		anthropicConfig({ id: "good", apiKey: "sk-good" }),
+	]);
+	await storage2.set("settings", "activeProviderId", "stale");
+
+	await controller2.load();
+
+	const state = browsergentStore.getState().settings;
+	expect(state.providers.map((p) => p.id)).toEqual(["good"]);
+	expect(state.activeProviderId).toBeNull();
+	await storage2.clear();
+	await storage2.close();
+});

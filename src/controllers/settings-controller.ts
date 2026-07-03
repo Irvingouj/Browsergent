@@ -18,9 +18,12 @@ export class SettingsController {
 			.map((item) => providerConfigSchema.safeParse(item))
 			.filter((r): r is { success: true; data: ProviderConfig } => r.success)
 			.map((r) => r.data);
-		const activeProviderId =
+		const validIds = new Set(providers.map((p) => p.id));
+		const storedActive =
 			(await this.storage.get<string | null>("settings", "activeProviderId")) ??
 			null;
+		const activeProviderId =
+			storedActive && validIds.has(storedActive) ? storedActive : null;
 		browsergentStore.getState().settingsLoaded({
 			providers,
 			activeProviderId,
