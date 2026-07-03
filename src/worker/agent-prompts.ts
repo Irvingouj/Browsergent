@@ -1,151 +1,10 @@
 /**
- * Prompts and tool definitions for the Anthropic provider.
+ * Provider-agnostic agent prompts: the system prompt, the run_js tool
+ * description, and the skill-catalog composer. Used by both the Anthropic
+ * and OpenAI provider paths via composeSystemPrompt -> instructions.
  */
 
-import type { AnthropicTool } from "./anthropic-types";
 import { JS_TOOL_PROMPT } from "./js-tool-prompt";
-
-/** Tool definitions in Anthropic wire format — used when constructing the agent. */
-export const BROWSER_TOOLS: AnthropicTool[] = [
-	{
-		name: "run_js",
-		description: JS_TOOL_PROMPT,
-		input_schema: {
-			type: "object",
-			properties: {
-				code: {
-					type: "string",
-					description:
-						"Inline JS code to execute. Mutually exclusive with 'file'.",
-				},
-				file: {
-					type: "object",
-					properties: {
-						name: {
-							type: "string",
-							description:
-								'Path of a text file on the shared OPFS filesystem to execute (e.g. "script.js" or "/skills/user/my-skill/references/do-thing.js"). Use file_list to discover paths. Mutually exclusive with code.',
-						},
-					},
-					required: ["name"],
-					description:
-						"Reference to a file to execute. Mutually exclusive with 'code'.",
-				},
-				params: {
-					type: "object",
-					description:
-						"Optional parameters injected into the cell as globalThis._params. Use to parameterize a script executed via 'file' or to pass values into inline code without string interpolation.",
-				},
-			},
-		},
-	},
-	{
-		name: "get_doc",
-		description:
-			"Return extension-js API documentation. Call this BEFORE every run_js that uses APIs you are not 100% sure about. Prefer get_doc over guessing.",
-		input_schema: {
-			type: "object",
-			properties: {
-				format: {
-					type: "string",
-					enum: ["markdown", "json"],
-					description: "Documentation format. Defaults to markdown.",
-				},
-				namespace: {
-					type: "string",
-					description:
-						"Optional namespace filter, such as page, chrome, web, fs, or sidepanel.",
-				},
-			},
-		},
-	},
-	{
-		name: "load_skill",
-		description:
-			"Load a Browsergent skill body or resource file from OPFS. Use when a skill is listed in the catalog but not already in context, or when a skill references files under references/.",
-		input_schema: {
-			type: "object",
-			properties: {
-				skill: {
-					type: "string",
-					description: "Skill name, e.g. capability-check",
-				},
-				path: {
-					type: "string",
-					description:
-						"Optional relative path under the skill directory, e.g. references/checklist.md",
-				},
-			},
-			required: ["skill"],
-		},
-	},
-	{
-		name: "file_list",
-		description:
-			"List files the user uploaded to this session. Returns path, id, name, size, mime, and isText. Use prefix to filter by directory. Use this BEFORE file_read/file_edit/file_delete to discover available file paths.",
-		input_schema: {
-			type: "object",
-			properties: {
-				prefix: {
-					type: "string",
-					description:
-						"Optional case-sensitive prefix filter (e.g. 'notes' matches 'notes.md').",
-				},
-			},
-		},
-	},
-	{
-		name: "file_read",
-		description:
-			"Read text content from a session file. path is the file NAME (e.g. 'notes.md'), not a full OPFS path. Binary files return E_FILE_BINARY. Long files are truncated.",
-		input_schema: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: 'File name (e.g. "notes.md").',
-				},
-			},
-			required: ["path"],
-		},
-	},
-	{
-		name: "file_edit",
-		description:
-			"Apply an exact text replacement to a session file. path is the file NAME. old_string must match exactly and be unique unless replace_all=true. Prefer this over rewriting the whole file.",
-		input_schema: {
-			type: "object",
-			properties: {
-				path: { type: "string", description: 'File name (e.g. "notes.md").' },
-				old_string: {
-					type: "string",
-					description: "The exact text to replace.",
-				},
-				new_string: {
-					type: "string",
-					description: "The text to replace it with.",
-				},
-				replace_all: {
-					type: "boolean",
-					description: "Replace every occurrence. Defaults to false.",
-				},
-			},
-			required: ["path", "old_string", "new_string"],
-		},
-	},
-	{
-		name: "file_delete",
-		description:
-			"Permanently remove a file from the session. path is the file NAME. Use only when the user asks or the file is no longer needed.",
-		input_schema: {
-			type: "object",
-			properties: {
-				path: { type: "string", description: 'File name (e.g. "notes.md").' },
-			},
-			required: ["path"],
-		},
-	},
-];
 
 export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating JavaScript code via the run_js tool.
 
@@ -154,8 +13,8 @@ Use get_doc proactively. Before any run_js that touches APIs you are not 100% su
 ## Capability atlas
 You have a broad runtime — far more than snapshot/click/fill. When a task could use a capability below, call get_doc with the namespace to get exact signatures, then use it. Do not attempt manual DOM workarounds (simulating a form submit with clicks, building a date picker by hand, etc.) when a purpose-built API exists.
 
-- page.* — observe and act on the active tab: snapshot, snapshot_data, snapshot_query (filtered by role/tag/text/name/href/interactiveOnly), snapshot_text, url, title, goto, back, forward, reload, click, dblclick, fill, type, append, press, select, select_option, check, check_radio, hover, unhover, scroll, scroll_to, submit, set_files, find, wait, health, fetch, active_tab, tabs, switch, new_tab, close.
-- web.tab.* — the SAME action set as page.* but scoped to a specific tabId; plus tab management: list, get, find, query, current, create, activate, close, wait_for_load. Prefer web.tab.* when the task names a specific tab.
+- page.* — observe and act on the active tab: snapshot, snapshot_data, snapshot_query (filtered by role/tag/text/name/href/interactiveOnly), snapshot_text, url, title, goto, back, forward, reload, click, dblclick, fill, type, append, press, select, select_option, check, check_radio, hover, unhover, scroll, scroll_to, submit, set_files, find, dom (raw DOM subtree introspect), wait_for, health, fetch, active_tab, tabs, switch, new_tab, close. Per-tab network capture: page.network.list/get/clear.
+- web.tab.* — the SAME action set as page.* but scoped to a specific tabId; plus tab management: list, get, find, query, current, create, activate, close, wait_for_load, goto (tab-scoped nav, no active-tab mutation, Promise.all-parallelizable). web.tab.create({ url, active: false }) waits for page load + content-script readiness, so you can snapshot an inactive tab immediately. Per-tab network capture: web.tab.network.list/get/clear. Prefer web.tab.* when the task names a specific tab.
 - web.sleep(ms) — the only timer API; setTimeout/setInterval do not exist in the sandbox.
 - network.fetch / web.fetch — HTTP client returning { body, headers, ok, status }. Use for API calls and data retrieval outside the page context.
 - fs.* — OPFS filesystem: exists, stat, list, mkdir, delete, copy, move, read, readText, readBase64, readRange, write, writeText, writeBase64, append, appendText, appendBase64, update, hash. Auto-creates parent dirs. Also: document extractors — csv_parse, pdf_text, xlsx_read, zip_list — each takes a path and returns extracted text (PDF/XLSX parsed server-side; zip_list returns the archive's file listing).
@@ -166,6 +25,8 @@ You have a broad runtime — far more than snapshot/click/fill. When a task coul
 - sidepanel.* — act on Browsergent's own side panel. Use only when explicitly controlling the side panel.
 
 Exploration mindset: when a task involves downloading files, uploading files, form submission, radio buttons, clipboard, tab management, HTTP/API calls, cookies, bookmarks, browser history, or parsing uploaded documents (PDF text, spreadsheet/XLSX rows, CSV, ZIP contents), scan the atlas above and call get_doc for the exact API before falling back to manual DOM interaction or ad-hoc parsing. The runtime almost always has a purpose-built API that is more reliable than simulating it with clicks and fills.
+
+Research and multi-tab tasks: prefer web.* over page.* so you never depend on the global active tab. Open background tabs with \`web.tab.create({ url, active: false })\` (snapshot-ready on return), navigate specific tabs with \`web.tab.goto({ tabId, url })\` (parallelizable via \`Promise.all\`, no active-tab mutation), inspect a tab's API traffic with \`web.tab.network.list({ tabId })\`, and fetch data directly with \`network.fetch\` / \`web.fetch\` when you already have a URL. Take snapshots via \`web.tab.snapshot(tabId)\` rather than activating + \`page.snapshot()\`. Reserve \`page.*\` for single-tab tasks on the already-active http(s) tab.
 
 Key rules:
 1. Observe before acting.
@@ -211,8 +72,3 @@ export function composeSystemPrompt(skillCatalog: string): string {
 Use load_skill to load skill instructions from the available_skills catalog when relevant. Use load_skill with path when a skill references files under references/. Users may activate skills at compose time with /skill:name.${catalogBlock}`;
 }
 
-export interface AnthropicConfig {
-	apiKey: string;
-	model: string;
-	baseUrl?: string;
-}

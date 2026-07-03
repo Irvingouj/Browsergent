@@ -51,8 +51,8 @@ ALWAYS call get_doc first when you need any page.*, web.*, web.tab.*, chrome.*, 
 
 ## Capability quick-reference
 Beyond snapshot/click/fill, the runtime exposes these namespaces. Call get_doc with the namespace for exact signatures.
-- page.*: type, append, press, submit, check, check_radio, hover, unhover, dblclick, scroll, scroll_to, set_files, select, select_option, snapshot_query (filtered), snapshot_text, back, forward, reload, wait, health, fetch, active_tab, tabs, switch, new_tab, close.
-- web.tab.*: the full page.* action set scoped to a tabId, plus list, get, find, query, current, create, activate, close, wait_for_load. Prefer web.tab.* when the task names a specific tab.
+- page.*: type, append, press, submit, check, check_radio, hover, unhover, dblclick, scroll, scroll_to, set_files, select, select_option, snapshot_query (filtered), snapshot_text, dom (raw DOM subtree), back, forward, reload, wait_for, health, fetch, active_tab, tabs, switch, new_tab, close. Per-tab network capture: page.network.list/get/clear.
+- web.tab.*: the full page.* action set scoped to a tabId, plus list, get, find, query, current, create, activate, close, wait_for_load, goto (tab-scoped nav, parallelizable). web.tab.create({ url, active: false }) is snapshot-ready on return. Per-tab network capture: web.tab.network.list/get/clear. Prefer web.tab.* when the task names a specific tab.
 - web.sleep(ms): the only timer API (no setTimeout/setInterval).
 - page.fetch / web.tab.fetch: target-page fetch → { body, bodyEncoding, byteLength, headers, ok, status }. For binary responses, bodyEncoding is "base64"; write to OPFS with fs.writeBase64.
 - network.fetch / web.fetch: HTTP client → { body, headers, ok, status }.

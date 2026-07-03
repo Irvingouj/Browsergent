@@ -5,7 +5,7 @@ import type {
 } from "@pi-oxide/pi-host-web/raw";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AnthropicProvider } from "../../src/worker/anthropic";
-import { composeSystemPrompt } from "../../src/worker/anthropic-prompts";
+import { composeSystemPrompt } from "../../src/worker/agent-prompts";
 
 // ── SSE mock helpers ──────────────────────────────────────────────
 

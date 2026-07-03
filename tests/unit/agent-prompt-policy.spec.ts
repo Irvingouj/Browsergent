@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { SYSTEM_PROMPT } from "../../src/worker/anthropic-prompts";
+import { SYSTEM_PROMPT } from "../../src/worker/agent-prompts";
 import { JS_TOOL_PROMPT } from "../../src/worker/js-tool-prompt";
 
 describe("agent prompt policy", () => {

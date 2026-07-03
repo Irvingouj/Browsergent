@@ -479,7 +479,7 @@ From each repo's `AGENTS.md` / `CLAUDE.md`:
 
 **Where do I…**
 
-| …change the system prompt? | `Browsergent/src/worker/anthropic-prompts.ts` (`composeSystemPrompt`) |
+| …change the system prompt? | `Browsergent/src/worker/agent-prompts.ts` (`composeSystemPrompt`) |
 | …add/change an agent tool? | `Browsergent/src/worker/agent-tools.ts` (`createAgentTools`) |
 | …change how SSE is parsed? | `Browsergent/src/worker/anthropic-sse.ts` |
 | …change the turn loop / directives? | `pi-oxide/pi-core/src/agent_runtime.rs` + `events.rs` |

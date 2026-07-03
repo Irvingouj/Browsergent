@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { CellResult } from "../../src/types/extjs-utils";
 import { createAgentTools } from "../../src/worker/agent-tools";
-import { composeSystemPrompt } from "../../src/worker/anthropic-prompts";
+import { composeSystemPrompt } from "../../src/worker/agent-prompts";
 
 const mockGetDocs = vi.fn();
 const mockLoadSkill = vi.fn();
