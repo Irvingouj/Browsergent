@@ -21,6 +21,7 @@
 	--color-accent-hover: #416f61;
 	--color-accent-soft: rgba(79, 127, 111, 0.12);
 	--color-accent-text: #ffffff;
+	--color-link: #2563eb;
 
 	--color-danger: #b94a48;
 	--color-danger-soft: rgba(185, 74, 72, 0.12);
@@ -155,6 +156,7 @@ html[data-theme="dark"] {
 	--color-accent-hover: #9dc8b8;
 	--color-accent-soft: rgba(139, 183, 166, 0.14);
 	--color-accent-text: #11110f;
+	--color-link: #60a5fa;
 
 	--color-danger: #d07370;
 	--color-danger-soft: rgba(208, 115, 112, 0.14);
@@ -414,14 +416,17 @@ body,
 }
 
 /* ── Links ── */
-.message-bubble .msg-link {
-	color: var(--color-accent);
+.message-bubble .msg-link,
+.linkify {
+	color: var(--color-link);
 	text-decoration: none;
 	border-bottom: 1px solid transparent;
 	transition: border-color 0.15s;
+	cursor: pointer;
 }
-.message-bubble .msg-link:hover {
-	border-bottom-color: var(--color-accent);
+.message-bubble .msg-link:hover,
+.linkify:hover {
+	border-bottom-color: var(--color-link);
 }
 
 /* ── Headings ── */

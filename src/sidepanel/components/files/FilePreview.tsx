@@ -10,6 +10,8 @@ import {
 import { selectSelectedFileId } from "../../../state/selectors";
 import type { FileNode } from "../../../state/slices/files-slice";
 import { browsergentStore } from "../../../state/store";
+import { CsvTablePreview } from "./CsvTablePreview";
+import { TextPreview } from "./TextPreview";
 import { renderMarkdownFile } from "../../../utils/markdown-stream";
 import { highlightCode } from "../../../utils/syntax-highlight";
 
@@ -177,6 +179,15 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 				/>
 			);
 		}
+		if (lowerName.endsWith(".csv")) {
+			return (
+				<CsvTablePreview
+					content={content}
+					path={node.path}
+					filesController={filesController}
+				/>
+			);
+		}
 		const ext = lowerName.slice(lowerName.lastIndexOf("."));
 		if (CODE_EXTS[ext]) {
 			return (
@@ -190,9 +201,11 @@ export const FilePreview = ({ node, filesController }: FilePreviewProps) => {
 			);
 		}
 		return (
-			<pre class="text-xs font-mono text-text-secondary whitespace-pre-wrap break-all leading-relaxed">
-				{content}
-			</pre>
+			<TextPreview
+				content={content}
+				path={node.path}
+				filesController={filesController}
+			/>
 		);
 	};
 
