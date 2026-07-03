@@ -14,6 +14,7 @@ import { browsergentStore } from "../../state/store";
 import { ProviderId, WireFormat } from "../../types/messages";
 import { getPreset } from "../../worker/provider-registry";
 import type { ProviderPreset } from "../../worker/provider-schema";
+import { AddProviderButton } from "./AddProviderButton";
 import { discoverProviderModels } from "./model-discovery";
 import { testConnection } from "./test-connection";
 
@@ -680,51 +681,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 					})}
 				</div>
 			)}
-
-			<div class="flex gap-sm">
-				<button
-					type="button"
-					data-testid="settings-add-anthropic"
-					onClick={() => addProvider(ProviderId.Anthropic)}
-					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
-				>
-					+ Anthropic
-				</button>
-				<button
-					type="button"
-					data-testid="settings-add-openai"
-					onClick={() => addProvider(ProviderId.OpenAI)}
-					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
-				>
-					+ OpenAI (Chat Completions)
-				</button>
-				<button
-					type="button"
-					data-testid="settings-add-deepseek"
-					onClick={() => addProvider(ProviderId.DeepSeek)}
-					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
-				>
-					+ DeepSeek
-				</button>
-				<button
-					type="button"
-					data-testid="settings-add-openai-compatible"
-					onClick={() => addProvider(ProviderId.Custom)}
-					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
-				>
-					+ OpenAI-compatible (Chat Completions)
-				</button>
-				<button
-					type="button"
-					data-testid="settings-add-anthropic-compatible"
-					onClick={() =>
-						addProvider(ProviderId.Custom, WireFormat.AnthropicMessages)
-					}
-					class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary"
-				>
-					+ Anthropic-compatible
-				</button>
-			</div>
+			<AddProviderButton onPick={addProvider} />
 
 			<hr class="border-border my-sm" />
 

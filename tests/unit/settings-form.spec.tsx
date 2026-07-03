@@ -74,8 +74,8 @@ describe("SettingsPanel", () => {
 				onExportConversation={() => {}}
 			/>,
 		);
-		expect(html).toContain("Anthropic");
-		expect(html).toContain("OpenAI-compatible");
+		expect(html).toContain("settings-add-provider");
+		expect(html).toContain("+ Provider");
 	});
 
 	test("marks the active provider", () => {
