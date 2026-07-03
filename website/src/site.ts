@@ -16,10 +16,15 @@ export const SITE = {
 const v = SITE.latestVersion;
 const tag = `v${v}`;
 export const DOWNLOADS = {
-  // Source zip built by the release workflow.
-  zip: `${SITE.releases}/download/${tag}/browsergent-${v}.zip`,
-  // Latest release page (version-agnostic fallback).
-  latestRelease: `${SITE.releases}/latest`,
+	// Stable "always latest" link — GitHub redirects
+	// /releases/latest/download/<file> to the newest release's asset of
+	// that name. The release workflow uploads a version-stable browsergent.zip
+	// alias for this. This link never goes stale between releases.
+	latestZip: `${SITE.releases}/latest/download/browsergent.zip`,
+	// Versioned link (display/fallback — points at this exact release).
+	zip: `${SITE.releases}/download/${tag}/browsergent-${v}.zip`,
+	// Latest release page (version-agnostic fallback).
+	latestRelease: `${SITE.releases}/latest`,
 } as const;
 
 export const NAV = [

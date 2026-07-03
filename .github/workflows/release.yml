@@ -42,6 +42,10 @@ jobs:
         run: |
           node scripts/package-crx.mjs \
             --crx-url "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/browsergent-$(node -p "require('./package.json').version").crx"
+          # Stable-name alias so /releases/latest/download/browsergent.zip
+          # always resolves to the newest release's zip. The versioned name is
+          # kept for archival; the CRX stays versioned (Chrome update URL needs it).
+          cp "release/browsergent-$(node -p "require('./package.json').version").zip" release/browsergent.zip
 
       - name: Upload artifacts to the release
         uses: softprops/action-gh-release@v2
@@ -50,6 +54,7 @@ jobs:
           files: |
             release/browsergent-*.crx
             release/browsergent-*.zip
+            release/browsergent.zip
 
       # Publish update.xml to the gh-pages branch. Chrome reads update_url from
       # the installed extension's manifest and polls this URL every few hours;
