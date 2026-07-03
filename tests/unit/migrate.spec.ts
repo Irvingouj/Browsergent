@@ -49,7 +49,7 @@ describe("migrateFromChromeStorage", () => {
 		expect(migrated).toBe(true);
 	});
 
-	test("migrates settings", async () => {
+	test("does not migrate provider settings", async () => {
 		vi.stubGlobal("chrome", {
 			storage: {
 				local: {
@@ -64,23 +64,10 @@ describe("migrateFromChromeStorage", () => {
 
 		await migrateFromChromeStorage(storage);
 
-		const providers = await storage.get<
-			Array<{
-				id: string;
-				apiKey: string;
-				baseUrl: string;
-				model: string;
-				kind: string;
-			}>
-		>("settings", "providers");
-		expect(providers).toHaveLength(1);
-		expect(providers?.[0]?.apiKey).toBe("sk-key");
-		expect(providers?.[0]?.baseUrl).toBe("https://api.example.com");
-		expect(providers?.[0]?.model).toBe("claude-sonnet-4-6");
-		expect(providers?.[0]?.kind).toBe("anthropic");
-		expect(await storage.get("settings", "activeProviderId")).toBe(
-			providers?.[0]?.id,
-		);
+		const providers = await storage.get("settings", "providers");
+		expect(providers).toBeNull();
+		expect(await storage.get("settings", "activeProviderId")).toBeNull();
+		expect(await storage.get("settings", "__migrated")).toBe(true);
 	});
 
 	test("skips migration if already marked", async () => {
@@ -115,12 +102,14 @@ describe("migrateFromChromeStorage", () => {
 		expect(await storage.get("history", "current")).toBeNull();
 	});
 
-	test("partial migration still marks migrated", async () => {
+	test("does not migrate partial legacy provider data", async () => {
 		vi.stubGlobal("chrome", {
 			storage: {
 				local: {
 					get: vi.fn().mockResolvedValue({
 						anthropicApiKey: "sk-key",
+						anthropicBaseUrl: "https://api.anthropic.com",
+						anthropicModel: "claude-sonnet-4-6",
 					}),
 				},
 			},
@@ -128,12 +117,9 @@ describe("migrateFromChromeStorage", () => {
 
 		await migrateFromChromeStorage(storage);
 
-		const providers = await storage.get<Array<{ id: string; apiKey: string }>>(
-			"settings",
-			"providers",
-		);
-		expect(providers?.[0]?.apiKey).toBe("sk-key");
-		expect(providers?.[0]?.baseUrl).toBe("https://api.anthropic.com");
+		const providers = await storage.get("settings", "providers");
+		expect(providers).toBeNull();
+		expect(await storage.get("settings", "activeProviderId")).toBeNull();
 		expect(await storage.get("settings", "__migrated")).toBe(true);
 	});
 

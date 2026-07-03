@@ -8,10 +8,19 @@ const mockState = {
 			{
 				id: "p1",
 				name: "Anthropic",
-				kind: "anthropic",
-				baseUrl: "https://api.anthropic.com",
+				providerId: "anthropic",
+				wireFormat: "anthropic-messages",
 				apiKey: "sk-test-key",
-				model: "claude-test",
+				chatEndpointUrl: "https://api.anthropic.com/v1/messages",
+				modelsEndpointUrl: "",
+				defaultModelId: "m1",
+				models: [
+					{
+						id: "m1",
+						name: "claude-test",
+						model: "claude-test",
+					},
+				],
 			},
 		],
 		activeProviderId: "p1",
@@ -65,8 +74,8 @@ describe("SettingsPanel", () => {
 				onExportConversation={() => {}}
 			/>,
 		);
-		expect(html).toContain("Anthropic");
-		expect(html).toContain("OpenAI-compatible");
+		expect(html).toContain("settings-add-provider");
+		expect(html).toContain("+ Provider");
 	});
 
 	test("marks the active provider", () => {

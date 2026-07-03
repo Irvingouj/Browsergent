@@ -91,7 +91,7 @@ describe("matchSkillsToUrl", () => {
 			"https://www.linkedin.com/jobs/search",
 		);
 		expect(matched).toHaveLength(1);
-		expect(matched[0]!.name).toBe("skill-linkedin.com/jobs/*");
+		expect(matched[0]?.name).toBe("skill-linkedin.com/jobs/*");
 	});
 
 	test("matches multiple skills on the same url", () => {
@@ -99,7 +99,7 @@ describe("matchSkillsToUrl", () => {
 			...matchSkillsToUrl(skills, "https://github.com/foo/bar/pull/1"),
 		];
 		expect(both).toHaveLength(1);
-		expect(both[0]!.name).toBe("skill-github.com/*/pull/*");
+		expect(both[0]?.name).toBe("skill-github.com/*/pull/*");
 	});
 
 	test("skips skills without a match field", () => {

@@ -1,15 +1,21 @@
 import type { StoreApi } from "zustand/vanilla";
 import type { BrowsergentError } from "../../errors/browsergent-error";
-import type { ProviderKind } from "../../types/messages";
+import type {
+	ProviderConfig,
+	ProviderModelConfig,
+} from "../../worker/provider-schema";
 import type { BrowsergentStore } from "../store";
 
-export interface ProviderConfig {
-	id: string;
-	name: string;
-	kind: ProviderKind;
-	baseUrl: string;
-	apiKey: string;
-	model: string;
+export type { ProviderConfig, ProviderModelConfig };
+
+export function defaultModelForProvider(
+	provider: ProviderConfig,
+): ProviderModelConfig | null {
+	return (
+		provider.models.find((m) => m.id === provider.defaultModelId) ??
+		provider.models[0] ??
+		null
+	);
 }
 
 export interface SettingsState {
@@ -22,7 +28,6 @@ export interface SettingsState {
 export interface SettingsSlice {
 	settings: SettingsState;
 	settingsLoaded(next: SettingsState): void;
-	/** Patch the in-memory providers list (UI edits); persistence is the controller's job. */
 	providersChanged(providers: ProviderConfig[]): void;
 	activeProviderChanged(id: string | null): void;
 	settingsSaveStarted(): void;

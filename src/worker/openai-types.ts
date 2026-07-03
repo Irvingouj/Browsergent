@@ -30,13 +30,13 @@ export interface OpenAIMessage {
 }
 
 /** Request body for POST /v1/chat/completions (streaming). */
-export interface OpenAIRequestBody {
+export type OpenAIRequestBody = {
 	model: string;
 	messages: OpenAIMessage[];
 	tools?: OpenAIToolDefinition[];
 	stream: boolean;
-	max_tokens?: number;
-}
+	max_completion_tokens?: number;
+};
 
 /**
  * One streamed chunk: `data: {...}`. `choices[0].delta` carries incremental

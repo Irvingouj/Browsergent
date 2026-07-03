@@ -120,9 +120,9 @@ test("markdown and js previews render formatted content with a drag handle", asy
 	const handle = preview.locator('[data-testid="preview-drag-handle"]');
 	const box = await handle.boundingBox();
 	expect(box).not.toBeNull();
-	await sidePanel.mouse.move(box!.x + 5, box!.y + 5);
+	await sidePanel.mouse.move(box?.x + 5, box?.y + 5);
 	await sidePanel.mouse.down();
-	await sidePanel.mouse.move(box!.x + 5, box!.y - 80); // drag up → grow
+	await sidePanel.mouse.move(box?.x + 5, box?.y - 80); // drag up → grow
 	await sidePanel.mouse.up();
 	const after = await preview.evaluate((el) =>
 		Number((el as HTMLElement).style.height.replace("px", "")),

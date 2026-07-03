@@ -103,7 +103,7 @@ describe("handleFileOp list", () => {
 		// Subdirectory entry
 		const subEntry = result.files.find((f) => f.name === "sub");
 		expect(subEntry).toBeDefined();
-		expect(subEntry!.path).toBe("/user/sub");
+		expect(subEntry?.path).toBe("/user/sub");
 
 		// Every entry has path starting with "/"
 		for (const entry of result.files) {

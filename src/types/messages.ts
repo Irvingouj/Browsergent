@@ -2,12 +2,20 @@
 
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { FileOp, FileOpResult } from "../worker/file-op-relay";
+import type { WireFormat } from "../worker/provider-schema";
 import type { CellResult } from "./extjs-utils";
 
-export type { BrowsergentError };
-
-/** Wire-format kind for an LLM provider. */
-export type ProviderKind = "anthropic" | "openai";
+export type {
+	ProviderConfig,
+	ProviderModelConfig,
+	ProviderPreset,
+} from "../worker/provider-schema";
+export {
+	ProviderId,
+	providerIdSchema,
+	WireFormat,
+	wireFormatSchema,
+} from "../worker/provider-schema";
 
 // --- Panel -> Worker ---
 
@@ -43,12 +51,11 @@ export type PanelToWorker =
 	  };
 
 export interface WorkerSettings {
-	kind: ProviderKind;
+	wireFormat: WireFormat;
 	apiKey: string;
-	baseUrl?: string;
+	chatEndpointUrl: string;
 	model: string;
 }
-
 // --- Worker -> Panel ---
 
 export type WorkerToPanel =

@@ -30,9 +30,10 @@ test("Test Connection shows success on a 2xx response", async () => {
 
 	await sidePanel
 		.getByTestId("settings-baseurl-input")
-		.fill("https://provider.test");
+		.fill("https://provider.test/v1/messages");
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test");
 	await sidePanel.getByTestId("settings-model-input").fill("claude-test");
+	await sidePanel.getByTestId("settings-add-model-button").click();
 
 	await sidePanel.getByTestId("settings-test-connection-button").click();
 
@@ -61,9 +62,10 @@ test("Test Connection shows a classified inline error on 401", async () => {
 
 	await sidePanel
 		.getByTestId("settings-baseurl-input")
-		.fill("https://provider.test");
+		.fill("https://provider.test/v1/messages");
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-bad");
 	await sidePanel.getByTestId("settings-model-input").fill("claude-test");
+	await sidePanel.getByTestId("settings-add-model-button").click();
 
 	await sidePanel.getByTestId("settings-test-connection-button").click();
 
@@ -86,9 +88,10 @@ async function openEditForTest(sidePanel: import("@playwright/test").Page) {
 	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
 	await sidePanel
 		.getByTestId("settings-baseurl-input")
-		.fill("https://provider.test");
+		.fill("https://provider.test/v1/messages");
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test");
 	await sidePanel.getByTestId("settings-model-input").fill("claude-test");
+	await sidePanel.getByTestId("settings-add-model-button").click();
 }
 
 test("Test Connection shows the in-flight Testing… state and disables the button", async () => {

@@ -9,8 +9,10 @@ test("settings save and load within a session", async () => {
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test-key");
 	await sidePanel
 		.getByTestId("settings-baseurl-input")
-		.fill("https://custom.example.com");
+		.fill("https://custom.example.com/v1/messages");
+	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test-key");
 	await sidePanel.getByTestId("settings-model-input").fill("claude-test-model");
+	await sidePanel.getByTestId("settings-add-model-button").click();
 	await sidePanel.getByTestId("settings-done-button").click();
 
 	await expect(sidePanel.getByTestId("settings-list")).toBeVisible();
@@ -22,11 +24,11 @@ test("settings save and load within a session", async () => {
 		"sk-test-key",
 	);
 	await expect(sidePanel.getByTestId("settings-baseurl-input")).toHaveValue(
-		"https://custom.example.com",
+		"https://custom.example.com/v1/messages",
 	);
-	await expect(sidePanel.getByTestId("settings-model-input")).toHaveValue(
-		"claude-test-model",
-	);
+	await expect(
+		sidePanel.getByTestId("settings-default-model-select").locator("option"),
+	).toContainText(["claude-test-model"]);
 
 	await close();
 });

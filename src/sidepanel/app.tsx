@@ -30,8 +30,10 @@ import {
 	selectSkillDiagnostics,
 	selectTraceEntries,
 } from "../state/selectors";
+import { defaultModelForProvider } from "../state/slices/settings-slice";
 import { browsergentStore } from "../state/store";
 import type { ChatMessage } from "../types/messages";
+import { WireFormat } from "../worker/provider-schema";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
 import { InputBar } from "./components/input/InputBar";
@@ -419,6 +421,18 @@ const App: FunctionalComponent = () => {
 		const runId = crypto.randomUUID();
 		browsergentStore.getState().agentRunRequested(runId);
 
+		const activeModel = activeProvider
+			? defaultModelForProvider(activeProvider)
+			: null;
+		if (activeProvider && !activeModel) {
+			browsergentStore.getState().agentFailed({
+				code: "E_BAD_SETTINGS",
+				message: "Add a model to the active provider before running a task",
+				source: "settings",
+			});
+			return;
+		}
+
 		bridgeRef.current?.post({
 			type: "agentStart",
 			runId,
@@ -429,12 +443,17 @@ const App: FunctionalComponent = () => {
 			activatedSkills,
 			settings: activeProvider
 				? {
-						kind: activeProvider.kind,
+						wireFormat: activeProvider.wireFormat,
 						apiKey: activeProvider.apiKey,
-						baseUrl: activeProvider.baseUrl || undefined,
-						model: activeProvider.model,
+						chatEndpointUrl: activeProvider.chatEndpointUrl,
+						model: activeModel?.model ?? "",
 					}
-				: { kind: "anthropic", apiKey: "", model: "" },
+				: {
+						wireFormat: WireFormat.AnthropicMessages,
+						apiKey: "",
+						chatEndpointUrl: "",
+						model: "",
+					},
 		});
 	}, [activeProvider, sessionControllerRef, bridgeRef, filesControllerRef]);
 

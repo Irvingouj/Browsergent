@@ -11,14 +11,13 @@ import { composeSystemPrompt } from "./agent-prompts";
 import { createAnthropicStream } from "./anthropic-sse";
 import { toAnthropicMessages, toAnthropicTools } from "./anthropic-wire";
 import type { LlmStream } from "./llm-streamer";
-import { defaultBaseUrlFor } from "./provider-defaults";
 
 export { composeSystemPrompt };
 
 export interface AnthropicConfig {
 	apiKey: string;
 	model: string;
-	baseUrl?: string;
+	chatEndpointUrl: string;
 }
 
 function isRetryableError(err: unknown): boolean {
@@ -104,8 +103,8 @@ export class AnthropicProvider {
 	) {}
 
 	async call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream> {
-		const baseUrl = this.config.baseUrl ?? defaultBaseUrlFor("anthropic");
-		const isFireworks = baseUrl.includes("fireworks.ai");
+		const url = this.config.chatEndpointUrl.trim();
+		const isFireworks = url.includes("fireworks.ai");
 
 		const body = {
 			model: this.config.model,
@@ -115,7 +114,6 @@ export class AnthropicProvider {
 			tools: toAnthropicTools(context.tools),
 			stream: true,
 		};
-		const url = `${baseUrl}/v1/messages`;
 		this.onDiagnostic({
 			kind: "provider_request",
 			timestamp: Date.now(),
