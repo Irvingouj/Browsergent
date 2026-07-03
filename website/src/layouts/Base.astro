@@ -7,11 +7,30 @@ import { SITE } from "../site";
 interface Props {
   title?: string;
   description?: string;
+  image?: string;
 }
 
-const { title, description } = Astro.props;
+const { title, description, image } = Astro.props;
 const pageTitle = title ? `${title} · ${SITE.name}` : `${SITE.name} — ${SITE.tagline}`;
 const pageDesc = description ?? SITE.description;
+const pageUrl = new URL(Astro.url.pathname, SITE.url).toString();
+const ogImage = image ?? "/demo-poster.jpg";
+const ogImageUrl = new URL(ogImage, SITE.url).toString();
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: SITE.name,
+  description: SITE.description,
+  applicationCategory: "BrowserExtension",
+  operatingSystem: "Chrome",
+  url: SITE.url,
+  downloadUrl: `${SITE.url}/download`,
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  author: { "@type": "Organization", name: SITE.name, url: SITE.url },
+  version: SITE.latestVersion,
+  license: "https://opensource.org/licenses/MIT",
+};
 ---
 
 <!doctype html>
@@ -22,12 +41,24 @@ const pageDesc = description ?? SITE.description;
     <title>{pageTitle}</title>
     <meta name="description" content={pageDesc} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={pageUrl} />
+
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={pageDesc} />
-    <meta property="og:url" content={new URL(Astro.url.pathname, SITE.url).toString()} />
+    <meta property="og:url" content={pageUrl} />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:site_name" content={SITE.name} />
+
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="canonical" href={new URL(Astro.url.pathname, SITE.url).toString()} />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={pageDesc} />
+    <meta name="twitter:image" content={ogImageUrl} />
+
+    <meta name="theme-color" content="#2b6cb0" />
+    <meta name="robots" content="index, follow" />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   </head>
   <body>
     <Header />
