@@ -78,6 +78,12 @@ export const MessageBubble: FunctionalComponent<{ messageId: string }> = ({
 				...kindClasses,
 				isStreaming ? "streaming-cursor" : "",
 			].join(" ")}
+			onContextMenu={(e) => {
+				e.preventDefault();
+				browsergentStore
+					.getState()
+					.openChatContextMenu(messageId, e.clientX, e.clientY);
+			}}
 		>
 			<div dangerouslySetInnerHTML={{ __html: html }} />
 		</div>

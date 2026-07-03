@@ -7,6 +7,7 @@ import {
 	selectTraceEntries,
 } from "../../state/selectors";
 import { browsergentStore } from "../../state/store";
+import { ChatContextMenu } from "./ChatContextMenu";
 import { MessageBubble } from "./MessageBubble";
 import { TraceEntryCompact } from "./TraceEntryCompact";
 
@@ -33,19 +34,22 @@ export const ChatPanel: FunctionalComponent = () => {
 	}, [messageIds, messagesById, trace]);
 
 	return (
-		<div class="flex flex-col gap-sm">
-			{timeline.map((item) =>
-				item.type === "message" ? (
-					<MessageBubble key={item.id} messageId={item.id} />
-				) : (
-					(() => {
-						const entry = trace.find((t) => t.id === item.id);
-						return entry ? (
-							<TraceEntryCompact key={item.id} entry={entry} />
-						) : null;
-					})()
-				),
-			)}
-		</div>
+		<>
+			<div class="flex flex-col gap-sm">
+				{timeline.map((item) =>
+					item.type === "message" ? (
+						<MessageBubble key={item.id} messageId={item.id} />
+					) : (
+						(() => {
+							const entry = trace.find((t) => t.id === item.id);
+							return entry ? (
+								<TraceEntryCompact key={item.id} entry={entry} />
+							) : null;
+						})()
+					),
+				)}
+			</div>
+			<ChatContextMenu />
+		</>
 	);
 };

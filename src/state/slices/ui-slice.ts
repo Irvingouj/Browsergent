@@ -8,6 +8,12 @@ export type ChatUploadStatus =
 	| { kind: "uploading" }
 	| { kind: "error"; message: string };
 
+export interface ChatContextMenuState {
+	messageId: string;
+	x: number;
+	y: number;
+}
+
 export interface UiState {
 	settingsOpen: boolean;
 	taskDraft: string;
@@ -15,6 +21,7 @@ export interface UiState {
 	chatUpload: ChatUploadStatus;
 	chatDragOver: boolean;
 	openTabs: chrome.tabs.Tab[];
+	chatContextMenu: ChatContextMenuState | null;
 }
 
 export interface UiSlice {
@@ -25,6 +32,8 @@ export interface UiSlice {
 	setChatUploadStatus(status: ChatUploadStatus): void;
 	setChatDragOver(dragOver: boolean): void;
 	setOpenTabs(tabs: chrome.tabs.Tab[]): void;
+	openChatContextMenu(messageId: string, x: number, y: number): void;
+	closeChatContextMenu(): void;
 }
 
 export function createUiSlice(
@@ -38,6 +47,7 @@ export function createUiSlice(
 			chatUpload: { kind: "idle" },
 			chatDragOver: false,
 			openTabs: [],
+			chatContextMenu: null,
 		},
 		setSettingsOpen(open) {
 			set((state) => ({ ui: { ...state.ui, settingsOpen: open } }));
@@ -56,6 +66,14 @@ export function createUiSlice(
 		},
 		setOpenTabs(tabs) {
 			set((state) => ({ ui: { ...state.ui, openTabs: tabs } }));
+		},
+		openChatContextMenu(messageId, x, y) {
+			set((state) => ({
+				ui: { ...state.ui, chatContextMenu: { messageId, x, y } },
+			}));
+		},
+		closeChatContextMenu() {
+			set((state) => ({ ui: { ...state.ui, chatContextMenu: null } }));
 		},
 	};
 }
