@@ -36,38 +36,16 @@ jobs:
           npx biome check .
           npm run test:unit
 
-      - name: Package CRX3 + ZIP
-        env:
-          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
-        run: |
-          node scripts/package-crx.mjs \
-            --crx-url "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/browsergent-$(node -p "require('./package.json').version").crx"
-          # Stable-name alias so /releases/latest/download/browsergent.zip
-          # always resolves to the newest release's zip. The versioned name is
-          # kept for archival; the CRX stays versioned (Chrome update URL needs it).
-          cp "release/browsergent-$(node -p "require('./package.json').version").zip" release/browsergent.zip
+      - name: Package ZIP
+        run: node scripts/package-zip.mjs
 
       - name: Upload artifacts to the release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            release/browsergent-*.crx
             release/browsergent-*.zip
             release/browsergent.zip
-
-      # Publish update.xml to the gh-pages branch. Chrome reads update_url from
-      # the installed extension's manifest and polls this URL every few hours;
-      # if the version here is higher, it downloads the .crx from the codebase
-      # URL and replaces the install. Requires GH_PAGES_DEPLOY_KEY secret.
-      - name: Publish update.xml to gh-pages (auto-update)
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          deploy_key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
-          publish_dir: release
-          publish_branch: gh-pages
-          keep_files: true
-          destination_dir: ./
 
       - name: Install website dependencies
         working-directory: website

@@ -1,12 +1,13 @@
 {
 	"name": "browsergent",
-	"version": "0.5.4",
+	"version": "0.5.5",
 	"private": true,
 	"license": "MIT OR Apache-2.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc --noEmit && vite build",
+		"sync:manifest": "node scripts/sync-manifest.mjs",
+		"build": "npm run sync:manifest && tsc --noEmit && vite build",
 		"typecheck": "tsc --noEmit",
 		"test": "npx playwright test",
 		"test:unit": "vitest run",
