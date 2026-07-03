@@ -15,8 +15,18 @@ import {
 	configureMockProvider,
 	focusTargetTab,
 	launchExtension,
-	typeTask,
 } from "./helpers";
+
+async function setTaskText(
+	sidePanel: import("@playwright/test").Page,
+	text: string,
+): Promise<void> {
+	await sidePanel.locator('[data-testid="task-input"]').click();
+	await sidePanel.keyboard.insertText(text);
+	await expect(sidePanel.locator('[data-testid="task-input"]')).toContainText(
+		text.slice(0, 40),
+	);
+}
 
 function readRc(): Record<string, string> {
 	try {
@@ -119,10 +129,13 @@ test.describe("real deepseek", () => {
 			}
 		});
 
-		await typeTask(sidePanel, TASK_PROMPT);
+		await setTaskText(sidePanel, TASK_PROMPT);
 		await sidePanel.getByRole("button", { name: "Run task" }).click();
 
-		const traceEntry = sidePanel.locator("[data-testid='trace-entry']").first();
+		const traceEntry = sidePanel
+			.locator("[data-testid='trace-entry']")
+			.filter({ hasText: "run_js" })
+			.first();
 		await traceEntry.waitFor({ state: "visible", timeout: 60_000 });
 
 		await expect
@@ -138,6 +151,7 @@ test.describe("real deepseek", () => {
 		await traceEntry.click();
 		const traceCard = sidePanel
 			.locator("[data-testid='trace-entry']")
+			.filter({ hasText: "run_js" })
 			.first()
 			.locator("xpath=ancestor::div[contains(@class,'rounded-md')]");
 		await expect(sidePanel.getByText("Result", { exact: true })).toBeVisible({
@@ -214,10 +228,13 @@ test.describe("real deepseek", () => {
 			"```",
 			"The ReferenceError is intentional. Do not catch it. Do not retry. Do not add anything else.",
 		].join("\n");
-		await typeTask(sidePanel, refTask);
+		await setTaskText(sidePanel, refTask);
 		await sidePanel.getByRole("button", { name: "Run task" }).click();
 
-		const traceEntry = sidePanel.locator("[data-testid='trace-entry']").first();
+		const traceEntry = sidePanel
+			.locator("[data-testid='trace-entry']")
+			.filter({ hasText: "run_js" })
+			.first();
 		await traceEntry.waitFor({ state: "visible", timeout: 60_000 });
 
 		await expect
@@ -233,6 +250,7 @@ test.describe("real deepseek", () => {
 		await traceEntry.click();
 		const traceCard = sidePanel
 			.locator("[data-testid='trace-entry']")
+			.filter({ hasText: "run_js" })
 			.first()
 			.locator("xpath=ancestor::div[contains(@class,'rounded-md')]");
 		await expect(sidePanel.getByText("Result", { exact: true })).toBeVisible({

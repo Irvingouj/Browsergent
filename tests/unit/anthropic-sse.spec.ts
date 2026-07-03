@@ -193,6 +193,64 @@ describe("createAnthropicStream", () => {
 		});
 	});
 
+	test("provider error stop reason returns Err without preserving partial tool calls", async () => {
+		const stream = createSseStream([
+			sseEvent("message_start", { type: "message_start", message: {} }),
+			sseEvent("content_block_start", {
+				type: "content_block_start",
+				index: 0,
+				content_block: {
+					type: "tool_use",
+					id: "tu-error",
+					name: "run_js",
+					input: {},
+				},
+			}),
+			sseEvent("content_block_delta", {
+				type: "content_block_delta",
+				index: 0,
+				delta: { type: "input_json_delta", partial_json: '{"code":"print(' },
+			}),
+			sseEvent("message_delta", {
+				type: "message_delta",
+				delta: { stop_reason: "error", stop_sequence: null },
+			}),
+		]);
+
+		const { chunks, result } = createAnthropicStream(
+			stream,
+			"claude-3-haiku-20240307",
+		);
+		const emitted: unknown[] = [];
+		for await (const chunk of chunks) {
+			emitted.push(chunk);
+		}
+
+		expect(emitted).toMatchObject([
+			{ kind: "start" },
+			{
+				kind: "tool_call_delta",
+				tool_call_id: "tu-error",
+				delta: { type: "string", value: '{"code":"print(' },
+			},
+			{
+				kind: "error",
+				message: "Provider stream ended with stop_reason=error",
+			},
+		]);
+
+		const finalResult = await result;
+		expect(finalResult).toMatchObject({
+			Err: {
+				error: {
+					code: "provider_error",
+					message: "Provider stream ended with stop_reason=error",
+				},
+				aborted: false,
+			},
+		});
+	});
+
 	test("handles tool_use with invalid JSON gracefully", async () => {
 		const stream = createSseStream([
 			sseEvent("message_start", { type: "message_start", message: {} }),

@@ -47,6 +47,7 @@ test("settings panel stores API key", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-provider").click();
 	await sidePanel.getByTestId("settings-add-anthropic").click();
 
 	const apiKeyInput = sidePanel.getByTestId("settings-apikey-input");

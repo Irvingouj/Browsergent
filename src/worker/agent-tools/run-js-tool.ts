@@ -331,8 +331,7 @@ export function createRunJsTool(
 				const msg = err instanceof Error ? err.message : String(err);
 				const traceId = getCurrentTraceId();
 				const tracePrefix = traceId ? `[${traceId}] ` : "";
-				const stack =
-					err instanceof Error && err.stack ? err.stack : undefined;
+				const stack = err instanceof Error && err.stack ? err.stack : undefined;
 				const { code: errCode, hint } = classifyError({
 					message: msg,
 					stack,

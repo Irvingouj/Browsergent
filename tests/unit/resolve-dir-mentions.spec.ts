@@ -65,10 +65,19 @@ interface DirContextChild {
 	isText: boolean;
 }
 
+function parseSingleDirMention(input: string) {
+	const [mention] = parseDirMentions(input);
+	expect(mention).toBeDefined();
+	if (!mention) {
+		throw new Error("expected one directory mention");
+	}
+	return mention;
+}
+
 describe("buildDirContextXmlBlock", () => {
 	test("empty children → note form", () => {
-		const [mention] = parseDirMentions("@[dir:/project/src:src]");
-		expect(buildDirContextXmlBlock(mention!, [])).toBe(
+		const mention = parseSingleDirMention("@[dir:/project/src:src]");
+		expect(buildDirContextXmlBlock(mention, [])).toBe(
 			'<directory_reference path="/project/src" name="src">\n' +
 				"  <note>directory empty or not found</note>\n" +
 				"</directory_reference>",
@@ -76,7 +85,7 @@ describe("buildDirContextXmlBlock", () => {
 	});
 
 	test("single file child", () => {
-		const [mention] = parseDirMentions("@[dir:/project/src:src]");
+		const mention = parseSingleDirMention("@[dir:/project/src:src]");
 		const child: DirContextChild = {
 			name: "readme.md",
 			path: "/project/src/readme.md",
@@ -84,7 +93,7 @@ describe("buildDirContextXmlBlock", () => {
 			size: 123,
 			isText: true,
 		};
-		expect(buildDirContextXmlBlock(mention!, [child])).toBe(
+		expect(buildDirContextXmlBlock(mention, [child])).toBe(
 			'<directory_reference path="/project/src" name="src">\n' +
 				'  <entry path="/project/src/readme.md" name="readme.md" size="123" kind="file" isText="yes" />\n' +
 				"</directory_reference>",
@@ -92,7 +101,7 @@ describe("buildDirContextXmlBlock", () => {
 	});
 
 	test("single directory child", () => {
-		const [mention] = parseDirMentions("@[dir:/project/src:src]");
+		const mention = parseSingleDirMention("@[dir:/project/src:src]");
 		const child: DirContextChild = {
 			name: "sub",
 			path: "/project/src/sub",
@@ -100,7 +109,7 @@ describe("buildDirContextXmlBlock", () => {
 			size: 0,
 			isText: false,
 		};
-		expect(buildDirContextXmlBlock(mention!, [child])).toBe(
+		expect(buildDirContextXmlBlock(mention, [child])).toBe(
 			'<directory_reference path="/project/src" name="src">\n' +
 				'  <entry path="/project/src/sub" name="sub" size="0" kind="directory" isText="no" />\n' +
 				"</directory_reference>",
@@ -128,7 +137,7 @@ describe("buildDirContextXmlBlock", () => {
 	});
 
 	test("mixed children preserve order", () => {
-		const [mention] = parseDirMentions("@[dir:/a:alpha]");
+		const mention = parseSingleDirMention("@[dir:/a:alpha]");
 		const fileChild: DirContextChild = {
 			name: "x.ts",
 			path: "/a/x.ts",
@@ -143,14 +152,14 @@ describe("buildDirContextXmlBlock", () => {
 			size: 0,
 			isText: false,
 		};
-		const result = buildDirContextXmlBlock(mention!, [fileChild, dirChild]);
+		const result = buildDirContextXmlBlock(mention, [fileChild, dirChild]);
 		const filePos = result.indexOf('kind="file"');
 		const dirPos = result.indexOf('kind="directory"');
 		expect(filePos).toBeLessThan(dirPos);
 	});
 
 	test("caps entries beyond limit with a truncation note", () => {
-		const [mention] = parseDirMentions("@[dir:/big:big]");
+		const mention = parseSingleDirMention("@[dir:/big:big]");
 		const many: DirContextChild[] = Array.from({ length: 60 }, (_, i) => ({
 			name: `f${i}.md`,
 			path: `/big/f${i}.md`,
@@ -158,7 +167,7 @@ describe("buildDirContextXmlBlock", () => {
 			size: 0,
 			isText: true,
 		}));
-		const result = buildDirContextXmlBlock(mention!, many);
+		const result = buildDirContextXmlBlock(mention, many);
 		// First and last of the first 50 are present.
 		expect(result).toContain('path="/big/f0.md"');
 		expect(result).toContain('path="/big/f49.md"');
@@ -172,7 +181,7 @@ describe("buildDirContextXmlBlock", () => {
 	});
 
 	test("does not cap when at or below limit", () => {
-		const [mention] = parseDirMentions("@[dir:/ok:ok]");
+		const mention = parseSingleDirMention("@[dir:/ok:ok]");
 		const fifty: DirContextChild[] = Array.from({ length: 50 }, (_, i) => ({
 			name: `f${i}.md`,
 			path: `/ok/f${i}.md`,
@@ -180,7 +189,7 @@ describe("buildDirContextXmlBlock", () => {
 			size: 0,
 			isText: true,
 		}));
-		const result = buildDirContextXmlBlock(mention!, fifty);
+		const result = buildDirContextXmlBlock(mention, fifty);
 		expect(result).not.toContain("omitted");
 		expect(result).toContain('path="/ok/f49.md"');
 	});

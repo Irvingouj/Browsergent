@@ -219,6 +219,21 @@ export function createAnthropicStream(
 				});
 			}
 
+			if (stopReason === "error") {
+				const message = "Provider stream ended with stop_reason=error";
+				enqueue({
+					kind: "error",
+					message,
+				});
+				resultResolve?.({
+					Err: {
+						error: { code: "provider_error", message },
+						aborted: false,
+					},
+				});
+				return;
+			}
+
 			for (const block of activeToolBlocks.values()) {
 				let args: unknown = {};
 				if (block.partialJson) {

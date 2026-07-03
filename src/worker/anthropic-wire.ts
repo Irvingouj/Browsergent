@@ -145,6 +145,8 @@ export function toStopReason(raw: string | null): StopReason {
 			return "max_tokens";
 		case "tool_use":
 			return "tool_use";
+		case "error":
+			return "error";
 		default:
 			return "end_turn";
 	}

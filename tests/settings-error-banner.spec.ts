@@ -15,6 +15,7 @@ test("settings error banner renders on real storage failure", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-provider").click();
 	await sidePanel.getByTestId("settings-add-anthropic").click();
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test");
 	await sidePanel.getByTestId("settings-done-button").click();
@@ -46,6 +47,7 @@ test("settings error banner dismisses via the × button", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-provider").click();
 	await sidePanel.getByTestId("settings-add-anthropic").click();
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test");
 	await sidePanel.getByTestId("settings-done-button").click();

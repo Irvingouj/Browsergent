@@ -192,25 +192,23 @@ describe("discoverProviderModels", () => {
 		);
 	});
 	test("filters out non-language models (embeddings, tts, whisper, dall-e)", async () => {
-		global.fetch = vi
-			.fn()
-			.mockResolvedValue(
-				jsonResp({
-					data: [
-						{ id: "gpt-4o" },
-						{ id: "gpt-4o-mini" },
-						{ id: "text-embedding-3-small" },
-						{ id: "tts-1" },
-						{ id: "whisper-1" },
-						{ id: "dall-e-3" },
-						{ id: "text-moderation-latest" },
-						{ id: "omni-moderation-latest" },
-						{ id: "sora-2" },
-						{ id: "gpt-image-1" },
-						{ id: "o3-mini" },
-					],
-				}),
-			);
+		global.fetch = vi.fn().mockResolvedValue(
+			jsonResp({
+				data: [
+					{ id: "gpt-4o" },
+					{ id: "gpt-4o-mini" },
+					{ id: "text-embedding-3-small" },
+					{ id: "tts-1" },
+					{ id: "whisper-1" },
+					{ id: "dall-e-3" },
+					{ id: "text-moderation-latest" },
+					{ id: "omni-moderation-latest" },
+					{ id: "sora-2" },
+					{ id: "gpt-image-1" },
+					{ id: "o3-mini" },
+				],
+			}),
+		);
 		const result = await discoverProviderModels(openai);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
@@ -228,13 +226,11 @@ describe("discoverProviderModels", () => {
 			chatEndpointUrl: "https://api.deepseek.com/chat/completions",
 			modelsEndpointUrl: "https://api.deepseek.com/models",
 		};
-		global.fetch = vi
-			.fn()
-			.mockResolvedValue(
-				jsonResp({
-					data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }],
-				}),
-			);
+		global.fetch = vi.fn().mockResolvedValue(
+			jsonResp({
+				data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }],
+			}),
+		);
 		const result = await discoverProviderModels(deepseek);
 		expect(result.ok).toBe(true);
 		if (result.ok) {

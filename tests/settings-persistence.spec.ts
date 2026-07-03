@@ -5,7 +5,8 @@ test("settings save and load within a session", async () => {
 	const { sidePanel, close } = await launchExtension();
 
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
-	await sidePanel.getByTestId("settings-add-anthropic").click();
+	await sidePanel.getByTestId("settings-add-provider").click();
+	await sidePanel.getByTestId("settings-add-anthropic-compatible").click();
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test-key");
 	await sidePanel
 		.getByTestId("settings-baseurl-input")

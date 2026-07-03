@@ -4,8 +4,8 @@ import type {
 	ToolDefinition,
 } from "@pi-oxide/pi-host-web/raw";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { AnthropicProvider } from "../../src/worker/anthropic";
 import { composeSystemPrompt } from "../../src/worker/agent-prompts";
+import { AnthropicProvider } from "../../src/worker/anthropic";
 
 // ── SSE mock helpers ──────────────────────────────────────────────
 

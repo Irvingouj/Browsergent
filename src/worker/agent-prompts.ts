@@ -3,9 +3,6 @@
  * description, and the skill-catalog composer. Used by both the Anthropic
  * and OpenAI provider paths via composeSystemPrompt -> instructions.
  */
-
-import { JS_TOOL_PROMPT } from "./js-tool-prompt";
-
 export const SYSTEM_PROMPT = `You are Browsergent, a browser automation agent. You control the browser by generating JavaScript code via the run_js tool.
 
 Use get_doc proactively. Before any run_js that touches APIs you are not 100% sure about, call get_doc to verify exact function names, argument order, and return types. Prefer get_doc over guessing.
@@ -71,4 +68,3 @@ export function composeSystemPrompt(skillCatalog: string): string {
 
 Use load_skill to load skill instructions from the available_skills catalog when relevant. Use load_skill with path when a skill references files under references/. Users may activate skills at compose time with /skill:name.${catalogBlock}`;
 }
-

@@ -208,7 +208,9 @@ test("renames a file via double-click on the label", async () => {
 		// Select all existing text and type new name character-by-character
 		// (pressSequentially avoids React/Preact controlled-input race with fill())
 		await renameInput.click();
-		await renameInput.press("Control+a");
+		await renameInput.press(
+			process.platform === "darwin" ? "Meta+A" : "Control+A",
+		);
 		await renameInput.pressSequentially("new.md", { delay: 10 });
 		await renameInput.press("Enter");
 

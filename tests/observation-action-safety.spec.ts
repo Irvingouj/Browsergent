@@ -99,6 +99,7 @@ test("observation-action safety: branching click does NOT invalidate lease (E2E)
 		.fill("click branch then other");
 	await focusTargetTab(testPage);
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await focusTargetTab(testPage);
 	// Both clicks fire in one run_js cell. The Branch click sets "chipped"
 	// then the Other click sets "other_clicked" — the final state proves both succeeded.
 

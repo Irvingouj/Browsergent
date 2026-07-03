@@ -25,6 +25,7 @@ test("Test Connection shows success on a 2xx response", async () => {
 	);
 
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-provider").click();
 	await sidePanel.getByTestId("settings-add-anthropic").click();
 	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
 
@@ -32,8 +33,6 @@ test("Test Connection shows success on a 2xx response", async () => {
 		.getByTestId("settings-baseurl-input")
 		.fill("https://provider.test/v1/messages");
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test");
-	await sidePanel.getByTestId("settings-model-input").fill("claude-test");
-	await sidePanel.getByTestId("settings-add-model-button").click();
 
 	await sidePanel.getByTestId("settings-test-connection-button").click();
 
@@ -57,6 +56,7 @@ test("Test Connection shows a classified inline error on 401", async () => {
 	);
 
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-provider").click();
 	await sidePanel.getByTestId("settings-add-anthropic").click();
 	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
 
@@ -64,8 +64,6 @@ test("Test Connection shows a classified inline error on 401", async () => {
 		.getByTestId("settings-baseurl-input")
 		.fill("https://provider.test/v1/messages");
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-bad");
-	await sidePanel.getByTestId("settings-model-input").fill("claude-test");
-	await sidePanel.getByTestId("settings-add-model-button").click();
 
 	await sidePanel.getByTestId("settings-test-connection-button").click();
 
@@ -84,14 +82,13 @@ test("Test Connection shows a classified inline error on 401", async () => {
 // Helper: open edit view for a fresh Anthropic provider pointed at provider.test.
 async function openEditForTest(sidePanel: import("@playwright/test").Page) {
 	await sidePanel.getByRole("button", { name: "Settings" }).click();
+	await sidePanel.getByTestId("settings-add-provider").click();
 	await sidePanel.getByTestId("settings-add-anthropic").click();
 	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
 	await sidePanel
 		.getByTestId("settings-baseurl-input")
 		.fill("https://provider.test/v1/messages");
 	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test");
-	await sidePanel.getByTestId("settings-model-input").fill("claude-test");
-	await sidePanel.getByTestId("settings-add-model-button").click();
 }
 
 test("Test Connection shows the in-flight Testing… state and disables the button", async () => {

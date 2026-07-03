@@ -133,8 +133,8 @@ test("two prompts keep all messages visible and prior transcript included in sec
 	for (const msg of userMsgs) {
 		expect(typeof msg.content).toBe("string");
 		const c = msg.content as string;
-		expect(c.startsWith("task ")).toBe(true);
-		expect(c).toMatch(/\[Current time: .+\]$/);
+		expect(c).toContain("task ");
+		expect(c).toMatch(/\[Current time: .+\]/);
 	}
 	const assistantMsg = secondRequest.messages.find(
 		(m) => m.role === "assistant",

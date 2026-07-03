@@ -216,7 +216,14 @@ export async function configureMockProvider(
 	if ((await editButtons.count()) > 0) {
 		await editButtons.first().click();
 	} else {
-		await sidePanel.getByTestId("settings-add-anthropic").click();
+		await sidePanel.getByTestId("settings-add-provider").click();
+		await sidePanel
+			.getByTestId(
+				model === undefined
+					? "settings-add-anthropic"
+					: "settings-add-anthropic-compatible",
+			)
+			.click();
 	}
 
 	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
@@ -239,7 +246,7 @@ export async function configureMockProvider(
 export async function typeTask(sidePanel: Page, text: string): Promise<void> {
 	const input = sidePanel.locator('[data-testid="task-input"]');
 	await input.click();
-	await input.type(text);
+	await sidePanel.keyboard.insertText(text);
 }
 
 /**
@@ -368,7 +375,7 @@ export function startMockAnthropicServer(options: {
 	responses: Array<{
 		chunks: string[];
 		delays: number[];
-		stopReason: "end_turn" | "tool_use";
+		stopReason: "end_turn" | "error" | "tool_use";
 	}>;
 }): MockAnthropicServer {
 	const requestBodies: unknown[] = [];
