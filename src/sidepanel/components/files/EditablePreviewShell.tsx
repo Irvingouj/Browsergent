@@ -20,13 +20,9 @@ interface EditablePreviewShellProps {
  * No revert button — the editor keeps its own draft state and Save is the
  * only commit. Copy writes the current content to the clipboard.
  */
-export const EditablePreviewShell: FunctionalComponent<EditablePreviewShellProps> = ({
-	getContent,
-	dirty,
-	onSave,
-	ariaLabel,
-	children,
-}) => {
+export const EditablePreviewShell: FunctionalComponent<
+	EditablePreviewShellProps
+> = ({ getContent, dirty, onSave, ariaLabel, children }) => {
 	const [saving, setSaving] = useState(false);
 	const [savedAt, setSavedAt] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -69,6 +65,7 @@ export const EditablePreviewShell: FunctionalComponent<EditablePreviewShellProps
 
 	return (
 		<div
+			role="region"
 			class="relative flex flex-col h-full"
 			aria-label={ariaLabel}
 			data-testid="editable-preview-shell"

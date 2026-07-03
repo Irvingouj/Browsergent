@@ -52,9 +52,7 @@ describe("parseCsv", () => {
 	});
 
 	test("doubled quotes = literal quote", () => {
-		expect(parseCsv('"she said ""hi""",x')).toEqual([
-			['she said "hi"', "x"],
-		]);
+		expect(parseCsv('"she said ""hi""",x')).toEqual([['she said "hi"', "x"]]);
 	});
 
 	test("ragged rows preserved", () => {
@@ -99,7 +97,7 @@ describe("serializeCsv", () => {
 	test("round-trips quoted fields", () => {
 		const rows = [
 			["name", "note"],
-			['Jo,Ann', 'say "hi"'],
+			["Jo,Ann", 'say "hi"'],
 		];
 		const text = serializeCsv(rows);
 		expect(text).toBe('name,note\r\n"Jo,Ann","say ""hi"""\r\n');

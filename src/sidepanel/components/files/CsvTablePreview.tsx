@@ -57,10 +57,10 @@ export const CsvTablePreview = ({
 					<thead class="sticky top-0 z-10 bg-bg-surface border-b border-border">
 						<tr>
 							<th
+								scope="col"
 								class="w-8 px-xs py-[2px] text-text-dim text-right border-r border-border"
-								aria-hidden="true"
 							>
-								#
+								<span class="sr-only">Row</span>#
 							</th>
 							{Array.from({ length: colCount }, (_, c) => (
 								<th

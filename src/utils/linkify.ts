@@ -16,8 +16,7 @@ export function linkify(text: string): string {
 	let last = 0;
 	// Fresh regex per call so lastIndex can't leak between invocations.
 	const re = new RegExp(URL_RE.source, "g");
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(text)) !== null) {
+	for (let m = re.exec(text); m !== null; m = re.exec(text)) {
 		const start = m.index;
 		const raw = m[0];
 		const trimmed = raw.replace(/[.,;:!?)]+$/, "");

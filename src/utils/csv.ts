@@ -118,6 +118,8 @@ export function serializeCsv(rows: CsvRows): string {
 /** Apply a single cell edit to a copy of the rows. Bounds are caller's job. */
 export function applyCsvEdit(rows: CsvRows, edit: CsvCellEdit): string[][] {
 	return rows.map((r, ri) =>
-		ri === edit.row ? r.map((c, ci) => (ci === edit.col ? edit.value : c)) : [...r],
+		ri === edit.row
+			? r.map((c, ci) => (ci === edit.col ? edit.value : c))
+			: [...r],
 	);
 }

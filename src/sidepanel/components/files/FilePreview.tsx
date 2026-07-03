@@ -10,10 +10,10 @@ import {
 import { selectSelectedFileId } from "../../../state/selectors";
 import type { FileNode } from "../../../state/slices/files-slice";
 import { browsergentStore } from "../../../state/store";
-import { CsvTablePreview } from "./CsvTablePreview";
-import { TextPreview } from "./TextPreview";
 import { renderMarkdownFile } from "../../../utils/markdown-stream";
 import { highlightCode } from "../../../utils/syntax-highlight";
+import { CsvTablePreview } from "./CsvTablePreview";
+import { TextPreview } from "./TextPreview";
 
 interface FilePreviewProps {
 	node: FileNode;
