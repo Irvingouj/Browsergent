@@ -173,7 +173,7 @@ describe("run_js tool resolved-error path (status: err)", () => {
 	test("runtime error returns E_JS_RUNTIME envelope", async () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
-			error: { kind: "runtime", message: "undefined variable", line: 5 },
+			error: { kind: "js_runtime", message: "undefined variable", line: 5 },
 			stdout: [],
 			stderr: [],
 		});
@@ -204,7 +204,7 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "Cannot read 'x'",
 				line: 7,
@@ -228,7 +228,7 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: null,
 				message: "boom",
 				line: null,
@@ -250,8 +250,8 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
-				name: null,
+				kind: "api_error",
+				public_name: "page_fetch",
 				message:
 					"[page_fetch] (E_FETCH_BLOB_URL): fetch failed for blob URL blob:https://example.com/id: TypeError: Failed to fetch",
 				line: null,
@@ -287,7 +287,7 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "",
 				line: null,
@@ -313,7 +313,7 @@ describe("run_js tool resolved-error path (status: err)", () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "",
 				line: null,
@@ -339,7 +339,7 @@ await page.click({ refId: link.refId });`,
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "",
 				line: null,
@@ -363,7 +363,7 @@ await page.click({ refId: link.refId });`,
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "",
 				line: null,
@@ -389,7 +389,7 @@ await page.click({ refId: link.refId });`,
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "",
 				line: null,
@@ -417,7 +417,7 @@ await page.click({ refId: link.refId });`,
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "",
 				line: null,
@@ -442,13 +442,12 @@ await page.click({ refId: link.refId });`,
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
-				name: "TypeError",
+				kind: "api_error",
+				public_name: "page_dom",
 				message: "[page_dom] invalid params: tabId is required",
 				line: null,
 				action: "page_dom",
 				code: "E_INVALID_PARAMS",
-				stack: null,
 				hint: null,
 				details: {
 					field: "tabId",
@@ -475,8 +474,8 @@ await page.click({ refId: link.refId });`,
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
-				name: null,
+				kind: "api_error",
+				public_name: "page_click",
 				message: "[page_click] content script disconnected",
 				line: null,
 				action: "page_click",
@@ -499,7 +498,7 @@ await page.click({ refId: link.refId });`,
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
-				kind: "runtime",
+				kind: "js_runtime",
 				name: "TypeError",
 				message: "",
 				line: null,

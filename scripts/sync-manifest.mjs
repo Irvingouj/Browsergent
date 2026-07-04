@@ -1,19 +1,23 @@
 // Sync public/manifest.json "version" from package.json before builds.
-// Keeps a single source of truth (package.json) so the Chrome extension
-// version badge, the release tag, and the website all agree.
+// String-level replacement to preserve file formatting exactly.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const pkg = JSON.parse(
 	readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
 );
 const manifestPath = new URL("../public/manifest.json", import.meta.url);
-const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
-
-if (manifest.version !== pkg.version) {
-	manifest.version = pkg.version;
-	// 2-space indent to match the existing file style.
-	writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-	console.info(`sync-manifest: set manifest version to ${pkg.version}`);
+const content = readFileSync(manifestPath, "utf-8");
+const newVersion = pkg.version;
+const match = content.match(/"version":\s*"(\d+\.\d+\.\d+)"/);
+if (match && match[1] !== newVersion) {
+	const updated = content.replace(
+		/"version":\s*"\d+\.\d+\.\d+"/,
+		`"version": "${newVersion}"`,
+	);
+	writeFileSync(manifestPath, updated);
+	console.info(`sync-manifest: set manifest version to ${newVersion}`);
+} else if (!match) {
+	console.warn("sync-manifest: could not find version field in manifest.json");
 } else {
-	console.info(`sync-manifest: already at ${pkg.version}`);
+	console.info(`sync-manifest: already at ${newVersion}`);
 }

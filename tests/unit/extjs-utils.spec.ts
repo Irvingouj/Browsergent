@@ -39,7 +39,7 @@ describe("formatError runtime branch", () => {
 	test("uses error.message when present", async () => {
 		const { formatError } = await import("../../src/types/extjs-utils");
 		const out = formatError({
-			kind: "runtime",
+			kind: "js_runtime",
 			name: "TypeError",
 			message: "Cannot read 'x'",
 			line: null,
@@ -53,12 +53,12 @@ describe("formatError runtime branch", () => {
 	test("falls back to stack when message empty (action/code path)", async () => {
 		const { formatError } = await import("../../src/types/extjs-utils");
 		const out = formatError({
-			kind: "runtime",
-			name: null,
+			kind: "api_error",
 			message: "",
+			public_name: "page_click",
 			line: null,
 			action: "page.click",
-			code: null,
+			code: "E_CLICK",
 			stack: "TypeError: at foo (file.js:1:7)\n    at bar (file.js:2:5)",
 		});
 		// When action/code present, format_js_exception message is used as-is.
@@ -70,7 +70,7 @@ describe("formatError runtime branch", () => {
 	test("falls back to stack for plain runtime error with empty message", async () => {
 		const { formatError } = await import("../../src/types/extjs-utils");
 		const out = formatError({
-			kind: "runtime",
+			kind: "js_runtime",
 			name: "TypeError",
 			message: "",
 			line: 3,
@@ -86,7 +86,7 @@ describe("formatError runtime branch", () => {
 	test("empty message and empty stack yields bare prefix", async () => {
 		const { formatError } = await import("../../src/types/extjs-utils");
 		const out = formatError({
-			kind: "runtime",
+			kind: "js_runtime",
 			name: null,
 			message: "",
 			line: null,

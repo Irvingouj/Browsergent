@@ -12,16 +12,25 @@ declare module "@pi-oxide/extension-js" {
 				line: number | null;
 		  }
 		| {
-				kind: "runtime";
+				kind: "js_runtime";
 				name: string | null;
 				message: string;
 				line: number | null;
-				action: string | null;
-				code: string | null;
-				stack: string | null;
-				hint?: string | null;
-				recovery?: string[] | null;
-				details?: Record<string, unknown> | null;
+				stack?: string;
+		  }
+		| {
+				kind: "api_error";
+				code: string;
+				message: string;
+				action: string;
+				public_name: string;
+				line: number | null;
+				param?: WasmParamDetail;
+				category?: string;
+				hint?: string;
+				recovery?: string[];
+				details?: unknown;
+				stack?: string;
 		  }
 		| { kind: "fuel_exhausted" }
 		| { kind: "internal"; message: string };
@@ -42,6 +51,12 @@ declare module "@pi-oxide/extension-js" {
 				execution_count: number;
 		  };
 
+	export interface WasmParamDetail {
+		path: string;
+		expected?: string;
+		received_type?: string;
+		received_preview?: string;
+	}
 	export interface FsPathParams {
 		path: string;
 	}

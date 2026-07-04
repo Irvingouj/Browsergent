@@ -33,25 +33,27 @@ export function formatError(error: WasmCellError): string {
 				: `[compile error] ${error.message}`;
 		case "fuel_exhausted":
 			return "[execution limit reached] possible infinite loop — try a different approach";
-		case "runtime": {
-			// When action/code exist, Rust already formatted the full message including
-			// hint and recovery into error.message (via format_js_exception).
-			// For either branch, fall back to stack when message is empty so a bare
-			// TypeError with no message still surfaces a failure location.
-			//
-			// QuickJS's wasm32 backtrace is intentionally disabled (its stack capture
-			// crashes the runtime), so engine-thrown errors carry an empty message
-			// AND a 5-char garbage stack. The isStackUseful check ensures we only
-			// fall back to stacks that actually contain frame info.
+		case "js_runtime": {
 			const trimmedStack = isStackUseful(error.stack) ? error.stack.trim() : "";
-			if (error.action || error.code) {
-				return error.message || trimmedStack;
-			}
 			const message = error.message || trimmedStack;
 			const name = error.name ? `${error.name}: ` : "";
 			return error.line !== null
 				? `[runtime error] line ${error.line}: ${name}${message}`
 				: `[runtime error] ${name}${message}`;
+		}
+		case "api_error": {
+			// When action/code exist, Rust already formatted the full message including
+			// hint and recovery into error.message (via format_js_exception).
+			// Fall back to stack when message is empty so a bare TypeError with no
+			// message still surfaces a failure location.
+			const trimmedStack = error.stack ? error.stack.trim() : "";
+			if (error.action && error.code) {
+				return error.message || trimmedStack;
+			}
+			const message = error.message || trimmedStack;
+			return error.line !== null
+				? `[runtime error] line ${error.line}: ${message}`
+				: `[runtime error] ${message}`;
 		}
 		case "internal":
 			return `[internal error] ${error.message}`;

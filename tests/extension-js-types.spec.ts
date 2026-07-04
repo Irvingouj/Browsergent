@@ -80,7 +80,7 @@ describe("formatJsRunResult", () => {
 
 	test("formats runtime error with line number", () => {
 		const error: WasmCellError = {
-			kind: "runtime",
+			kind: "js_runtime",
 			name: null,
 			message: "attempt to call nil value",
 			line: 12,
@@ -101,7 +101,7 @@ describe("formatJsRunResult", () => {
 
 	test("formats runtime error without line number", () => {
 		const error: WasmCellError = {
-			kind: "runtime",
+			kind: "js_runtime",
 			name: null,
 			message: "something went wrong",
 			line: null,
@@ -151,7 +151,7 @@ describe("formatJsRunResult", () => {
 
 	test("includes stderr in error output", () => {
 		const error: WasmCellError = {
-			kind: "runtime",
+			kind: "js_runtime",
 			name: null,
 			message: "something went wrong",
 			line: null,
@@ -184,7 +184,7 @@ describe("formatError", () => {
 			},
 			{
 				error: {
-					kind: "runtime",
+			kind: "js_runtime",
 					name: null,
 					message: "oops",
 					line: 3,
@@ -195,7 +195,7 @@ describe("formatError", () => {
 			},
 			{
 				error: {
-					kind: "runtime",
+			kind: "js_runtime",
 					name: null,
 					message: "oops",
 					line: null,
@@ -222,7 +222,7 @@ describe("formatError", () => {
 
 	test("includes error name for runtime errors", () => {
 		const error: WasmCellError = {
-			kind: "runtime",
+			kind: "js_runtime",
 			name: "TypeError",
 			message: "x is not a function",
 			line: null,
@@ -236,7 +236,7 @@ describe("formatError", () => {
 
 	test("includes error name and line for runtime errors", () => {
 		const error: WasmCellError = {
-			kind: "runtime",
+			kind: "js_runtime",
 			name: "ReferenceError",
 			message: "foo is not defined",
 			line: 7,
@@ -250,8 +250,8 @@ describe("formatError", () => {
 
 	test("passes through pre-formatted message when action/code exist (includes hint/recovery)", () => {
 		const error: WasmCellError = {
-			kind: "runtime",
-			name: "Error",
+			kind: "api_error",
+			public_name: "page_snapshot",
 			message:
 				"[page_snapshot] (E_PERMISSION): Cannot use DOM APIs on tab 123\n\nHint: Use an http(s) tab.\n\nRecovery:\n  1. await page.goto(url)",
 			line: null,
