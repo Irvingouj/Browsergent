@@ -167,7 +167,7 @@ function classifyErrorBase(
 	if (isOpaqueRuntimeError && callsWebTabStar(jsSource)) {
 		return {
 			code: errCode ?? "E_JS_RUNTIME",
-			hint: "A TypeError occurred in a web.tab.* call. This usually happens when a click triggers a navigation or SPA re-render and the follow-up snapshot runs before the content script reconnects, OR the cell used setTimeout (use `await web.sleep(ms)` instead). Split click and snapshot into separate run_js cells with `await web.sleep(800)` between them, or navigate directly via page.goto with a parameterised search URL.",
+			hint: "The JS runtime returned an opaque TypeError without structured extension-js details. Check get_doc for the exact API name and argument shape, then retry with the documented signature.",
 		};
 	}
 	return {

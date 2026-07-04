@@ -359,7 +359,61 @@ await page.click({ refId: link.refId });`,
 		expect(envelope.code).toBe("E_JS_RUNTIME");
 		expect(envelope.hint.toLowerCase()).not.toContain("use web.tab");
 	});
-	test("empty-message TypeError on web.tab.* code yields split-cells hint", async () => {
+	test("empty-message TypeError on web.tab.url yields neutral opaque hint", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({ code: "await web.tab.url(tabId);" });
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_JS_RUNTIME");
+		expect(envelope.hint.toLowerCase()).not.toContain("split");
+		expect(envelope.hint.toLowerCase()).not.toContain("snapshot");
+		expect(envelope.hint.toLowerCase()).not.toContain("reconnect");
+		expect(envelope.hint.toLowerCase()).not.toContain("navigation");
+		expect(envelope.hint.toLowerCase()).toContain("get_doc");
+	});
+	test("empty-message TypeError on web.tab.dom yields neutral opaque hint", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "",
+				line: null,
+				action: null,
+				code: null,
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "await web.tab.dom({ tabId, selector: \"input[type='file']\" });",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_JS_RUNTIME");
+		expect(envelope.hint.toLowerCase()).not.toContain("split");
+		expect(envelope.hint.toLowerCase()).not.toContain("snapshot");
+		expect(envelope.hint.toLowerCase()).not.toContain("reconnect");
+		expect(envelope.hint.toLowerCase()).not.toContain("navigation");
+		expect(envelope.hint.toLowerCase()).toContain("get_doc");
+	});
+	test("empty-message TypeError on web.tab.click+snapshot yields no split hint", async () => {
 		const runJs = vi.fn().mockResolvedValue({
 			status: "err",
 			error: {
@@ -381,8 +435,65 @@ await page.click({ refId: link.refId });`,
 		});
 		const envelope = expectErrorEnvelope(result as string);
 		expect(envelope.code).toBe("E_JS_RUNTIME");
-		expect(envelope.hint.toLowerCase()).toContain("split");
-		expect(envelope.hint.toLowerCase()).toContain("separate");
+		expect(envelope.hint.toLowerCase()).not.toContain("split");
+		expect(envelope.hint.toLowerCase()).not.toContain("separate");
+	});
+	test("structured E_INVALID_PARAMS passes through code/message/details without speculation", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: "TypeError",
+				message: "[page_dom] invalid params: tabId is required",
+				line: null,
+				action: "page_dom",
+				code: "E_INVALID_PARAMS",
+				stack: null,
+				hint: null,
+				details: {
+					field: "tabId",
+					reason: "missing required parameter",
+				},
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "await web.tab.dom({ selector: 'input' });",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_INVALID_PARAMS");
+		expect(envelope.message).toContain("tabId is required");
+		expect(envelope.details).toMatchObject({ field: "tabId" });
+		expect(envelope.hint.toLowerCase()).not.toContain("split");
+		expect(envelope.hint.toLowerCase()).not.toContain("snapshot");
+		expect(envelope.hint.toLowerCase()).not.toContain("reconnect");
+	});
+	test("structured E_CONTENT_SCRIPT allows content-script recovery hint", async () => {
+		const runJs = vi.fn().mockResolvedValue({
+			status: "err",
+			error: {
+				kind: "runtime",
+				name: null,
+				message: "[page_click] content script disconnected",
+				line: null,
+				action: "page_click",
+				code: "E_CONTENT_SCRIPT",
+				stack: null,
+			},
+			stdout: [],
+			stderr: [],
+		});
+		const tools = makeTools(runJs);
+		const handler = getRunJsHandler(tools);
+		const result = await handler({
+			code: "await web.tab.click({ tabId: 1, refId: 'e2' });",
+		});
+		const envelope = expectErrorEnvelope(result as string);
+		expect(envelope.code).toBe("E_CONTENT_SCRIPT");
+		expect(envelope.hint.toLowerCase()).toContain("content script");
 	});
 	test("empty-message TypeError on setTimeout code yields web.sleep hint", async () => {
 		const runJs = vi.fn().mockResolvedValue({
