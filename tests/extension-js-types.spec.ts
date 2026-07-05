@@ -184,7 +184,7 @@ describe("formatError", () => {
 			},
 			{
 				error: {
-			kind: "js_runtime",
+					kind: "js_runtime",
 					name: null,
 					message: "oops",
 					line: 3,
@@ -195,7 +195,7 @@ describe("formatError", () => {
 			},
 			{
 				error: {
-			kind: "js_runtime",
+					kind: "js_runtime",
 					name: null,
 					message: "oops",
 					line: null,

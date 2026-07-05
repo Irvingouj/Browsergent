@@ -139,7 +139,9 @@ function classifyErrorBase(
 	// runner's notion of the active tab — often the side panel after web.tab.activate),
 	// steer the agent toward web.tab.* with an explicit tabId, which is unambiguous.
 	const isOpaqueRuntimeError =
-		(source.kind === "js_runtime" || source.kind === "api_error" || source.kind === undefined) &&
+		(source.kind === "js_runtime" ||
+			source.kind === "api_error" ||
+			source.kind === undefined) &&
 		(errCode === "E_JS_RUNTIME" || errCode === undefined || errCode === null) &&
 		(!source.message || source.message.trim() === "");
 	if (isOpaqueRuntimeError && callsSetTimeout(jsSource)) {
