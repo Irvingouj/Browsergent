@@ -39,6 +39,7 @@ function domSyncFor(state: InputState): DomSync {
 interface InputBarProps {
 	isRunning: boolean;
 	onRun: () => void;
+	onSteer: (text: string) => void;
 	onStop: () => void;
 	inputRef?: Ref<HTMLDivElement>;
 	filesController: FilesController | null;
@@ -49,6 +50,7 @@ interface InputBarProps {
 export const InputBar: FunctionalComponent<InputBarProps> = ({
 	isRunning,
 	onRun,
+	onSteer,
 	onStop,
 	inputRef,
 	filesController,
@@ -102,15 +104,20 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				});
 				browsergentStore.getState().setTaskDraft(serializeDraft(result.draft));
 			} else if (result.kind === "submitted") {
+				if (!result.value.trim()) return;
 				browsergentStore.getState().setTaskDraft(result.value);
 				setInputState({
 					kind: "needs-dom-reconcile",
 					draft: result.nextDraft,
 				});
-				onRun();
+				if (isRunning) {
+					onSteer(result.value);
+				} else {
+					onRun();
+				}
 			}
 		},
-		[onRun],
+		[isRunning, onRun, onSteer],
 	);
 
 	const mode = useInputMode({
@@ -305,7 +312,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						onBlur={mode.onBlur}
 						onPaste={handlePaste}
 						placeholder="Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"
-						disabled={isRunning || isUploading}
+						disabled={isUploading}
 						class={INPUT_CLASS}
 					/>
 				</div>

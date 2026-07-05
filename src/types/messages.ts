@@ -48,7 +48,8 @@ export type PanelToWorker =
 			skillName: string;
 			skillBody: string;
 			url: string;
-	  };
+	  }
+	| { type: "agentSteer"; runId: string; text: string };
 
 export interface WorkerSettings {
 	wireFormat: WireFormat;

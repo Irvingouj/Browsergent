@@ -146,7 +146,7 @@ export function interpretKey(
 					nextMode: { kind: "plain" },
 				};
 			}
-			if (e.key === "Enter" && !e.shiftKey && !ctx.isRunning) {
+			if (e.key === "Enter" && !e.shiftKey) {
 				return { type: "prevent-default", effect: "submit" };
 			}
 			if (e.key === "ArrowDown" && ctx.caretAtEnd) {
@@ -170,7 +170,7 @@ export function interpretKey(
 			if (e.key === "Escape") {
 				return null; // hook will blur; no preventDefault needed
 			}
-			if (e.key === "Enter" && !e.shiftKey && !ctx.isRunning) {
+			if (e.key === "Enter" && !e.shiftKey) {
 				return { type: "prevent-default", effect: "submit" };
 			}
 			if (e.key === "ArrowUp" && ctx.caretAtStart) {

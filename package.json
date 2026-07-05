@@ -13,6 +13,9 @@
 		"test:unit": "vitest run",
 		"test:unit:coverage": "vitest run --coverage",
 		"test:all": "vitest run && npx playwright test",
+		"test:mock": "npx playwright test tests/steer-mock.spec.ts",
+		"replay": "node scripts/replay-llm.mjs",
+		"record": "node scripts/record-cassette.mjs",
 		"smoke": "node scripts/smoke.mjs"
 	},
 	"dependencies": {

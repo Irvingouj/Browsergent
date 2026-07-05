@@ -97,6 +97,21 @@ describe("WorkerBridge", () => {
 		expect(postMessageSpy).toHaveBeenCalledWith({ type: "agentStop" });
 	});
 
+	test("posts agentSteer message to worker", () => {
+		const bridge = new WorkerBridge();
+		bridge.start();
+		bridge.post({
+			type: "agentSteer",
+			runId: "run-1",
+			text: "focus on the title",
+		});
+		expect(postMessageSpy).toHaveBeenCalledWith({
+			type: "agentSteer",
+			runId: "run-1",
+			text: "focus on the title",
+		});
+	});
+
 	test("stop terminates worker", () => {
 		const bridge = new WorkerBridge();
 		bridge.start();

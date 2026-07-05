@@ -24,3 +24,8 @@ reasonix.toml
 .agents/
 OBSERVATION_ACTION_SAFETY_PLAN.md
 *-PLAN.md
+# LLM cassette secrets — recorder writes no keys, but guard against accidents
+**/.env
+**/rc.deepseek*
+**/*api-key*
+**/credentials*

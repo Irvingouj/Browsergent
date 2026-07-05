@@ -83,13 +83,15 @@ describe("interpretKey — plain-mode Enter", () => {
 		expect(result).toBeNull();
 	});
 
-	test("Enter while running returns null (don't submit)", () => {
+	test("Enter while running still submits (steer path)", () => {
 		const result = interpretKey(
 			{ kind: "plain" },
 			{ key: "Enter", shiftKey: false } as KeyboardEvent,
 			{ itemCount: 0, caretAtStart: false, caretAtEnd: false, isRunning: true },
 		);
-		expect(result).toBeNull();
+		// Submit now fires regardless of running state — InputBar's dispatch
+		// routes it to onSteer (not onRun) when isRunning.
+		expect(result).toEqual({ type: "prevent-default", effect: "submit" });
 	});
 });
 

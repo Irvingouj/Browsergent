@@ -462,6 +462,16 @@ const App: FunctionalComponent = () => {
 		bridgeRef.current?.post({ type: "agentStop", runId });
 	}, [bridgeRef]);
 
+	const handleSteer = useCallback(
+		(text: string) => {
+			const runId = browsergentStore.getState().agent.activeRunId;
+			if (!runId) return;
+			browsergentStore.getState().setTaskDraft("");
+			bridgeRef.current?.post({ type: "agentSteer", runId, text });
+		},
+		[bridgeRef],
+	);
+
 	const handleExportConversation = useCallback(() => {
 		exportConversation(buildExportSnapshot(messages, trace, diagnostics));
 	}, [messages, trace, diagnostics]);
@@ -756,6 +766,7 @@ const App: FunctionalComponent = () => {
 				<InputBar
 					isRunning={isRunning}
 					onRun={handleRun}
+					onSteer={handleSteer}
 					onStop={handleStop}
 					inputRef={inputRef}
 					filesController={filesControllerRef.current}

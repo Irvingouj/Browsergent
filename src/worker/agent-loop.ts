@@ -313,6 +313,29 @@ export class AgentLoop {
 		streamLog("agentloop.steer_skill", { skillName, url });
 	}
 
+	/**
+	 * Steer a user-typed follow-up into the running turn. Queues, never
+	 * interrupts — same SDK path as steerSkill. Unlike skills, no dedup:
+	 * users steer repeatedly. Surfaces the text as a user message bubble so
+	 * the human sees what they injected.
+	 */
+	async steerUser(text: string, callbacks: AgentLoopCallbacks): Promise<void> {
+		if (!this.agent || this.aborted) return;
+		callbacks.onMessage("user", text);
+		try {
+			await this.agent.steer({ text, source: { kind: "user" as const } });
+			streamLog("agentloop.steer_user", { len: text.length });
+		} catch (err) {
+			// steer() can reject if the run ends between the guard and the call.
+			// The bubble stays — the user said it; surface the failure, don't drop it.
+			const message = err instanceof Error ? err.message : String(err);
+			callbacks.onMessage(
+				"system",
+				`Couldn't deliver steer mid-action: ${message}`,
+			);
+		}
+	}
+
 	reset(): void {
 		this.aborted = true;
 		this.agent?.stop();

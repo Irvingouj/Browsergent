@@ -18,7 +18,7 @@ import type {
 	WorkerToPanel,
 } from "../types/messages";
 import { enableStreamDebug, streamLog } from "../utils/stream-logger";
-import { AgentLoop } from "./agent-loop";
+import { AgentLoop, type AgentLoopCallbacks } from "./agent-loop";
 import { setCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { FileOpRelay } from "./file-op-relay";
@@ -55,6 +55,7 @@ function isBrowsergentErrorCode(value: string): value is BrowsergentErrorCode {
 declare const self: DedicatedWorkerGlobalScope;
 
 let agentLoop: AgentLoop | null = null;
+let currentCallbacks: AgentLoopCallbacks | null = null;
 let currentRunId: string | null = null;
 let currentSessionId: string | null = null;
 let currentActivatedSkills: string[] = [];
@@ -260,83 +261,91 @@ function handleAgentStart(
 		});
 		return;
 	}
-
 	if (agentLoop) {
 		agentLoop.stop();
 	}
 
 	agentLoop = new AgentLoop();
+	const callbacks: AgentLoopCallbacks = {
+		onStatus(status, reason) {
+			postIfCurrentRun(runId, {
+				type: "agentStatus",
+				runId,
+				status,
+				reason,
+			});
+		},
+		onMessage(kind, text, id) {
+			postIfCurrentRun(runId, {
+				type: "agentMessage",
+				runId,
+				message: {
+					kind,
+					id: id ?? crypto.randomUUID(),
+					text,
+					timestamp: Date.now(),
+				},
+			});
+		},
+		onTextDelta(messageId, text) {
+			streamLog("worker.post_delta", {
+				msgId: messageId.slice(0, 8),
+				len: text.length,
+			});
+			postIfCurrentRun(runId, {
+				type: "agentTextDelta",
+				runId,
+				messageId,
+				text,
+			});
+		},
+		onMessageEnd(messageId) {
+			postIfCurrentRun(runId, {
+				type: "agentMessageEnd",
+				runId,
+				messageId,
+			});
+		},
+		onTrace(entry: AgentTraceEntry) {
+			postIfCurrentRun(runId, { type: "agentTrace", runId, entry });
+		},
+		onDiagnostic(event) {
+			postIfCurrentRun(runId, { type: "agentDiagnostic", runId, event });
+		},
+		onError(code, message) {
+			postIfCurrentRun(runId, {
+				type: "agentError",
+				runId,
+				error: {
+					code: isBrowsergentErrorCode(code) ? code : "E_UNKNOWN",
+					message,
+				},
+			});
+		},
+		runJs(code) {
+			return relayExtjsExecution(code);
+		},
+		getDocs(format) {
+			return relayExtjsDocs(format);
+		},
+		loadSkill(skill, path) {
+			return relayLoadSkill(skill, path);
+		},
+		fileOp(op) {
+			return relayFileOp(op);
+		},
+	};
+	currentCallbacks = callbacks;
 
 	agentLoop
-		.run(sessionId, task, resolvedTask ?? task, skillCatalog ?? "", settings, {
-			onStatus(status, reason) {
-				postIfCurrentRun(runId, {
-					type: "agentStatus",
-					runId,
-					status,
-					reason,
-				});
-			},
-			onMessage(kind, text, id) {
-				postIfCurrentRun(runId, {
-					type: "agentMessage",
-					runId,
-					message: {
-						kind,
-						id: id ?? crypto.randomUUID(),
-						text,
-						timestamp: Date.now(),
-					},
-				});
-			},
-			onTextDelta(messageId, text) {
-				streamLog("worker.post_delta", {
-					msgId: messageId.slice(0, 8),
-					len: text.length,
-				});
-				postIfCurrentRun(runId, {
-					type: "agentTextDelta",
-					runId,
-					messageId,
-					text,
-				});
-			},
-			onMessageEnd(messageId) {
-				postIfCurrentRun(runId, {
-					type: "agentMessageEnd",
-					runId,
-					messageId,
-				});
-			},
-			onTrace(entry: AgentTraceEntry) {
-				postIfCurrentRun(runId, { type: "agentTrace", runId, entry });
-			},
-			onDiagnostic(event) {
-				postIfCurrentRun(runId, { type: "agentDiagnostic", runId, event });
-			},
-			onError(code, message) {
-				postIfCurrentRun(runId, {
-					type: "agentError",
-					runId,
-					error: {
-						code: isBrowsergentErrorCode(code) ? code : "E_UNKNOWN",
-						message,
-					},
-				});
-			},
-			runJs(code) {
-				return relayExtjsExecution(code);
-			},
-			getDocs(format) {
-				return relayExtjsDocs(format);
-			},
-			loadSkill(skill, path) {
-				return relayLoadSkill(skill, path);
-			},
-			fileOp(op) {
-				return relayFileOp(op);
-			},
-		})
+		.run(
+			sessionId,
+			task,
+			resolvedTask ?? task,
+			skillCatalog ?? "",
+			settings,
+			callbacks,
+		)
 		.catch((err) => {
 			if (runId === currentRunId) {
 				post({
@@ -362,6 +371,7 @@ function handleAgentStop(runId?: string): void {
 	}
 	const stoppedRunId = currentRunId ?? "unknown";
 	currentRunId = null; // prevent late agent callbacks from overwriting the stopped status
+	currentCallbacks = null;
 	currentSessionId = null;
 	currentActivatedSkills = [];
 	post({
@@ -383,6 +393,7 @@ function handleAgentReset(): void {
 	loadSkillRelay.rejectAll("Agent reset");
 	fileOpRelay.rejectAll("Agent reset");
 	agentLoop = null;
+	currentCallbacks = null;
 	currentSessionId = null;
 	currentActivatedSkills = [];
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
@@ -451,6 +462,18 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 				void agentLoop?.steerSkill(msg.skillName, msg.skillBody, msg.url);
 			}
 			break;
+		case "agentSteer": {
+			const loop = agentLoop;
+			if (
+				loop &&
+				currentCallbacks &&
+				msg.runId === currentRunId &&
+				msg.text.trim().length > 0
+			) {
+				void loop.steerUser(msg.text, currentCallbacks);
+			}
+			break;
+		}
 	}
 };
 

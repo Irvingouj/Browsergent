@@ -1,0 +1,11 @@
+[
+	{
+		"user": "I'm on a web page. First, take a snapshot of the page so you can see what's there. Then describe what you find in detail.",
+		"maxTokens": 2048
+	},
+	{
+		"toolResult": "[page.snapshot result] Page title: \"Example Domain\". Page URL: https://example.com. One heading: \"Example Domain\". One paragraph of placeholder text. One link: \"More information...\".",
+		"toolUseId": "RECORDED_TOOL_USE_ID",
+		"maxTokens": 2048
+	}
+]

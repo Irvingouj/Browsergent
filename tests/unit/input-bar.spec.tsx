@@ -63,6 +63,7 @@ describe("InputBar", () => {
 			<InputBar
 				isRunning={false}
 				onRun={() => {}}
+				onSteer={() => {}}
 				onStop={() => {}}
 				filesController={null}
 				sessionId="session-1"
@@ -80,6 +81,7 @@ describe("InputBar", () => {
 			<InputBar
 				isRunning={true}
 				onRun={() => {}}
+				onSteer={() => {}}
 				onStop={() => {}}
 				filesController={null}
 				sessionId="session-1"
@@ -89,17 +91,19 @@ describe("InputBar", () => {
 		expect(html).not.toContain("Run");
 	});
 
-	test("disables input when running", () => {
+	test("keeps input editable while running (steer)", () => {
 		const html = render(
 			<InputBar
 				isRunning={true}
 				onRun={() => {}}
+				onSteer={() => {}}
 				onStop={() => {}}
 				filesController={null}
 				sessionId="session-1"
 			/>,
 		);
-		expect(html).not.toMatch(/contenteditable/);
+		expect(html).toMatch(/contenteditable/);
+		expect(html).toContain('data-testid="stop-button"');
 	});
 
 	test("does not disable input when not running", () => {
@@ -107,6 +111,7 @@ describe("InputBar", () => {
 			<InputBar
 				isRunning={false}
 				onRun={() => {}}
+				onSteer={() => {}}
 				onStop={() => {}}
 				filesController={null}
 				sessionId="session-1"
