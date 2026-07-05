@@ -696,7 +696,7 @@ const App: FunctionalComponent = () => {
 			{/* Main content */}
 			<div
 				ref={chatScrollRef}
-				class="flex-1 overflow-auto p-md relative z-10 flex flex-col gap-md"
+			class="chat-scroll flex-1 overflow-auto p-md relative z-10 flex flex-col gap-md"
 			>
 				{activeTab === "chat" && messages.length > 0 && !isRunning && (
 					<button
