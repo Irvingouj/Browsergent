@@ -103,7 +103,8 @@ import { SITE } from "../site";
       <ul>
         <li><strong>Chrome only.</strong> MV3 side panel + content scripts; not ported to Firefox/Safari.</li>
         <li><strong>Anthropic Messages API only.</strong> OpenAI-native function-calling isn&rsquo;t supported on the wire.</li>
-        <li><strong>No headless mode.</strong> It drives your real tab.</li>
+        <li><strong>Drives your real tab</strong> (not a remote browser farm).</li>
+        <li><strong>Closing the side panel stops agent runs</strong> (by design). While the panel stays open, other sessions may keep running in the background of that panel (not on the chat frontend).</li>
         <li><strong>Context-bound.</strong> Long sessions are compacted, but very long tasks may lose earlier detail.</li>
         <li><strong>Single tab.</strong> The agent operates on one active tab at a time.</li>
         <li><strong>Stale refIds.</strong> Snapshot refs (<code>eNNN</code>) are single-use within an observation &mdash; reusing one is the most common failure.</li>

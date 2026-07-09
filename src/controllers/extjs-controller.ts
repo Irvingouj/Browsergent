@@ -1,43 +1,55 @@
 import { normalizeJsError } from "../errors/normalize-error";
+import { reportError, reportWarn } from "../errors/report";
 import {
 	ExtensionJsClient,
 	type ExtjsRelayResponse,
 } from "../sidepanel/extension-js-client";
 import { getSkillService } from "../skills/skill-service";
 import { browsergentStore } from "../state/store";
-import type { WorkerBridge } from "./worker-bridge";
+import type { PanelToWorker } from "../types/messages";
+
+export type WorkerPostFn = (message: PanelToWorker) => void;
 
 export class ExtjsController {
 	private client: ExtensionJsClient;
 
-	constructor(private bridge: WorkerBridge) {
+	constructor(private postToWorker: WorkerPostFn) {
 		this.client = ExtensionJsClient.getInstance();
 	}
 
-	async init(): Promise<void> {
+	async init(options?: { windowId?: number }): Promise<void> {
 		browsergentStore.getState().extjsInitializing();
 
 		try {
-			await this.client.init();
+			await this.client.init(options);
 			ExtensionJsClient.relayCallback = (msg: ExtjsRelayResponse) => {
-				this.bridge.post(msg);
+				this.postToWorker(msg);
 			};
 			this.client.setOnFsMutation(() => {
 				browsergentStore.getState().incrementFilesVersion();
 			});
 			browsergentStore.getState().extjsReady();
 		} catch (err: unknown) {
-			browsergentStore.getState().extjsFailed(normalizeJsError(err));
+			const normalized = normalizeJsError(err);
+			browsergentStore.getState().extjsFailed(normalized);
+			reportError({
+				code: "E_BOOT_EXTJS",
+				source: "extjs",
+				message: normalized.message,
+				cause: err,
+			});
 			throw err;
 		}
 
 		try {
 			await getSkillService().ensureReady();
 		} catch (err: unknown) {
-			console.warn(
-				"Skill initialization failed:",
-				err instanceof Error ? err.message : String(err),
-			);
+			reportWarn({
+				code: "E_HOST_UNKNOWN",
+				source: "boot",
+				message: "Skill initialization failed",
+				cause: err,
+			});
 		}
 	}
 
@@ -72,10 +84,10 @@ export class ExtjsController {
 				activatedSkills,
 			})
 			.then((content) => {
-				this.bridge.post({ type: "loadSkillResult", id, content });
+				this.postToWorker({ type: "loadSkillResult", id, content });
 			})
 			.catch((err: unknown) => {
-				this.bridge.post({
+				this.postToWorker({
 					type: "loadSkillError",
 					id,
 					error: err instanceof Error ? err.message : String(err),
@@ -83,11 +95,24 @@ export class ExtjsController {
 			});
 	}
 
+	getWindowId(): number | null {
+		return this.client.getWindowId();
+	}
+
+	rebindWindow(newWindowId: number): void {
+		this.client.rebindWindow(newWindowId);
+	}
+
 	async stop(): Promise<void> {
 		try {
 			await this.client.stop();
 		} catch (err: unknown) {
-			console.warn("Extjs stop failed:", err);
+			reportWarn({
+				code: "E_BOOT_EXTJS",
+				source: "extjs",
+				message: "Extjs stop failed",
+				cause: err,
+			});
 		}
 	}
 
@@ -98,7 +123,12 @@ export class ExtjsController {
 		try {
 			await this.client.dispose();
 		} catch (err: unknown) {
-			console.warn("Extjs dispose failed:", err);
+			reportWarn({
+				code: "E_BOOT_EXTJS",
+				source: "extjs",
+				message: "Extjs dispose failed",
+				cause: err,
+			});
 		}
 	}
 }

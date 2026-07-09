@@ -219,17 +219,24 @@ All cross-thread requests follow the identical "post + park a Promise + 30s time
 
 ### 4.3 Side panel main thread
 
-- **`ExtensionJsClient`** (`src/sidepanel/extension-js-client.ts`) — **singleton** (mandatory:
-  extension-js uses a module-level `AbortController`; multiple sessions would race).
-  Serializes all access through a promise-chain queue. On non-timeout error it calls
+- **`ExtensionJsClient`** (`src/sidepanel/extension-js-client.ts`) — one instance per
+  side-panel document (each Chrome window gets its own panel realm, and each panel
+  owns one ExtensionSession). extension-js now holds the AbortController per-session
+  (no module global), so multi-window isolation is safe. Serializes all access through
+  a promise-chain queue. On non-timeout error it calls
   `rebuildSession()` (stop → re-init → health-check `runCellAsync('1+1')`). Also implements
   `SkillFsClient`, so **skills and files share one OPFS root**.
 - **Controllers** (`src/controllers/`) — `WorkerBridge` (sole worker→store bridge,
   validates every message via `worker-guards.ts`, drops stale `runId`s), `ExtjsController`,
-  `SessionController` (≤50 sessions, 500ms debounced save), `FilesController`, `SettingsController`.
-- **UI/state** — Preact `App` over a 10-slice Zustand vanilla store
+  `SessionController` (≤50 sessions, 500ms debounced save), `FilesController`, `SettingsController`,
+  `RunSupervisor` with **`hosting: "local"`** (workers live in the panel document).
+- **Run lifetime (product):** Closing the side panel ends all agent runs hosted there.
+  “Background” means other sessions may keep running **while the same panel stays open**
+  (N concurrent sessions; only one is the chat foreground). We do **not** keep agents
+  running after the panel is closed.
+- **UI/state** — Preact `App` over a Zustand vanilla store
   (`src/state/store.ts`: settings, chat, agent, trace, diagnostics, extjs, ui, session,
-  skills, files). Streaming text uses `@preact/signals` (`streaming-signals.ts`).
+  skills, files, boot). Streaming text uses `@preact/signals` (`streaming-signals.ts`).
 
 ### 4.4 Skills & files
 

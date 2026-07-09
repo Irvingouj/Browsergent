@@ -7,10 +7,13 @@ test("manifest grants host access for normal web pages", async () => {
 	const manifestPath = path.resolve("dist/manifest.json");
 	const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
 		action?: { default_icon?: Record<string, string> };
+		background?: { service_worker?: string; type?: string };
 		host_permissions?: string[];
 		icons?: Record<string, string>;
 	};
 
+	expect(manifest.background?.service_worker).toBe("background.js");
+	expect(manifest.background?.type).toBe("module");
 	expect(manifest.host_permissions).toEqual(["http://*/*", "https://*/*"]);
 	expect(manifest.icons?.["128"]).toBe("icons/icon-128.png");
 	expect(manifest.action?.default_icon?.["32"]).toBe("icons/icon-32.png");

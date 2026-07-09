@@ -1,5 +1,5 @@
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
 import type { SessionController } from "../controllers/session-controller";
 import type { SessionListItem } from "../state/slices/session-slice";
@@ -7,10 +7,13 @@ import { browsergentStore } from "../state/store";
 
 interface SessionPanelProps {
 	sessionController: SessionController;
+	panelWindowId: number | null;
+	runningSessionIds?: string[];
 	onSwitchSession: (id: string) => void;
 	onCreateSession: () => void;
 	onDeleteSession: (id: string) => void;
 	onUpdateTitle: (id: string, title: string) => void;
+	onBlockedSession: () => void;
 	onSettingsClick: () => void;
 	canSwitch: boolean;
 }
@@ -29,10 +32,13 @@ function formatRelativeTime(timestamp: number): string {
 
 export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	sessionController,
+	panelWindowId,
+	runningSessionIds = [],
 	onSwitchSession,
 	onCreateSession,
 	onDeleteSession,
 	onUpdateTitle,
+	onBlockedSession,
 	onSettingsClick,
 	canSwitch,
 }) => {
@@ -44,31 +50,32 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editValue, setEditValue] = useState("");
 
-	useEffect(() => {
-		sessionController.listSessions().then(({ sessions }) => {
-			browsergentStore.getState().sessionListLoaded(sessions);
-		});
-	}, [sessionController]);
-
 	const closePanel = useCallback(() => {
 		browsergentStore.getState().sessionPanelOpenChanged(false);
 	}, []);
 
 	const handleItemClick = useCallback(
-		(id: string) => {
-			if (!canSwitch) return;
-			onSwitchSession(id);
+		(session: SessionListItem) => {
+			if (session.openable === false) {
+				onBlockedSession();
+				return;
+			}
+			onSwitchSession(session.id);
 		},
-		[canSwitch, onSwitchSession],
+		[onSwitchSession, onBlockedSession],
 	);
 
 	const handleTitleClick = useCallback(
 		(e: MouseEvent, session: SessionListItem) => {
 			e.stopPropagation();
+			if (session.openable === false) {
+				onBlockedSession();
+				return;
+			}
 			setEditingId(session.id);
 			setEditValue(session.title);
 		},
-		[],
+		[onBlockedSession],
 	);
 
 	const handleEditSave = useCallback(() => {
@@ -91,11 +98,18 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	);
 
 	const handleDeleteClick = useCallback(
-		(e: MouseEvent, id: string) => {
+		(e: MouseEvent, session: SessionListItem) => {
 			e.stopPropagation();
-			onDeleteSession(id);
+			if (session.openable === false) {
+				onBlockedSession();
+				return;
+			}
+			if (session.running) {
+				return;
+			}
+			onDeleteSession(session.id);
 		},
-		[onDeleteSession],
+		[onDeleteSession, onBlockedSession],
 	);
 
 	const visibleSessions = sessions.filter(
@@ -172,22 +186,28 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 						visibleSessions.map((session) => {
 							const isActive = session.id === activeSessionId;
 							const isEditing = editingId === session.id;
+							const rowOpenable = session.openable !== false;
+							const isRunning = session.running === true;
 							return (
 								<div
 									key={session.id}
 									data-testid="session-item"
-									onClick={() => handleItemClick(session.id)}
+									data-session-id={session.id}
+									data-session-openable={session.openable !== false}
+									onClick={() => handleItemClick(session)}
 									class={[
-										"group px-md py-sm border-b border-border cursor-pointer transition-all relative",
-										!canSwitch
-											? "opacity-40 cursor-not-allowed"
-											: "hover:bg-bg-hover",
+										"group px-md py-sm border-b border-border transition-all relative",
+										rowOpenable
+											? "cursor-pointer hover:bg-bg-hover"
+											: "opacity-50 cursor-not-allowed",
 										isActive ? "bg-accent-soft border-l-2 border-l-accent" : "",
 									].join(" ")}
 									title={
-										canSwitch
-											? undefined
-											: "Cannot switch while agent is running"
+										session.openable === false
+											? "Open this session in its window"
+											: isRunning && !isActive
+												? "Agent running in background — click to subscribe"
+												: undefined
 									}
 								>
 									<div class="flex items-center">
@@ -211,7 +231,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 												}
 												class="text-sm font-semibold text-text-primary truncate flex-1"
 												style={{
-													cursor: canSwitch ? "text" : "not-allowed",
+													cursor: rowOpenable ? "text" : "not-allowed",
 												}}
 											>
 												{session.title || "Untitled"}
@@ -224,7 +244,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 											onClick={(e) =>
 												handleDeleteClick(
 													e as unknown as MouseEvent,
-													session.id,
+													session,
 												)
 											}
 											class="absolute top-sm right-md p-[2px_6px] bg-transparent border-none text-text-dim cursor-pointer text-sm opacity-0 group-hover:opacity-100 hover:text-danger transition-opacity"
@@ -232,9 +252,35 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 											×
 										</button>
 									</div>
-									<div class="text-[10px] text-text-dim mt-xs font-mono">
-										{session.messageCount} messages ·{" "}
-										{formatRelativeTime(session.timestamp)}
+									<div class="text-[10px] text-text-dim mt-xs font-mono flex flex-wrap gap-xs items-center">
+										<span>
+											{session.messageCount} messages ·{" "}
+											{formatRelativeTime(session.timestamp)}
+										</span>
+										{session.windowLabel ? (
+											<span
+												data-testid="session-window-badge"
+												class="px-[4px] py-[1px] rounded bg-bg-muted border border-border text-[9px]"
+											>
+												{session.windowLabel}
+											</span>
+										) : null}
+										{session.lifecycle === "background" ? (
+											<span
+												data-testid="session-lifecycle-badge"
+												class="px-[4px] py-[1px] rounded bg-bg-muted border border-border text-[9px]"
+											>
+												Background
+											</span>
+										) : null}
+										{isRunning ? (
+											<span
+												data-testid="session-running-badge"
+												class="px-[4px] py-[1px] rounded bg-warning/20 border border-warning/40 text-warning text-[9px]"
+											>
+												Running
+											</span>
+										) : null}
 									</div>
 								</div>
 							);

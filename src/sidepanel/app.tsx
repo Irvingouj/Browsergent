@@ -1,5 +1,5 @@
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
 import {
 	buildExportSnapshot,
@@ -14,11 +14,19 @@ import { getSkillService } from "../skills/skill-service";
 import type { SkillDiagnostic } from "../skills/skill-types";
 import { matchSkillsToUrl } from "../skills/url-match";
 import {
+	formatDiagSnapshot,
+	getMemoryDiagRing,
+	readDiagRingFromSession,
+	reportError,
+} from "../errors/report";
+import {
 	selectActiveProvider,
 	selectActiveSessionId,
 	selectActiveTab,
 	selectAgentStatus,
 	selectAgentStatusReason,
+	selectBootHealth,
+	selectBootHostError,
 	selectDiagnosticEvents,
 	selectMessageIds,
 	selectMessagesById,
@@ -61,6 +69,10 @@ import {
 	parseTabMentions,
 	resolveTabMentions,
 } from "./resolve-tab-mentions";
+import {
+	CROSS_WINDOW_SESSION_MESSAGE,
+	collectRunningSessionIds,
+} from "../controllers/session-window-utils";
 import { SessionPanel } from "./session-panel";
 import { getUrlTracker } from "./url-tracker";
 
@@ -129,6 +141,8 @@ const App: FunctionalComponent = () => {
 	const _sessions = useStore(browsergentStore, selectSessions);
 	const _activeSessionId = useStore(browsergentStore, selectActiveSessionId);
 	const sessionError = useStore(browsergentStore, selectSessionError);
+	const bootHealth = useStore(browsergentStore, selectBootHealth);
+	const bootHostError = useStore(browsergentStore, selectBootHostError);
 	const activeTab = useStore(browsergentStore, selectActiveTab);
 	const skillDiagnostics = useStore(browsergentStore, selectSkillDiagnostics);
 	const skillIssueTitle = skillDiagnostics
@@ -138,17 +152,38 @@ const App: FunctionalComponent = () => {
 	const {
 		initialized,
 		workerReady,
-		bridgeRef,
-		extjsControllerRef: _extjsControllerRef,
+		windowId,
+		supervisorRef,
+		onRunningSessionsChangedRef,
+		extjsControllerRef,
 		settingsControllerRef,
 		sessionControllerRef,
 		filesControllerRef,
+		windowContextRef,
 	} = useAppInit();
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
 	const inputRef = useRef<HTMLDivElement | null>(null);
 	const prevIsRunning = useRef<boolean>(false);
 	const shouldFocusRef = useRef<boolean>(false);
+	const [runningSessionIds, setRunningSessionIds] = useState<string[]>([]);
+	const [globalRunningBySession, setGlobalRunningBySession] = useState<
+		Record<string, number>
+	>({});
 	useTitleGeneration(sessionControllerRef, messages);
+
+	const syncLocalRunningToCoordinator = useCallback(() => {
+		const local =
+			supervisorRef.current?.getRegistry().getRunningSessionIds() ?? [];
+		windowContextRef.current?.reportRunningSessions(local);
+		const wid = windowId ?? windowContextRef.current?.getWindowId();
+		if (wid !== null && wid !== undefined && sessionControllerRef.current) {
+			void sessionControllerRef.current.updateRunningSessionsForWindow(
+				wid,
+				local,
+			);
+		}
+		return local;
+	}, [supervisorRef, windowContextRef, sessionControllerRef, windowId]);
 
 	useEffect(() => {
 		const snapshot = currentSessionSnapshot();
@@ -216,7 +251,7 @@ const App: FunctionalComponent = () => {
 					agentState.status === "waiting_for_model" ||
 					agentState.status === "executing_tool";
 				if (isRunning && agentState.activeRunId) {
-					bridgeRef.current?.post({
+					supervisorRef.current?.postToForeground({
 						type: "skillAutoActivate",
 						runId: agentState.activeRunId,
 						skillName: skill.name,
@@ -229,7 +264,7 @@ const App: FunctionalComponent = () => {
 			}
 		});
 		return unsub;
-	}, [bridgeRef]);
+	}, [supervisorRef]);
 
 	const handleRun = useCallback(async () => {
 		const task = browsergentStore.getState().ui.taskDraft.trim();
@@ -418,9 +453,6 @@ const App: FunctionalComponent = () => {
 
 		browsergentStore.getState().setTaskDraft("");
 
-		const runId = crypto.randomUUID();
-		browsergentStore.getState().agentRunRequested(runId);
-
 		const activeModel = activeProvider
 			? defaultModelForProvider(activeProvider)
 			: null;
@@ -433,7 +465,20 @@ const App: FunctionalComponent = () => {
 			return;
 		}
 
-		bridgeRef.current?.post({
+		const runId = crypto.randomUUID();
+		browsergentStore.getState().agentRunRequested(runId);
+		supervisorRef.current?.registerRun(sessionId, runId);
+		const local = syncLocalRunningToCoordinator();
+		const persisted =
+			sessionControllerRef.current?.getGlobalRunningSessionIds() ?? [];
+		const allRunning = collectRunningSessionIds(
+			local,
+			persisted,
+			globalRunningBySession,
+		);
+		setRunningSessionIds(allRunning);
+
+		supervisorRef.current?.postToForeground({
 			type: "agentStart",
 			runId,
 			sessionId,
@@ -455,21 +500,28 @@ const App: FunctionalComponent = () => {
 						model: "",
 					},
 		});
-	}, [activeProvider, sessionControllerRef, bridgeRef, filesControllerRef]);
+	}, [
+		activeProvider,
+		sessionControllerRef,
+		supervisorRef,
+		filesControllerRef,
+		syncLocalRunningToCoordinator,
+		globalRunningBySession,
+	]);
 
 	const handleStop = useCallback(() => {
 		const runId = browsergentStore.getState().agent.activeRunId;
-		bridgeRef.current?.post({ type: "agentStop", runId });
-	}, [bridgeRef]);
+		supervisorRef.current?.stopForegroundRun(runId);
+	}, [supervisorRef]);
 
 	const handleSteer = useCallback(
 		(text: string) => {
 			const runId = browsergentStore.getState().agent.activeRunId;
 			if (!runId) return;
 			browsergentStore.getState().setTaskDraft("");
-			bridgeRef.current?.post({ type: "agentSteer", runId, text });
+			supervisorRef.current?.postToForeground({ type: "agentSteer", runId, text });
 		},
-		[bridgeRef],
+		[supervisorRef],
 	);
 
 	const handleExportConversation = useCallback(() => {
@@ -488,11 +540,163 @@ const App: FunctionalComponent = () => {
 	}, [filesControllerRef]);
 
 	const reloadSessionList = useCallback(async () => {
-		const result = await sessionControllerRef.current?.listSessions();
-		if (result) {
-			browsergentStore.getState().sessionListLoaded(result.sessions);
-		}
-	}, [sessionControllerRef]);
+		windowContextRef.current?.requestGlobalRunningSnapshot();
+		const ctrl = sessionControllerRef.current;
+		const wid = windowId ?? ctrl?.getPanelWindowId() ?? undefined;
+		if (!ctrl) return;
+		await ctrl.refreshMeta();
+		const result = await ctrl.listSessions(wid);
+		const local = syncLocalRunningToCoordinator();
+		const runningIds = collectRunningSessionIds(
+			local,
+			ctrl.getGlobalRunningSessionIds(),
+			globalRunningBySession,
+		);
+		const runningSet = new Set(runningIds);
+		setRunningSessionIds(runningIds);
+		browsergentStore.getState().sessionListLoaded(
+			result.sessions.map((s) => ({
+				...s,
+				running: runningSet.has(s.id),
+			})),
+		);
+	}, [
+		sessionControllerRef,
+		windowContextRef,
+		windowId,
+		syncLocalRunningToCoordinator,
+		globalRunningBySession,
+	]);
+
+	useEffect(() => {
+		onRunningSessionsChangedRef.current = () => {
+			void reloadSessionList();
+		};
+		return () => {
+			onRunningSessionsChangedRef.current = null;
+		};
+	}, [onRunningSessionsChangedRef, reloadSessionList]);
+
+	useEffect(() => {
+		const ctx = windowContextRef.current;
+		if (!ctx) return;
+		return ctx.subscribeGlobalRunning((message) => {
+			setGlobalRunningBySession({ ...message.bySession });
+		});
+	}, [initialized, windowContextRef]);
+
+	useEffect(() => {
+		if (!initialized) return;
+		void reloadSessionList();
+	}, [initialized, globalRunningBySession, reloadSessionList]);
+
+	useEffect(() => {
+		if (!initialized || !sessionPanelOpen) return;
+		void reloadSessionList();
+	}, [initialized, sessionPanelOpen, reloadSessionList]);
+
+	useEffect(() => {
+		const ctx = windowContextRef.current;
+		const sessionCtrl = sessionControllerRef.current;
+		const supervisor = supervisorRef.current;
+		if (!ctx || !sessionCtrl) return;
+		return ctx.subscribeLifecycle((message) => {
+			const run = async () => {
+				if (message.kind === "split") {
+					void reloadSessionList();
+					return;
+				}
+				if (message.kind === "close") {
+					const removed = message.removedWindowId;
+					if (typeof removed !== "number") return;
+					await sessionCtrl.applyWindowClose(removed);
+					void reloadSessionList();
+					return;
+				}
+				if (message.kind === "merge") {
+					const removed = message.removedWindowId;
+					const survivor = message.survivorWindowId;
+					if (
+						typeof removed !== "number" ||
+						typeof survivor !== "number"
+					) {
+						return;
+					}
+					await sessionCtrl.applyWindowMerge(removed, survivor);
+					const panelWid =
+						windowId ?? windowContextRef.current?.getWindowId() ?? null;
+					if (panelWid === survivor) {
+						extjsControllerRef.current?.rebindWindow(survivor);
+						const rebound = message.reboundRunningSessionIds ?? [];
+						if (rebound.length > 0 && typeof chrome !== "undefined") {
+							const { sendMessageSafe } = await import(
+								"../errors/report"
+							);
+							void sendMessageSafe(
+								{
+									type: "offscreenAdoptRuns",
+									sessionIds: rebound,
+									windowId: survivor,
+								},
+								{ source: "lifecycle", op: "offscreenAdoptRuns" },
+							);
+							void sendMessageSafe(
+								{
+									type: "offscreenQueryRuns",
+									sessionIds: rebound,
+								},
+								{ source: "lifecycle", op: "offscreenQueryRuns" },
+							);
+							void sessionCtrl.updateRunningSessionsForWindow(
+								survivor,
+								rebound,
+							);
+						}
+						for (const sessionId of rebound) {
+							const record = await sessionCtrl.getSessionRecord(sessionId);
+							if (!record || record.windowId !== survivor) continue;
+							const isRunning =
+								supervisor?.getRegistry().isRunning(sessionId) ?? false;
+							const fresh = await sessionCtrl.loadForSession(sessionId);
+							if (!fresh) continue;
+							if (isRunning) {
+								supervisor?.detachToHeadless(sessionId);
+								if (sessionCtrl.getActiveSessionId() === sessionId) {
+									supervisor?.attachForeground(sessionId);
+								}
+								continue;
+							}
+							if (sessionCtrl.getActiveSessionId() === sessionId) {
+								browsergentStore.getState().hydrateChat(fresh.messages);
+								browsergentStore.getState().hydrateTrace(fresh.trace);
+								browsergentStore
+									.getState()
+									.hydrateDiagnostics(fresh.diagnostics);
+							}
+						}
+					}
+					void reloadSessionList();
+				}
+			};
+			void run().catch((err: unknown) => {
+				reportError({
+					code: "E_LIFECYCLE",
+					source: "lifecycle",
+					message: `lifecycle handler failed: ${message.kind}`,
+					details: { kind: message.kind },
+					cause: err,
+				});
+			});
+		});
+	}, [
+		initialized,
+		windowContextRef,
+		sessionControllerRef,
+		extjsControllerRef,
+		supervisorRef,
+		windowId,
+		reloadSessionList,
+	]);
 
 	const handleFilesChanged = useCallback(() => {
 		const snapshot = currentSessionSnapshot();
@@ -511,19 +715,57 @@ const App: FunctionalComponent = () => {
 
 	const handleSwitchSession = useCallback(
 		async (id: string) => {
+			const sessionCtrl = sessionControllerRef.current;
+			const supervisor = supervisorRef.current;
+			const wid = windowId ?? sessionCtrl?.getPanelWindowId();
+			if (sessionCtrl && wid !== null && wid !== undefined) {
+				const openable = await sessionCtrl.canOpenSession(id, wid);
+				if (!openable) {
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: CROSS_WINDOW_SESSION_MESSAGE,
+						timestamp: Date.now(),
+					});
+					return;
+				}
+			}
+			const prevId = sessionCtrl?.getActiveSessionId();
 			const snapshot = currentSessionSnapshot();
-			await sessionControllerRef.current?.flushSave(
+			await sessionCtrl?.flushSave(
 				snapshot.messages,
 				snapshot.trace,
 				snapshot.diagnostics,
 			);
-			const data = await sessionControllerRef.current?.switchSession(id);
+			if (
+				supervisor &&
+				prevId &&
+				supervisor.getRegistry().isRunning(prevId) &&
+				prevId !== id
+			) {
+				supervisor.detachToHeadless(prevId);
+			}
+			const data = await sessionCtrl?.switchSession(id);
 			if (data) {
-				browsergentStore.getState().hydrateChat(data.messages);
-				browsergentStore.getState().hydrateTrace(data.trace);
-				browsergentStore.getState().hydrateDiagnostics(data.diagnostics);
+				if (prevId && prevId !== id) {
+					await sessionCtrl?.setSessionLifecycle(prevId, "background");
+				}
+				await sessionCtrl?.setSessionLifecycle(id, "foreground");
+				const fresh = await sessionCtrl?.loadForSession(id);
+				const payload = fresh ?? data;
+				browsergentStore.getState().hydrateChat(payload.messages);
+				browsergentStore.getState().hydrateTrace(payload.trace);
+				browsergentStore.getState().hydrateDiagnostics(payload.diagnostics);
 				await refreshFiles();
 				browsergentStore.getState().activeSessionChanged(id);
+				if (supervisor) {
+					if (supervisor.getRegistry().isRunning(id)) {
+						supervisor.attachForeground(id);
+					} else {
+						supervisor.startForeground(id);
+						supervisor.resetForegroundUi();
+					}
+				}
 			} else {
 				browsergentStore.getState().appendSystemMessage({
 					kind: "system",
@@ -532,35 +774,69 @@ const App: FunctionalComponent = () => {
 					timestamp: Date.now(),
 				});
 			}
-			browsergentStore.getState().agentReset();
 			clearPendingAutoSkills();
 			browsergentStore.getState().sessionPanelOpenChanged(false);
 			browsergentStore.getState().setSettingsOpen(false);
 			await reloadSessionList();
 		},
-		[reloadSessionList, refreshFiles, sessionControllerRef],
+		[
+			reloadSessionList,
+			refreshFiles,
+			sessionControllerRef,
+			supervisorRef,
+			windowId,
+		],
 	);
 
 	const handleCreateSession = useCallback(async () => {
+		const sessionCtrl = sessionControllerRef.current;
+		const supervisor = supervisorRef.current;
+		const prevId = sessionCtrl?.getActiveSessionId();
 		const snapshot = currentSessionSnapshot();
-		await sessionControllerRef.current?.flushSave(
+		await sessionCtrl?.flushSave(
 			snapshot.messages,
 			snapshot.trace,
 			snapshot.diagnostics,
 		);
-		const newId = await sessionControllerRef.current?.createSession();
+		if (
+			supervisor &&
+			prevId &&
+			supervisor.getRegistry().isRunning(prevId)
+		) {
+			supervisor.detachToHeadless(prevId);
+			await sessionCtrl?.setSessionLifecycle(prevId, "background");
+		}
+		const newId = await sessionCtrl?.createSession();
 		if (!newId) return;
 		browsergentStore.getState().clearChat();
 		browsergentStore.getState().clearTrace();
-		browsergentStore.getState().agentReset();
+		browsergentStore.getState().clearDiagnostics();
 		clearPendingAutoSkills();
+		if (supervisor) {
+			supervisor.startForeground(newId);
+			supervisor.resetForegroundUi();
+		}
 		browsergentStore.getState().sessionCreated(newId);
 		browsergentStore.getState().sessionPanelOpenChanged(false);
 		await reloadSessionList();
-	}, [reloadSessionList, sessionControllerRef]);
+	}, [reloadSessionList, sessionControllerRef, supervisorRef]);
 
 	const handleDeleteSession = useCallback(
 		async (id: string) => {
+			const sessionCtrl = sessionControllerRef.current;
+			const wid = windowId ?? sessionCtrl?.getPanelWindowId();
+			if (sessionCtrl && wid !== null && wid !== undefined) {
+				const openable = await sessionCtrl.canOpenSession(id, wid);
+				if (!openable) {
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: CROSS_WINDOW_SESSION_MESSAGE,
+						timestamp: Date.now(),
+					});
+					return;
+				}
+			}
 			sessionControllerRef.current?.cancelPendingSave();
 			const wasActive =
 				sessionControllerRef.current?.getActiveSessionId() === id;
@@ -579,7 +855,7 @@ const App: FunctionalComponent = () => {
 			}
 			await reloadSessionList();
 		},
-		[reloadSessionList, refreshFiles, sessionControllerRef],
+		[reloadSessionList, refreshFiles, sessionControllerRef, windowId],
 	);
 
 	const handleUpdateTitle = useCallback(
@@ -617,12 +893,62 @@ const App: FunctionalComponent = () => {
 		prevIsRunning.current = isRunning;
 	}, [isRunning, showSettings, sessionPanelOpen, activeTab]);
 
+	const copyHostDiagnostics = useCallback(async () => {
+		const swRing = await readDiagRingFromSession();
+		const text = [
+			"=== memory ring ===",
+			formatDiagSnapshot(getMemoryDiagRing()),
+			"=== SW ring ===",
+			formatDiagSnapshot(swRing),
+			"=== boot health ===",
+			JSON.stringify(bootHealth, null, 2),
+		].join("\n");
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			console.error("[browsergent][error] clipboard write failed\n" + text);
+		}
+	}, [bootHealth]);
+
 	return (
 		<div
 			data-initialized={initialized}
 			data-worker-ready={workerReady}
+			data-window-id={windowId ?? undefined}
+			data-boot-idb={bootHealth.idb}
+			data-boot-extjs={bootHealth.extjs}
+			data-boot-worker={bootHealth.worker}
+			data-boot-sw={bootHealth.sw}
 			class="flex flex-col h-screen bg-bg-base relative overflow-hidden"
 		>
+			{bootHostError && (
+				<div
+					data-testid="host-error-banner"
+					class="relative z-20 flex items-start gap-sm border-b border-error bg-error/10 px-md py-xs text-xs text-error shrink-0"
+				>
+					<span class="flex-1 font-mono">
+						[{bootHostError.code}] {bootHostError.message}
+						<span class="text-error/70"> · {bootHostError.source}</span>
+					</span>
+					<button
+						type="button"
+						class="text-error/80 hover:text-error cursor-pointer underline"
+						onClick={() => void copyHostDiagnostics()}
+					>
+						Copy logs
+					</button>
+					<button
+						type="button"
+						class="text-error/70 hover:text-error cursor-pointer px-xs"
+						aria-label="Dismiss host error"
+						onClick={() =>
+							browsergentStore.getState().bootHostErrorDismissed()
+						}
+					>
+						×
+					</button>
+				</div>
+			)}
 			{/* Header */}
 			<div class="relative z-10 flex items-center justify-end px-md py-sm bg-bg-surface/85 backdrop-blur-[22px] border-b border-border shrink-0">
 				<div class="flex items-center gap-sm">
@@ -778,15 +1104,25 @@ const App: FunctionalComponent = () => {
 			{sessionPanelOpen && sessionControllerRef.current && (
 				<SessionPanel
 					sessionController={sessionControllerRef.current}
+					panelWindowId={windowId}
+					runningSessionIds={runningSessionIds}
 					onSwitchSession={handleSwitchSession}
 					onCreateSession={handleCreateSession}
 					onDeleteSession={handleDeleteSession}
 					onUpdateTitle={handleUpdateTitle}
+					onBlockedSession={() => {
+						browsergentStore.getState().appendSystemMessage({
+							kind: "system",
+							id: crypto.randomUUID(),
+							text: CROSS_WINDOW_SESSION_MESSAGE,
+							timestamp: Date.now(),
+						});
+					}}
 					onSettingsClick={() => {
 						browsergentStore.getState().setActiveTab("settings");
 						browsergentStore.getState().sessionPanelOpenChanged(false);
 					}}
-					canSwitch={!isRunning}
+					canSwitch
 				/>
 			)}
 		</div>

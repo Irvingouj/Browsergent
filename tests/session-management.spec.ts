@@ -218,7 +218,7 @@ test("Settings inside panel", async () => {
 	await close();
 });
 
-test("Agent running blocks switch", async () => {
+test("Agent running allows switch while continuing in background", async () => {
 	const mock = startMockAnthropicServer({
 		responses: [
 			{
@@ -247,7 +247,16 @@ test("Agent running blocks switch", async () => {
 	await sidePanel.getByRole("button", { name: "More options" }).click();
 	const item = sessionItemLocator(sidePanel);
 	await expect(item).toBeVisible();
-	await expect(item).toHaveCSS("opacity", "0.4");
+	await expect(item).not.toHaveCSS("opacity", "0.4");
+	await expect(sidePanel.getByTestId("session-running-badge")).toBeVisible({
+		timeout: 5000,
+	});
+	await item.click();
+	await expect(sidePanel.locator("text=quick task")).toBeVisible({
+		timeout: 5000,
+	});
+	await sidePanel.getByRole("button", { name: "More options" }).click();
+	await expect(sidePanel.getByTestId("session-running-badge")).toBeVisible();
 	await close();
 	mock.server.close();
 });

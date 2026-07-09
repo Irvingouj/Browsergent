@@ -73,12 +73,12 @@ async function getExtjsClientModule() {
 	return await import("../../src/sidepanel/extension-js-client");
 }
 
-function makeBridge() {
+function makePoster() {
 	const posted: unknown[] = [];
-	return {
-		post: (msg: unknown) => posted.push(msg),
-		posted,
+	const post = (msg: unknown) => {
+		posted.push(msg);
 	};
+	return { post, posted };
 }
 
 describe("ExtjsController", () => {
@@ -102,20 +102,16 @@ describe("ExtjsController", () => {
 
 	test("init sets store to initializing then ready", async () => {
 		const { mockStoreState } = await getMocks();
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await ctrl.init();
 		expect(mockStoreState.extjsInitializing).toHaveBeenCalled();
 		expect(mockStoreState.extjsReady).toHaveBeenCalled();
 	});
 
 	test("init sets relayCallback that posts to bridge", async () => {
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post, posted } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await ctrl.init();
 
 		const extjsMod = await getExtjsClientModule();
@@ -126,15 +122,13 @@ describe("ExtjsController", () => {
 		).relayCallback;
 		expect(callback).not.toBeNull();
 		callback?.({ type: "extjsRunResult", id: "r1", result: {} });
-		expect(bridge.posted).toHaveLength(1);
+		expect(posted).toHaveLength(1);
 	});
 
 	test("init relayCallback does NOT bump filesVersion on run result", async () => {
 		const { mockStoreState } = await getMocks();
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await ctrl.init();
 
 		const extjsMod = await getExtjsClientModule();
@@ -151,10 +145,8 @@ describe("ExtjsController", () => {
 
 	test("init wires onFsMutation to bump filesVersion", async () => {
 		const { mockInstance, mockStoreState } = await getMocks();
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await ctrl.init();
 
 		expect(mockInstance.setOnFsMutation).toHaveBeenCalledTimes(1);
@@ -166,10 +158,8 @@ describe("ExtjsController", () => {
 	test("init failure stores error and rethrows", async () => {
 		const { mockInstance, mockStoreState } = await getMocks();
 		mockInstance.init.mockRejectedValue(new Error("init failed"));
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await expect(ctrl.init()).rejects.toThrow("init failed");
 		expect(mockStoreState.extjsFailed).toHaveBeenCalled();
 		expect(mockStoreState.extjsFailed.mock.calls[0][0].code).toBe(
@@ -185,10 +175,8 @@ describe("ExtjsController", () => {
 	test("controller init does not mark extjsReady when client.init throws", async () => {
 		const { mockInstance, mockStoreState } = await getMocks();
 		mockInstance.init.mockRejectedValue(new Error("init failed"));
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await expect(ctrl.init()).rejects.toThrow("init failed");
 		expect(mockStoreState.extjsFailed).toHaveBeenCalled();
 		expect(mockStoreState.extjsReady).not.toHaveBeenCalled();
@@ -198,10 +186,8 @@ describe("ExtjsController", () => {
 		const { mockEnsureReady, mockStoreState } = await getMocks();
 		mockEnsureReady.mockRejectedValue(new Error("skill fs failed"));
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post, posted } = makePoster();
+		const ctrl = new ExtjsController(post);
 
 		await expect(ctrl.init()).resolves.toBeUndefined();
 
@@ -216,17 +202,15 @@ describe("ExtjsController", () => {
 		).relayCallback;
 		expect(callback).not.toBeNull();
 		callback?.({ type: "extjsDocsResult", id: "docs-1", docs: "{}" });
-		expect(bridge.posted).toHaveLength(1);
+		expect(posted).toHaveLength(1);
 
 		warnSpy.mockRestore();
 	});
 
 	test("handleRelayRequest delegates to client", async () => {
 		const { mockInstance } = await getMocks();
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await ctrl.init();
 		const msg = { type: "extjsRunRequest" as const, id: "req-1", code: "1+1" };
 		ctrl.handleRelayRequest(msg);
@@ -235,10 +219,8 @@ describe("ExtjsController", () => {
 
 	test("dispose sets disposed and clears relayCallback", async () => {
 		const { mockInstance, mockStoreState } = await getMocks();
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await ctrl.init();
 		await ctrl.dispose();
 		expect(mockStoreState.extjsDisposed).toHaveBeenCalled();
@@ -254,16 +236,15 @@ describe("ExtjsController", () => {
 		const { mockInstance } = await getMocks();
 		mockInstance.dispose.mockRejectedValue(new Error("dispose failed"));
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const bridge = makeBridge();
-		const ctrl = new ExtjsController(
-			bridge as unknown as ConstructorParameters<typeof ExtjsController>[0],
-		);
+		const { post } = makePoster();
+		const ctrl = new ExtjsController(post);
 		await ctrl.init();
 		await ctrl.dispose();
-		expect(warnSpy).toHaveBeenCalledWith(
-			"Extjs dispose failed:",
-			expect.any(Error),
-		);
+		expect(warnSpy).toHaveBeenCalled();
+		const line = String(warnSpy.mock.calls[0]?.[0] ?? "");
+		expect(line).toContain("[browsergent][warn]");
+		expect(line).toContain("E_BOOT_EXTJS");
+		expect(line).toContain("Extjs dispose failed");
 		warnSpy.mockRestore();
 	});
 });

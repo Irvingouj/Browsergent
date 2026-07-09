@@ -1,24 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { SessionController } from "../../src/controllers/session-controller";
 import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
+import {
+	initBoundController,
+	requireActiveId,
+} from "./session-test-utils";
 
 import "fake-indexeddb/auto";
 
-function requireActiveId(ctrl: SessionController): string {
-	const id = ctrl.getActiveSessionId();
-	if (id === null) throw new Error("no active session");
-	return id;
-}
-
-describe("SessionController with IndexedDB (backward compat)", () => {
+describe("SessionController with IndexedDB (window-bound)", () => {
 	let storage: IndexedDBStorage;
-	let controller: SessionController;
 
 	beforeEach(async () => {
 		storage = new IndexedDBStorage();
 		await storage.init();
-		controller = new SessionController(storage);
-		await controller.init();
 	});
 
 	afterEach(async () => {
@@ -28,12 +22,14 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 		}
 	});
 
-	test("load() returns empty session after init", async () => {
-		const result = await controller.load();
+	test("load() returns empty session after bind", async () => {
+		const { ctrl } = await initBoundController(storage);
+		const result = await ctrl.load();
 		expect(result).toEqual({ messages: [], trace: [], diagnostics: [] });
 	});
 
 	test("save() / load() roundtrip", async () => {
+		const { ctrl } = await initBoundController(storage);
 		const messages = [
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
 		];
@@ -46,14 +42,15 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 				timestamp: 1,
 			},
 		];
-		await controller.save(messages, trace);
-		const result = await controller.load();
+		await ctrl.save(messages, trace);
+		const result = await ctrl.load();
 		expect(result).not.toBeNull();
 		expect(result?.messages).toEqual(messages);
 		expect(result?.trace).toEqual(trace);
 	});
 
 	test("clear() removes data", async () => {
+		const { ctrl } = await initBoundController(storage);
 		const messages = [
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
 		];
@@ -66,33 +63,32 @@ describe("SessionController with IndexedDB (backward compat)", () => {
 				timestamp: 1,
 			},
 		];
-		await controller.save(messages, trace);
+		await ctrl.save(messages, trace);
 
-		await controller.clear();
+		await ctrl.clear();
 
-		expect(await controller.load()).toBeNull();
+		expect(await ctrl.load()).toBeNull();
 	});
 
 	test("load() rejects malformed session", async () => {
-		const activeId = controller.getActiveSessionId();
-		await storage.set("sessions", `session_${activeId}`, {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		await storage.set("sessions", `session_${sessionId}`, {
 			messages: "not-array",
 			trace: [],
 		});
-		const result = await controller.load();
+		const result = await ctrl.load();
 		expect(result).toBeNull();
 	});
 });
 
 describe("SessionController with IndexedDB (multi-session)", () => {
 	let storage: IndexedDBStorage;
-	let controller: SessionController;
+	let controller: Awaited<ReturnType<typeof initBoundController>>["ctrl"];
 
 	beforeEach(async () => {
 		storage = new IndexedDBStorage();
 		await storage.init();
-		controller = new SessionController(storage);
-		await controller.init();
+		({ ctrl: controller } = await initBoundController(storage));
 	});
 
 	afterEach(async () => {
@@ -102,7 +98,7 @@ describe("SessionController with IndexedDB (multi-session)", () => {
 		}
 	});
 
-	test("init() creates a fresh session", async () => {
+	test("resolveOrCreateForWindow creates a fresh session", async () => {
 		const activeId = controller.getActiveSessionId();
 		expect(activeId).not.toBeNull();
 		expect(await controller.load()).toEqual({

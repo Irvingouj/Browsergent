@@ -1,4 +1,5 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
+import { reportError } from "../errors/report";
 import {
 	isExtjsError,
 	isExtjsOutput,
@@ -15,8 +16,15 @@ import {
 	getStreamingSignal,
 	initStreamingSignal,
 } from "../state/streaming-signals";
-import type { PanelToWorker } from "../types/messages";
+import type { PanelToWorker, WorkerToPanel } from "../types/messages";
 import type { FileOp } from "../worker/file-op-relay";
+
+export interface RunRouting {
+	shouldUpdateUi: (runId: string) => boolean;
+	/** When false, worker crashes and extjs stream events skip global UI (in-panel background bridge). */
+	shouldApplyBridgeEffects?: () => boolean;
+	onRunEvent?: (runId: string, event: WorkerToPanel) => void;
+}
 
 type ExtjsRunRequestHandler = (msg: {
 	type: "extjsRunRequest";
@@ -62,6 +70,7 @@ export class WorkerBridge {
 	private onFileOpRequest: FileOpRequestHandler | null = null;
 	private onWorkerReady: WorkerReadyHandler | null = null;
 	private onAgentStopped: AgentStoppedHandler | null = null;
+	private runRouting: RunRouting | null = null;
 
 	constructor(options?: {
 		onExtjsRunRequest?: ExtjsRunRequestHandler;
@@ -70,6 +79,7 @@ export class WorkerBridge {
 		onFileOpRequest?: FileOpRequestHandler;
 		onWorkerReady?: WorkerReadyHandler;
 		onAgentStopped?: AgentStoppedHandler;
+		runRouting?: RunRouting;
 	}) {
 		this.onExtjsRunRequest = options?.onExtjsRunRequest ?? null;
 		this.onExtjsDocsRequest = options?.onExtjsDocsRequest ?? null;
@@ -77,6 +87,28 @@ export class WorkerBridge {
 		this.onFileOpRequest = options?.onFileOpRequest ?? null;
 		this.onWorkerReady = options?.onWorkerReady ?? null;
 		this.onAgentStopped = options?.onAgentStopped ?? null;
+		this.runRouting = options?.runRouting ?? null;
+	}
+
+	private shouldApplyToUi(runId: string): boolean {
+		if (this.runRouting) {
+			return this.runRouting.shouldUpdateUi(runId);
+		}
+		return !isStaleRunId(
+			runId,
+			browsergentStore.getState().agent.activeRunId,
+		);
+	}
+
+	private shouldApplyBridgeEffects(): boolean {
+		if (this.runRouting?.shouldApplyBridgeEffects) {
+			return this.runRouting.shouldApplyBridgeEffects();
+		}
+		return true;
+	}
+
+	private dispatchRunEvent(runId: string, event: WorkerToPanel): void {
+		this.runRouting?.onRunEvent?.(runId, event);
 	}
 
 	start(): void {
@@ -89,6 +121,16 @@ export class WorkerBridge {
 		};
 
 		w.onerror = (err) => {
+			reportError({
+				code: "E_BOOT_WORKER",
+				source: "worker",
+				message: `Agent worker error: ${err.message}`,
+				details: { filename: err.filename, lineno: err.lineno },
+			});
+			if (!this.shouldApplyBridgeEffects()) {
+				this.stop();
+				return;
+			}
 			const store = browsergentStore.getState();
 			store.agentFailed({
 				code: "E_WORKER_CRASH",
@@ -137,17 +179,18 @@ export class WorkerBridge {
 
 		switch (raw.type) {
 			case "workerReady": {
-				if (browsergentStore.getState().agent.status !== "loading") {
+				if (
+					!this.runRouting &&
+					browsergentStore.getState().agent.status !== "loading"
+				) {
 					browsergentStore.getState().agentReset();
 				}
 				this.onWorkerReady?.();
 				break;
 			}
 			case "agentStatus": {
-				if (
-					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
-				)
-					return;
+				this.dispatchRunEvent(raw.runId, raw);
+				if (!this.shouldApplyToUi(raw.runId)) return;
 				browsergentStore.getState().agentStatusChanged(raw.status, raw.reason);
 				if (
 					raw.status === "stopped" ||
@@ -163,10 +206,8 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentMessage": {
-				if (
-					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
-				)
-					return;
+				this.dispatchRunEvent(raw.runId, raw);
+				if (!this.shouldApplyToUi(raw.runId)) return;
 				const { message } = raw;
 				if (message.kind === "user") {
 					browsergentStore.getState().appendUserMessage(message);
@@ -179,42 +220,32 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentTextDelta": {
-				if (
-					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
-				)
-					return;
+				this.dispatchRunEvent(raw.runId, raw);
+				if (!this.shouldApplyToUi(raw.runId)) return;
 				appendStreamingDelta(raw.messageId, raw.text);
 				break;
 			}
 			case "agentMessageEnd": {
-				if (
-					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
-				)
-					return;
+				this.dispatchRunEvent(raw.runId, raw);
+				if (!this.shouldApplyToUi(raw.runId)) return;
 				this.finalizeMessageSignal(raw.messageId);
 				break;
 			}
 			case "agentTrace": {
-				if (
-					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
-				)
-					return;
+				this.dispatchRunEvent(raw.runId, raw);
+				if (!this.shouldApplyToUi(raw.runId)) return;
 				browsergentStore.getState().traceUpdated(raw.entry);
 				break;
 			}
 			case "agentDiagnostic": {
-				if (
-					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
-				)
-					return;
+				this.dispatchRunEvent(raw.runId, raw);
+				if (!this.shouldApplyToUi(raw.runId)) return;
 				browsergentStore.getState().diagnosticAdded(raw.event);
 				break;
 			}
 			case "agentError": {
-				if (
-					isStaleRunId(raw.runId, browsergentStore.getState().agent.activeRunId)
-				)
-					return;
+				this.dispatchRunEvent(raw.runId, raw);
+				if (!this.shouldApplyToUi(raw.runId)) return;
 				const error = raw.error;
 				browsergentStore.getState().agentFailed({
 					code:
@@ -234,12 +265,14 @@ export class WorkerBridge {
 				break;
 			}
 			case "extjsOutput": {
+				if (!this.shouldApplyBridgeEffects()) break;
 				if (isExtjsOutput(raw)) {
 					browsergentStore.getState().extjsOutputAppended(raw.output);
 				}
 				break;
 			}
 			case "extjsError": {
+				if (!this.shouldApplyBridgeEffects()) break;
 				if (isExtjsError(raw)) {
 					browsergentStore.getState().extjsFailed({
 						code: "E_JS_RUNTIME",

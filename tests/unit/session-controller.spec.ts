@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SessionController } from "../../src/controllers/session-controller";
 import { MemoryStorage } from "../../src/storage/memory-storage";
-
-function requireActiveId(ctrl: SessionController): string {
-	const id = ctrl.getActiveSessionId();
-	if (id === null) throw new Error("no active session");
-	return id;
-}
+import {
+	initBoundController,
+	requireActiveId,
+	TEST_WINDOW_ID,
+} from "./session-test-utils";
 
 describe("SessionController.load", () => {
 	let storage: MemoryStorage;
@@ -15,38 +14,40 @@ describe("SessionController.load", () => {
 		storage = new MemoryStorage();
 	});
 
-	test("returns null for non-object storage data", async () => {
-		await storage.set("sessions", "current", "not an object");
+	test("returns null when panel is not bound", async () => {
 		const ctrl = new SessionController(storage);
-		const result = await ctrl.load();
-		expect(result).toBeNull();
+		await ctrl.init();
+		expect(await ctrl.load()).toBeNull();
 	});
 
 	test("returns null when messages is not an array", async () => {
-		await storage.set("sessions", "current", {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		await storage.set("sessions", `session_${sessionId}`, {
+			id: sessionId,
 			messages: "not an array",
 			trace: [],
 			timestamp: Date.now(),
+			messageCount: 0,
 		});
-		const ctrl = new SessionController(storage);
 		const result = await ctrl.load();
 		expect(result).toBeNull();
 	});
 
 	test("returns null when trace is not an array", async () => {
-		await storage.set("sessions", "current", {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		await storage.set("sessions", `session_${sessionId}`, {
+			id: sessionId,
 			messages: [],
 			trace: "not an array",
 			timestamp: Date.now(),
+			messageCount: 0,
 		});
-		const ctrl = new SessionController(storage);
 		const result = await ctrl.load();
 		expect(result).toBeNull();
 	});
 
 	test("returns snapshot for valid data after init", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 		const messages = [{ kind: "user", id: "1", text: "hi", timestamp: 0 }];
 		const trace: never[] = [];
 		await ctrl.save(messages, trace);
@@ -58,8 +59,7 @@ describe("SessionController.load", () => {
 
 	test("scheduleSave debounces correctly", async () => {
 		vi.useFakeTimers();
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 		ctrl.hydrated = true;
 
 		const messages = [
@@ -93,8 +93,7 @@ describe("SessionController.load", () => {
 
 	test("flushSave persists immediately without waiting for debounce", async () => {
 		vi.useFakeTimers();
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 		ctrl.hydrated = true;
 
 		const messages = [
@@ -123,13 +122,19 @@ describe("SessionController multi-session", () => {
 	let storage: MemoryStorage;
 	let ctrl: SessionController;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		storage = new MemoryStorage();
-		ctrl = new SessionController(storage);
+		({ ctrl } = await initBoundController(storage));
 	});
 
-	test("init() creates fresh meta when storage is empty", async () => {
-		await ctrl.init();
+	test("init() does not create a session until window bind", async () => {
+		const bare = new SessionController(storage);
+		await bare.init();
+		expect(bare.getActiveSessionId()).toBeNull();
+		expect(await bare.load()).toBeNull();
+	});
+
+	test("resolveOrCreateForWindow creates a bound session", async () => {
 		const activeId = ctrl.getActiveSessionId();
 		expect(activeId).not.toBeNull();
 		expect(typeof activeId).toBe("string");
@@ -143,35 +148,7 @@ describe("SessionController multi-session", () => {
 		});
 	});
 
-	test("init() migrates old sessions/current data", async () => {
-		const oldData = {
-			messages: [{ kind: "user", id: "1", text: "hello", timestamp: 1 }],
-			trace: [
-				{
-					id: "t1",
-					step: 1,
-					status: "done",
-					toolName: "run_js",
-					timestamp: 1,
-				},
-			],
-			timestamp: 1000,
-		};
-		await storage.set("sessions", "current", oldData);
-		await ctrl.init();
-
-		expect(await storage.get("sessions", "current")).toBeNull();
-
-		const activeId = ctrl.getActiveSessionId();
-		expect(activeId).not.toBeNull();
-
-		const loaded = await ctrl.load();
-		expect(loaded?.messages).toEqual(oldData.messages);
-		expect(loaded?.trace).toEqual(oldData.trace);
-	});
-
 	test("save() and load() roundtrip after init", async () => {
-		await ctrl.init();
 		const messages = [
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
 		];
@@ -192,7 +169,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("createSession() creates a new session and switches active", async () => {
-		await ctrl.init();
 		const firstId = requireActiveId(ctrl);
 		const messages = [
 			{ id: "1", kind: "user" as const, text: "first", timestamp: 1 },
@@ -224,7 +200,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("switchSession() changes active session", async () => {
-		await ctrl.init();
 		const id1 = requireActiveId(ctrl);
 		await ctrl.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
@@ -244,7 +219,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("listSessions() returns sorted items and respects cap", async () => {
-		await ctrl.init();
 		for (let i = 0; i < 3; i++) {
 			if (i > 0) await ctrl.createSession();
 			await ctrl.save(
@@ -261,7 +235,6 @@ describe("SessionController multi-session", () => {
 
 	test("listSessions() auto-trims sessions beyond cap", async () => {
 		vi.useFakeTimers();
-		await ctrl.init();
 		const ids: string[] = [];
 		for (let i = 0; i < 52; i++) {
 			if (i > 0) {
@@ -286,7 +259,6 @@ describe("SessionController multi-session", () => {
 
 	test("listSessions() returns pruned session ids", async () => {
 		vi.useFakeTimers();
-		await ctrl.init();
 		const ids: string[] = [];
 		for (let i = 0; i < 52; i++) {
 			if (i > 0) {
@@ -310,7 +282,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("deleteSession() removes session", async () => {
-		await ctrl.init();
 		const id1 = requireActiveId(ctrl);
 		await ctrl.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
@@ -328,7 +299,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("deleteSession() creates new session when last is deleted", async () => {
-		await ctrl.init();
 		const id = requireActiveId(ctrl);
 		await ctrl.save(
 			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
@@ -346,7 +316,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("updateTitle() updates title", async () => {
-		await ctrl.init();
 		const id = requireActiveId(ctrl);
 		await ctrl.updateTitle(id, "My Title");
 		const { sessions: list } = await ctrl.listSessions();
@@ -354,7 +323,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("updateTitle() with isCustom sets customTitle", async () => {
-		await ctrl.init();
 		const id = requireActiveId(ctrl);
 		await ctrl.updateTitle(id, "Custom", true);
 		await ctrl.updateTitle(id, "Ignored", false);
@@ -363,7 +331,6 @@ describe("SessionController multi-session", () => {
 	});
 
 	test("clear() removes active session after init", async () => {
-		await ctrl.init();
 		await ctrl.save(
 			[{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 }],
 			[],
@@ -376,8 +343,7 @@ describe("SessionController multi-session", () => {
 describe("SessionController diagnostics", () => {
 	test("persists full model context", async () => {
 		const storage = new MemoryStorage();
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 		const longText = "context".repeat(20_000);
 		const diagnostics = [
 			{
@@ -403,8 +369,7 @@ describe("SessionController diagnostics trimming", () => {
 	});
 
 	test("trims oversized diagnostics array on save", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 
 		// Generate many large diagnostic events that exceed the size threshold
 		const hugeText = "x".repeat(6000);
@@ -437,8 +402,7 @@ describe("SessionController diagnostics trimming", () => {
 	});
 
 	test("trims provider_sse_event data in persisted diagnostics", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 
 		const hugeData = "raw_sse_chunk_".repeat(2000); // ~28KB
 		const diagnostics = [
@@ -476,9 +440,7 @@ describe("SessionController diagnostics trimming", () => {
 	});
 
 	test("trims old persisted provider_sse_event data on load", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
-		const id = requireActiveId(ctrl);
+		const { ctrl, sessionId: id } = await initBoundController(storage);
 		const hugeData = "raw_sse_chunk_".repeat(2000);
 		await storage.set("sessions", `session_${id}`, {
 			id,
@@ -509,7 +471,9 @@ describe("SessionController diagnostics trimming", () => {
 
 	test("init trims oldest non-active sessions when stored sessions are too large", async () => {
 		const activeId = "s11";
-		await storage.set("sessions", "__meta", { activeSessionId: activeId });
+		await storage.set("sessions", "__meta", {
+			panelActiveSession: { [String(TEST_WINDOW_ID)]: activeId },
+		});
 		const hugeText = "x".repeat(6000);
 		for (let i = 0; i < 12; i++) {
 			await storage.set("sessions", `session_s${i}`, {
@@ -530,6 +494,7 @@ describe("SessionController diagnostics trimming", () => {
 
 		const ctrl = new SessionController(storage);
 		await ctrl.init();
+		ctrl.bindPanelWindow(TEST_WINDOW_ID);
 
 		const { sessions } = await ctrl.listSessions();
 		expect(sessions.some((session) => session.id === activeId)).toBe(true);
@@ -539,7 +504,9 @@ describe("SessionController diagnostics trimming", () => {
 
 	test("init does not rewrite already-clean sessions", async () => {
 		const activeId = "clean";
-		await storage.set("sessions", "__meta", { activeSessionId: activeId });
+		await storage.set("sessions", "__meta", {
+			panelActiveSession: { [String(TEST_WINDOW_ID)]: activeId },
+		});
 		await storage.set("sessions", `session_${activeId}`, {
 			id: activeId,
 			messages: [],
@@ -566,8 +533,7 @@ describe("SessionController diagnostics trimming", () => {
 	});
 
 	test("trims many persisted diagnostics without dropping the newest event", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 		const diagnostics = Array.from({ length: 6000 }, (_, i) => ({
 			kind: "model_response" as const,
 			timestamp: i,
@@ -609,8 +575,7 @@ describe("SessionController diagnostics trimming", () => {
 			return origSet(store, key, value);
 		};
 
-		const ctrl = new SessionController(flakyStorage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(flakyStorage);
 
 		const messages = [
 			{ id: "1", kind: "user" as const, text: "hello", timestamp: 1 },
@@ -645,8 +610,7 @@ describe("SessionController diagnostics trimming", () => {
 	});
 
 	test("drops a single oversized diagnostic event entirely", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 
 		const hugeBody = "x".repeat(600_000);
 		const diagnostics = [
@@ -665,8 +629,7 @@ describe("SessionController diagnostics trimming", () => {
 	});
 
 	test("does not truncate data exactly at threshold", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 
 		const exactData = "y".repeat(10000);
 		const diagnostics = [
@@ -692,7 +655,9 @@ describe("SessionController diagnostics trimming", () => {
 
 	test("createSession trims oldest non-active sessions when over budget", async () => {
 		const activeId = "keep-me";
-		await storage.set("sessions", "__meta", { activeSessionId: activeId });
+		await storage.set("sessions", "__meta", {
+			panelActiveSession: { [String(TEST_WINDOW_ID)]: activeId },
+		});
 		const hugeText = "x".repeat(6000);
 		// Seed enough sessions to be under budget after init but pushable over by adding more.
 		for (let i = 0; i < 12; i++) {
@@ -714,6 +679,7 @@ describe("SessionController diagnostics trimming", () => {
 
 		const ctrl = new SessionController(storage);
 		await ctrl.init(); // trims down to budget
+		ctrl.bindPanelWindow(TEST_WINDOW_ID);
 
 		// Push back over budget by re-seeding large sessions the controller does not yet know about.
 		for (let i = 100; i < 112; i++) {
@@ -747,9 +713,7 @@ describe("SessionController diagnostics trimming", () => {
 	});
 
 	test("already-truncated provider_sse_remainder is not re-truncated", async () => {
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
-		const id = requireActiveId(ctrl);
+		const { ctrl, sessionId: id } = await initBoundController(storage);
 		// A remainder event whose data already ends with the truncated marker.
 		const alreadyTruncated = `${"partial_".repeat(500)}... [truncated 4999964 bytes]`;
 		await storage.set("sessions", `session_${id}`, {
@@ -807,9 +771,7 @@ describe("SessionController diagnostics trimming", () => {
 			return origSet(store, key, value);
 		};
 
-		const ctrl = new SessionController(flaky);
-		await ctrl.init();
-		const id = requireActiveId(ctrl);
+		const { ctrl, sessionId: id } = await initBoundController(flaky);
 		const hugeData = "raw_sse_chunk_".repeat(2000);
 		await flaky.set("sessions", `session_${id}`, {
 			id,

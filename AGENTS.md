@@ -77,6 +77,7 @@ Rules:
 - Impossible states, programmer errors, and invalid boundary data should throw early.
 - Error objects must carry a machine-readable code and human-readable message.
 - Never catch and discard. Never `.catch(() => {})`.
+- Host / multi-window / SW paths must use `reportError` / `reportWarn` from `src/errors/report.ts` (fixed prefix `[browsergent][error]`). Service worker listeners must use `safeListener` so a single throw cannot kill the SW.
 
 ## State Rules
 
@@ -110,6 +111,12 @@ The side panel is the extension UI, not the automation target.
 - Do not let side-panel navigation destroy the worker/main-thread relay.
 - The agent core and generated JS runtime must not access `document`, `window`, `chrome.*`, `fetch`, cookies, or localStorage directly.
 - Real browser effects belong in the TypeScript extension adapter/content script path.
+
+## Session / run hosting (locked product rules)
+
+- **Closing the side panel ends all runs hosted in that panel.** Do not design for or promise “keep agent running after panel close” (no offscreen survival goal).
+- **In-panel background ≠ panel-close headless.** “Background” means: N sessions may run concurrently while the panel stays open; only the foreground session is shown in the chat UI. Switching sessions does not stop other runs in the same open panel.
+- `RunSupervisor` with `hosting: "local"` matches this model: workers live in the panel document.
 
 ## Architecture Boundaries
 

@@ -472,6 +472,39 @@ describe("WorkerBridge", () => {
 		);
 	});
 
+	test("headless bridge extjsOutput does not append to global UI", () => {
+		const bridge = new WorkerBridge({
+			runRouting: {
+				shouldUpdateUi: () => false,
+				shouldApplyBridgeEffects: () => false,
+			},
+		});
+		bridge.start();
+		const worker = getWorkerInstance();
+		const before = browsergentStore.getState().extjs.output.length;
+		worker.onmessage?.(
+			new MessageEvent("message", {
+				data: { type: "extjsOutput", output: "headless log" },
+			}),
+		);
+		expect(browsergentStore.getState().extjs.output.length).toBe(before);
+	});
+
+	test("headless bridge worker crash does not fail foreground agent UI", () => {
+		browsergentStore.getState().agentRunRequested("run-foreground");
+		browsergentStore.getState().agentStatusChanged("running");
+		const bridge = new WorkerBridge({
+			runRouting: {
+				shouldUpdateUi: () => false,
+				shouldApplyBridgeEffects: () => false,
+			},
+		});
+		bridge.start();
+		const worker = getWorkerInstance();
+		worker.onerror?.({ message: "headless worker died" } as ErrorEvent);
+		expect(browsergentStore.getState().agent.status).toBe("running");
+	});
+
 	test("worker crash stores agent error and stops", () => {
 		browsergentStore.getState().agentRunRequested("run-1");
 		const bridge = new WorkerBridge();

@@ -7,6 +7,11 @@ export interface SessionListItem {
 	title: string;
 	timestamp: number;
 	messageCount: number;
+	windowId?: number | null;
+	windowLabel?: string;
+	lifecycle?: "foreground" | "background";
+	openable?: boolean;
+	running?: boolean;
 }
 
 export interface SessionState {

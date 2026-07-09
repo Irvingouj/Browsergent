@@ -112,7 +112,8 @@ Browsergent is **experimental (v0.1)** and under active development. It works we
 
 - **Chrome only.** MV3 side panel + content scripts; not ported to Firefox/Safari.
 - **Anthropic Messages API only.** The wire layer targets the Anthropic schema; OpenAI-native function-calling is not supported.
-- **No headless mode.** It drives the user's real Chrome tab; there is no detached/background automation target.
+- **Closing the side panel ends runs (by design).** Workers live in the side panel document. Closing the panel stops every agent run hosted there — we do **not** keep running after the panel is closed (no offscreen “survive panel close” mode).
+- **In-panel “background” sessions are concurrent runs, not panel-close survival.** While a panel stays open, you can switch the chat UI to another session; the previous session’s run may continue **in the background of that open panel** (N concurrent sessions, only one is the foreground chat view). That is different from keeping work alive after the panel is gone.
 - **Context window bound.** Long sessions are compacted, but very long tasks may still lose earlier detail.
 - **Single tab.** The agent operates on one active tab at a time.
 

@@ -67,6 +67,208 @@ export async function launchExtension(userDataDir?: string): Promise<{
 	};
 }
 
+/** Open a sidepanel document in a second Chrome window (distinct windowId). */
+export async function openSecondWindow(
+	context: BrowserContext,
+	extensionId: string,
+	_anchor?: Page,
+): Promise<{ sidePanel: Page; windowId: number }> {
+	let serviceWorker = context.serviceWorkers()[0];
+	if (!serviceWorker) {
+		serviceWorker = await context.waitForEvent("serviceworker");
+	}
+
+	const [newPage] = await Promise.all([
+		context.waitForEvent("page", {
+			predicate: (p) => p.url().includes("/sidepanel.html"),
+			timeout: 15000,
+		}),
+		serviceWorker.evaluate(async (extId: string) => {
+			await chrome.windows.create({
+				url: `chrome-extension://${extId}/sidepanel.html`,
+				focused: true,
+				type: "normal",
+				width: 900,
+				height: 700,
+			});
+		}, extensionId),
+	]);
+
+	newPage.on("console", (msg) => {
+		if (msg.type() === "error") {
+			consoleErrors.push(msg.text());
+		}
+	});
+	await newPage.waitForSelector('[data-initialized="true"]', {
+		timeout: 15000,
+	});
+	await newPage.waitForSelector('[data-worker-ready="true"]', {
+		timeout: 15000,
+	});
+	const windowId = Number(
+		await newPage
+			.locator('[data-initialized="true"]')
+			.getAttribute("data-window-id"),
+	);
+	if (!Number.isFinite(windowId) || windowId <= 0) {
+		throw new Error(`Second window has invalid data-window-id: ${windowId}`);
+	}
+	return { sidePanel: newPage, windowId };
+}
+
+/** Close a Chrome window by id (simulates merge destroying the removed window). */
+export async function closeChromeWindow(
+	context: BrowserContext,
+	windowId: number,
+): Promise<void> {
+	let serviceWorker = context.serviceWorkers()[0];
+	if (!serviceWorker) {
+		serviceWorker = await context.waitForEvent("serviceworker");
+	}
+	await serviceWorker.evaluate(async (wid: number) => {
+		await chrome.windows.remove(wid);
+	}, windowId);
+}
+
+/** Merge windows by moving a tab — exercises the real coordinator path. */
+export async function mergeWindowsByMovingTab(
+	removedPanel: Page,
+	removedWindowId: number,
+	survivorWindowId: number,
+): Promise<void> {
+	await removedPanel.evaluate(
+		async ({
+			removed,
+			survivor,
+		}: {
+			removed: number;
+			survivor: number;
+		}) => {
+			const tabs = await chrome.tabs.query({ windowId: removed });
+			const tabId = tabs[0]?.id;
+			if (tabId === undefined) {
+				throw new Error(`no tab in window ${removed}`);
+			}
+			await chrome.tabs.move(tabId, { windowId: survivor, index: -1 });
+			try {
+				await chrome.windows.get(removed);
+				await chrome.windows.remove(removed);
+			} catch {
+				// Chrome may auto-close the window once its last tab moves out.
+			}
+			await new Promise((resolve) => setTimeout(resolve, 200));
+		},
+		{ removed: removedWindowId, survivor: survivorWindowId },
+	);
+}
+
+/** Poll IDB runningSessionsByWindow (panel can stay closed). */
+export async function pollPersistedRunningSessions(
+	panel: Page,
+	minCount: number,
+	timeoutMs = 10_000,
+): Promise<void> {
+	await expect
+		.poll(
+			async () =>
+				panel.evaluate(async () => {
+					const db = await new Promise<IDBDatabase>((resolve, reject) => {
+						const req = indexedDB.open("browsergent", 2);
+						req.onsuccess = () => resolve(req.result);
+						req.onerror = () => reject(req.error);
+					});
+					const meta = await new Promise<{
+						runningSessionsByWindow?: Record<string, string[]>;
+					} | null>((resolve, reject) => {
+						const tx = db.transaction("sessions", "readonly");
+						const req = tx.objectStore("sessions").get("__meta");
+						req.onsuccess = () =>
+							resolve(
+								req.result as {
+									runningSessionsByWindow?: Record<string, string[]>;
+								} | null,
+							);
+						req.onerror = () => reject(req.error);
+					});
+					db.close();
+					const byWindow = meta?.runningSessionsByWindow ?? {};
+					return Object.values(byWindow).flat().length;
+				}),
+			{ timeout: timeoutMs },
+		)
+		.toBeGreaterThanOrEqual(minCount);
+}
+
+/** Broadcast a window close lifecycle event from the service worker. */
+export async function broadcastWindowClose(
+	context: BrowserContext,
+	panel: Page,
+	removedWindowId: number,
+): Promise<void> {
+	let serviceWorker = context.serviceWorkers()[0];
+	if (!serviceWorker) {
+		serviceWorker = await context.waitForEvent("serviceworker");
+	}
+	await serviceWorker.evaluate(async (removed: number) => {
+		const message = {
+			type: "windowLifecycle",
+			kind: "close",
+			removedWindowId: removed,
+		};
+		chrome.runtime.sendMessage(message);
+		await chrome.storage.session.set({
+			windowLifecycleEvent: { ...message, emittedAt: Date.now() },
+		});
+	}, removedWindowId);
+	await panel.waitForTimeout(500);
+}
+
+/** Broadcast a window merge lifecycle event from the service worker. */
+export async function broadcastWindowMerge(
+	context: BrowserContext,
+	survivorPanel: Page,
+	removedWindowId: number,
+	survivorWindowId: number,
+	options?: { reboundRunningSessionIds?: string[] },
+): Promise<void> {
+	let serviceWorker = context.serviceWorkers()[0];
+	if (!serviceWorker) {
+		serviceWorker = await context.waitForEvent("serviceworker");
+	}
+	await serviceWorker.evaluate(
+		async ({
+			removed,
+			survivor,
+			reboundRunningSessionIds,
+		}: {
+			removed: number;
+			survivor: number;
+			reboundRunningSessionIds?: string[];
+		}) => {
+			const message = {
+				type: "windowLifecycle",
+				kind: "merge",
+				removedWindowId: removed,
+				survivorWindowId: survivor,
+				reboundRunningSessionIds:
+					reboundRunningSessionIds && reboundRunningSessionIds.length > 0
+						? reboundRunningSessionIds
+						: undefined,
+			};
+			chrome.runtime.sendMessage(message);
+			await chrome.storage.session.set({
+				windowLifecycleEvent: { ...message, emittedAt: Date.now() },
+			});
+		},
+		{
+			removed: removedWindowId,
+			survivor: survivorWindowId,
+			reboundRunningSessionIds: options?.reboundRunningSessionIds,
+		},
+	);
+	await survivorPanel.waitForTimeout(500);
+}
+
 test.afterEach(({ page: _page }, testInfo) => {
 	if (testInfo.status !== "passed" && consoleErrors.length > 0) {
 		console.log(

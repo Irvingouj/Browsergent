@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Browsergent Headless</title>
+</head>
+<body>
+  <script>
+    chrome.storage.session.set({ offscreenBoot: "inline" }).catch(function () {});
+  </script>
+  <script src="headless-boot.js"></script>
+</body>
+</html>

@@ -1,12 +1,16 @@
 /**
- * Singleton adapter for @pi-oxide/extension-js.
+ * Per-window adapter for @pi-oxide/extension-js.
  *
  * Owns the ExtensionSession lifecycle on the side panel main thread.
  * Both the agent (via worker relay) and the standalone JS tab share
  * this single instance, with access serialized through a queue.
  *
- * Why singleton: extension-js's runner uses a module-level AbortController.
- * Multiple ExtensionSession instances would race on the same abort signal.
+ * Why one instance per panel document: Chrome gives each window its own
+ * sidepanel document (own JS realm), and each document owns exactly one
+ * ExtensionSession. extension-js now holds the AbortController per-session
+ * (no module global), so multiple sessions are safe across windows; within
+ * one document we still keep a single client because the panel IS the
+ * session scope. This is a product-scope singleton, not a runtime constraint.
  */
 
 import type {
@@ -20,6 +24,7 @@ import type {
 	FsWriteResult,
 } from "@pi-oxide/extension-js";
 import { setLogLevel } from "@pi-oxide/extension-js";
+import { reportError, reportWarn } from "../errors/report";
 import type { FsClient } from "../skills/skill-types";
 import { browsergentStore } from "../state/store";
 
@@ -116,15 +121,24 @@ export class ExtensionJsClient implements FsClient {
 		this.onFsMutation = cb;
 	}
 
-	async init(): Promise<void> {
+	async init(options?: { windowId?: number }): Promise<void> {
 		if (this.initialized && this.session) return;
 		if (this.initPromise) {
 			await this.initPromise;
 			return;
 		}
 		this.initPromise = (async () => {
+			// Surface init failures; drop to error-only after success.
+			setLogLevel("warn");
 			const { ExtensionSession } = await import("@pi-oxide/extension-js");
-			const [session, runner] = await ExtensionSession.init();
+			const initOptions =
+				typeof options?.windowId === "number" ? options : undefined;
+			type InitFn = (opts?: { windowId?: number }) => Promise<
+				[ExtensionSessionType, Promise<void>]
+			>;
+			const [session, runner] = await (
+				ExtensionSession.init as InitFn
+			)(initOptions);
 			session.setFuelLimit(Number.MAX_SAFE_INTEGER);
 			// Atomic publish: only set session + initialized after BOTH creation and runner start succeed.
 			this.session = session;
@@ -137,6 +151,16 @@ export class ExtensionJsClient implements FsClient {
 		} catch (err) {
 			// Publishing failed: clear the promise so the next init() retries fresh.
 			this.initPromise = null;
+			reportError({
+				code: "E_BOOT_EXTJS",
+				source: "extjs",
+				message: "ExtensionSession.init failed",
+				details: {
+					windowId:
+						typeof options?.windowId === "number" ? options.windowId : null,
+				},
+				cause: err,
+			});
 			throw err;
 		}
 	}
@@ -258,7 +282,15 @@ export class ExtensionJsClient implements FsClient {
 						);
 					}
 				})
-				.catch(() => {});
+				.catch((err: unknown) => {
+					// Queue chain continuity only — the original reject already fired.
+					reportWarn({
+						code: "E_HOST_UNKNOWN",
+						source: "extjs",
+						message: `extjs queue settled with error after reject: ${errorLabel}`,
+						cause: err,
+					});
+				});
 		});
 	}
 
@@ -358,6 +390,20 @@ export class ExtensionJsClient implements FsClient {
 
 	get isReady(): boolean {
 		return this.initialized && this.session !== null;
+	}
+
+	getWindowId(): number | null {
+		const session = this.session as ExtensionSessionType & {
+			getWindowId?: () => number | null;
+		};
+		return session?.getWindowId?.() ?? null;
+	}
+
+	rebindWindow(newWindowId: number): void {
+		const session = this.session as ExtensionSessionType & {
+			rebindWindow?: (windowId: number) => void;
+		};
+		session?.rebindWindow?.(newWindowId);
 	}
 
 	private async ensureReady(): Promise<void> {
@@ -464,11 +510,17 @@ export class ExtensionJsClient implements FsClient {
 				),
 			]);
 			store.extjsReady();
-		} catch {
+		} catch (err) {
 			this.session = null;
 			this.runnerPromise = null;
 			this.initialized = false;
 			this.initPromise = null; // leave retryable
+			reportError({
+				code: "E_BOOT_EXTJS",
+				source: "extjs",
+				message: "Runtime rebuild failed",
+				cause: err,
+			});
 			store.extjsFailed({
 				code: "E_JS_RUNTIME",
 				message: "Runtime rebuild failed",

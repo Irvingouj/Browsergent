@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { SessionController } from "../../src/controllers/session-controller";
 import { browsergentStore } from "../../src/state/store";
 import { MemoryStorage } from "../../src/storage/memory-storage";
+import { initBoundController } from "./session-test-utils";
 
 /** MemoryStorage whose set/remove reject only after `rejecting` is flipped on,
  *  so SessionController.init() can complete before we simulate failure. */
@@ -24,8 +24,7 @@ describe("SessionController error surfacing", () => {
 
 	test("save() failure lands E_SESSION_STORE in store", async () => {
 		const storage = new RejectingStorage();
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 		storage.rejecting = true;
 		ctrl.hydrated = true;
 
@@ -39,8 +38,7 @@ describe("SessionController error surfacing", () => {
 
 	test("clear() failure lands E_SESSION_STORE with operation clear", async () => {
 		const storage = new RejectingStorage();
-		const ctrl = new SessionController(storage);
-		await ctrl.init();
+		const { ctrl } = await initBoundController(storage);
 		storage.rejecting = true;
 		ctrl.hydrated = true;
 
