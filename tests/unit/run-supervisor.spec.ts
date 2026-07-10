@@ -144,4 +144,56 @@ describe("RunSupervisor", () => {
 		expect(loaded?.messages.some((m) => m.text === "headless done")).toBe(true);
 		void bridgeA;
 	});
+
+	test("isLocalWorkerHost stays true after terminal while bridge remains", async () => {
+		const sessionA = await controller.resolveOrCreateForWindow(1);
+		supervisor.startForeground(sessionA);
+		supervisor.ensureBridge(sessionA);
+		supervisor.registerRun(sessionA, "run-a");
+		expect(supervisor.isLocalWorkerHost(sessionA)).toBe(true);
+		supervisor.getRegistry().clear(sessionA);
+		// Registry cleared (terminal), but local bridge still owns the session.
+		expect(supervisor.getRegistry().isRunning(sessionA)).toBe(false);
+		expect(supervisor.isLocalWorkerHost(sessionA)).toBe(true);
+	});
+
+	test("applyRemoteRunEvent does not pollute chat for foreign session", async () => {
+		const sessionA = await controller.resolveOrCreateForWindow(1);
+		const sessionB = "foreign-session-b";
+		supervisor.startForeground(sessionA);
+		browsergentStore.getState().clearChat();
+
+		supervisor.applyRemoteRunEvent(sessionB, {
+			type: "agentMessage",
+			runId: "run-b",
+			message: {
+				kind: "user",
+				id: "u-foreign",
+				text: "only in B",
+				timestamp: 1,
+			},
+		});
+		supervisor.applyRemoteRunEvent(sessionB, {
+			type: "agentTextDelta",
+			runId: "run-b",
+			messageId: "a-foreign",
+			text: "Merged content",
+		});
+		supervisor.applyRemoteRunEvent(sessionB, {
+			type: "agentStatus",
+			runId: "run-b",
+			status: "running",
+		});
+
+		expect(browsergentStore.getState().chat.messageIds).toHaveLength(0);
+		expect(supervisor.getRegistry().isRunning(sessionB)).toBe(true);
+		expect(supervisor.getRegistry().shouldUpdateUi("run-b")).toBe(false);
+
+		supervisor.applyRemoteRunEvent(sessionB, {
+			type: "agentStatus",
+			runId: "run-b",
+			status: "done",
+		});
+		expect(supervisor.getRegistry().isRunning(sessionB)).toBe(false);
+	});
 });

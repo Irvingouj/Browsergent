@@ -31,6 +31,24 @@ describe("applyRunEvent", () => {
 		expect(snapshot.messages[0]?.text).toBe("hello");
 	});
 
+	test("dedupes user messages by id (relay redelivery)", () => {
+		const snapshot = createSessionSnapshot();
+		const user = {
+			type: "agentMessage" as const,
+			runId: "run-1",
+			message: {
+				kind: "user" as const,
+				id: "u1",
+				text: "hello",
+				timestamp: 1,
+			},
+		};
+		applyRunEvent(snapshot, user);
+		applyRunEvent(snapshot, user);
+		applyRunEvent(snapshot, user);
+		expect(snapshot.messages).toHaveLength(1);
+	});
+
 	test("accumulates streaming deltas into assistant message", () => {
 		const snapshot = createSessionSnapshot();
 		applyRunEvent(snapshot, {

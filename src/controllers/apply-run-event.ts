@@ -77,6 +77,8 @@ export function applyRunEvent(
 			if (message.kind === "assistant") {
 				upsertAssistantFromMessage(snapshot, message);
 			} else {
+				// Idempotent: dual relay channels must not triple-store the same bubble.
+				if (snapshot.messages.some((m) => m.id === message.id)) break;
 				snapshot.messages.push(message);
 			}
 			break;

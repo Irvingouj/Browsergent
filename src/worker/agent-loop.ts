@@ -320,8 +320,15 @@ export class AgentLoop {
 	 * the human sees what they injected.
 	 */
 	async steerUser(text: string, callbacks: AgentLoopCallbacks): Promise<void> {
-		if (!this.agent || this.aborted) return;
-		callbacks.onMessage("user", text);
+		// Panel already showed the user bubble optimistically (handleSteer).
+		// Do not emit a second user message here.
+		if (!this.agent || this.aborted) {
+			callbacks.onMessage(
+				"system",
+				"Couldn't deliver steer mid-action: agent not running",
+			);
+			return;
+		}
 		try {
 			await this.agent.steer({ text, source: { kind: "user" as const } });
 			streamLog("agentloop.steer_user", { len: text.length });

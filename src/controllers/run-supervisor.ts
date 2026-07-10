@@ -99,13 +99,14 @@ export class RunSupervisor {
 		return this.registry;
 	}
 
-	/** True when this panel owns the in-process worker for the session. */
+	/**
+	 * True when this panel owns the in-process worker for the session.
+	 * Uses bridge presence (not registry.isRunning): the registry is cleared on
+	 * terminal status, but late sessionRunRelay/storage echoes must still be
+	 * ignored so the origin panel does not re-apply the same events 2–3×.
+	 */
 	isLocalWorkerHost(sessionId: string): boolean {
-		return (
-			this.hosting === "local" &&
-			this.bridges.has(sessionId) &&
-			this.registry.isRunning(sessionId)
-		);
+		return this.hosting === "local" && this.bridges.has(sessionId);
 	}
 
 	isWorkerReady(): boolean {
@@ -200,7 +201,18 @@ export class RunSupervisor {
 		}
 	}
 
-	startForeground(sessionId: string): RunBridge {
+	/**
+	 * Bind UI to a session without starting the agent worker (cold boot).
+	 * Worker is created on first postToForeground / postToSession / registerRun.
+	 */
+	startForeground(sessionId: string): RunBridge | null {
+		this.foregroundSessionId = sessionId;
+		const existing = this.bridges.get(sessionId);
+		return existing ?? null;
+	}
+
+	/** Ensure worker exists for a run (first agentStart path). */
+	ensureWorkerForSession(sessionId: string): RunBridge {
 		this.foregroundSessionId = sessionId;
 		return this.ensureBridge(sessionId);
 	}
@@ -222,6 +234,16 @@ export class RunSupervisor {
 		this.handlers.onRunningSessionsChanged?.();
 	}
 
+	/**
+	 * Apply a run event received from another panel (sessionRunRelay / storage).
+	 *
+	 * Cross-panel observers must NOT:
+	 * - inject foreign sessions into this panel's chat UI
+	 * - dual-write the session body to IDB (the local host already sinks)
+	 *
+	 * They only track running state for badges, unless this panel's foreground
+	 * session is exactly the remote session (merge-adopt while viewing it).
+	 */
 	applyRemoteRunEvent(sessionId: string, event: WorkerToPanel): void {
 		if (event.type === "workerReady") {
 			this.workerReady = true;
@@ -230,11 +252,30 @@ export class RunSupervisor {
 		}
 		const runId = "runId" in event ? event.runId : undefined;
 		if (!runId) return;
+
+		const isForeground = this.foregroundSessionId === sessionId;
 		if (!this.registry.getByRunId(runId)) {
 			this.registry.register(sessionId, runId, "loading");
+			// Badge-only for foreign/remote sessions; do not mark as chat UI owner.
+			if (!isForeground) {
+				this.registry.detach(sessionId);
+			}
 		}
-		this.applyRemoteRunEventToUi(runId, event);
-		void this.handleRunEvent(runId, event);
+
+		if (isForeground) {
+			this.applyRemoteRunEventToUi(runId, event);
+			void this.handleRunEvent(runId, event);
+			return;
+		}
+
+		// Headless remote observer: running badge only.
+		if (event.type === "agentStatus") {
+			this.registry.updateStatus(runId, event.status);
+			if (TERMINAL_STATUSES.has(event.status)) {
+				this.registry.clear(sessionId);
+			}
+			this.handlers.onRunningSessionsChanged?.();
+		}
 	}
 
 	private applyRemoteRunEventToUi(runId: string, event: WorkerToPanel): void {
@@ -326,7 +367,11 @@ export class RunSupervisor {
 	}
 
 	postToForeground(message: PanelToWorker): void {
-		this.getForegroundBridge().post(message);
+		if (!this.foregroundSessionId) {
+			throw new Error("No foreground session bound");
+		}
+		// Lazy: create agent-worker only when first message is posted (agentStart).
+		this.ensureBridge(this.foregroundSessionId).post(message);
 	}
 
 	postToSession(sessionId: string, message: PanelToWorker): void {
@@ -335,7 +380,9 @@ export class RunSupervisor {
 
 	stopForegroundRun(runId?: string): void {
 		if (!this.foregroundSessionId) return;
-		this.getForegroundBridge().post({ type: "agentStop", runId });
+		const bridge = this.bridges.get(this.foregroundSessionId);
+		if (!bridge) return; // no worker → nothing to stop
+		bridge.post({ type: "agentStop", runId });
 	}
 
 	dispose(): void {
