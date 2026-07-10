@@ -209,14 +209,33 @@ export class SkillRegistry {
 		return skills.find((s) => s.name === name) ?? null;
 	}
 
+	/** Read SKILL.md body for a known meta without re-listing the skill tree. */
+	async loadBodyFromMeta(meta: SkillMeta): Promise<SkillDocument> {
+		const { data: raw } = await this.fs.readText(meta.skillPath);
+		const { body } = parseFrontmatter(raw);
+		return { meta, body };
+	}
+
+	/** Read a skill resource for a known meta without re-listing the skill tree. */
+	async loadResourceFromMeta(
+		meta: SkillMeta,
+		relativePath: string,
+	): Promise<string> {
+		const fullPath = joinSkillResourcePath(meta.baseDir, relativePath);
+		const { exists } = await this.fs.exists(fullPath);
+		if (!exists) {
+			throw new Error(`Skill resource not found: ${relativePath}`);
+		}
+		const { data } = await this.fs.readText(fullPath);
+		return data;
+	}
+
 	async loadSkillBody(skillName: string): Promise<SkillDocument> {
 		const meta = await this.getSkill(skillName);
 		if (!meta) {
 			throw new Error(`Unknown skill: ${skillName}`);
 		}
-		const { data: raw } = await this.fs.readText(meta.skillPath);
-		const { body } = parseFrontmatter(raw);
-		return { meta, body };
+		return this.loadBodyFromMeta(meta);
 	}
 
 	async loadSkillResource(
@@ -227,12 +246,6 @@ export class SkillRegistry {
 		if (!meta) {
 			throw new Error(`Unknown skill: ${skillName}`);
 		}
-		const fullPath = joinSkillResourcePath(meta.baseDir, relativePath);
-		const { exists } = await this.fs.exists(fullPath);
-		if (!exists) {
-			throw new Error(`Skill resource not found: ${relativePath}`);
-		}
-		const { data } = await this.fs.readText(fullPath);
-		return data;
+		return this.loadResourceFromMeta(meta, relativePath);
 	}
 }

@@ -17,6 +17,10 @@ export class ExtjsController {
 		this.client = ExtensionJsClient.getInstance();
 	}
 
+	/**
+	 * Boot extension-js only. Skills are seeded/listed lazily on first use
+	 * (picker, run start, load_skill, URL match, import) — not during panel init.
+	 */
 	async init(options?: { windowId?: number }): Promise<void> {
 		browsergentStore.getState().extjsInitializing();
 
@@ -39,17 +43,6 @@ export class ExtjsController {
 				cause: err,
 			});
 			throw err;
-		}
-
-		try {
-			await getSkillService().ensureReady();
-		} catch (err: unknown) {
-			reportWarn({
-				code: "E_HOST_UNKNOWN",
-				source: "boot",
-				message: "Skill initialization failed",
-				cause: err,
-			});
 		}
 	}
 

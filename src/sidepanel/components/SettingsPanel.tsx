@@ -111,6 +111,35 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	// Track which config is being edited; null = list view.
 	const [editingId, setEditingId] = useState<string | null>(null);
 
+	// Retry load when controller becomes available (each window has its own store).
+	useEffect(() => {
+		if (loaded || !settingsController) return;
+		void settingsController.load().catch(() => {
+			// Controller marks loaded=true even on failure.
+		});
+	}, [loaded, settingsController]);
+
+	// Hard fallback: never block Settings forever if boot is stuck on sessions.
+	useEffect(() => {
+		if (loaded) return;
+		const timer = window.setTimeout(() => {
+			if (browsergentStore.getState().settings.loaded) return;
+			browsergentStore.getState().settingsLoaded({
+				providers: browsergentStore.getState().settings.providers,
+				activeProviderId: browsergentStore.getState().settings.activeProviderId,
+				loaded: true,
+				error: {
+					code: "E_SETTINGS_PERSIST",
+					message:
+						"Settings load timed out (boot may still be loading sessions). You can still edit providers; save when ready.",
+					source: "settings",
+					details: { operation: "load", timedOut: true },
+				},
+			});
+		}, 4_000);
+		return () => window.clearTimeout(timer);
+	}, [loaded]);
+
 	const editing = providers.find((p) => p.id === editingId) ?? null;
 
 	// Ephemeral Test Connection result for the provider being edited. Not in
@@ -321,7 +350,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	if (editing) {
 		return (
 			<div
-				class="settings-edit-view flex-1 overflow-auto p-md flex flex-col gap-md"
+				class="settings-edit-view flex-1 min-h-0 p-md flex flex-col gap-md"
 				data-testid="settings-edit"
 			>
 				<div class="flex items-center justify-between">
@@ -624,7 +653,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	// --- List view ---
 	return (
 		<div
-			class="settings-list-view flex-1 overflow-auto p-md flex flex-col gap-md"
+			class="settings-list-view flex-1 min-h-0 p-md flex flex-col gap-md"
 			data-testid="settings-list"
 		>
 			<div class="flex items-center justify-between">

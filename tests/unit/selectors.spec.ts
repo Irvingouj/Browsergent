@@ -103,6 +103,7 @@ describe("selectors", () => {
 			selectedFileId: null,
 			filesVersion: 0,
 			expandedFolderIds: ["/sub"],
+			loadedDirPaths: [],
 		},
 	} as unknown as BrowsergentStore;
 
@@ -197,6 +198,7 @@ describe("selectRetryState", () => {
 				selectedFileId: null,
 				filesVersion: 0,
 				expandedFolderIds: [],
+				loadedDirPaths: [],
 			},
 		} as unknown as BrowsergentStore;
 	}

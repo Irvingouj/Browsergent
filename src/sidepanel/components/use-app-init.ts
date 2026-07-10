@@ -21,19 +21,20 @@ import {
 	type OffscreenRunStateMessage,
 } from "../../protocol/offscreen-run";
 import { browsergentStore } from "../../state/store";
-import { IndexedDBStorage } from "../../storage/indexeddb-storage";
-import { MemoryStorage } from "../../storage/memory-storage";
-import { migrateFromChromeStorage } from "../../storage/migrate";
+import { openPanelStorage } from "../../storage/open-panel-storage";
 import type { StorageBackend } from "../../storage/storage-backend";
 import { ExtensionJsClient } from "../extension-js-client";
 import { handleFileOp } from "../file-op-handler";
 import { getUrlTracker } from "../url-tracker";
 import { WindowContextController } from "../window-context-controller";
+import { refreshShallowFileTree } from "./files/refresh-file-tree";
 
 export interface AppInitResult {
 	initialized: boolean;
 	workerReady: boolean;
 	windowId: number | null;
+	/** Reactive — set as soon as storage is ready (before session hydrate). */
+	settingsController: SettingsController | null;
 	onRunningSessionsChangedRef: { current: (() => void) | null };
 	supervisorRef: { current: RunSupervisor | null };
 	extjsControllerRef: { current: ExtjsController | null };
@@ -73,9 +74,12 @@ export function useAppInit(): AppInitResult {
 	const [initialized, setInitialized] = useState(false);
 	const [workerReady, setWorkerReady] = useState(false);
 	const [windowId, setWindowId] = useState<number | null>(null);
+	const [settingsController, setSettingsController] =
+		useState<SettingsController | null>(null);
 	const supervisorRef = useRef<RunSupervisor | null>(null);
 	const onRunningSessionsChangedRef = useRef<(() => void) | null>(null);
 	const extjsControllerRef = useRef<ExtjsController | null>(null);
+	/** Ref for non-React callers; kept in sync with settingsController state. */
 	const settingsControllerRef = useRef<SettingsController | null>(null);
 	const sessionControllerRef = useRef<SessionController | null>(null);
 	const filesControllerRef = useRef<FilesController | null>(null);
@@ -102,51 +106,137 @@ export function useAppInit(): AppInitResult {
 
 		async function init() {
 			const store = browsergentStore.getState();
-
-			// --- IDB ---
-			try {
-				const storage = new IndexedDBStorage();
-				await storage.init();
-				if (cancelled) {
-					storage.close();
-					return;
+			const bootStep = (step: string) => {
+				// Sync DOM marker for multi-window diagnostics (survives hung awaits).
+				try {
+					document.documentElement.dataset.bootStep = step;
+				} catch {
+					/* ignore */
 				}
-				await migrateFromChromeStorage(storage);
+			};
+			bootStep("start");
+
+			// --- IDB (durable only via openPanelStorage; serial queue inside) ---
+			const swReject = (ms: number, label: string): Promise<never> => {
+				const pageTimer = new Promise<never>((_, rej) => {
+					setTimeout(
+						() => rej(new Error(`${label} timeout after ${ms}ms`)),
+						ms,
+					);
+				});
+				if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+					return pageTimer;
+				}
+				const swTimer = chrome.runtime
+					.sendMessage({ type: "swDelay", ms })
+					.then(() => {
+						throw new Error(`${label} timeout after ${ms}ms`);
+					})
+					.catch((err: unknown) => {
+						if (
+							err instanceof Error &&
+							err.message.includes("timeout after")
+						) {
+							throw err;
+						}
+						return pageTimer;
+					});
+				return Promise.race([swTimer, pageTimer]);
+			};
+
+			const idbStartedAt = Date.now();
+			bootStep("idb-open");
+			store.bootComponentSet("idb", "pending");
+
+			let storage: StorageBackend;
+			try {
+				storage = await openPanelStorage();
 				if (cancelled) {
-					storage.close();
+					await storage.close();
 					return;
 				}
 				storageRef = storage;
 				store.bootComponentSet("idb", "ok");
+				bootStep("idb-ok");
+				console.info(
+					`[browsergent][info] IndexedDB ready in ${Date.now() - idbStartedAt}ms`,
+				);
 			} catch (err) {
 				reportError({
 					code: "E_BOOT_IDB",
 					source: "boot",
-					message: "IndexedDB init failed; falling back to memory storage",
+					message: "IndexedDB init failed",
 					cause: err,
 				});
-				store.bootComponentSet("idb", "degraded");
+				store.bootComponentSet("idb", "fail");
 				store.bootHostErrorSet({
 					code: "E_BOOT_IDB",
 					message:
 						err instanceof Error
 							? err.message
-							: "IndexedDB failed; using memory storage (sessions not persisted)",
+							: "IndexedDB failed; cannot start durable storage",
 					source: "boot",
 				});
-				storageRef = new MemoryStorage();
-				if (cancelled) return;
+				bootStep("idb-fail");
+				// No MemoryStorage stash — surface error and stop boot.
+				if (!cancelled) {
+					setInitialized(true);
+					setWorkerReady(false);
+				}
+				return;
 			}
 
 			if (cancelled) return;
 
-			const storage = storageRef;
+			// Settings first — independent of sessions store. Second-window panels
+			// were stuck on "Loading settings…" when session init/listSessions
+			// blocked before settingsCtrl existed or load() ran.
+			bootStep("settings-load");
+			const settingsCtrl = new SettingsController(storage);
+			settingsControllerRef.current = settingsCtrl;
+			if (!cancelled) setSettingsController(settingsCtrl);
+			// Optimistic loaded=true so Settings UI is never stuck if IDB get hangs
+			// under multi-window contention (B8). Real values overwrite when load completes.
+			browsergentStore.getState().settingsLoaded({
+				providers: browsergentStore.getState().settings.providers,
+				activeProviderId: browsergentStore.getState().settings.activeProviderId,
+				loaded: true,
+			});
+			const settingsLoadPromise = settingsCtrl.load().catch((err: unknown) => {
+				reportWarn({
+					code: "E_HOST_UNKNOWN",
+					source: "boot",
+					message: "Settings load failed",
+					cause: err,
+				});
+			});
+			bootStep("settings-started");
 
 			const sessionCtrl = new SessionController(storage);
 			sessionControllerRef.current = sessionCtrl;
+			// Meta-only refresh — await briefly so resolveOrCreate sees panelActive (B1).
+			bootStep("session-init");
 			try {
-				await sessionCtrl.init();
-			} catch (err) {
+				const initP = sessionCtrl.init();
+				const pageTimeout = new Promise<never>((_, rej) => {
+					setTimeout(
+						() => rej(new Error("SessionController.init timeout")),
+						3_000,
+					);
+				});
+				const swTimeout =
+					typeof chrome !== "undefined" && chrome.runtime?.sendMessage
+						? chrome.runtime
+								.sendMessage({ type: "swDelay", ms: 3_000 })
+								.then(() => {
+									throw new Error("SessionController.init timeout");
+								})
+								.catch(() => pageTimeout)
+						: pageTimeout;
+				await Promise.race([initP, swTimeout, pageTimeout]);
+				bootStep("session-ok");
+			} catch (err: unknown) {
+				bootStep("session-fail");
 				reportError({
 					code: "E_BOOT_SESSION",
 					source: "boot",
@@ -154,6 +244,7 @@ export function useAppInit(): AppInitResult {
 					cause: err,
 				});
 			}
+			void settingsLoadPromise;
 
 			const supervisor = new RunSupervisor(
 				sessionCtrl,
@@ -181,12 +272,26 @@ export function useAppInit(): AppInitResult {
 							return;
 						}
 						handleFileOp(msg, filesCtrl)
-							.then((result) => {
+							.then(async (result) => {
 								supervisor.postRelay(msg.id, {
 									type: "fileOpResult",
 									id: msg.id,
 									result,
 								});
+								// Mutating tools must refresh Files tree / preview (upload path
+								// already did; agent file_edit/delete/write previously left UI stale).
+								if (
+									result.op === "edit" ||
+									result.op === "write" ||
+									result.op === "delete"
+								) {
+									browsergentStore.getState().incrementFilesVersion();
+									try {
+										await refreshShallowFileTree(filesCtrl);
+									} catch {
+										/* best-effort UI refresh */
+									}
+								}
 							})
 							.catch((err: unknown) => {
 								const message =
@@ -254,75 +359,161 @@ export function useAppInit(): AppInitResult {
 			});
 			extjsControllerRef.current = extjs;
 
-			const settingsCtrl = new SettingsController(storage);
-			settingsControllerRef.current = settingsCtrl;
-
 			const windowCtx = new WindowContextController(sessionCtrl);
 			windowContextRef.current = windowCtx;
 
 			const filesCtrl = new FilesController(ExtensionJsClient.getInstance());
 			filesControllerRef.current = filesCtrl;
 
-			const startExtjs = (wid: number | null | undefined) => {
-				const opts =
-					typeof wid === "number" && wid > 0 ? { windowId: wid } : undefined;
-				if (!opts) {
-					reportWarn({
-						code: "E_BOOT_WINDOW",
-						source: "boot",
-						message:
-							"extjs init without windowId — per-window tab ownership disabled",
-						details: { windowId: wid ?? null },
-					});
-				}
-				extjs
-					.init(opts)
-					.then(() => {
-						browsergentStore.getState().bootComponentSet("extjs", "ok");
-					})
-					.catch((err: unknown) => {
-						reportError({
-							code: "E_BOOT_EXTJS",
-							source: "boot",
-							message: "Extension-js init failed",
-							cause: err,
-						});
-						browsergentStore.getState().bootComponentSet("extjs", "fail");
-					});
-			};
-
-			try {
-				const { windowId: wid, sessionId } = await windowCtx.init();
-				if (!cancelled) {
+			// Acting (extension-js) and agent-worker start on first Run / first OPFS need — not on boot.
+			// Window bind then shell paint; never block paint more than a few seconds.
+			const paintShell = (
+				sessionId: string,
+				wid: number,
+				step: string,
+			): void => {
+				if (cancelled) return;
+				if (wid > 0) {
 					setWindowId(wid);
 					browsergentStore.getState().bootWindowIdSet(wid);
-					browsergentStore.getState().bootComponentSet("sw", "ok");
 				}
-				startExtjs(wid);
+				browsergentStore.getState().bootComponentSet("sw", "ok");
 				try {
 					supervisor.startForeground(sessionId);
-					browsergentStore.getState().bootComponentSet("worker", "pending");
+					setWorkerReady(true);
+					browsergentStore.getState().bootComponentSet("worker", "ok");
+					browsergentStore.getState().bootComponentSet("extjs", "pending");
 				} catch (err) {
 					reportError({
 						code: "E_BOOT_WORKER",
 						source: "boot",
-						message: "Failed to start agent worker",
+						message: "Failed to bind foreground session",
 						cause: err,
 					});
 					browsergentStore.getState().bootComponentSet("worker", "fail");
+					// Still paint shell so the user sees errors / can use Settings.
+					setWorkerReady(true);
 				}
-				const session = await sessionCtrl.loadForSession(sessionId);
-				if (session) {
-					browsergentStore.getState().hydrateChat(session.messages);
-					browsergentStore.getState().hydrateTrace(session.trace);
-					browsergentStore.getState().hydrateDiagnostics(session.diagnostics);
-					const nodes = await filesCtrl.listAllFiles();
-					browsergentStore.getState().setFileNodes(nodes);
-				}
-				sessionCtrl.hydrated = true;
-				const { sessions: sessionList } = await sessionCtrl.listSessions(wid);
-				browsergentStore.getState().sessionListLoaded(sessionList);
 				browsergentStore.getState().activeSessionChanged(sessionId);
+				setInitialized(true);
+				bootStep(step);
+				// Out-of-band ready marker — Playwright can poll this via the service
+				// worker when page.evaluate on the extension document is frozen (CDP).
+				if (
+					typeof chrome !== "undefined" &&
+					chrome.storage?.session?.set &&
+					wid > 0
+				) {
+					void chrome.storage.session
+						.set({
+							[`panelReady:${wid}`]: {
+								ts: Date.now(),
+								sessionId,
+								step,
+								idb: browsergentStore.getState().boot.idb,
+							},
+						})
+						.catch(() => {
+							/* ok */
+						});
+				}
+			};
+
+			const parseQueryWindowId = (): number => {
+				try {
+					const raw = new URLSearchParams(location.search).get("windowId");
+					const n = raw ? Number(raw) : 0;
+					return Number.isFinite(n) && n > 0 ? n : 0;
+				} catch {
+					return 0;
+				}
+			};
+
+			try {
+				bootStep("window-init");
+				const rebindSession = (nextId: string, nextWid: number) => {
+					if (cancelled) return;
+					supervisor.startForeground(nextId);
+					browsergentStore.getState().activeSessionChanged(nextId);
+					if (nextWid > 0) {
+						setWindowId(nextWid);
+						browsergentStore.getState().bootWindowIdSet(nextWid);
+					}
+					void sessionCtrl.loadForSession(nextId).then((session) => {
+						if (cancelled || !session) return;
+						browsergentStore.getState().hydrateChat(session.messages);
+						browsergentStore.getState().hydrateTrace(session.trace);
+						browsergentStore.getState().hydrateDiagnostics(session.diagnostics);
+					});
+				};
+
+				let wid = 0;
+				let sessionId = "";
+
+				// Durable path: bounded window attach (ephemeral only if attach times out).
+				const WINDOW_INIT_MS = 4_000;
+				try {
+					const attached = await Promise.race([
+						windowCtx.init({ onSessionResolved: rebindSession }),
+						swReject(WINDOW_INIT_MS, "windowCtx.init"),
+					]);
+					wid = attached.windowId;
+					sessionId = attached.sessionId;
+					bootStep("window-ok");
+				} catch (winErr: unknown) {
+					reportError({
+						code: "E_BOOT_WINDOW",
+						source: "boot",
+						message: "windowCtx.init timed out or failed; ephemeral attach",
+						cause: winErr,
+					});
+					wid = parseQueryWindowId();
+					if (wid > 0) {
+						sessionCtrl.bindPanelWindow(wid);
+					}
+					sessionId = sessionCtrl.adoptEphemeralSession(wid);
+					// Best-effort durable write so multi-window list/merge can see this session.
+					void sessionCtrl
+						.persistEphemeralSession(wid, sessionId)
+						.catch(() => {
+							/* ok */
+						});
+					bootStep("window-ephemeral");
+				}
+				paintShell(sessionId, wid, "shell-ready");
+				sessionCtrl.scheduleIdleTrim();
+
+				// Background body hydrate + session list (never blocks shell).
+				void (async () => {
+					try {
+						await settingsLoadPromise;
+						if (cancelled) return;
+						const session = await sessionCtrl.loadForSession(sessionId);
+						if (cancelled) return;
+						if (session) {
+							browsergentStore.getState().hydrateChat(session.messages);
+							browsergentStore.getState().hydrateTrace(session.trace);
+							browsergentStore
+								.getState()
+								.hydrateDiagnostics(session.diagnostics);
+						}
+						sessionCtrl.hydrated = true;
+						const { sessions: sessionList } =
+							await sessionCtrl.listSessions(wid > 0 ? wid : undefined);
+						if (cancelled) return;
+						browsergentStore.getState().sessionListLoaded(sessionList);
+						bootStep("hydrate-ok");
+					} catch (hydrateErr: unknown) {
+						sessionCtrl.hydrated = true;
+						reportWarn({
+							code: "E_BOOT_SESSION",
+							source: "boot",
+							message: "background session hydrate failed",
+							cause: hydrateErr,
+						});
+						bootStep("hydrate-fail");
+					}
+				})();
 			} catch (err: unknown) {
 				reportError({
 					code: "E_BOOT_SESSION",
@@ -331,53 +522,34 @@ export function useAppInit(): AppInitResult {
 					cause: err,
 				});
 				sessionCtrl.hydrated = true;
-				const activeSessionId = sessionCtrl.getActiveSessionId() ?? "";
-				try {
-					const nodes = await filesCtrl.listAllFiles();
-					browsergentStore.getState().setFileNodes(nodes);
-				} catch (filesErr) {
-					reportWarn({
-						code: "E_HOST_UNKNOWN",
-						source: "boot",
-						message: "listAllFiles during boot recovery failed",
-						cause: filesErr,
-					});
-				}
-				const wid = windowCtx.getWindowId();
-				if (wid !== null) {
-					browsergentStore.getState().bootWindowIdSet(wid);
-				}
-				startExtjs(wid);
-				if (activeSessionId) {
+				let wid = windowCtx.getWindowId() ?? 0;
+				if (wid <= 0) {
 					try {
-						supervisor.startForeground(activeSessionId);
-					} catch (workerErr) {
-						reportError({
-							code: "E_BOOT_WORKER",
-							source: "boot",
-							message: "Failed to start agent worker (recovery path)",
-							cause: workerErr,
-						});
-						browsergentStore.getState().bootComponentSet("worker", "fail");
+						const raw = new URLSearchParams(location.search).get("windowId");
+						const n = raw ? Number(raw) : 0;
+						wid = Number.isFinite(n) && n > 0 ? n : 0;
+					} catch {
+						wid = 0;
 					}
 				}
-				const { sessions: sessionList } = await sessionCtrl.listSessions(
-					wid ?? undefined,
-				);
-				browsergentStore.getState().sessionListLoaded(sessionList);
-				browsergentStore.getState().activeSessionChanged(activeSessionId);
+				if (wid > 0) {
+					sessionCtrl.bindPanelWindow(wid);
+				}
+				const activeSessionId =
+					sessionCtrl.getActiveSessionId() ??
+					sessionCtrl.adoptEphemeralSession(wid);
+				paintShell(activeSessionId, wid, "shell-ready-recovery");
+				sessionCtrl.scheduleIdleTrim();
+				void sessionCtrl
+					.listSessions(wid > 0 ? wid : undefined)
+					.then(({ sessions: sessionList }) => {
+						if (cancelled) return;
+						browsergentStore.getState().sessionListLoaded(sessionList);
+					})
+					.catch(() => {
+						/* ok */
+					});
 			}
-
-			settingsCtrl.load().catch((err: unknown) => {
-				reportWarn({
-					code: "E_HOST_UNKNOWN",
-					source: "boot",
-					message: "Settings load failed",
-					cause: err,
-				});
-			});
-
-			setInitialized(true);
 		}
 
 		void init();
@@ -620,6 +792,7 @@ export function useAppInit(): AppInitResult {
 		initialized,
 		workerReady,
 		windowId,
+		settingsController,
 		onRunningSessionsChangedRef,
 		supervisorRef,
 		extjsControllerRef,

@@ -21,6 +21,7 @@ const mockState = {
 		selectedFileId: null,
 		filesVersion: 0,
 		expandedFolderIds: [],
+		loadedDirPaths: [],
 	},
 	skills: { diagnostics: [], catalog: [] },
 };

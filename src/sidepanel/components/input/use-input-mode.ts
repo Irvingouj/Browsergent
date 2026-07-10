@@ -106,7 +106,7 @@ export function useInputMode({
 		[messageIds, messagesById],
 	);
 
-	// --- Skill loading ---
+	// --- Skill loading (lazy: first /skill picker open seeds + lists OPFS) ---
 	const loadSkills = useCallback((): void => {
 		getSkillService()
 			.listSkills()
@@ -124,6 +124,13 @@ export function useInputMode({
 		);
 		return unsubscribe;
 	}, [store]);
+
+	// Load catalog only when the slash skill picker opens — not on boot/focus.
+	useEffect(() => {
+		if (mode.kind === "picker-slash") {
+			loadSkills();
+		}
+	}, [mode.kind, loadSkills]);
 
 	// --- Tabs listener (lazy, while at picker is open) ---
 	useEffect(() => {

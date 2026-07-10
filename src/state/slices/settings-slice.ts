@@ -59,7 +59,11 @@ export function createSettingsSlice(
 			}));
 		},
 		settingsSaveStarted() {
-			set((state) => ({ settings: { ...state.settings, loaded: false } }));
+			// Do not flip `loaded` false — SettingsPanel treats !loaded as a
+			// full-page "Loading settings…" blocker. Save is in-place.
+			set((state) => ({
+				settings: { ...state.settings, error: undefined },
+			}));
 		},
 		settingsSaved(next) {
 			set({ settings: next });

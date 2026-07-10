@@ -3,12 +3,14 @@ import { ExtjsController } from "../../src/controllers/extjs-controller";
 
 vi.mock("../../src/skills/skill-service", () => {
 	const mockEnsureReady = vi.fn().mockResolvedValue({ listSkills: vi.fn() });
+	const mockLoadSkill = vi.fn().mockResolvedValue("skill body");
 	return {
 		getSkillService: vi.fn().mockReturnValue({
 			ensureReady: mockEnsureReady,
-			loadSkill: vi.fn().mockResolvedValue("skill body"),
+			loadSkill: mockLoadSkill,
 		}),
 		__mockEnsureReady: mockEnsureReady,
+		__mockLoadSkill: mockLoadSkill,
 	};
 });
 
@@ -66,6 +68,8 @@ async function getMocks() {
 			.__mockStoreState as Record<string, ReturnType<typeof vi.fn>>,
 		mockEnsureReady: (skillMod as unknown as Record<string, unknown>)
 			.__mockEnsureReady as ReturnType<typeof vi.fn>,
+		mockLoadSkill: (skillMod as unknown as Record<string, unknown>)
+			.__mockLoadSkill as ReturnType<typeof vi.fn>,
 	};
 }
 
@@ -182,15 +186,14 @@ describe("ExtjsController", () => {
 		expect(mockStoreState.extjsReady).not.toHaveBeenCalled();
 	});
 
-	test("skill init failure still marks extjs ready and installs relay callback", async () => {
+	test("init does not call skill ensureReady (skills load lazily on demand)", async () => {
 		const { mockEnsureReady, mockStoreState } = await getMocks();
-		mockEnsureReady.mockRejectedValue(new Error("skill fs failed"));
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const { post, posted } = makePoster();
 		const ctrl = new ExtjsController(post);
 
 		await expect(ctrl.init()).resolves.toBeUndefined();
 
+		expect(mockEnsureReady).not.toHaveBeenCalled();
 		expect(mockStoreState.extjsReady).toHaveBeenCalled();
 		expect(mockStoreState.extjsFailed).not.toHaveBeenCalled();
 
@@ -203,8 +206,34 @@ describe("ExtjsController", () => {
 		expect(callback).not.toBeNull();
 		callback?.({ type: "extjsDocsResult", id: "docs-1", docs: "{}" });
 		expect(posted).toHaveLength(1);
+	});
 
-		warnSpy.mockRestore();
+	test("handleLoadSkillRelayRequest loads skill on demand (not at init)", async () => {
+		const { mockEnsureReady, mockLoadSkill } = await getMocks();
+		const { post, posted } = makePoster();
+		const ctrl = new ExtjsController(post);
+		await ctrl.init();
+		expect(mockEnsureReady).not.toHaveBeenCalled();
+
+		ctrl.handleLoadSkillRelayRequest({
+			type: "loadSkillRequest",
+			id: "ls-1",
+			skill: "demo",
+		});
+
+		await vi.waitFor(() => {
+			expect(mockLoadSkill).toHaveBeenCalledWith("demo", undefined, {
+				source: "tool",
+				activatedSkills: undefined,
+			});
+		});
+		await vi.waitFor(() => {
+			expect(posted).toContainEqual({
+				type: "loadSkillResult",
+				id: "ls-1",
+				content: "skill body",
+			});
+		});
 	});
 
 	test("handleRelayRequest delegates to client", async () => {

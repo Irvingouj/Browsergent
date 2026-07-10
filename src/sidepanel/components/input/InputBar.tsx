@@ -308,7 +308,6 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						domSync={domSync}
 						onRead={handleRead}
 						onKeyDown={mode.onKeyDown}
-						onFocus={() => mode.loadSkills()}
 						onBlur={mode.onBlur}
 						onPaste={handlePaste}
 						placeholder="Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"

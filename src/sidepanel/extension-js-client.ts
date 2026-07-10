@@ -107,6 +107,8 @@ export class ExtensionJsClient implements FsClient {
 	private initialized = false;
 	private initPromise: Promise<void> | null = null;
 	private onFsMutation: (() => void) | null = null;
+	/** Last windowId passed to init — used when OPFS is first touched before Run. */
+	private boundWindowId: number | undefined;
 
 	private constructor() {}
 
@@ -122,6 +124,9 @@ export class ExtensionJsClient implements FsClient {
 	}
 
 	async init(options?: { windowId?: number }): Promise<void> {
+		if (typeof options?.windowId === "number") {
+			this.boundWindowId = options.windowId;
+		}
 		if (this.initialized && this.session) return;
 		if (this.initPromise) {
 			await this.initPromise;
@@ -131,8 +136,11 @@ export class ExtensionJsClient implements FsClient {
 			// Surface init failures; drop to error-only after success.
 			setLogLevel("warn");
 			const { ExtensionSession } = await import("@pi-oxide/extension-js");
-			const initOptions =
-				typeof options?.windowId === "number" ? options : undefined;
+			const wid =
+				typeof options?.windowId === "number"
+					? options.windowId
+					: this.boundWindowId;
+			const initOptions = typeof wid === "number" ? { windowId: wid } : undefined;
 			type InitFn = (opts?: { windowId?: number }) => Promise<
 				[ExtensionSessionType, Promise<void>]
 			>;
@@ -408,9 +416,16 @@ export class ExtensionJsClient implements FsClient {
 
 	private async ensureReady(): Promise<void> {
 		if (this.initialized && this.session) return;
-		if (this.initPromise) {
-			await this.initPromise;
+		// Lazy acting host: first OPFS / run_js use may init without explicit caller.
+		if (!this.initPromise) {
+			await this.init(
+				typeof this.boundWindowId === "number"
+					? { windowId: this.boundWindowId }
+					: undefined,
+			);
+			return;
 		}
+		await this.initPromise;
 		if (!this.initialized || !this.session) {
 			throw new Error("ExtensionJsClient not initialized. Call init() first.");
 		}

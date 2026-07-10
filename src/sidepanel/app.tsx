@@ -44,6 +44,7 @@ import type { ChatMessage } from "../types/messages";
 import { WireFormat } from "../worker/provider-schema";
 import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
+import { refreshShallowFileTree } from "./components/files/refresh-file-tree";
 import { InputBar } from "./components/input/InputBar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useAppInit } from "./components/use-app-init";
@@ -153,6 +154,7 @@ const App: FunctionalComponent = () => {
 		initialized,
 		workerReady,
 		windowId,
+		settingsController,
 		supervisorRef,
 		onRunningSessionsChangedRef,
 		extjsControllerRef,
@@ -275,6 +277,25 @@ const App: FunctionalComponent = () => {
 		}
 		const sessionId = sessionControllerRef.current?.getActiveSessionId();
 		if (!sessionId) return;
+
+		// Lazy acting host: init extension-js with this panel's windowId on first Run.
+		const wid =
+			windowId ?? windowContextRef.current?.getWindowId() ?? undefined;
+		try {
+			await extjsControllerRef.current?.init(
+				typeof wid === "number" && wid > 0 ? { windowId: wid } : undefined,
+			);
+			browsergentStore.getState().bootComponentSet("extjs", "ok");
+		} catch (err: unknown) {
+			browsergentStore.getState().bootComponentSet("extjs", "fail");
+			browsergentStore.getState().appendSystemMessage({
+				kind: "system",
+				id: crypto.randomUUID(),
+				text: `Browser runtime failed to start: ${err instanceof Error ? err.message : String(err)}`,
+				timestamp: Date.now(),
+			});
+			return;
+		}
 
 		let resolvedTask = task;
 		let skillCatalog = "";
@@ -478,6 +499,7 @@ const App: FunctionalComponent = () => {
 		);
 		setRunningSessionIds(allRunning);
 
+		supervisorRef.current?.ensureWorkerForSession(sessionId);
 		supervisorRef.current?.postToForeground({
 			type: "agentStart",
 			runId,
@@ -504,6 +526,9 @@ const App: FunctionalComponent = () => {
 		activeProvider,
 		sessionControllerRef,
 		supervisorRef,
+		extjsControllerRef,
+		windowContextRef,
+		windowId,
 		filesControllerRef,
 		syncLocalRunningToCoordinator,
 		globalRunningBySession,
@@ -516,10 +541,25 @@ const App: FunctionalComponent = () => {
 
 	const handleSteer = useCallback(
 		(text: string) => {
+			const trimmed = text.trim();
+			if (!trimmed) return;
 			const runId = browsergentStore.getState().agent.activeRunId;
 			if (!runId) return;
 			browsergentStore.getState().setTaskDraft("");
-			supervisorRef.current?.postToForeground({ type: "agentSteer", runId, text });
+			// Optimistic bubble so the user always sees what they steered, even if the
+			// worker rejects (run just ended / runId race). Worker steerUser no longer
+			// emits a second user bubble for the same text.
+			browsergentStore.getState().appendUserMessage({
+				kind: "user",
+				id: crypto.randomUUID(),
+				text: trimmed,
+				timestamp: Date.now(),
+			});
+			supervisorRef.current?.postToForeground({
+				type: "agentSteer",
+				runId,
+				text: trimmed,
+			});
 		},
 		[supervisorRef],
 	);
@@ -532,40 +572,55 @@ const App: FunctionalComponent = () => {
 		const ctrl = filesControllerRef.current;
 		if (!ctrl) return;
 		try {
-			const nodes = await ctrl.listAllFiles();
-			browsergentStore.getState().setFileNodes(nodes);
+			await refreshShallowFileTree(ctrl);
 		} catch (err) {
 			console.warn("Failed to refresh files:", err);
 		}
 	}, [filesControllerRef]);
 
+	// Latest global running map for reloadSessionList without putting it in
+	// useCallback deps (that caused identity churn → effect storms → IDB flood).
+	const globalRunningBySessionRef = useRef(globalRunningBySession);
+	globalRunningBySessionRef.current = globalRunningBySession;
+
+	const reloadInFlightRef = useRef<Promise<void> | null>(null);
 	const reloadSessionList = useCallback(async () => {
-		windowContextRef.current?.requestGlobalRunningSnapshot();
-		const ctrl = sessionControllerRef.current;
-		const wid = windowId ?? ctrl?.getPanelWindowId() ?? undefined;
-		if (!ctrl) return;
-		await ctrl.refreshMeta();
-		const result = await ctrl.listSessions(wid);
-		const local = syncLocalRunningToCoordinator();
-		const runningIds = collectRunningSessionIds(
-			local,
-			ctrl.getGlobalRunningSessionIds(),
-			globalRunningBySession,
-		);
-		const runningSet = new Set(runningIds);
-		setRunningSessionIds(runningIds);
-		browsergentStore.getState().sessionListLoaded(
-			result.sessions.map((s) => ({
-				...s,
-				running: runningSet.has(s.id),
-			})),
-		);
+		// Single-flight: concurrent callers share one reload (prevents __meta storms).
+		if (reloadInFlightRef.current) {
+			await reloadInFlightRef.current;
+			return;
+		}
+		const run = (async () => {
+			windowContextRef.current?.requestGlobalRunningSnapshot();
+			const ctrl = sessionControllerRef.current;
+			const wid = windowId ?? ctrl?.getPanelWindowId() ?? undefined;
+			if (!ctrl) return;
+			await ctrl.refreshMeta();
+			const result = await ctrl.listSessions(wid);
+			const local = syncLocalRunningToCoordinator();
+			const runningIds = collectRunningSessionIds(
+				local,
+				ctrl.getGlobalRunningSessionIds(),
+				globalRunningBySessionRef.current,
+			);
+			const runningSet = new Set(runningIds);
+			setRunningSessionIds(runningIds);
+			browsergentStore.getState().sessionListLoaded(
+				result.sessions.map((s) => ({
+					...s,
+					running: runningSet.has(s.id),
+				})),
+			);
+		})().finally(() => {
+			reloadInFlightRef.current = null;
+		});
+		reloadInFlightRef.current = run;
+		await run;
 	}, [
 		sessionControllerRef,
 		windowContextRef,
 		windowId,
 		syncLocalRunningToCoordinator,
-		globalRunningBySession,
 	]);
 
 	useEffect(() => {
@@ -581,14 +636,55 @@ const App: FunctionalComponent = () => {
 		const ctx = windowContextRef.current;
 		if (!ctx) return;
 		return ctx.subscribeGlobalRunning((message) => {
-			setGlobalRunningBySession({ ...message.bySession });
+			setGlobalRunningBySession((prev) => {
+				const next = message.bySession;
+				const prevKeys = Object.keys(prev);
+				const nextKeys = Object.keys(next);
+				if (prevKeys.length === nextKeys.length) {
+					let same = true;
+					for (const k of nextKeys) {
+						if (prev[k] !== next[k]) {
+							same = false;
+							break;
+						}
+					}
+					if (same) return prev;
+				}
+				return { ...next };
+			});
 		});
 	}, [initialized, windowContextRef]);
 
+	// Global running badge updates: patch in-memory list only — NO refreshMeta/listSessions.
+	// (Previously this depended on globalRunningBySession → full IDB reload → write __meta →
+	// broadcast → loop: 30k+ concurrent get(__meta) under multi-window.)
+	useEffect(() => {
+		if (!initialized) return;
+		const local =
+			supervisorRef.current?.getRegistry().getRunningSessionIds() ?? [];
+		const ctrl = sessionControllerRef.current;
+		const runningIds = collectRunningSessionIds(
+			local,
+			ctrl?.getGlobalRunningSessionIds() ?? [],
+			globalRunningBySession,
+		);
+		const runningSet = new Set(runningIds);
+		setRunningSessionIds(runningIds);
+		const current = browsergentStore.getState().session.sessions;
+		if (current.length === 0) return;
+		browsergentStore.getState().sessionListLoaded(
+			current.map((s) => ({
+				...s,
+				running: runningSet.has(s.id),
+			})),
+		);
+	}, [initialized, globalRunningBySession, supervisorRef, sessionControllerRef]);
+
+	// Full IDB-backed list load: once when shell ready, and when session panel opens.
 	useEffect(() => {
 		if (!initialized) return;
 		void reloadSessionList();
-	}, [initialized, globalRunningBySession, reloadSessionList]);
+	}, [initialized, reloadSessionList]);
 
 	useEffect(() => {
 		if (!initialized || !sessionPanelOpen) return;
@@ -1046,7 +1142,7 @@ const App: FunctionalComponent = () => {
 					<ChatPanel />
 				) : activeTab === "settings" ? (
 					<SettingsPanel
-						settingsController={settingsControllerRef.current}
+						settingsController={settingsController}
 						onExportConversation={handleExportConversation}
 					/>
 				) : initialized && filesControllerRef.current ? (
