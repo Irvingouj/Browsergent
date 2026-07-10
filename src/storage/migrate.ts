@@ -7,8 +7,17 @@ import type { StorageBackend } from "./storage-backend";
 export async function migrateFromChromeStorage(
 	backend: StorageBackend,
 ): Promise<void> {
+	const t0 = performance.now();
+	console.info("[idb-timing] migrate_start");
 	const migrated = await backend.get<boolean>("settings", "__migrated");
-	if (migrated) return;
+	if (migrated) {
+		console.info(
+			`[idb-timing] migrate_skip_already_done ${JSON.stringify({
+				ms: Math.round(performance.now() - t0),
+			})}`,
+		);
+		return;
+	}
 
 	try {
 		const result = await chrome.storage.local.get(null);
@@ -25,9 +34,20 @@ export async function migrateFromChromeStorage(
 			});
 		}
 		await backend.set("settings", "__migrated", true);
+		console.info(
+			`[idb-timing] migrate_did_work ${JSON.stringify({
+				ms: Math.round(performance.now() - t0),
+				hadSession: !!result.browsergentSession,
+			})}`,
+		);
 	} catch {
 		// chrome.storage.local unavailable (e.g. test env) — mark migrated to
 		// avoid retrying. Real extension environments always have it.
 		await backend.set("settings", "__migrated", true);
+		console.info(
+			`[idb-timing] migrate_mark_only ${JSON.stringify({
+				ms: Math.round(performance.now() - t0),
+			})}`,
+		);
 	}
 }

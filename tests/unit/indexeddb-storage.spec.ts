@@ -13,10 +13,12 @@ describe("IndexedDBStorage", () => {
 	});
 
 	afterEach(async () => {
-		if (storage?.db) {
+		try {
 			await storage.clear();
-			await storage.close();
+		} catch {
+			/* not open */
 		}
+		await storage.close();
 	});
 
 	test("get returns null for missing key", async () => {
@@ -79,6 +81,16 @@ describe("IndexedDBStorage", () => {
 		expect(result).toBe(2);
 	});
 
+	test("serial queue preserves write/read order under concurrent callers", async () => {
+		// Fire many concurrent sets then a get — queue must not interleave incorrectly.
+		const writes = Array.from({ length: 20 }, (_, i) =>
+			storage.set("settings", "counter", i),
+		);
+		await Promise.all(writes);
+		const result = await storage.get<number>("settings", "counter");
+		expect(result).toBe(19);
+	});
+
 	test("works across multiple stores", async () => {
 		await storage.set("settings", "k", "settings-val");
 		await storage.set("sessions", "k", "sessions-val");
@@ -89,6 +101,16 @@ describe("IndexedDBStorage", () => {
 	test("throws when not initialized", async () => {
 		const fresh = new IndexedDBStorage();
 		await expect(fresh.get("settings", "x")).rejects.toThrow("not initialized");
+	});
+
+	test("queue continues after a failed op (later init+set+get succeed)", async () => {
+		const fresh = new IndexedDBStorage();
+		await expect(fresh.get("settings", "x")).rejects.toThrow("not initialized");
+		// Queue must not stick: open and use after a rejected op.
+		await fresh.init();
+		await fresh.set("settings", "after-error", "ok");
+		expect(await fresh.get("settings", "after-error")).toBe("ok");
+		await fresh.close();
 	});
 
 	test("init recovers after close", async () => {
