@@ -73,6 +73,25 @@ describe("SettingsController error surfacing", () => {
 		expect(error?.details?.operation).toBe("save");
 	});
 
+	test("load() failure still marks loaded so Settings UI is not stuck", async () => {
+		class FailingGetStorage extends RejectingStorage {
+			override async get(): Promise<null> {
+				throw new Error("storage read denied");
+			}
+		}
+		browsergentStore.getState().settingsLoaded({
+			providers: [],
+			activeProviderId: null,
+			loaded: false,
+		});
+		const controller = new SettingsController(new FailingGetStorage());
+		await expect(controller.load()).rejects.toThrow("storage read denied");
+		const state = browsergentStore.getState().settings;
+		expect(state.loaded).toBe(true);
+		expect(state.error?.code).toBe("E_SETTINGS_PERSIST");
+		expect(state.error?.details?.operation).toBe("load");
+	});
+
 	test("settingsErrorDismissed clears the error", () => {
 		browsergentStore.getState().settingsSaveFailed({
 			code: "E_SETTINGS_PERSIST",

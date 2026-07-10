@@ -22,6 +22,76 @@ initWindowSessionCoordinator();
 
 chrome.runtime?.onMessage?.addListener(
 	safeListener(
+		"swDelay",
+		(
+			message: unknown,
+			_sender: chrome.runtime.MessageSender,
+			sendResponse: (response?: unknown) => void,
+		) => {
+			if (
+				typeof message !== "object" ||
+				message === null ||
+				(message as { type?: string }).type !== "swDelay"
+			) {
+				return;
+			}
+			const ms = Number((message as { ms?: number }).ms);
+			const delay = Number.isFinite(ms) && ms > 0 ? Math.min(ms, 30_000) : 1_000;
+			// SW timers are not subject to background-tab throttling like panel pages.
+			setTimeout(() => {
+				sendResponse({ ok: true });
+			}, delay);
+			return true;
+		},
+		"sw",
+	),
+);
+
+chrome.runtime?.onMessage?.addListener(
+	safeListener(
+		"resolvePanelWindowId",
+		(
+			message: unknown,
+			sender: chrome.runtime.MessageSender,
+			sendResponse: (response?: unknown) => void,
+		) => {
+			if (
+				typeof message !== "object" ||
+				message === null ||
+				(message as { type?: string }).type !== "resolvePanelWindowId"
+			) {
+				return;
+			}
+			const windowId =
+				typeof sender.tab?.windowId === "number"
+					? sender.tab.windowId
+					: typeof sender.documentId === "string" &&
+							typeof (sender as { windowId?: number }).windowId === "number"
+						? (sender as { windowId?: number }).windowId
+						: null;
+			// MV3 extension pages often send without tab; use last focused as hint.
+			if (typeof windowId === "number" && windowId > 0) {
+				sendResponse({ windowId });
+				return true;
+			}
+			void chrome.windows
+				?.getLastFocused?.()
+				?.then((w) => {
+					sendResponse({
+						windowId: typeof w?.id === "number" ? w.id : 0,
+					});
+				})
+				?.catch?.(() => {
+					sendResponse({ windowId: 0 });
+				});
+			return true;
+		},
+		"sw",
+	),
+);
+
+chrome.runtime?.onMessage?.addListener(
+	safeListener(
 		"sessionRunRelay",
 		(message: unknown, sender: chrome.runtime.MessageSender) => {
 			if (!isSessionRunRelayMessage(message)) return;

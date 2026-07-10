@@ -200,8 +200,8 @@ export function safeListener<TArgs extends unknown[]>(
 	name: string,
 	handler: (...args: TArgs) => unknown,
 	source: HostErrorSource = "sw",
-): (...args: TArgs) => void {
-	return (...args: TArgs): void => {
+): (...args: TArgs) => unknown {
+	return (...args: TArgs): unknown => {
 		try {
 			const result = handler(...args);
 			if (
@@ -219,6 +219,8 @@ export function safeListener<TArgs extends unknown[]>(
 					});
 				});
 			}
+			// Preserve return value (e.g. `true` to keep sendResponse channel open).
+			return result;
 		} catch (err) {
 			reportError({
 				code: "E_SW_LISTENER",

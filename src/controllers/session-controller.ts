@@ -14,11 +14,18 @@ import type {
 	ChatMessage,
 } from "../types/messages";
 import {
+	applyWindowCloseToIndex,
+	applyWindowMergeToIndex,
+	type SessionIndexEntry,
+	type SessionIndexSnapshot,
+} from "./session-index-lifecycle";
+import {
 	canOpenSessionForWindow,
 	formatWindowLabel,
 	type SessionLifecycle,
 } from "./session-window-utils";
 
+/** Full persisted chat payload for one session (messages/trace/diagnostics). */
 interface SessionData {
 	id: string;
 	windowId?: number | null;
@@ -32,6 +39,22 @@ interface SessionData {
 	messageCount: number;
 }
 
+/**
+ * Lightweight per-session index for list/find/trim.
+ * Avoids deserializing messages/trace/diagnostics when only metadata is needed.
+ */
+interface StoredSessionMeta {
+	id: string;
+	windowId: number | null;
+	lifecycle: SessionLifecycle;
+	timestamp: number;
+	title?: string;
+	customTitle?: string;
+	messageCount: number;
+	/** Approximate serialized size of the full session body in bytes. */
+	bytes: number;
+}
+
 interface SessionMeta {
 	panelActiveSession: Record<string, string>;
 	closedWindowIds?: number[];
@@ -41,8 +64,79 @@ interface SessionMeta {
 
 const SESSION_STORE = "sessions";
 const META_KEY = "__meta";
+/** Full body key: session_<id> */
 const SESSION_PREFIX = "session_";
+/** Meta index key: session_meta_<id> (must be checked before SESSION_PREFIX matches). */
+const SESSION_META_PREFIX = "session_meta_";
 const SESSION_CAP = 50;
+
+function sessionBodyKey(id: string): string {
+	return `${SESSION_PREFIX}${id}`;
+}
+
+function sessionMetaKey(id: string): string {
+	return `${SESSION_META_PREFIX}${id}`;
+}
+
+function isSessionBodyKey(key: string): boolean {
+	return key.startsWith(SESSION_PREFIX) && !key.startsWith(SESSION_META_PREFIX);
+}
+
+function sessionIdFromBodyKey(key: string): string {
+	return key.slice(SESSION_PREFIX.length);
+}
+
+function metaFromSessionData(
+	data: SessionData,
+	bytes?: number,
+): StoredSessionMeta {
+	return {
+		id: data.id,
+		windowId: data.windowId ?? null,
+		lifecycle: data.lifecycle ?? "foreground",
+		timestamp: data.timestamp,
+		title: data.title,
+		customTitle: data.customTitle,
+		messageCount: data.messageCount,
+		bytes: bytes ?? estimateJsonSize(data),
+	};
+}
+
+function parseStoredSessionMeta(raw: unknown): StoredSessionMeta | null {
+	// Storage boundary: values may be legacy or partially written.
+	if (!raw || typeof raw !== "object") return null;
+	const v = raw as Record<string, unknown>;
+	if (typeof v.id !== "string" || v.id.length === 0) return null;
+	if (typeof v.timestamp !== "number" || !Number.isFinite(v.timestamp)) {
+		return null;
+	}
+	if (typeof v.messageCount !== "number" || !Number.isFinite(v.messageCount)) {
+		return null;
+	}
+	const windowId =
+		v.windowId === null || v.windowId === undefined
+			? null
+			: typeof v.windowId === "number"
+				? v.windowId
+				: null;
+	const lifecycle: SessionLifecycle =
+		v.lifecycle === "background" ? "background" : "foreground";
+	// Missing/invalid bytes forces lazy re-derive from the full body.
+	if (typeof v.bytes !== "number" || !Number.isFinite(v.bytes) || v.bytes <= 0) {
+		return null;
+	}
+	const meta: StoredSessionMeta = {
+		id: v.id,
+		windowId,
+		lifecycle,
+		timestamp: v.timestamp,
+		messageCount: Math.max(0, Math.floor(v.messageCount)),
+		bytes: v.bytes,
+	};
+	if (typeof v.title === "string") meta.title = v.title;
+	if (typeof v.customTitle === "string") meta.customTitle = v.customTitle;
+	return meta;
+}
 
 const MAX_DIAGNOSTICS_SIZE_BYTES = 500_000;
 const MAX_SSE_DATA_LENGTH = 10_000;
@@ -224,18 +318,99 @@ export class SessionController {
 		sessionId: string,
 		panelWindowId: number,
 	): Promise<boolean> {
-		const record = await this.getSessionRecord(sessionId);
-		if (!record) return false;
-		return canOpenSessionForWindow(record.windowId, panelWindowId);
+		const meta = await this.getOrMigrateSessionMeta(sessionId);
+		if (!meta) return false;
+		return canOpenSessionForWindow(meta.windowId, panelWindowId);
 	}
 
 	async getSessionRecord(id: string): Promise<SessionData | null> {
 		const raw = await this.storage.get<SessionData>(
 			SESSION_STORE,
-			`${SESSION_PREFIX}${id}`,
+			sessionBodyKey(id),
 		);
 		if (!raw || typeof raw !== "object" || !raw.id) return null;
 		return raw;
+	}
+
+	private async writeSessionMeta(meta: StoredSessionMeta): Promise<void> {
+		await this.storage.set(SESSION_STORE, sessionMetaKey(meta.id), meta);
+	}
+
+	private async removeSessionKeys(id: string): Promise<void> {
+		await this.storage.remove(SESSION_STORE, sessionBodyKey(id));
+		await this.storage.remove(SESSION_STORE, sessionMetaKey(id));
+	}
+
+	private async persistSessionBody(data: SessionData): Promise<void> {
+		const bytes = estimateJsonSize(data);
+		await this.storage.set(SESSION_STORE, sessionBodyKey(data.id), data);
+		await this.writeSessionMeta(metaFromSessionData(data, bytes));
+	}
+
+	/**
+	 * Read meta index; if missing, derive once from the full body and backfill.
+	 */
+	private async getOrMigrateSessionMeta(
+		id: string,
+	): Promise<StoredSessionMeta | null> {
+		const rawMeta = await this.storage.get<unknown>(
+			SESSION_STORE,
+			sessionMetaKey(id),
+		);
+		const parsed = parseStoredSessionMeta(rawMeta);
+		if (parsed) return parsed;
+
+		const full = await this.getSessionRecord(id);
+		if (!full) return null;
+		const cleanup = this.cleanupStoredSession(full);
+		if (cleanup.changed) {
+			await this.storage.set(
+				SESSION_STORE,
+				sessionBodyKey(cleanup.data.id),
+				cleanup.data,
+			);
+		}
+		const meta = metaFromSessionData(cleanup.data, cleanup.bytes);
+		await this.writeSessionMeta(meta);
+		return meta;
+	}
+
+	private async listAllSessionMetas(): Promise<StoredSessionMeta[]> {
+		const keys = await this.storage.getAllKeys(SESSION_STORE);
+		// Prefer lightweight session_meta_* rows (no body deserialize).
+		const metaIds = new Set(
+			keys
+				.filter((k) => k.startsWith(SESSION_META_PREFIX))
+				.map((k) => k.slice(SESSION_META_PREFIX.length)),
+		);
+		const bodyIds = keys.filter(isSessionBodyKey).map(sessionIdFromBodyKey);
+		const metas: StoredSessionMeta[] = [];
+		const seen = new Set<string>();
+
+		for (const id of metaIds) {
+			const rawMeta = await this.storage.get<unknown>(
+				SESSION_STORE,
+				sessionMetaKey(id),
+			);
+			const parsed = parseStoredSessionMeta(rawMeta);
+			if (parsed) {
+				metas.push(parsed);
+				seen.add(id);
+			}
+		}
+
+		// Migrate only bodies that still lack a meta row (idle / first open after upgrade).
+		for (const id of bodyIds) {
+			if (seen.has(id)) continue;
+			const meta = await this.getOrMigrateSessionMeta(id);
+			if (meta) {
+				metas.push(meta);
+			} else {
+				// Corrupt or empty body key — drop body + any orphan meta.
+				await this.removeSessionKeys(id);
+			}
+		}
+		return metas;
 	}
 
 	async refreshMeta(): Promise<void> {
@@ -268,9 +443,43 @@ export class SessionController {
 		await this.persistMeta();
 	}
 
+	private initPromise: Promise<void> | null = null;
+	private metaLoaded = false;
+
 	async init(): Promise<void> {
-		await this.refreshMeta();
-		await this.trimStoredSessions();
+		// Meta only — do not trim/list all session bodies on cold boot (B8/B9).
+		// Trim runs after shell is painted via scheduleIdleTrim().
+		if (this.metaLoaded) return;
+		// Dedup concurrent init() so multi-window boot does not stack IDB gets.
+		if (!this.initPromise) {
+			this.initPromise = this.refreshMeta()
+				.then(() => {
+					this.metaLoaded = true;
+				})
+				.finally(() => {
+					this.initPromise = null;
+				});
+		}
+		await this.initPromise;
+	}
+
+	/** True after a successful refreshMeta (panelActiveSession trustworthy). */
+	isMetaLoaded(): boolean {
+		return this.metaLoaded;
+	}
+
+	/** Yield to the event loop, then evict oversized session bodies (non-blocking boot). */
+	scheduleIdleTrim(): void {
+		const run = () => {
+			void this.trimStoredSessions().catch((err) => {
+				this.failStore(err, { operation: "idleTrim" });
+			});
+		};
+		if (typeof requestIdleCallback === "function") {
+			requestIdleCallback(() => run(), { timeout: 5_000 });
+		} else {
+			setTimeout(run, 0);
+		}
 	}
 
 	async resolveOrCreateForWindow(windowId: number): Promise<string> {
@@ -278,10 +487,20 @@ export class SessionController {
 		const key = String(windowId);
 		const existingPanelId = this.meta.panelActiveSession[key];
 		if (existingPanelId) {
-			const record = await this.getSessionRecord(existingPanelId);
-			if (record && record.windowId === windowId) {
+			// Trust in-memory meta first (already loaded via init). Optional body check:
+			const meta = await this.getOrMigrateSessionMeta(existingPanelId);
+			if (meta && meta.windowId === windowId) {
 				return existingPanelId;
 			}
+			// Meta row missing but panelActive points here — still return id if body exists.
+			const body = await this.getSessionRecord(existingPanelId);
+			if (body && (body.windowId === windowId || body.windowId == null)) {
+				return existingPanelId;
+			}
+			// Ephemeral attach claimed this id before IDB body existed. Persist it
+			// instead of minting a second id (which would orphan in-flight UI work).
+			await this.persistEphemeralSession(windowId, existingPanelId);
+			return existingPanelId;
 		}
 
 		const attached = await this.findSessionsForWindow(windowId);
@@ -303,72 +522,123 @@ export class SessionController {
 		const attached = await this.findSessionsForWindow(windowId);
 		for (const session of attached) {
 			if (session.lifecycle === "foreground") {
-				session.lifecycle = "background";
-				await this.storage.set(
-					SESSION_STORE,
-					`${SESSION_PREFIX}${session.id}`,
-					session,
-				);
+				await this.setSessionLifecycle(session.id, "background");
 			}
 		}
 
 		const newId = crypto.randomUUID();
 		const empty = emptySessionData(newId, windowId);
-		await this.storage.set(SESSION_STORE, `${SESSION_PREFIX}${newId}`, empty);
+		await this.persistSessionBody(empty);
 		this.meta.panelActiveSession[String(windowId)] = newId;
 		await this.persistMeta();
 		await this.trimStoredSessions();
 		return newId;
 	}
 
+	/**
+	 * Fast attach for boot fallback: no list/trim (avoids multi-window IDB stalls).
+	 */
+	async createSessionAttachedToFast(windowId: number): Promise<string> {
+		this.bindPanelWindow(windowId);
+		const newId = crypto.randomUUID();
+		const empty = emptySessionData(newId, windowId);
+		await this.persistSessionBody(empty);
+		this.meta.panelActiveSession[String(windowId)] = newId;
+		await this.persistMeta();
+		return newId;
+	}
+
+	/**
+	 * In-memory attach only (no IDB). Used when storage is stuck so shell can paint.
+	 * Background persist should follow when IDB is healthy via persistEphemeralSession.
+	 */
+	adoptEphemeralSession(windowId: number, sessionId?: string): string {
+		this.bindPanelWindow(windowId);
+		const id = sessionId ?? crypto.randomUUID();
+		this.meta.panelActiveSession[String(windowId)] = id;
+		return id;
+	}
+
+	/** Persist a previously adopted ephemeral session id (same id — no second mint). */
+	async persistEphemeralSession(
+		windowId: number,
+		sessionId: string,
+	): Promise<void> {
+		this.bindPanelWindow(windowId);
+		const existing = await this.getSessionRecord(sessionId);
+		if (!existing) {
+			await this.persistSessionBody(emptySessionData(sessionId, windowId));
+		}
+		this.meta.panelActiveSession[String(windowId)] = sessionId;
+		await this.persistMeta();
+	}
+
+	private toIndexSnapshot(
+		metas: StoredSessionMeta[],
+	): SessionIndexSnapshot {
+		const sessions: SessionIndexEntry[] = metas.map((m) => ({
+			id: m.id,
+			windowId: m.windowId,
+			lifecycle: m.lifecycle,
+			timestamp: m.timestamp,
+			title: m.title,
+			customTitle: m.customTitle,
+			messageCount: m.messageCount,
+			bytes: m.bytes,
+		}));
+		return {
+			sessions,
+			meta: {
+				panelActiveSession: { ...this.meta.panelActiveSession },
+				closedWindowIds: [...(this.meta.closedWindowIds ?? [])],
+				runningSessionsByWindow: this.meta.runningSessionsByWindow
+					? { ...this.meta.runningSessionsByWindow }
+					: undefined,
+			},
+		};
+	}
+
 	async applyWindowMerge(
 		removedWindowId: number,
 		survivorWindowId: number,
 	): Promise<void> {
-		const keys = await this.storage.getAllKeys(SESSION_STORE);
-		for (const key of keys) {
-			if (!key.startsWith(SESSION_PREFIX)) continue;
-			const data = await this.storage.get<SessionData>(SESSION_STORE, key);
-			if (!data || data.windowId !== removedWindowId) continue;
-			data.windowId = survivorWindowId;
-			data.lifecycle = "background";
-			await this.storage.set(SESSION_STORE, key, data);
+		const metas = await this.listAllSessionMetas();
+		const next = applyWindowMergeToIndex(
+			this.toIndexSnapshot(metas),
+			removedWindowId,
+			survivorWindowId,
+		);
+		// Persist body+meta for rebinding sessions (pure reducer is source of truth).
+		for (const entry of next.sessions) {
+			const prev = metas.find((m) => m.id === entry.id);
+			if (
+				!prev ||
+				(prev.windowId === entry.windowId &&
+					prev.lifecycle === entry.lifecycle)
+			) {
+				continue;
+			}
+			const data = await this.getSessionRecord(entry.id);
+			if (!data) continue;
+			data.windowId = entry.windowId;
+			data.lifecycle = entry.lifecycle;
+			await this.persistSessionBody(data);
 		}
-
-		const closed = new Set(this.meta.closedWindowIds ?? []);
-		closed.add(removedWindowId);
-		this.meta.closedWindowIds = [...closed];
-
-		const panelKey = String(removedWindowId);
-		if (this.meta.panelActiveSession[panelKey]) {
-			delete this.meta.panelActiveSession[panelKey];
-		}
-		if (this.meta.runningSessionsByWindow?.[panelKey]) {
-			const next = { ...this.meta.runningSessionsByWindow };
-			delete next[panelKey];
-			this.meta.runningSessionsByWindow =
-				Object.keys(next).length > 0 ? next : undefined;
-		}
-
+		this.meta.panelActiveSession = next.meta.panelActiveSession;
+		this.meta.closedWindowIds = next.meta.closedWindowIds;
+		this.meta.runningSessionsByWindow = next.meta.runningSessionsByWindow;
 		await this.persistMeta();
 	}
 
 	async applyWindowClose(removedWindowId: number): Promise<void> {
-		const closed = new Set(this.meta.closedWindowIds ?? []);
-		closed.add(removedWindowId);
-		this.meta.closedWindowIds = [...closed];
-
-		const panelKey = String(removedWindowId);
-		if (this.meta.panelActiveSession[panelKey]) {
-			delete this.meta.panelActiveSession[panelKey];
-		}
-		if (this.meta.runningSessionsByWindow?.[panelKey]) {
-			const next = { ...this.meta.runningSessionsByWindow };
-			delete next[panelKey];
-			this.meta.runningSessionsByWindow =
-				Object.keys(next).length > 0 ? next : undefined;
-		}
-
+		const metas = await this.listAllSessionMetas();
+		const next = applyWindowCloseToIndex(
+			this.toIndexSnapshot(metas),
+			removedWindowId,
+		);
+		this.meta.panelActiveSession = next.meta.panelActiveSession;
+		this.meta.closedWindowIds = next.meta.closedWindowIds;
+		this.meta.runningSessionsByWindow = next.meta.runningSessionsByWindow;
 		await this.persistMeta();
 	}
 
@@ -411,11 +681,7 @@ export class SessionController {
 		const record = await this.getSessionRecord(sessionId);
 		if (!record) return;
 		record.lifecycle = lifecycle;
-		await this.storage.set(
-			SESSION_STORE,
-			`${SESSION_PREFIX}${sessionId}`,
-			record,
-		);
+		await this.persistSessionBody(record);
 	}
 
 	async saveForSession(
@@ -425,11 +691,14 @@ export class SessionController {
 		diagnostics: AgentDiagnosticEvent[] = [],
 	): Promise<void> {
 		const existing = await this.getSessionRecord(sessionId);
-		if (!existing) return;
+		// Ephemeral sessions may not have a body yet — upsert rather than silent no-op.
+		const base =
+			existing ??
+			emptySessionData(sessionId, this.panelWindowId ?? null);
 
 		const trimmedDiagnostics = normalizeDiagnostics(diagnostics).diagnostics;
 		const data: SessionData = {
-			...existing,
+			...base,
 			messages,
 			trace,
 			diagnostics: trimmedDiagnostics,
@@ -438,11 +707,7 @@ export class SessionController {
 		};
 
 		try {
-			await this.storage.set(
-				SESSION_STORE,
-				`${SESSION_PREFIX}${sessionId}`,
-				data,
-			);
+			await this.persistSessionBody(data);
 		} catch (err) {
 			this.failStore(err, { operation: "save", sessionId });
 		}
@@ -450,14 +715,9 @@ export class SessionController {
 
 	private async findSessionsForWindow(
 		windowId: number,
-	): Promise<SessionData[]> {
-		const keys = await this.storage.getAllKeys(SESSION_STORE);
-		const out: SessionData[] = [];
-		for (const key of keys) {
-			if (!key.startsWith(SESSION_PREFIX)) continue;
-			const data = await this.storage.get<SessionData>(SESSION_STORE, key);
-			if (data?.windowId === windowId) out.push(data);
-		}
+	): Promise<StoredSessionMeta[]> {
+		const metas = await this.listAllSessionMetas();
+		const out = metas.filter((m) => m.windowId === windowId);
 		out.sort((a, b) => b.timestamp - a.timestamp);
 		return out;
 	}
@@ -466,39 +726,21 @@ export class SessionController {
 		await this.storage.set(SESSION_STORE, META_KEY, this.meta);
 	}
 
+	/**
+	 * Evict oldest non-active sessions when total stored bytes exceed the budget.
+	 * Uses meta.bytes only — does not keep full SessionData arrays in memory.
+	 * Missing meta is migrated one session at a time via getOrMigrateSessionMeta.
+	 */
 	private async trimStoredSessions(): Promise<void> {
-		const keys = await this.storage.getAllKeys(SESSION_STORE);
+		const metas = await this.listAllSessionMetas();
 		const activeId = this.getActiveSessionId();
-		const sessions: Array<SessionData & { bytes: number }> = [];
-
-		for (const key of keys) {
-			if (!key.startsWith(SESSION_PREFIX)) continue;
-			const data = await this.storage.get<SessionData>(SESSION_STORE, key);
-			if (!data || typeof data !== "object" || !data.id) {
-				await this.storage.remove(SESSION_STORE, key);
-				continue;
-			}
-			const cleanup = this.cleanupStoredSession(data);
-			if (cleanup.changed) {
-				await this.storage.set(
-					SESSION_STORE,
-					`${SESSION_PREFIX}${cleanup.data.id}`,
-					cleanup.data,
-				);
-			}
-			sessions.push({ ...cleanup.data, bytes: cleanup.bytes });
-		}
-
-		let totalBytes = sessions.reduce((sum, session) => sum + session.bytes, 0);
+		let totalBytes = metas.reduce((sum, m) => sum + m.bytes, 0);
 		if (totalBytes <= MAX_SESSION_STORE_BYTES) return;
 
-		const oldestFirst = [...sessions].sort((a, b) => a.timestamp - b.timestamp);
+		const oldestFirst = [...metas].sort((a, b) => a.timestamp - b.timestamp);
 		for (const session of oldestFirst) {
 			if (session.id === activeId) continue;
-			await this.storage.remove(
-				SESSION_STORE,
-				`${SESSION_PREFIX}${session.id}`,
-			);
+			await this.removeSessionKeys(session.id);
 			totalBytes -= session.bytes;
 			if (totalBytes <= MAX_SESSION_STORE_BYTES) return;
 		}
@@ -540,7 +782,7 @@ export class SessionController {
 	} | null> {
 		const raw = await this.storage.get<SessionData>(
 			SESSION_STORE,
-			`${SESSION_PREFIX}${id}`,
+			sessionBodyKey(id),
 		);
 		if (!raw || typeof raw !== "object") return null;
 		if (!Array.isArray(raw.messages) || !Array.isArray(raw.trace)) return null;
@@ -561,11 +803,9 @@ export class SessionController {
 				trace,
 				diagnostics: normalized.diagnostics,
 			};
-			this.storage
-				.set(SESSION_STORE, `${SESSION_PREFIX}${id}`, patched)
-				.catch((err) => {
-					this.failStore(err, { operation: "save" });
-				});
+			this.persistSessionBody(patched).catch((err) => {
+				this.failStore(err, { operation: "save" });
+			});
 		}
 
 		return { messages, trace, diagnostics: normalized.diagnostics };
@@ -610,7 +850,6 @@ export class SessionController {
 		const activeId = this.getActiveSessionId();
 		const trimmedDiagnostics = normalizeDiagnostics(diagnostics).diagnostics;
 		if (!activeId) return;
-		const key = `${SESSION_PREFIX}${activeId}`;
 
 		const existing = await this.getSessionRecord(activeId);
 
@@ -628,11 +867,7 @@ export class SessionController {
 		});
 
 		try {
-			await this.storage.set(
-				SESSION_STORE,
-				key,
-				buildSnapshot(trimmedDiagnostics),
-			);
+			await this.persistSessionBody(buildSnapshot(trimmedDiagnostics));
 			this.saveFailedReported = false;
 		} catch (err) {
 			if (this.saveFailedReported) return;
@@ -642,7 +877,7 @@ export class SessionController {
 				return;
 			}
 			try {
-				await this.storage.set(SESSION_STORE, key, buildSnapshot([]));
+				await this.persistSessionBody(buildSnapshot([]));
 			} catch (retryErr) {
 				this.failStore(retryErr, { operation: "save", retry: true });
 			}
@@ -653,10 +888,7 @@ export class SessionController {
 		try {
 			const activeId = this.getActiveSessionId();
 			if (!activeId) return;
-			await this.storage.remove(
-				SESSION_STORE,
-				`${SESSION_PREFIX}${activeId}`,
-			);
+			await this.removeSessionKeys(activeId);
 		} catch (err) {
 			this.failStore(err, { operation: "clear" });
 		}
@@ -696,7 +928,7 @@ export class SessionController {
 			return;
 		}
 
-		await this.storage.remove(SESSION_STORE, `${SESSION_PREFIX}${id}`);
+		await this.removeSessionKeys(id);
 
 		if (this.getActiveSessionId() === id) {
 			const { sessions: remaining } = await this.listSessions(
@@ -716,16 +948,7 @@ export class SessionController {
 	}
 
 	async listSessions(panelWindowId?: number): Promise<ListSessionsResult> {
-		const keys = await this.storage.getAllKeys(SESSION_STORE);
-		const sessionKeys = keys.filter((k) => k.startsWith(SESSION_PREFIX));
-		const sessions: SessionData[] = [];
-		for (const key of sessionKeys) {
-			const data = await this.storage.get<SessionData>(SESSION_STORE, key);
-			if (data && typeof data === "object" && data.id) {
-				sessions.push(data);
-			}
-		}
-
+		const sessions = await this.listAllSessionMetas();
 		sessions.sort((a, b) => b.timestamp - a.timestamp);
 
 		const prunedIds: string[] = [];
@@ -733,7 +956,7 @@ export class SessionController {
 			const toDelete = sessions.slice(SESSION_CAP);
 			for (const s of toDelete) {
 				prunedIds.push(s.id);
-				await this.storage.remove(SESSION_STORE, `${SESSION_PREFIX}${s.id}`);
+				await this.removeSessionKeys(s.id);
 			}
 			sessions.length = SESSION_CAP;
 		}
@@ -746,9 +969,9 @@ export class SessionController {
 				title: s.customTitle || s.title || `Session ${s.id.slice(0, 8)}`,
 				timestamp: s.timestamp,
 				messageCount: s.messageCount,
-				windowId: s.windowId ?? null,
+				windowId: s.windowId,
 				windowLabel: formatWindowLabel(s.windowId, closed),
-				lifecycle: s.lifecycle ?? "foreground",
+				lifecycle: s.lifecycle,
 				openable:
 					panelWindowId === undefined
 						? true
@@ -763,16 +986,13 @@ export class SessionController {
 		title: string,
 		isCustom = false,
 	): Promise<void> {
-		const data = await this.storage.get<SessionData>(
-			SESSION_STORE,
-			`${SESSION_PREFIX}${id}`,
-		);
+		const data = await this.getSessionRecord(id);
 		if (!data) return;
 		if (isCustom) {
 			data.customTitle = title;
 		} else {
 			data.title = title;
 		}
-		await this.storage.set(SESSION_STORE, `${SESSION_PREFIX}${id}`, data);
+		await this.persistSessionBody(data);
 	}
 }

@@ -118,6 +118,178 @@ describe("SessionController.load", () => {
 	});
 });
 
+describe("SessionController session meta index", () => {
+	let storage: MemoryStorage;
+
+	beforeEach(() => {
+		storage = new MemoryStorage();
+	});
+
+	test("listSessions does not get full session body when meta exists", async () => {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		const huge = "x".repeat(50_000);
+		await ctrl.save(
+			[{ id: "1", kind: "user" as const, text: huge, timestamp: 1 }],
+			[],
+		);
+
+		const bodyKey = `session_${sessionId}`;
+		const metaKey = `session_meta_${sessionId}`;
+		expect(await storage.get("sessions", metaKey)).not.toBeNull();
+
+		const gotKeys: string[] = [];
+		const origGet = storage.get.bind(storage);
+		storage.get = async <T>(store: string, key: string): Promise<T | null> => {
+			if (store === "sessions") gotKeys.push(key);
+			return origGet(store, key);
+		};
+
+		const { sessions } = await ctrl.listSessions();
+		expect(sessions).toHaveLength(1);
+		expect(sessions[0]?.id).toBe(sessionId);
+		expect(sessions[0]?.messageCount).toBe(1);
+		expect(gotKeys).not.toContain(bodyKey);
+		expect(gotKeys).toContain(metaKey);
+	});
+
+	test("listSessions lazy-migrates meta from legacy full-only sessions", async () => {
+		const id = "legacy-only";
+		await storage.set("sessions", "__meta", {
+			panelActiveSession: { [String(TEST_WINDOW_ID)]: id },
+		});
+		await storage.set("sessions", `session_${id}`, {
+			id,
+			windowId: TEST_WINDOW_ID,
+			lifecycle: "foreground",
+			messages: [
+				{ id: "1", kind: "user" as const, text: "hi", timestamp: 1 },
+			],
+			trace: [],
+			diagnostics: [],
+			timestamp: 42,
+			title: "Legacy",
+			messageCount: 1,
+		});
+
+		const ctrl = new SessionController(storage);
+		await ctrl.init();
+		ctrl.bindPanelWindow(TEST_WINDOW_ID);
+
+		const { sessions } = await ctrl.listSessions();
+		expect(sessions).toHaveLength(1);
+		expect(sessions[0]?.title).toBe("Legacy");
+		expect(sessions[0]?.messageCount).toBe(1);
+		expect(sessions[0]?.timestamp).toBe(42);
+
+		const meta = await storage.get<{ id: string; messageCount: number }>(
+			"sessions",
+			`session_meta_${id}`,
+		);
+		expect(meta?.id).toBe(id);
+		expect(meta?.messageCount).toBe(1);
+	});
+
+	test("find path resolveOrCreateForWindow uses meta without full body when present", async () => {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		// Meta written on create; re-resolve should not need full body.
+		const bodyKey = `session_${sessionId}`;
+		const gotKeys: string[] = [];
+		const origGet = storage.get.bind(storage);
+		storage.get = async <T>(store: string, key: string): Promise<T | null> => {
+			if (store === "sessions") gotKeys.push(key);
+			return origGet(store, key);
+		};
+
+		const resolved = await ctrl.resolveOrCreateForWindow(TEST_WINDOW_ID);
+		expect(resolved).toBe(sessionId);
+		// Panel active path loads full record to verify windowId — that is one body get.
+		// When panel meta is wrong/missing, findSessionsForWindow must not body-get when meta exists.
+		// Clear panel binding so resolve falls through to findSessionsForWindow.
+		await storage.set("sessions", "__meta", {
+			panelActiveSession: {},
+		});
+		await ctrl.refreshMeta();
+		gotKeys.length = 0;
+
+		const again = await ctrl.resolveOrCreateForWindow(TEST_WINDOW_ID);
+		expect(again).toBe(sessionId);
+		expect(gotKeys.filter((k) => k === bodyKey)).toHaveLength(0);
+		expect(gotKeys.some((k) => k.startsWith("session_meta_"))).toBe(true);
+	});
+
+	test("loadForId still loads full body with messages", async () => {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		const messages = [
+			{ id: "1", kind: "user" as const, text: "full body", timestamp: 1 },
+		];
+		await ctrl.save(messages, []);
+		const loaded = await ctrl.loadForSession(sessionId);
+		expect(loaded?.messages).toEqual(messages);
+	});
+
+	test("deleteSession removes both body and meta keys", async () => {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		await ctrl.save(
+			[{ id: "1", kind: "user" as const, text: "a", timestamp: 1 }],
+			[],
+		);
+		const id2 = await ctrl.createSession();
+		await ctrl.deleteSession(sessionId);
+		expect(await storage.get("sessions", `session_${sessionId}`)).toBeNull();
+		expect(
+			await storage.get("sessions", `session_meta_${sessionId}`),
+		).toBeNull();
+		expect(ctrl.getActiveSessionId()).toBe(id2);
+	});
+
+	test("trimStoredSessions uses meta bytes without retaining full bodies", async () => {
+		// Seed many large legacy sessions; after init, meta exists and a second
+		// init must not re-read every full body.
+		const hugeText = "x".repeat(6000);
+		for (let i = 0; i < 12; i++) {
+			await storage.set("sessions", `session_s${i}`, {
+				id: `s${i}`,
+				windowId: TEST_WINDOW_ID,
+				lifecycle: "foreground" as const,
+				messages: [],
+				trace: [],
+				diagnostics: Array.from({ length: 150 }, (_, j) => ({
+					kind: "model_response" as const,
+					timestamp: j,
+					providerStopReason: "end_turn",
+					sdkStopReason: "end" as const,
+					content: [{ type: "text" as const, text: hugeText }],
+				})),
+				timestamp: i,
+				messageCount: 0,
+			});
+		}
+		await storage.set("sessions", "__meta", {
+			panelActiveSession: { [String(TEST_WINDOW_ID)]: "s11" },
+		});
+
+		const first = new SessionController(storage);
+		await first.init();
+
+		const bodyGets: string[] = [];
+		const origGet = storage.get.bind(storage);
+		storage.get = async <T>(store: string, key: string): Promise<T | null> => {
+			if (
+				store === "sessions" &&
+				key.startsWith("session_") &&
+				!key.startsWith("session_meta_")
+			) {
+				bodyGets.push(key);
+			}
+			return origGet(store, key);
+		};
+
+		const second = new SessionController(storage);
+		await second.init();
+		expect(bodyGets).toEqual([]);
+	});
+});
+
 describe("SessionController multi-session", () => {
 	let storage: MemoryStorage;
 	let ctrl: SessionController;
@@ -495,6 +667,8 @@ describe("SessionController diagnostics trimming", () => {
 		const ctrl = new SessionController(storage);
 		await ctrl.init();
 		ctrl.bindPanelWindow(TEST_WINDOW_ID);
+		// Boot no longer trims synchronously (B8). createSessionAttachedTo still trims.
+		await ctrl.createSessionAttachedTo(TEST_WINDOW_ID);
 
 		const { sessions } = await ctrl.listSessions();
 		expect(sessions.some((session) => session.id === activeId)).toBe(true);
@@ -515,21 +689,28 @@ describe("SessionController diagnostics trimming", () => {
 			timestamp: 1,
 			messageCount: 0,
 		});
-		let sessionWrites = 0;
+		let sessionBodyWrites = 0;
 		const origSet = storage.set.bind(storage);
 		storage.set = async <T>(
 			store: string,
 			key: string,
 			value: T,
 		): Promise<void> => {
-			if (store === "sessions" && key.startsWith("session_")) sessionWrites++;
+			// Meta backfill may write session_meta_*; full body must stay untouched.
+			if (
+				store === "sessions" &&
+				key.startsWith("session_") &&
+				!key.startsWith("session_meta_")
+			) {
+				sessionBodyWrites++;
+			}
 			return origSet(store, key, value);
 		};
 
 		const ctrl = new SessionController(storage);
 		await ctrl.init();
 
-		expect(sessionWrites).toBe(0);
+		expect(sessionBodyWrites).toBe(0);
 	});
 
 	test("trims many persisted diagnostics without dropping the newest event", async () => {

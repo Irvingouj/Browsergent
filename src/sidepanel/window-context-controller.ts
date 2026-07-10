@@ -22,16 +22,153 @@ export function lifecycleEventKey(message: WindowLifecycleMessage): string {
 	}
 }
 
-export async function getCurrentWindowId(): Promise<number> {
-	if (typeof chrome === "undefined" || !chrome.windows?.getCurrent) {
-		return 0;
+/** Prefer SW delay (unthrottled) over page setTimeout (throttled in bg tabs). */
+async function swDelay(ms: number): Promise<void> {
+	if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+		try {
+			await chrome.runtime.sendMessage({ type: "swDelay", ms });
+			return;
+		} catch {
+			// fall through
+		}
 	}
-	const w = await chrome.windows.getCurrent();
-	if (typeof w.id !== "number") {
-		return 0;
-	}
-	return w.id;
+	await new Promise<void>((r) => setTimeout(r, ms));
 }
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+	return Promise.race([
+		p,
+		swDelay(ms).then(() => {
+			throw new Error(`${label} timeout`);
+		}),
+		// Page timer as backup when SW messaging is also stuck (focused tab OK).
+		new Promise<T>((_, reject) => {
+			setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+		}),
+	]);
+}
+
+/**
+ * Resolve this panel document's Chrome window id.
+ * Cache + in-flight dedupe; callers that need a guaranteed id use waitForWindowId.
+ */
+let cachedWindowId: number | null = null;
+let resolveInFlight: Promise<number> | null = null;
+
+/** Test-only: clear module window-id cache between cases. */
+export function resetWindowIdCacheForTests(): void {
+	cachedWindowId = null;
+	resolveInFlight = null;
+}
+
+/** Optional ?windowId=N query (E2E openSecondWindow / diagnostics). */
+function windowIdFromLocation(): number {
+	try {
+		if (typeof location === "undefined") return 0;
+		const raw = new URLSearchParams(location.search).get("windowId");
+		const n = raw ? Number(raw) : 0;
+		return Number.isFinite(n) && n > 0 ? n : 0;
+	} catch {
+		return 0;
+	}
+}
+
+async function resolveWindowIdUncached(): Promise<number> {
+	const fromQuery = windowIdFromLocation();
+	if (fromQuery > 0) return fromQuery;
+
+	if (typeof chrome === "undefined") return 0;
+
+	if (chrome.runtime?.sendMessage) {
+		try {
+			const response = (await chrome.runtime.sendMessage({
+				type: "resolvePanelWindowId",
+			})) as { windowId?: number } | undefined;
+			if (typeof response?.windowId === "number" && response.windowId > 0) {
+				return response.windowId;
+			}
+		} catch {
+			// fall through
+		}
+	}
+
+	if (chrome.tabs?.getCurrent) {
+		try {
+			const tab = await chrome.tabs.getCurrent();
+			if (typeof tab?.windowId === "number" && tab.windowId > 0) {
+				return tab.windowId;
+			}
+		} catch {
+			// fall through
+		}
+	}
+
+	if (chrome.windows?.getCurrent) {
+		try {
+			const w = await chrome.windows.getCurrent();
+			if (typeof w.id === "number") return w.id;
+		} catch {
+			// give up
+		}
+	}
+	return 0;
+}
+
+export async function getCurrentWindowId(): Promise<number> {
+	const fromQuery = windowIdFromLocation();
+	if (fromQuery > 0) {
+		cachedWindowId = fromQuery;
+		return fromQuery;
+	}
+	if (cachedWindowId !== null && cachedWindowId > 0) {
+		return cachedWindowId;
+	}
+	if (!resolveInFlight) {
+		resolveInFlight = resolveWindowIdUncached()
+			.then((id) => {
+				if (id > 0) cachedWindowId = id;
+				return id;
+			})
+			.finally(() => {
+				resolveInFlight = null;
+			});
+	}
+	// Prefer waiting for in-flight resolve (B1 needs real windowId before attach).
+	// Tests inject windowId via WindowContextController.init({ windowId }).
+	try {
+		return await withTimeout(resolveInFlight, 5_000, "getCurrentWindowId");
+	} catch {
+		return cachedWindowId ?? 0;
+	}
+}
+
+/** Await background window-id resolution. */
+export async function waitForWindowId(maxMs = 10_000): Promise<number> {
+	if (cachedWindowId !== null && cachedWindowId > 0) return cachedWindowId;
+	if (!resolveInFlight) {
+		void getCurrentWindowId();
+	}
+	if (cachedWindowId !== null && cachedWindowId > 0) return cachedWindowId;
+	if (!resolveInFlight) return cachedWindowId ?? 0;
+	try {
+		return await withTimeout(resolveInFlight, maxMs, "waitForWindowId");
+	} catch {
+		return cachedWindowId ?? 0;
+	}
+}
+
+export type WindowContextInitOptions = {
+	/**
+	 * Explicit window id (tests / already known). When set, skips chrome resolve
+	 * and always uses this id for resolveOrCreateForWindow (B1/B2 attach path).
+	 */
+	windowId?: number;
+	/**
+	 * Called if a later durable resolveOrCreate yields a different session id
+	 * than the shell initially bound (IDB recovered after ephemeral attach).
+	 */
+	onSessionResolved?: (sessionId: string, windowId: number) => void;
+};
 
 export class WindowContextController {
 	private windowId: number | null = null;
@@ -42,22 +179,131 @@ export class WindowContextController {
 		return this.windowId;
 	}
 
-	async init(): Promise<{ windowId: number; sessionId: string }> {
-		const windowId = await getCurrentWindowId();
-		this.windowId = windowId;
+	/**
+	 * Bind this panel to a chrome window and attach the correct session.
+	 *
+	 * Uses resolveOrCreateForWindow when meta is loaded — never mints a new
+	 * session when panelActiveSession already exists (B1). Never blocks shell
+	 * paint on hung IDB (B8): falls back to in-memory attach and persists later.
+	 */
+	async init(
+		options?: WindowContextInitOptions,
+	): Promise<{ windowId: number; sessionId: string }> {
+		let windowId = options?.windowId ?? 0;
+		if (windowId > 0) {
+			cachedWindowId = windowId;
+		} else {
+			const fromQuery = (() => {
+				try {
+					const raw = new URLSearchParams(location.search).get("windowId");
+					const n = raw ? Number(raw) : 0;
+					return Number.isFinite(n) && n > 0 ? n : 0;
+				} catch {
+					return 0;
+				}
+			})();
+			if (fromQuery > 0) {
+				windowId = fromQuery;
+				cachedWindowId = fromQuery;
+			} else {
+				// Focused first panel: chrome APIs usually respond; bounded by withTimeout.
+				windowId = await getCurrentWindowId();
+			}
+		}
+
+		this.windowId = windowId > 0 ? windowId : null;
 		if (windowId <= 0) {
 			reportWarn({
 				code: "E_BOOT_WINDOW",
 				source: "boot",
 				message:
-					"windows.getCurrent returned no id; tab ownership isolation may be disabled",
+					"could not resolve panel window id; tab ownership isolation may be disabled",
 				details: { windowId },
 			});
+		} else {
+			// Required so getActiveSessionId() works after re-init (B1 / handleRun).
+			this.sessionController.bindPanelWindow(windowId);
 		}
-		const sessionId =
-			await this.sessionController.resolveOrCreateForWindow(windowId);
 
-		if (typeof chrome !== "undefined" && chrome.runtime) {
+		// Kick meta load without blocking if already in flight / hung.
+		if (!this.sessionController.isMetaLoaded()) {
+			void this.sessionController.init().catch((err: unknown) => {
+				reportWarn({
+					code: "E_BOOT_SESSION",
+					source: "boot",
+					message: "background session meta load failed",
+					cause: err,
+				});
+			});
+		}
+
+		// B1: if meta already has panelActive for this window, use it immediately.
+		const existing =
+			windowId > 0
+				? this.sessionController.getPanelActiveSessionId(windowId)
+				: null;
+
+		let sessionId: string;
+		if (existing) {
+			// bindPanelWindow already called above — do not skip panel binding on restore.
+			sessionId = existing;
+		} else if (this.sessionController.isMetaLoaded()) {
+			// Durable attach path — may touch IDB (create / list).
+			try {
+				sessionId = await withTimeout(
+					this.sessionController.resolveOrCreateForWindow(windowId),
+					4_000,
+					"resolveOrCreateForWindow",
+				);
+			} catch (err) {
+				reportWarn({
+					code: "E_BOOT_SESSION",
+					source: "boot",
+					message:
+						err instanceof Error
+							? err.message
+							: "resolveOrCreateForWindow failed; ephemeral attach",
+					cause: err,
+				});
+				sessionId = this.sessionController.adoptEphemeralSession(windowId);
+				void this.sessionController
+					.persistEphemeralSession(windowId, sessionId)
+					.catch(() => {
+						/* best-effort */
+					});
+			}
+		} else {
+			// Meta not ready — shell paint with ephemeral; re-resolve when meta loads.
+			sessionId = this.sessionController.adoptEphemeralSession(windowId);
+			void (async () => {
+				try {
+					await this.sessionController.init();
+					const durable =
+						await this.sessionController.resolveOrCreateForWindow(windowId);
+					if (
+						durable &&
+						durable !== sessionId &&
+						options?.onSessionResolved
+					) {
+						options.onSessionResolved(durable, windowId);
+					} else if (durable === sessionId) {
+						void this.sessionController
+							.persistEphemeralSession(windowId, sessionId)
+							.catch(() => {
+								/* ok */
+							});
+					}
+				} catch {
+					void this.sessionController
+						.persistEphemeralSession(windowId, sessionId)
+						.catch(() => {
+							/* ok */
+						});
+				}
+			})();
+		}
+
+		if (windowId > 0 && typeof chrome !== "undefined" && chrome.runtime) {
 			void sendMessageSafe(
 				{ type: "panelRegister", windowId, sessionId },
 				{ source: "panel", op: "panelRegister" },

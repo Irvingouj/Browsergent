@@ -104,18 +104,12 @@ const registry = new PanelRegistry();
 const lifecycleTracker = new WindowLifecycleTracker();
 const handledWindowRemovals = new Set<number>();
 
+/**
+ * Single fanout path for lifecycle (B7 stability).
+ * Prefer storage.session so panels that wake later still see the event;
+ * do NOT dual-broadcast via runtime.sendMessage (historical SW loop risk).
+ */
 function broadcast(message: WindowLifecycleMessage): void {
-	chrome.runtime
-		?.sendMessage?.(message)
-		?.catch?.((err: unknown) => {
-			reportWarn({
-				code: "E_SW_FANOUT",
-				source: "lifecycle",
-				message: "lifecycle runtime broadcast failed",
-				details: { kind: message.kind },
-				cause: err,
-			});
-		});
 	void chrome.storage?.session
 		?.set?.({
 			windowLifecycleEvent: { ...message, emittedAt: Date.now() },

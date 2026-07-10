@@ -12,23 +12,41 @@ export class SettingsController {
 	constructor(private readonly storage: StorageBackend) {}
 
 	async load(): Promise<void> {
-		const raw: unknown =
-			(await this.storage.get("settings", "providers")) ?? [];
-		const providers = (Array.isArray(raw) ? raw : [])
-			.map((item) => providerConfigSchema.safeParse(item))
-			.filter((r): r is { success: true; data: ProviderConfig } => r.success)
-			.map((r) => r.data);
-		const validIds = new Set(providers.map((p) => p.id));
-		const storedActive =
-			(await this.storage.get<string | null>("settings", "activeProviderId")) ??
-			null;
-		const activeProviderId =
-			storedActive && validIds.has(storedActive) ? storedActive : null;
-		browsergentStore.getState().settingsLoaded({
-			providers,
-			activeProviderId,
-			loaded: true,
-		});
+		try {
+			const raw: unknown =
+				(await this.storage.get("settings", "providers")) ?? [];
+			const providers = (Array.isArray(raw) ? raw : [])
+				.map((item) => providerConfigSchema.safeParse(item))
+				.filter((r): r is { success: true; data: ProviderConfig } => r.success)
+				.map((r) => r.data);
+			const validIds = new Set(providers.map((p) => p.id));
+			const storedActive =
+				(await this.storage.get<string | null>(
+					"settings",
+					"activeProviderId",
+				)) ?? null;
+			const activeProviderId =
+				storedActive && validIds.has(storedActive) ? storedActive : null;
+			browsergentStore.getState().settingsLoaded({
+				providers,
+				activeProviderId,
+				loaded: true,
+			});
+		} catch (err) {
+			// Never leave the UI stuck on "Loading settings…".
+			browsergentStore.getState().settingsLoaded({
+				providers: browsergentStore.getState().settings.providers,
+				activeProviderId: browsergentStore.getState().settings.activeProviderId,
+				loaded: true,
+				error: {
+					code: "E_SETTINGS_PERSIST",
+					message: err instanceof Error ? err.message : String(err),
+					source: "settings",
+					details: { operation: "load" },
+				},
+			});
+			throw err;
+		}
 	}
 
 	async save(values: SettingsValues): Promise<void> {
