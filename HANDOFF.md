@@ -1,9 +1,10 @@
 # Browsergent — Window Session Isolation Handoff
 
-**Date:** 2026-07-09  
+**Date:** 2026-07-10  
 **Version:** 0.5.7  
-**Status:** Fragile — mock tests mostly green, real Chrome usage unstable  
-**Partner repo:** `../web-js` (extension-js linked via `node_modules/@pi-oxide/extension-js`)
+**Status:** Mock Playwright **122 passed / 1 skipped / 0 failed** (`--workers=1`). Real multi-window Chrome still needs a manual smoke.  
+**Partner repo:** `../web-js` (extension-js linked via `node_modules/@pi-oxide/extension-js`)  
+**Latest session note:** [`talk/2026-07-10-e2e-green-and-status.md`](./talk/2026-07-10-e2e-green-and-status.md)
 
 ---
 
@@ -42,11 +43,18 @@ Full design: [`WINDOW_SESSION_ISOLATION_PLAN.md`](./WINDOW_SESSION_ISOLATION_PLA
 |----|--------|-------|
 | B1 | ✅ | Two windows → independent sessions |
 | B2 | ✅ | Split → fresh session in new window |
-| B3 | ✅ | Merge → survivor rebind, SB background (list/lifecycle) |
-| B4 / B4b | ✅ | Foreign rows disabled + block message |
-| B5 | ✅ **by design** | In-panel: switch session → prior run can keep going **while panel open**. Close panel → runs **stop** (not a bug; not Slice 6). |
-| B6 | ⚠️ | Reopen panel: hydrate stored chat; no live run to subscribe if panel was closed |
-| B7 | ⚠️ | Merge **while both panels open** / survivor rebind; mock E2E flaky; real Chrome fragile |
+| B3 | ✅ | Merge → survivor rebind openable + hydrate (mock E2E green 2026-07-10) |
+| B4 / B4b | ✅ | Foreign rows disabled + English block message |
+| B5 | ✅ **by design** | In-panel: switch session → prior run can keep going **while panel open**. Close panel → runs **stop**. |
+| B6 | ⚠️ | Reopen panel: hydrate stored chat; no live run if panel was closed |
+| B7 | ⚠️ mock ✅ / real ⚠️ | Merge while panels open: mock E2E green; real Chrome still needs smoke |
+
+### 2026-07-10 fixes (summary)
+
+- **Relay:** remote run events are badge-only unless session is local foreground; no triple chat/IDB apply.
+- **Ephemeral boot:** persist claimed session id instead of minting a second one; `saveForSession` upserts.
+- **IDB:** durable-only open + serial queue (no Memory fail-open).
+- **Todo next:** lease hang on `page.fill`/`page.click` completion; real dual-window smoke; optional SW single-writer.
 
 ---
 
@@ -77,7 +85,9 @@ Older plans explored offscreen continuation after panel close. **That goal is ca
 
 ### Cross-panel run relay (active while panels open)
 
-While a run lives on panel B **and panel B is still open**, events can fan out so panel A can observe/subscribe for merge UX:
+**2026-07-10:** remote panels must **not** append foreign chat or dual-sink IDB. They only track running badges unless the session is their foreground (merge-adopt). Origin ignores late relays while a local bridge still exists.
+
+While a run lives on panel B **and panel B is still open**, events can fan out so panel A can observe running state for merge UX:
 
 1. Panel B `onSessionRunRelay` → `chrome.runtime.sendMessage`
 2. Background stores `runRelay:{sessionId}` in `chrome.storage.session`
