@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension } from "./helpers";
+import { domClickButton, launchExtension } from "./helpers";
 
 async function seedForeignWindowSession(
 	sidePanel: import("@playwright/test").Page,
@@ -66,10 +66,17 @@ test.describe("window session isolation", () => {
 			const foreignWindowId = panelWindowId + 9_999;
 			await seedForeignWindowSession(sidePanel, foreignWindowId);
 
-			await sidePanel.getByRole("button", { name: "More options" }).click();
-			await expect(
-				sidePanel.locator('[data-testid="session-item"]').first(),
-			).toBeVisible({ timeout: 5000 });
+			await domClickButton(sidePanel, "More options");
+			await expect
+				.poll(
+					async () =>
+						sidePanel.evaluate(
+							() =>
+								document.querySelectorAll('[data-testid="session-item"]').length,
+						),
+					{ timeout: 10_000 },
+				)
+				.toBeGreaterThan(0);
 
 			const foreignRow = sidePanel.locator(
 				'[data-testid="session-item"]:has-text("Foreign window session")',

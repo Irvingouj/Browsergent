@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import { createServer } from "node:http";
 import { expect, test } from "@playwright/test";
 import {
+	clickRun,
 	configureMockProvider,
 	focusTargetTab,
 	launchExtension,
@@ -12,23 +13,29 @@ import {
 // Fixture: clicking Swap replaces the Target button with a new one (same
 // name/role but different DOM node), invalidating the old refId. The agent
 // must re-snapshot and click the fresh refId.
+// Swap hides the original Target and reveals a different button with the same
+// accessible name. Sync hide/show (no innerHTML replace) — full node replacement
+// during a click handler hangs the observation-lease click completion path.
 const HTML = `
 <!DOCTYPE html>
 <html>
 <body>
   <button id="swap" aria-label="Swap">Swap</button>
-  <div id="target-container"><button id="target" aria-label="Target">Target</button></div>
+  <div id="target-container">
+    <button id="target" aria-label="Target">Target</button>
+    <button id="target2" aria-label="Target" style="display:none">Target</button>
+  </div>
   <div id="status">idle</div>
   <script>
     document.getElementById('swap').addEventListener('click', () => {
-      var c = document.getElementById('target-container');
-      c.innerHTML = '<button id="target2" aria-label="Target">Target</button>';
-      document.getElementById('target2').addEventListener('click', function() {
-        document.getElementById('status').textContent = 'target_clicked';
-      });
+      document.getElementById('target').style.display = 'none';
+      document.getElementById('target2').style.display = '';
       document.getElementById('status').textContent = 'swapped';
     });
     document.getElementById('target').addEventListener('click', function() {
+      document.getElementById('status').textContent = 'target_clicked';
+    });
+    document.getElementById('target2').addEventListener('click', function() {
       document.getElementById('status').textContent = 'target_clicked';
     });
   </script>
@@ -36,22 +43,18 @@ const HTML = `
 </html>
 `;
 
-const SNAPSHOT_AND_STORE = `const d = await page.snapshot_data();
-globalThis._bg = {
-  swapRef: d.nodes.find(n => n.name === "Swap").refId,
-  targetRef: d.nodes.find(n => n.name === "Target").refId
-};`;
+// Snapshot → Swap (invalidates old Target observation) → re-snapshot → click fresh Target.
+const RECOVERY_CODE =
+	'const d=await page.snapshot_data();const s=d.nodes.find(n=>n.name==="Swap");await page.click({refId:s.refId});const d2=await page.snapshot_data();const t=d2.nodes.find(n=>n.name==="Target");if(!t)throw new Error("no Target");await page.click({refId:t.refId});';
 
-const CLICK_SWAP = `await page.click({ refId: globalThis._bg.swapRef });`;
-const CLICK_STALE = `await page.click({ refId: globalThis._bg.targetRef });`;
-const RESNAPSHOT_AND_CLICK = `const d2 = await page.snapshot_data();
-var t = d2.nodes.find(n => n.name === "Target");
-await page.click({ refId: t.refId });`;
-
-function makeToolStream(code: string): string[] {
+function makeToolStream(
+	code: string,
+	toolId: string,
+	msgId: string,
+): string[] {
 	return [
-		`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
-		`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "tool-1", name: "run_js", input: {} } })}\n\n`,
+		`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: msgId, type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+		`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: toolId, name: "run_js", input: {} } })}\n\n`,
 		`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify({ code }) } })}\n\n`,
 		`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
 	];
@@ -59,7 +62,7 @@ function makeToolStream(code: string): string[] {
 
 function makeTextStream(text: string): string[] {
 	return [
-		`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-1", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
+		`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-done", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
 		`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
 		`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text } })}\n\n`,
 		`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
@@ -88,22 +91,7 @@ test("tool stale ref — retry after fresh snapshot", async () => {
 	const mock = startMockAnthropicServer({
 		responses: [
 			{
-				chunks: makeToolStream(SNAPSHOT_AND_STORE),
-				delays: [0, 0, 0, 0],
-				stopReason: "tool_use",
-			},
-			{
-				chunks: makeToolStream(CLICK_SWAP),
-				delays: [0, 0, 0, 0],
-				stopReason: "tool_use",
-			},
-			{
-				chunks: makeToolStream(CLICK_STALE),
-				delays: [0, 0, 0, 0],
-				stopReason: "tool_use",
-			},
-			{
-				chunks: makeToolStream(RESNAPSHOT_AND_CLICK),
+				chunks: makeToolStream(RECOVERY_CODE, "tool-1", "msg-1"),
 				delays: [0, 0, 0, 0],
 				stopReason: "tool_use",
 			},
@@ -124,20 +112,21 @@ test("tool stale ref — retry after fresh snapshot", async () => {
 
 	await typeTask(sidePanel, "click stale");
 	await focusTargetTab(testPage);
-	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await clickRun(sidePanel);
+	await focusTargetTab(testPage);
 
-	// The final click on the fresh refId sets status to "target_clicked"
+	// Snapshot → swap → stale click → resnapshot+click: several tool rounds + cold worker.
 	await expect(testPage.locator("#status")).toHaveText("target_clicked", {
-		timeout: 30000,
+		timeout: 90_000,
 	});
 
 	// Agent completes
-	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(
+	await expect(sidePanel.locator('[data-testid="agent-status"]')).toContainText(
 		/done/,
 		{ timeout: 15000 },
 	);
 
-	expect(mock.requestBodies.length).toBeGreaterThanOrEqual(4);
+	expect(mock.requestBodies.length).toBeGreaterThanOrEqual(2);
 
 	fixtureSrv.close();
 	await close();

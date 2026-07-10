@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import {
+	clickRun,
 	configureMockProvider,
+	expectAgentStatus,
 	launchExtension,
 	startMockAnthropicServer,
 	typeTask,
@@ -53,12 +55,10 @@ test("agent shows error when API returns 401", async () => {
 	await configureMockProvider(sidePanel, mock.url, "bad-key");
 
 	await typeTask(sidePanel, "test error");
-	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await clickRun(sidePanel);
 
-	// Status should show error
-	await expect(sidePanel.getByText("error", { exact: true })).toBeVisible({
-		timeout: 10000,
-	});
+	// Status bar is `error — …` (not exact text node "error")
+	await expectAgentStatus(sidePanel, /error/i, 15_000);
 
 	await close();
 	mock.server.close();

@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import {
+	clickRun,
 	configureMockProvider,
+	expectAgentStatus,
 	launchExtension,
 	startMockAnthropicServer,
 	typeTask,
@@ -124,17 +126,13 @@ test("agent shows provider error and UI remains usable", async () => {
 
 	// Start a run
 	await typeTask(sidePanel, "test 401");
-	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await clickRun(sidePanel);
 
-	// Should show error status (hard stop)
-	await expect(sidePanel.getByText("error", { exact: true })).toBeVisible({
-		timeout: 10000,
-	});
+	// Status bar is `error — …` (CSS uppercase; not exact text "error")
+	await expectAgentStatus(sidePanel, /error/i, 15_000);
 
-	// UI should remain usable — Run button visible
-	await expect(
-		sidePanel.getByRole("button", { name: "Run task" }),
-	).toBeVisible();
+	// UI should remain usable — Run control still present
+	await expect(sidePanel.getByTestId("run-button")).toBeVisible();
 
 	await close();
 	mock.server.close();
@@ -161,13 +159,11 @@ test("failed partial tool call does not poison the next provider request", async
 		await configureMockProvider(sidePanel, mock.url);
 
 		await typeTask(sidePanel, "trigger partial tool failure");
-		await sidePanel.getByRole("button", { name: "Run task" }).click();
-		await expect(sidePanel.getByText("error", { exact: true })).toBeVisible({
-			timeout: 10000,
-		});
+		await clickRun(sidePanel);
+		await expectAgentStatus(sidePanel, /error/i, 15_000);
 
 		await typeTask(sidePanel, "recover after provider failure");
-		await sidePanel.getByRole("button", { name: "Run task" }).click();
+		await clickRun(sidePanel);
 		await expect(sidePanel.locator("text=Recovered.")).toBeVisible({
 			timeout: 10000,
 		});

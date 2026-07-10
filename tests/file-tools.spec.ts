@@ -141,7 +141,7 @@ test("file_edit tool modifies file content in OPFS", async () => {
 				chunks: [
 					MSG_START("msg-1"),
 					toolUseChunk(0, "tc-edit", "file_edit", {
-						path: "notes.txt",
+						path: "/notes.txt",
 						old_string: "hello",
 						new_string: "goodbye",
 					}),
@@ -177,9 +177,14 @@ test("file_edit tool modifies file content in OPFS", async () => {
 	});
 
 	await sidePanel.getByRole("button", { name: "Files" }).click();
+	// Re-select file after agent mutation so preview reloads from OPFS.
 	await sidePanel.locator("text=notes.txt").click();
-	const preview = sidePanel.locator('[data-testid="file-preview"]');
-	await expect(preview).toContainText("goodbye world", { timeout: 10000 });
+	// Plain-text preview uses a <textarea>; Playwright innerText/toContainText
+	// do not reliably surface textarea values — assert the control value.
+	await expect(sidePanel.getByTestId("text-preview-textarea")).toHaveValue(
+		"goodbye world",
+		{ timeout: 15_000 },
+	);
 
 	await close();
 	mock.server.close();
@@ -192,7 +197,7 @@ test("file_delete tool removes file from session", async () => {
 			{
 				chunks: [
 					MSG_START("msg-1"),
-					toolUseChunk(0, "tc-del", "file_delete", { path: "notes.txt" }),
+					toolUseChunk(0, "tc-del", "file_delete", { path: "/notes.txt" }),
 					BLOCK_STOP,
 				],
 				delays: [0, 0, 0],
@@ -225,9 +230,19 @@ test("file_delete tool removes file from session", async () => {
 	});
 
 	await sidePanel.getByRole("button", { name: "Files" }).click();
-	await expect(sidePanel.locator("text=notes.txt")).not.toBeVisible({
-		timeout: 10000,
-	});
+	// Tree is refreshed after delete; wait until the name is gone.
+	await expect
+		.poll(
+			async () => {
+				const text = await sidePanel
+					.locator('[data-testid="files-panel"]')
+					.innerText()
+					.catch(() => "");
+				return text.includes("notes.txt");
+			},
+			{ timeout: 15_000 },
+		)
+		.toBe(false);
 
 	await close();
 	mock.server.close();

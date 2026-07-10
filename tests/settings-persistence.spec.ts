@@ -1,35 +1,78 @@
 import { expect, test } from "@playwright/test";
-import { launchExtension } from "./helpers";
+import {
+	domClickButton,
+	domClickSelector,
+	domClickTestId,
+	domFillTestId,
+	launchExtension,
+} from "./helpers";
+
+async function waitForTestId(
+	page: import("@playwright/test").Page,
+	testId: string,
+	timeoutMs = 10_000,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const found = await page.evaluate(
+			(id) => !!document.querySelector(`[data-testid="${id}"]`),
+			testId,
+		);
+		if (found) return;
+		await new Promise((r) => setTimeout(r, 50));
+	}
+	throw new Error(`waitForTestId: ${testId}`);
+}
 
 test("settings save and load within a session", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
-	await sidePanel.getByTestId("settings-add-provider").click();
-	await sidePanel.getByTestId("settings-add-anthropic-compatible").click();
-	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test-key");
-	await sidePanel
-		.getByTestId("settings-baseurl-input")
-		.fill("https://custom.example.com/v1/messages");
-	await sidePanel.getByTestId("settings-apikey-input").fill("sk-test-key");
-	await sidePanel.getByTestId("settings-model-input").fill("claude-test-model");
-	await sidePanel.getByTestId("settings-add-model-button").click();
-	await sidePanel.getByTestId("settings-done-button").click();
-
-	await expect(sidePanel.getByTestId("settings-list")).toBeVisible();
-
-	await sidePanel.getByRole("button", { name: "Chat" }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
-	await sidePanel.locator('[data-testid^="settings-edit-"]').first().click();
-	await expect(sidePanel.getByTestId("settings-apikey-input")).toHaveValue(
-		"sk-test-key",
-	);
-	await expect(sidePanel.getByTestId("settings-baseurl-input")).toHaveValue(
+	await domClickButton(sidePanel, "Settings");
+	await waitForTestId(sidePanel, "settings-list");
+	await domClickTestId(sidePanel, "settings-add-provider");
+	await waitForTestId(sidePanel, "settings-add-anthropic-compatible");
+	await domClickTestId(sidePanel, "settings-add-anthropic-compatible");
+	await waitForTestId(sidePanel, "settings-edit");
+	await domFillTestId(sidePanel, "settings-apikey-input", "sk-test-key");
+	await domFillTestId(
+		sidePanel,
+		"settings-baseurl-input",
 		"https://custom.example.com/v1/messages",
 	);
-	await expect(
-		sidePanel.getByTestId("settings-default-model-select").locator("option"),
-	).toContainText(["claude-test-model"]);
+	await domFillTestId(sidePanel, "settings-model-input", "claude-test-model");
+	await domClickTestId(sidePanel, "settings-add-model-button");
+	await domClickTestId(sidePanel, "settings-done-button");
+	await waitForTestId(sidePanel, "settings-list");
+
+	await domClickButton(sidePanel, "Chat");
+	await domClickButton(sidePanel, "Settings");
+	await waitForTestId(sidePanel, "settings-list");
+	await domClickSelector(sidePanel, '[data-testid^="settings-edit-"]');
+	await waitForTestId(sidePanel, "settings-edit");
+
+	const values = await sidePanel.evaluate(() => {
+		const apiKey = (
+			document.querySelector(
+				'[data-testid="settings-apikey-input"]',
+			) as HTMLInputElement | null
+		)?.value;
+		const baseUrl = (
+			document.querySelector(
+				'[data-testid="settings-baseurl-input"]',
+			) as HTMLInputElement | null
+		)?.value;
+		const options = [
+			...document.querySelectorAll(
+				'[data-testid="settings-default-model-select"] option',
+			),
+		].map((o) => o.textContent ?? "");
+		return { apiKey, baseUrl, options };
+	});
+	expect(values.apiKey).toBe("sk-test-key");
+	expect(values.baseUrl).toBe("https://custom.example.com/v1/messages");
+	expect(values.options.some((t) => t.includes("claude-test-model"))).toBe(
+		true,
+	);
 
 	await close();
 });

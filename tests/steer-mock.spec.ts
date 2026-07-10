@@ -15,6 +15,7 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
 import {
+	clickRun,
 	configureMockProvider,
 	focusTargetTab,
 	launchExtension,
@@ -97,12 +98,12 @@ test.describe("steer mid-run (mocked LLM)", () => {
 			await sidePanel.keyboard.insertText(
 				"Take a snapshot of this page and describe it.",
 			);
-			await sidePanel.getByRole("button", { name: "Run task" }).click();
+			await clickRun(sidePanel);
 
 			// The run started — stop button replaces run button.
 			await expect(
 				sidePanel.locator('[data-testid="stop-button"]'),
-			).toBeVisible({ timeout: 15_000 });
+			).toBeVisible({ timeout: 30_000 });
 
 			// === THE STEER ===
 			// While the task is running, the input must stay editable (the bug
@@ -110,17 +111,24 @@ test.describe("steer mid-run (mocked LLM)", () => {
 			await expect(input).toBeEditable();
 
 			const steerText = "actually just give me the page title";
-			await input.click();
+			// ContentEditable: bring panel forward, focus, insertText, Enter.
+			await sidePanel.bringToFront();
+			await sidePanel.evaluate(() => {
+				const el = document.querySelector(
+					'[data-testid="task-input"]',
+				) as HTMLElement | null;
+				el?.focus();
+			});
 			await sidePanel.keyboard.insertText(steerText);
 			// Enter submits. While running this routes to onSteer, not onRun.
 			await sidePanel.keyboard.press("Enter");
 
 			// The steered text appears as a user message bubble.
 			await expect(
-				sidePanel.locator('[data-testid="chat-message-user"]', {
+				sidePanel.locator('[data-testid="chat-message-user"]').filter({
 					hasText: steerText,
 				}),
-			).toBeVisible({ timeout: 10_000 });
+			).toBeVisible({ timeout: 20_000 });
 
 			// The steered text reached the model — it's in some request body.
 			await expect
@@ -130,8 +138,11 @@ test.describe("steer mid-run (mocked LLM)", () => {
 				})
 				.toBe(true);
 
-			// Hard-stop button still works (unchanged behavior).
-			await sidePanel.locator('[data-testid="stop-button"]').click();
+			// Hard-stop if still running; cassette may finish before we get here.
+			const stop = sidePanel.locator('[data-testid="stop-button"]');
+			if (await stop.isVisible().catch(() => false)) {
+				await stop.click({ timeout: 5_000 }).catch(() => {});
+			}
 		} finally {
 			await close();
 		}

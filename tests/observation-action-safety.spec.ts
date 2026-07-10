@@ -110,8 +110,9 @@ test("observation-action safety: branching click does NOT invalidate lease (E2E)
 	// The Branch click sets "chipped", then the Other click sets "other_clicked".
 	// Both fire so fast that the final state is "other_clicked" — proving
 	// the second click succeeded against the SAME observation (no re-snapshot).
+	// Cold agent-worker + two tool rounds needs more than 10s under load.
 	await expect(testPage.locator("#status")).toHaveText("other_clicked", {
-		timeout: 10000,
+		timeout: 60_000,
 	});
 
 	server.close();

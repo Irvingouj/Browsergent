@@ -1,7 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { launchExtension } from "./helpers";
+import {
+	domClickButton,
+	domClickSelector,
+	domClickTestId,
+	domFillTestId,
+	launchExtension,
+} from "./helpers";
 
 test("manifest grants host access for normal web pages", async () => {
 	const manifestPath = path.resolve("dist/manifest.json");
@@ -49,26 +55,35 @@ test("side panel has task input and run button", async () => {
 test("settings panel stores API key", async () => {
 	const { sidePanel, close } = await launchExtension();
 
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
-	await sidePanel.getByTestId("settings-add-provider").click();
-	await sidePanel.getByTestId("settings-add-anthropic").click();
+	await domClickButton(sidePanel, "Settings");
+	await domClickTestId(sidePanel, "settings-add-provider");
+	await domClickTestId(sidePanel, "settings-add-anthropic");
 
-	const apiKeyInput = sidePanel.getByTestId("settings-apikey-input");
-	await expect(apiKeyInput).toBeVisible();
-
-	await apiKeyInput.fill("test-key-123");
-	await sidePanel.getByTestId("settings-done-button").click();
-
-	await expect(
-		sidePanel.getByTestId("settings-apikey-input"),
-	).not.toBeVisible();
-
-	await sidePanel.getByRole("button", { name: "Chat", exact: true }).click();
-	await sidePanel.getByRole("button", { name: "Settings" }).click();
-	await sidePanel.locator('[data-testid^="settings-edit-"]').first().click();
-	await expect(sidePanel.getByTestId("settings-apikey-input")).toHaveValue(
-		"test-key-123",
+	const hasEdit = await sidePanel.evaluate(
+		() => !!document.querySelector('[data-testid="settings-edit"]'),
 	);
+	expect(hasEdit).toBe(true);
+
+	await domFillTestId(sidePanel, "settings-apikey-input", "test-key-123");
+	await domClickTestId(sidePanel, "settings-done-button");
+
+	const stillEditing = await sidePanel.evaluate(
+		() => !!document.querySelector('[data-testid="settings-apikey-input"]'),
+	);
+	expect(stillEditing).toBe(false);
+
+	await domClickButton(sidePanel, "Chat");
+	await domClickButton(sidePanel, "Settings");
+	await domClickSelector(sidePanel, '[data-testid^="settings-edit-"]');
+	const apiKey = await sidePanel.evaluate(
+		() =>
+			(
+				document.querySelector(
+					'[data-testid="settings-apikey-input"]',
+				) as HTMLInputElement | null
+			)?.value ?? null,
+	);
+	expect(apiKey).toBe("test-key-123");
 
 	await close();
 });

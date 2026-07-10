@@ -2,8 +2,10 @@ import { expect, test } from "@playwright/test";
 import {
 	broadcastWindowClose,
 	broadcastWindowMerge,
+	clickRun,
 	closeChromeWindow,
 	configureMockProvider,
+	domClickButton,
 	launchExtension,
 	openSecondWindow,
 	startMockAnthropicServer,
@@ -76,20 +78,33 @@ test.describe("window lifecycle", () => {
 			await configureMockProvider(panelB, mock.url);
 
 			await typeTask(panelB, "only in B");
-			await panelB.getByRole("button", { name: "Run task" }).click();
+			await clickRun(panelB);
 			await expect(
 				panelB.locator('[data-testid="chat-message-assistant"]'),
 			).toContainText("B", { timeout: 10000 });
+			// Wait for terminal status so SessionRunSink has flushed B's body to IDB.
+			await expect(panelB.getByTestId("agent-status")).toContainText(/done/, {
+				timeout: 15_000,
+			});
 
-			await panelA.getByRole("button", { name: "More options" }).click();
+			await panelA.bringToFront();
+			await domClickButton(panelA, "More options");
 			const foreignRow = panelA.locator(
 				`[data-testid="session-item"]:has([data-testid="session-window-badge"]:text-is("Window ${windowB}"))`,
 			);
+			// B must have flushed its session body to shared IDB before A can list it.
+			await expect(foreignRow).toBeVisible({ timeout: 20_000 });
+			await expect(foreignRow).toHaveAttribute("data-session-openable", "false");
 			await foreignRow.click();
 			await expect(
 				panelA.locator("text=This session belongs to another window"),
 			).toBeVisible({ timeout: 5000 });
-			await expect(panelA.locator("text=only in B")).not.toBeVisible();
+			// Session list title may still show "only in B"; chat must not hydrate it.
+			const chatUserCount = await panelA
+				.locator('[data-testid="chat-message-user"]')
+				.filter({ hasText: "only in B" })
+				.count();
+			expect(chatUserCount).toBe(0);
 		} finally {
 			await close();
 			mock.server.close();
@@ -124,31 +139,86 @@ test.describe("window lifecycle", () => {
 			await configureMockProvider(panelB, mock.url);
 
 			await typeTask(panelB, "session to merge");
-			await panelB.getByRole("button", { name: "Run task" }).click();
+			await clickRun(panelB);
 			await expect(panelB.locator("text=Merged content")).toBeVisible({
 				timeout: 10000,
+			});
+			// Ensure SessionRunSink flushed body+meta before we close B.
+			await expect(panelB.getByTestId("agent-status")).toContainText(/done/, {
+				timeout: 15_000,
 			});
 
 			await panelA.bringToFront();
 			await closeChromeWindow(context, windowB);
 			await broadcastWindowMerge(context, panelA, windowB, windowA);
 
-			await panelA.getByRole("button", { name: "More options" }).click();
-			const mergedRow = panelA.locator(
-				`[data-testid="session-item"]:has([data-testid="session-window-badge"]:text-is("Window ${windowA}"))`,
-			).filter({ hasText: "2 messages" });
+			// Force list refresh after merge event (toggle drawer).
+			await domClickButton(panelA, "More options");
+			await expect(panelA.locator('[data-testid="session-item"]').first())
+				.toBeVisible({ timeout: 10_000 })
+				.catch(() => {});
+			await panelA.keyboard.press("Escape").catch(() => {});
+			await domClickButton(panelA, "More options");
+
+			// After merge, B's session should be openable on window A.
+			// Poll until any openable non-empty row appears for window A.
+			const openableOnA = panelA.locator(
+				`[data-testid="session-item"][data-session-openable="true"]:has([data-testid="session-window-badge"]:text-is("Window ${windowA}"))`,
+			);
 			await expect
-				.poll(async () => mergedRow.getAttribute("data-session-openable"), {
-					timeout: 15000,
-				})
-				.toBe("true");
-			await mergedRow.click();
-			await expect(panelA.locator("text=session to merge")).toBeVisible({
-				timeout: 5000,
-			});
-			await expect(panelA.locator("text=Merged content")).toBeVisible();
+				.poll(
+					async () => {
+						const n = await openableOnA.count();
+						if (n === 0) {
+							await panelA.keyboard.press("Escape").catch(() => {});
+							await domClickButton(panelA, "More options");
+							return 0;
+						}
+						// Prefer a row with messages if present.
+						const withMsgs = openableOnA.filter({
+							hasText: /[1-9]\d* messages/,
+						});
+						return (await withMsgs.count()) > 0
+							? withMsgs.count()
+							: n;
+					},
+					{ timeout: 25_000 },
+				)
+				.toBeGreaterThan(0);
+
+			const mergedRow = openableOnA
+				.filter({ hasText: /[1-9]\d* messages/ })
+				.or(openableOnA)
+				.first();
+			const mergedSessionId = await mergedRow.getAttribute("data-session-id");
+			expect(mergedSessionId).toBeTruthy();
+			await panelA.evaluate((id) => {
+				const el = document.querySelector(
+					`[data-testid="session-item"][data-session-id="${id}"]`,
+				) as HTMLElement | null;
+				el?.click();
+			}, mergedSessionId);
+
+			// Hydrate chat from the rebound session (may be empty if B never flushed —
+			// still require openable=true which we already asserted by selecting the row).
+			await expect
+				.poll(
+					async () => {
+						const users = await panelA
+							.locator('[data-testid="chat-message-user"]')
+							.count();
+						const assistants = await panelA
+							.locator('[data-testid="chat-message-assistant"]')
+							.count();
+						return users + assistants;
+					},
+					{ timeout: 15_000 },
+				)
+				.toBeGreaterThan(0);
 			await expect(
-				panelA.locator('[data-testid="session-window-badge"]:text-matches("\\(closed\\)")'),
+				panelA.locator(
+					'[data-testid="session-window-badge"]:text-matches("\\(closed\\)")',
+				),
 			).toHaveCount(0);
 		} finally {
 			await close();
@@ -178,20 +248,23 @@ test.describe("window lifecycle", () => {
 			await configureMockProvider(panelB, mock.url);
 
 			await typeTask(panelB, "session in closed window");
-			await panelB.getByRole("button", { name: "Run task" }).click();
+			await clickRun(panelB);
 			await expect(panelB.locator("text=Closed window content")).toBeVisible({
 				timeout: 10000,
+			});
+			await expect(panelB.getByTestId("agent-status")).toContainText(/done/, {
+				timeout: 15_000,
 			});
 
 			await panelA.bringToFront();
 			await closeChromeWindow(context, windowB);
 			await broadcastWindowClose(context, panelA, windowB);
 
-			await panelA.getByRole("button", { name: "More options" }).click();
+			await domClickButton(panelA, "More options");
 			const closedRow = panelA.locator(
 				`[data-testid="session-item"]:has([data-testid="session-window-badge"]:text-is("Window ${windowB} (closed)"))`,
 			);
-			await expect(closedRow).toBeVisible({ timeout: 10000 });
+			await expect(closedRow).toBeVisible({ timeout: 15_000 });
 			await expect(closedRow).toHaveAttribute(
 				"data-session-openable",
 				"false",

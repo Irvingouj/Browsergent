@@ -9,11 +9,120 @@ import {
 	type Page,
 	test,
 } from "@playwright/test";
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionPath = path.resolve(__dirname, "../dist");
 
 const consoleErrors: string[] = [];
+
+/** Sleep without Playwright page APIs (page.waitForTimeout can hang on extension pages). */
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Click via DOM HTMLElement.click(). Playwright's Locator.click hangs on
+ * chrome-extension:// pages (post-click "scheduled navigations" / actionability).
+ */
+export async function domClickTestId(
+	page: Page,
+	testId: string,
+	timeoutMs = 15_000,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const clicked = await page.evaluate((id) => {
+			const el = document.querySelector(
+				`[data-testid="${id}"]`,
+			) as HTMLElement | null;
+			if (!el) return false;
+			el.click();
+			return true;
+		}, testId);
+		if (clicked) return;
+		await sleep(50);
+	}
+	throw new Error(`domClickTestId: [${testId}] not found within ${timeoutMs}ms`);
+}
+
+/** Click a button by exact trimmed textContent. */
+export async function domClickButton(
+	page: Page,
+	name: string,
+	timeoutMs = 15_000,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const clicked = await page.evaluate((n) => {
+			const el = [...document.querySelectorAll("button")].find(
+				(b) => b.textContent?.trim() === n,
+			) as HTMLElement | undefined;
+			if (!el) return false;
+			el.click();
+			return true;
+		}, name);
+		if (clicked) return;
+		await sleep(50);
+	}
+	throw new Error(`domClickButton: "${name}" not found within ${timeoutMs}ms`);
+}
+
+/** Click first element matching a CSS selector (via DOM). */
+export async function domClickSelector(
+	page: Page,
+	selector: string,
+	timeoutMs = 15_000,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const clicked = await page.evaluate((sel) => {
+			const el = document.querySelector(sel) as HTMLElement | null;
+			if (!el) return false;
+			el.click();
+			return true;
+		}, selector);
+		if (clicked) return;
+		await sleep(50);
+	}
+	throw new Error(
+		`domClickSelector: ${selector} not found within ${timeoutMs}ms`,
+	);
+}
+
+/** Fill an input/textarea by test id without Playwright actionability waits. */
+export async function domFillTestId(
+	page: Page,
+	testId: string,
+	value: string,
+	timeoutMs = 15_000,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const ok = await page.evaluate(
+			({ id, v }) => {
+				const el = document.querySelector(`[data-testid="${id}"]`) as
+					| HTMLInputElement
+					| HTMLTextAreaElement
+					| null;
+				if (!el) return false;
+				el.focus();
+				// Native value setter so Preact onInput sees the new value.
+				const proto =
+					el.tagName === "TEXTAREA"
+						? HTMLTextAreaElement.prototype
+						: HTMLInputElement.prototype;
+				const desc = Object.getOwnPropertyDescriptor(proto, "value");
+				desc?.set?.call(el, v);
+				el.dispatchEvent(new Event("input", { bubbles: true }));
+				el.dispatchEvent(new Event("change", { bubbles: true }));
+				return true;
+			},
+			{ id: testId, v: value },
+		);
+		if (ok) return;
+		await sleep(50);
+	}
+	throw new Error(`domFillTestId: [${testId}] not found within ${timeoutMs}ms`);
+}
 
 export async function launchExtension(userDataDir?: string): Promise<{
 	context: BrowserContext;
@@ -31,6 +140,13 @@ export async function launchExtension(userDataDir?: string): Promise<{
 		args: [
 			`--disable-extensions-except=${extensionPath}`,
 			`--load-extension=${extensionPath}`,
+			// Multi-window extension E2E: unfocused windows throttle timers + CDP.
+			// Without these, second sidepanel boot and page.evaluate freeze for minutes.
+			"--disable-background-timer-throttling",
+			"--disable-backgrounding-occluded-windows",
+			"--disable-renderer-backgrounding",
+			"--disable-features=CalculateNativeWinOcclusion",
+			"--disable-ipc-flooding-protection",
 		],
 	});
 
@@ -47,12 +163,22 @@ export async function launchExtension(userDataDir?: string): Promise<{
 		}
 	});
 	await sidePanel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-	await sidePanel.waitForSelector('[data-initialized="true"]', {
-		timeout: 10000,
-	});
-	await sidePanel.waitForSelector('[data-worker-ready="true"]', {
-		timeout: 10000,
-	});
+	// Shell-ready: initialized + boot worker flag. Agent-worker is lazy (created on first Run),
+	// so data-worker-ready may mean "shell ready" rather than WASM agent online.
+	// Note: waitForFunction(fn, arg, options) — pass null arg so timeout is not eaten as arg.
+	await sidePanel.waitForFunction(
+		() => {
+			const el = document.querySelector("[data-initialized]");
+			if (!el) return false;
+			const initialized = el.getAttribute("data-initialized") === "true";
+			const workerReady =
+				el.getAttribute("data-worker-ready") === "true" ||
+				el.getAttribute("data-boot-worker") === "ok";
+			return initialized && workerReady;
+		},
+		null,
+		{ timeout: 30_000 },
+	);
 
 	return {
 		context,
@@ -67,49 +193,178 @@ export async function launchExtension(userDataDir?: string): Promise<{
 	};
 }
 
+/** Bring an extension page forward so Chromium unthrottles timers / CDP. */
+export async function focusExtensionPage(page: Page): Promise<void> {
+	await page.bringToFront().catch(() => {
+		/* ignore */
+	});
+	// Tiny yield so focus settles before evaluate (avoids CDP stall).
+	await sleep(30);
+}
+
+/**
+ * page.evaluate after bringToFront.
+ *
+ * IMPORTANT: do NOT Promise.race evaluate with setTimeout — abandoned
+ * evaluates keep CDP sessions busy and make subsequent evaluates hang
+ * forever on chrome-extension:// multi-window.
+ */
+export async function evalOnPanel<T>(
+	page: Page,
+	fn: () => T | Promise<T>,
+): Promise<T> {
+	await focusExtensionPage(page);
+	return page.evaluate(fn);
+}
+
 /** Open a sidepanel document in a second Chrome window (distinct windowId). */
 export async function openSecondWindow(
 	context: BrowserContext,
 	extensionId: string,
 	_anchor?: Page,
+	options?: { onPage?: (page: Page) => void },
 ): Promise<{ sidePanel: Page; windowId: number }> {
 	let serviceWorker = context.serviceWorkers()[0];
 	if (!serviceWorker) {
 		serviceWorker = await context.waitForEvent("serviceworker");
 	}
 
-	const [newPage] = await Promise.all([
-		context.waitForEvent("page", {
-			predicate: (p) => p.url().includes("/sidepanel.html"),
-			timeout: 15000,
-		}),
-		serviceWorker.evaluate(async (extId: string) => {
-			await chrome.windows.create({
-				url: `chrome-extension://${extId}/sidepanel.html`,
-				focused: true,
-				type: "normal",
-				width: 900,
-				height: 700,
+	const before = new Set(context.pages());
+	// Create window first to learn its id, then open sidepanel with ?windowId=
+	// so resolveOrCreateForWindow binds correctly without hung getCurrent.
+	const createdWindowId = await serviceWorker.evaluate(async (extId: string) => {
+		const w = await chrome.windows.create({
+			url: "about:blank",
+			focused: true,
+			type: "normal",
+			width: 900,
+			height: 700,
+		});
+		if (typeof w.id !== "number") {
+			throw new Error("windows.create returned no id");
+		}
+		const tabs = await chrome.tabs.query({ windowId: w.id });
+		const tabId = tabs[0]?.id;
+		if (tabId === undefined) {
+			throw new Error("no tab in created window");
+		}
+		await chrome.tabs.update(tabId, {
+			url: `chrome-extension://${extId}/sidepanel.html?windowId=${w.id}`,
+		});
+		// Keep the new window focused so boot is not timer-throttled.
+		await chrome.windows.update(w.id, { focused: true });
+		return w.id;
+	}, extensionId);
+
+	const sidepanelUrl = `chrome-extension://${extensionId}/sidepanel.html?windowId=${createdWindowId}`;
+	const findDeadline = Date.now() + 20_000;
+	let newPage: Page | undefined;
+	while (Date.now() < findDeadline) {
+		newPage = context
+			.pages()
+			.find(
+				(p) =>
+					!before.has(p) &&
+					(p.url().includes("/sidepanel.html") || p.url() === "about:blank"),
+			);
+		if (newPage?.url().includes("/sidepanel.html")) break;
+		if (newPage && newPage.url() === "about:blank") {
+			// SW may already be navigating this tab to sidepanel — wait before goto.
+			await sleep(200);
+			if (!newPage.url().includes("/sidepanel.html")) {
+				await newPage
+					.goto(sidepanelUrl, { waitUntil: "domcontentloaded" })
+					.catch(() => {
+						/* navigation race — URL may already be sidepanel */
+					});
+			}
+			break;
+		}
+		await sleep(100);
+	}
+	if (!newPage) {
+		// Last resort: open a page ourselves in the created window is hard; use newPage.
+		newPage = await context.newPage();
+		await newPage.goto(sidepanelUrl, { waitUntil: "domcontentloaded" });
+	} else if (!newPage.url().includes("/sidepanel.html")) {
+		await newPage
+			.goto(sidepanelUrl, { waitUntil: "domcontentloaded" })
+			.catch(() => {
+				/* navigation race */
 			});
-		}, extensionId),
-	]);
+	}
 
 	newPage.on("console", (msg) => {
 		if (msg.type() === "error") {
 			consoleErrors.push(msg.text());
 		}
 	});
-	await newPage.waitForSelector('[data-initialized="true"]', {
-		timeout: 15000,
-	});
-	await newPage.waitForSelector('[data-worker-ready="true"]', {
-		timeout: 15000,
-	});
-	const windowId = Number(
-		await newPage
-			.locator('[data-initialized="true"]')
-			.getAttribute("data-window-id"),
+	// Let callers attach listeners before boot emits (e.g. [idb-timing] harvest).
+	options?.onPage?.(newPage);
+	await focusExtensionPage(newPage);
+
+	// Prefer SW-visible panelReady marker — page.evaluate on a second
+	// chrome-extension:// document often freezes under multi-window CDP load.
+	const readyDeadline = Date.now() + 60_000;
+	let readyVia: "storage" | "dom" | null = null;
+	let finalState: Record<string, unknown> | null = null;
+	while (Date.now() < readyDeadline) {
+		try {
+			const marker = await serviceWorker.evaluate(async (wid: number) => {
+				const key = `panelReady:${wid}`;
+				const got = await chrome.storage.session.get(key);
+				return (got[key] as { ts?: number; step?: string; idb?: string } | undefined) ?? null;
+			}, createdWindowId);
+			if (marker && typeof marker.ts === "number") {
+				readyVia = "storage";
+				finalState = { via: "storage", ...marker, windowId: createdWindowId };
+				break;
+			}
+		} catch {
+			/* SW evaluate may briefly fail during restart */
+		}
+		// Fallback: DOM poll (works when CDP is healthy).
+		try {
+			await focusExtensionPage(newPage);
+			const snap = await newPage.evaluate(() => {
+				const el = document.querySelector("[data-initialized]");
+				return {
+					initialized: el?.getAttribute("data-initialized") ?? null,
+					workerReady: el?.getAttribute("data-worker-ready") ?? null,
+					bootWorker: el?.getAttribute("data-boot-worker") ?? null,
+					windowId: el?.getAttribute("data-window-id") ?? null,
+					bootStep: document.documentElement.dataset.bootStep ?? null,
+				};
+			});
+			finalState = snap;
+			if (
+				snap.initialized === "true" &&
+				(snap.workerReady === "true" || snap.bootWorker === "ok")
+			) {
+				readyVia = "dom";
+				break;
+			}
+		} catch {
+			/* CDP stall — keep waiting on storage marker */
+		}
+		await sleep(250);
+	}
+	if (!readyVia) {
+		throw new Error(
+			`openSecondWindow: shell not ready after 60s: ${JSON.stringify(finalState)}`,
+		);
+	}
+	console.log(
+		"openSecondWindow ready via",
+		readyVia,
+		"windowB",
+		createdWindowId,
+		finalState,
 	);
+	const windowId =
+		typeof createdWindowId === "number" && createdWindowId > 0
+			? createdWindowId
+			: Number(finalState?.windowId);
 	if (!Number.isFinite(windowId) || windowId <= 0) {
 		throw new Error(`Second window has invalid data-window-id: ${windowId}`);
 	}
@@ -404,51 +659,136 @@ export function extractFirstUserMessageText(body: unknown): string {
 }
 
 /** Configure mock Anthropic provider and close overlays that block the run button. */
+/** Poll until a test id exists (DOM only — no Locator actionability). */
+async function waitForTestId(
+	page: Page,
+	testId: string,
+	timeoutMs = 15_000,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		// Plain evaluate (no bringToFront spam) — matches working settings-persistence.
+		const found = await page
+			.evaluate(
+				(id) => !!document.querySelector(`[data-testid="${id}"]`),
+				testId,
+			)
+			.catch(() => false);
+		if (found) return;
+		await sleep(50);
+	}
+	// Last-ditch snapshot for diagnostics.
+	const snap = await page
+		.evaluate(() => ({
+			text: document.body?.innerText?.slice(0, 200) ?? "",
+			ids: [...document.querySelectorAll("[data-testid]")].map((e) =>
+				e.getAttribute("data-testid"),
+			),
+		}))
+		.catch((e) => ({ error: String(e) }));
+	throw new Error(
+		`waitForTestId: [${testId}] not found within ${timeoutMs}ms snap=${JSON.stringify(snap)}`,
+	);
+}
+
 export async function configureMockProvider(
 	sidePanel: Page,
 	mockUrl: string,
 	apiKey = "test-key",
 	model?: string,
 ): Promise<void> {
-	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await sidePanel.getByRole("button", { name: "Open settings" }).click();
-	await expect(sidePanel.getByTestId("settings-list")).toBeVisible();
+	await focusExtensionPage(sidePanel);
+	// Settings is a top-level tab (not buried under More options anymore).
+	await domClickButton(sidePanel, "Settings");
+	await waitForTestId(sidePanel, "settings-list");
 
-	const editButtons = sidePanel.locator('[data-testid^="settings-edit-"]');
-	if ((await editButtons.count()) > 0) {
-		await editButtons.first().click();
+	const hasEdit = await evalOnPanel(
+		sidePanel,
+		() => !!document.querySelector('[data-testid^="settings-edit-"]'),
+	);
+	if (hasEdit) {
+		await domClickSelector(sidePanel, '[data-testid^="settings-edit-"]');
 	} else {
-		await sidePanel.getByTestId("settings-add-provider").click();
-		await sidePanel
-			.getByTestId(
-				model === undefined
-					? "settings-add-anthropic"
-					: "settings-add-anthropic-compatible",
-			)
-			.click();
+		await domClickTestId(sidePanel, "settings-add-provider");
+		await domClickTestId(
+			sidePanel,
+			model === undefined
+				? "settings-add-anthropic"
+				: "settings-add-anthropic-compatible",
+		);
 	}
 
-	await expect(sidePanel.getByTestId("settings-edit")).toBeVisible();
-	await sidePanel
-		.getByTestId("settings-baseurl-input")
-		.fill(`${mockUrl}/v1/messages`);
-	await sidePanel.getByTestId("settings-apikey-input").fill(apiKey);
+	await waitForTestId(sidePanel, "settings-edit");
+	await domFillTestId(
+		sidePanel,
+		"settings-baseurl-input",
+		`${mockUrl}/v1/messages`,
+	);
+	await domFillTestId(sidePanel, "settings-apikey-input", apiKey);
 	if (model !== undefined) {
-		await sidePanel.getByTestId("settings-model-input").fill(model);
-		await sidePanel.getByTestId("settings-add-model-button").click();
-		await sidePanel
-			.getByTestId("settings-default-model-select")
-			.selectOption({ label: model });
+		await domFillTestId(sidePanel, "settings-model-input", model);
+		await domClickTestId(sidePanel, "settings-add-model-button");
+		// selectOption can hang on extension pages; set value via DOM.
+		await focusExtensionPage(sidePanel);
+		await sidePanel.evaluate((m) => {
+			const sel = document.querySelector(
+				'[data-testid="settings-default-model-select"]',
+			) as HTMLSelectElement | null;
+			if (!sel) return;
+			const opt = [...sel.options].find((o) => o.label === m || o.value === m);
+			if (opt) {
+				sel.value = opt.value;
+				sel.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		}, model);
 	}
-	await sidePanel.getByTestId("settings-done-button").click();
-	await sidePanel.getByRole("button", { name: "Chat", exact: true }).click();
-	await expect(sidePanel.locator('[data-testid="task-input"]')).toBeVisible();
+	await domClickTestId(sidePanel, "settings-done-button");
+	await domClickButton(sidePanel, "Chat");
+	await waitForTestId(sidePanel, "task-input");
 }
 
 export async function typeTask(sidePanel: Page, text: string): Promise<void> {
-	const input = sidePanel.locator('[data-testid="task-input"]');
-	await input.click();
+	// Prefer DOM focus + insertText; Locator.click hangs on chrome-extension pages.
+	await focusExtensionPage(sidePanel);
+	await evalOnPanel(sidePanel, () => {
+		const el = document.querySelector(
+			'[data-testid="task-input"]',
+		) as HTMLElement | null;
+		el?.focus();
+	});
 	await sidePanel.keyboard.insertText(text);
+}
+
+/** Click the icon-only Run control (aria-label / data-testid="run-button"). */
+export async function clickRun(sidePanel: Page): Promise<void> {
+	await focusExtensionPage(sidePanel);
+	await domClickTestId(sidePanel, "run-button");
+}
+
+/**
+ * Agent status bar shows `error — reason` (and CSS uppercase). Never use
+ * getByText('error', { exact: true }) — it will not match.
+ */
+export async function expectAgentStatus(
+	sidePanel: Page,
+	pattern: string | RegExp,
+	timeoutMs = 15_000,
+): Promise<void> {
+	await expect(sidePanel.getByTestId("agent-status")).toContainText(pattern, {
+		timeout: timeoutMs,
+	});
+}
+
+/** Read data-window-id without Playwright locator actionability (extension-safe). */
+export async function readPanelWindowId(sidePanel: Page): Promise<number> {
+	const raw = await evalOnPanel(
+		sidePanel,
+		() =>
+			document
+				.querySelector("[data-initialized]")
+				?.getAttribute("data-window-id") ?? "",
+	);
+	return Number(raw);
 }
 
 /**
