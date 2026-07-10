@@ -9,6 +9,11 @@ type ListedChild =
 	| { kind: "file"; name: string; path: string; parentId?: string }
 	| { kind: "directory"; name: string; path: string; parentId?: string };
 
+export interface ListOptions {
+	/** When true, call fs.stat for each file to fill size/mime. Default false. */
+	includeStat?: boolean;
+}
+
 function toListedChild(
 	entry: { name: string; kind: string },
 	root: string,
@@ -38,16 +43,31 @@ async function fillStat(fs: FsClient, node: FileNode): Promise<FileNode> {
 	}
 }
 
-/** List every node under the whole FS tree, recursing into directories. */
-export async function listAllFiles(fs: FsClient): Promise<FileNode[]> {
-	return scanRecursive(fs, "/", undefined);
+/** parentId for children of dirPath: root `/` has no parent; subdirs use their path. */
+function parentIdForDir(dirPath: string): string | undefined {
+	return dirPath === "/" ? undefined : dirPath;
 }
 
-/** List only the direct children of a directory (no recursion). */
+/** List every node under the whole FS tree, recursing into directories. */
+export async function listAllFiles(
+	fs: FsClient,
+	options?: ListOptions,
+): Promise<FileNode[]> {
+	return scanRecursive(fs, "/", undefined, options?.includeStat ?? false);
+}
+
+/**
+ * List only the direct children of a directory (no recursion).
+ * Sets parentId so nodes can be merged into a partial tree.
+ * Skips per-file stat by default (size/mime filled on select if needed).
+ */
 export async function listDirectChildren(
 	fs: FsClient,
 	dirPath: string,
+	options?: ListOptions,
 ): Promise<FileNode[]> {
+	const includeStat = options?.includeStat ?? false;
+	const parentId = parentIdForDir(dirPath);
 	let entries: FsListEntry[] = [];
 	try {
 		({ entries } = await fs.list(dirPath));
@@ -56,15 +76,25 @@ export async function listDirectChildren(
 	}
 	const out: FileNode[] = [];
 	for (const raw of entries) {
-		const child = toListedChild(raw, dirPath);
+		const child = toListedChild(raw, dirPath, parentId);
 		if (child === null) continue;
 		switch (child.kind) {
 			case "directory":
-				out.push(buildDirectoryNode({ name: child.name, path: child.path }));
+				out.push(
+					buildDirectoryNode({
+						name: child.name,
+						path: child.path,
+						parentId,
+					}),
+				);
 				break;
 			case "file": {
-				const base = buildFileNode({ name: child.name, path: child.path });
-				out.push(await fillStat(fs, base));
+				const base = buildFileNode({
+					name: child.name,
+					path: child.path,
+					parentId,
+				});
+				out.push(includeStat ? await fillStat(fs, base) : base);
 				break;
 			}
 		}
@@ -76,6 +106,7 @@ async function scanRecursive(
 	fs: FsClient,
 	root: string,
 	parentId: string | undefined,
+	includeStat: boolean,
 ): Promise<FileNode[]> {
 	let entries: FsListEntry[] = [];
 	try {
@@ -96,7 +127,9 @@ async function scanRecursive(
 						parentId,
 					}),
 				);
-				out.push(...(await scanRecursive(fs, child.path, child.path)));
+				out.push(
+					...(await scanRecursive(fs, child.path, child.path, includeStat)),
+				);
 				break;
 			case "file": {
 				const base = buildFileNode({
@@ -104,7 +137,7 @@ async function scanRecursive(
 					path: child.path,
 					parentId,
 				});
-				out.push(await fillStat(fs, base));
+				out.push(includeStat ? await fillStat(fs, base) : base);
 				break;
 			}
 		}

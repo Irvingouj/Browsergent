@@ -1,5 +1,5 @@
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand";
 import type { FilesController } from "../../../controllers/files";
 import { findSkillManifest } from "../../../controllers/files";
@@ -13,6 +13,7 @@ import {
 	selectSelectedFileId,
 } from "../../../state/selectors";
 import type { FileNode, FileNodeId } from "../../../state/slices/files-slice";
+import { ROOT_DIR_PATH } from "../../../state/slices/files-slice";
 import { browsergentStore } from "../../../state/store";
 import { FileContextMenu } from "./FileContextMenu";
 import { FilePreview } from "./FilePreview";
@@ -52,6 +53,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 	const movePromptTarget = useStore(browsergentStore, selectMovePromptTarget);
 	const [error, setError] = useState<string | null>(null);
 	const [skillImportToast, setSkillImportToast] = useState<string | null>(null);
+	const loadingDirsRef = useRef(new Set<string>());
 
 	const childrenByParent = useMemo(
 		() => buildChildrenByParent(filesState.nodes),
@@ -62,16 +64,18 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		[expandedFolderIds],
 	);
 
-	// Mount-load the file tree. Mutations (upload, agent file_write, delete,
-	// session switch via refreshFiles) update the store directly through
-	// addFileNode/setFileNodes, so we must NOT re-list on filesVersion — that
-	// would loop: setFileNodes bumps filesVersion → effect re-fires →
-	// setFileNodes again, clearing selection and never letting the preview load.
+	// Load only root children when the Files panel mounts. Do NOT re-list on
+	// filesVersion — that loops: setDirectoryChildren bumps filesVersion →
+	// effect re-fires → selection/preview thrash.
 	useEffect(() => {
 		const timer = setTimeout(() => {
+			const loaded = browsergentStore.getState().files.loadedDirPaths;
+			if (loaded.includes(ROOT_DIR_PATH)) return;
 			filesController
-				.listAllFiles()
-				.then((nodes) => browsergentStore.getState().setFileNodes(nodes))
+				.listDirectChildren(ROOT_DIR_PATH)
+				.then((nodes) =>
+					browsergentStore.getState().setDirectoryChildren(null, nodes),
+				)
 				.catch((err: unknown) => {
 					console.warn("Failed to load files:", err);
 				});
@@ -136,9 +140,29 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		return () => document.removeEventListener("mousedown", handler);
 	}, [contextMenu, movePromptTarget]);
 
-	const toggleExpand = useCallback((id: string) => {
-		browsergentStore.getState().toggleFolderExpanded(id);
-	}, []);
+	const toggleExpand = useCallback(
+		(id: string) => {
+			const state = browsergentStore.getState();
+			const isExpanding = !state.files.expandedFolderIds.includes(id);
+			state.toggleFolderExpanded(id);
+			if (!isExpanding) return;
+			if (state.files.loadedDirPaths.includes(id)) return;
+			if (loadingDirsRef.current.has(id)) return;
+			loadingDirsRef.current.add(id);
+			filesController
+				.listDirectChildren(id)
+				.then((children) => {
+					browsergentStore.getState().setDirectoryChildren(id, children);
+				})
+				.catch((err: unknown) => {
+					console.warn("Failed to load folder:", err);
+				})
+				.finally(() => {
+					loadingDirsRef.current.delete(id);
+				});
+		},
+		[filesController],
+	);
 
 	const handleFileClick = useCallback((fileId: string) => {
 		browsergentStore.getState().setSelectedFileId(fileId);

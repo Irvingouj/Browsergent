@@ -96,6 +96,7 @@ function createMockFs(): MockFs {
 			created_at: number | null;
 			modified_at: number | null;
 		}> {
+			logs.push(`stat:${path}`);
 			return {
 				path,
 				name: path.substring(path.lastIndexOf("/") + 1),
@@ -430,15 +431,79 @@ describe("FilesController.listAllFiles", () => {
 		expect(nodes).toEqual([]);
 	});
 
-	test("populates file size from stat", async () => {
+	test("skips stat by default", async () => {
+		fs.storage.set("/a.txt", "aaa");
+		const nodes = await ctrl.listAllFiles();
+		const aNode = nodes.find((n) => n.name === "a.txt");
+		expect(aNode?.size).toBeUndefined();
+		expect(fs.logs.filter((l) => l.startsWith("stat:"))).toEqual([]);
+	});
+
+	test("populates file size from stat when includeStat is true", async () => {
 		fs.storage.set("/a.txt", "aaa");
 		fs.storage.set("/longer.md", "this is longer content");
 
-		const nodes = await ctrl.listAllFiles();
+		const nodes = await ctrl.listAllFiles({ includeStat: true });
 		const aNode = nodes.find((n) => n.name === "a.txt");
 		const longerNode = nodes.find((n) => n.name === "longer.md");
 		expect(aNode?.size).toBe(3);
 		expect(longerNode?.size).toBe("this is longer content".length);
+	});
+});
+
+describe("FilesController.listDirectChildren", () => {
+	let fs: MockFs;
+	let ctrl: FilesController;
+
+	beforeEach(() => {
+		fs = createMockFs();
+		ctrl = new FilesController(fs);
+	});
+
+	test("lists only direct children of root without recursion", async () => {
+		fs.storage.set("/notes/draft.md", "draft");
+		fs.storage.set("/readme.txt", "hello");
+
+		const nodes = await ctrl.listDirectChildren("/");
+		const names = nodes.map((n) => n.name).sort();
+		expect(names).toEqual(["notes", "readme.txt"]);
+		expect(nodes.find((n) => n.name === "draft.md")).toBeUndefined();
+		// Only one list call — no recursive walk
+		expect(fs.logs.filter((l) => l.startsWith("list:"))).toEqual(["list:/"]);
+	});
+
+	test("sets parentId for nested directory children", async () => {
+		fs.storage.set("/notes/draft.md", "draft");
+		fs.storage.set("/notes/sub/x.md", "x");
+
+		const nodes = await ctrl.listDirectChildren("/notes");
+		expect(nodes).toHaveLength(2);
+		const draft = nodes.find((n) => n.name === "draft.md");
+		const sub = nodes.find((n) => n.name === "sub");
+		expect(draft?.parentId).toBe("/notes");
+		expect(sub?.parentId).toBe("/notes");
+		expect(sub?.kind).toBe("directory");
+		// Grandchildren not returned
+		expect(nodes.find((n) => n.name === "x.md")).toBeUndefined();
+	});
+
+	test("root children have no parentId", async () => {
+		fs.storage.set("/a.txt", "a");
+		const nodes = await ctrl.listDirectChildren("/");
+		expect(nodes[0]?.parentId).toBeUndefined();
+	});
+
+	test("skips per-file stat by default", async () => {
+		fs.storage.set("/a.txt", "aaa");
+		const nodes = await ctrl.listDirectChildren("/");
+		expect(nodes[0]?.size).toBeUndefined();
+		expect(fs.logs.filter((l) => l.startsWith("stat:"))).toEqual([]);
+	});
+
+	test("includeStat fills size", async () => {
+		fs.storage.set("/a.txt", "aaa");
+		const nodes = await ctrl.listDirectChildren("/", { includeStat: true });
+		expect(nodes[0]?.size).toBe(3);
 	});
 });
 

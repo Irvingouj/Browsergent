@@ -37,12 +37,17 @@ export interface ContextMenuState {
 	y: number;
 }
 
+/** Path key for the OPFS root when tracking which directories have been listed. */
+export const ROOT_DIR_PATH = "/";
+
 export interface FilesState {
 	nodes: Record<FileNodeId, FileNode>;
 	rootIds: FileNodeId[];
 	selectedFileId: FileNodeId | null;
 	filesVersion: number;
 	expandedFolderIds: FileNodeId[];
+	/** Directory paths whose direct children have been loaded into `nodes`. Includes `"/"`. */
+	loadedDirPaths: FileNodeId[];
 	creatingKind: CreatingKind;
 	creatingName: string;
 	creatingParentPath: string;
@@ -59,6 +64,15 @@ export interface FilesSlice {
 	removeFileNode(id: FileNodeId): void;
 	clearFiles(): void;
 	setFileNodes(nodes: FileNode[]): void;
+	/**
+	 * Replace only the direct children of one directory, leaving other branches intact.
+	 * `parentPath` is `null` (or `ROOT_DIR_PATH`) for the OPFS root.
+	 * Marks the directory as loaded.
+	 */
+	setDirectoryChildren(
+		parentPath: FileNodeId | null,
+		children: FileNode[],
+	): void;
 	incrementFilesVersion(): void;
 	toggleFolderExpanded(id: FileNodeId): void;
 	moveNode(
@@ -92,6 +106,53 @@ function buildFileState(
 		}
 	}
 	return { nodes: nodesRecord, rootIds };
+}
+
+/** Remove a node and every path under it from the map (mutates `nodes`). */
+function removeNodeAndDescendants(
+	nodes: Record<FileNodeId, FileNode>,
+	id: FileNodeId,
+): void {
+	delete nodes[id];
+	const prefix = `${id}/`;
+	for (const key of Object.keys(nodes)) {
+		if (key.startsWith(prefix)) delete nodes[key];
+	}
+}
+
+function isRootParent(parentPath: FileNodeId | null): boolean {
+	return parentPath === null || parentPath === ROOT_DIR_PATH;
+}
+
+function loadKeyForParent(parentPath: FileNodeId | null): FileNodeId {
+	if (parentPath === null || parentPath === ROOT_DIR_PATH) return ROOT_DIR_PATH;
+	return parentPath;
+}
+
+/** Paths that were loaded under any of the removed direct children are stale. */
+function pruneLoadedDirPaths(
+	loadedDirPaths: readonly FileNodeId[],
+	oldChildIds: readonly FileNodeId[],
+	loadKey: FileNodeId,
+): FileNodeId[] {
+	const next = loadedDirPaths.filter((p) => {
+		if (p === loadKey) return true;
+		for (const oldId of oldChildIds) {
+			if (p === oldId || p.startsWith(`${oldId}/`)) return false;
+		}
+		return true;
+	});
+	if (!next.includes(loadKey)) next.push(loadKey);
+	return next;
+}
+
+/** When a full tree is set at once, treat every directory (and root) as loaded. */
+function loadedPathsFromFullTree(nodes: FileNode[]): FileNodeId[] {
+	const paths: FileNodeId[] = [ROOT_DIR_PATH];
+	for (const node of nodes) {
+		if (node.kind === "directory") paths.push(node.id);
+	}
+	return paths;
 }
 
 function updateDescendants(
@@ -139,6 +200,7 @@ export function createFilesSlice(
 			selectedFileId: null,
 			filesVersion: 0,
 			expandedFolderIds: [],
+			loadedDirPaths: [],
 			creatingKind: null,
 			creatingName: "",
 			creatingParentPath: "",
@@ -195,6 +257,7 @@ export function createFilesSlice(
 					rootIds: [],
 					selectedFileId: null,
 					expandedFolderIds: [],
+					loadedDirPaths: [],
 					filesVersion: state.files.filesVersion + 1,
 				},
 			}));
@@ -203,9 +266,7 @@ export function createFilesSlice(
 			const next = buildFileState(nodes);
 			set((state) => {
 				// Only clear selection if its node is gone; otherwise preserve it so
-				// the preview keeps its content while FilesPanel's listAllFiles effect
-				// refreshes the tree. This breaks the loop: effect fires → setFileNodes
-				// → selectedFileId cleared → selection lost → preview unloadable.
+				// the preview keeps its content while the tree refreshes.
 				const selectedFileId =
 					state.files.selectedFileId &&
 					Object.hasOwn(next.nodes, state.files.selectedFileId)
@@ -216,6 +277,61 @@ export function createFilesSlice(
 						...state.files,
 						...next,
 						selectedFileId,
+						loadedDirPaths: loadedPathsFromFullTree(nodes),
+						filesVersion: state.files.filesVersion + 1,
+					},
+				};
+			});
+		},
+		setDirectoryChildren(parentPath, children) {
+			set((state) => {
+				const loadKey = loadKeyForParent(parentPath);
+				const isRoot = isRootParent(parentPath);
+				const nodes: Record<FileNodeId, FileNode> = { ...state.files.nodes };
+
+				const oldChildIds: FileNodeId[] = [];
+				for (const node of Object.values(nodes)) {
+					if (!node) continue;
+					const isDirectChild = isRoot
+						? node.parentId === undefined
+						: node.parentId === parentPath;
+					if (isDirectChild) oldChildIds.push(node.id);
+				}
+				for (const id of oldChildIds) {
+					removeNodeAndDescendants(nodes, id);
+				}
+				for (const child of children) {
+					nodes[child.id] = child;
+				}
+
+				const rootIds = isRoot
+					? children.map((c) => c.id)
+					: state.files.rootIds.filter((id) => Object.hasOwn(nodes, id));
+
+				const loadedDirPaths = pruneLoadedDirPaths(
+					state.files.loadedDirPaths,
+					oldChildIds,
+					loadKey,
+				);
+
+				const selectedFileId =
+					state.files.selectedFileId &&
+					Object.hasOwn(nodes, state.files.selectedFileId)
+						? state.files.selectedFileId
+						: null;
+
+				const expandedFolderIds = state.files.expandedFolderIds.filter(
+					(id) => Object.hasOwn(nodes, id),
+				);
+
+				return {
+					files: {
+						...state.files,
+						nodes,
+						rootIds,
+						loadedDirPaths,
+						selectedFileId,
+						expandedFolderIds,
 						filesVersion: state.files.filesVersion + 1,
 					},
 				};

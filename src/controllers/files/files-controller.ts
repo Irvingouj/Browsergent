@@ -2,7 +2,11 @@ import type { FsClient } from "../../skills/skill-types";
 import type { FileNode } from "../../state/slices/files-slice";
 import { editFile } from "./edit";
 import { newPathForRename } from "./paths";
-import { listAllFiles, listDirectChildren } from "./scan";
+import {
+	listAllFiles,
+	listDirectChildren,
+	type ListOptions,
+} from "./scan";
 import { uploadFiles } from "./upload";
 
 /**
@@ -34,12 +38,19 @@ export class FilesController {
 		return this.runSerialized(() => uploadFiles(this.fs, files));
 	}
 
-	async listAllFiles(): Promise<FileNode[]> {
-		return this.runSerialized(() => listAllFiles(this.fs));
+	/** Full recursive walk (agent file_list without prefix / @-picker). Not for boot. */
+	async listAllFiles(options?: ListOptions): Promise<FileNode[]> {
+		return this.runSerialized(() => listAllFiles(this.fs, options));
 	}
 
-	async listDirectChildren(dirPath: string): Promise<FileNode[]> {
-		return this.runSerialized(() => listDirectChildren(this.fs, dirPath));
+	/** Shallow list of one directory. Preferred path for the Files tree UI. */
+	async listDirectChildren(
+		dirPath: string,
+		options?: ListOptions,
+	): Promise<FileNode[]> {
+		return this.runSerialized(() =>
+			listDirectChildren(this.fs, dirPath, options),
+		);
 	}
 
 	async readFileText(path: string): Promise<string> {
