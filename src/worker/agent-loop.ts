@@ -52,17 +52,38 @@ export interface AgentLoopCallbacks {
 	fileOp: (op: FileOp) => Promise<FileOpResult>;
 }
 
-const STATUS_MAP: Record<string, AgentStatus> = {
+/**
+ * Map pi-host SDK status → panel AgentStatus.
+ *
+ * CRITICAL: SDK emits `completed` on every `turn_end`, including after a tool
+ * batch *before* hostContinueTurn streams the next assistant text. Mapping
+ * that to terminal `done` clears SessionRunRegistry and drops all subsequent
+ * agentMessage/agentTextDelta (chat shows tool only, status stuck).
+ * True run completion is posted explicitly at the end of AgentLoop.run().
+ */
+export const STATUS_MAP: Record<string, AgentStatus> = {
 	idle: "idle",
 	loading: "loading",
 	thinking: "waiting_for_model",
 	calling_model: "waiting_for_model",
 	running_tool: "executing_tool",
 	saving: "running",
-	completed: "done",
+	// Mid-run turn_end / settled — NOT terminal. See comment above.
+	completed: "running",
 	aborted: "stopped",
 	failed: "error",
 };
+
+export function mapAgentSdkStatus(
+	state: string,
+	opts?: { streamingAssistant?: boolean },
+): AgentStatus {
+	let mapped = STATUS_MAP[state] ?? "running";
+	if (opts?.streamingAssistant && mapped === "waiting_for_model") {
+		mapped = "running";
+	}
+	return mapped;
+}
 
 export class AgentLoop {
 	private agent: Agent | null = null;
@@ -114,6 +135,9 @@ export class AgentLoop {
 			if (!this.assistantMessageId) {
 				this.assistantMessageId = crypto.randomUUID();
 				callbacks.onMessage("assistant", "", this.assistantMessageId);
+				// SDK stays on calling_model for the whole stream; promote to running
+				// so the panel is not stuck on waiting_for_model while tokens flow.
+				callbacks.onStatus("running");
 			}
 			this.hadOutput = true;
 			callbacks.onTextDelta?.(this.assistantMessageId, delta);
@@ -130,7 +154,9 @@ export class AgentLoop {
 				state: s.state,
 				message: s.message,
 			});
-			const mapped = STATUS_MAP[s.state] ?? "running";
+			const mapped = mapAgentSdkStatus(s.state, {
+				streamingAssistant: this.assistantMessageId !== null,
+			});
 			callbacks.onStatus(mapped, s.message);
 		});
 

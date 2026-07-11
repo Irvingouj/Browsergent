@@ -1,19 +1,20 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
-import type { AgentRunStatus } from "../state/slices/agent-slice";
 import { notifySkillsChanged } from "../skills/skill-service";
+import type { AgentRunStatus } from "../state/slices/agent-slice";
 import { browsergentStore } from "../state/store";
 import {
 	appendStreamingDelta,
 	finalizeStreamingSignal,
+	getStreamingSignal,
 	initStreamingSignal,
 } from "../state/streaming-signals";
 import type { PanelToWorker, WorkerToPanel } from "../types/messages";
+import type { FileOp } from "../worker/file-op-relay";
 import { OffscreenProxyBridge } from "./offscreen-proxy-bridge";
+import type { SessionController } from "./session-controller";
 import { SessionRunRegistry } from "./session-run-registry";
 import { SessionRunSink } from "./session-run-sink";
-import type { SessionController } from "./session-controller";
 import { WorkerBridge } from "./worker-bridge";
-import type { FileOp } from "../worker/file-op-relay";
 
 type RunningSessionsChangedHandler = () => void;
 
@@ -283,7 +284,9 @@ export class RunSupervisor {
 
 		switch (event.type) {
 			case "agentStatus": {
-				browsergentStore.getState().agentStatusChanged(event.status, event.reason);
+				browsergentStore
+					.getState()
+					.agentStatusChanged(event.status, event.reason);
 				if (
 					event.status === "stopped" ||
 					event.status === "error" ||
@@ -308,12 +311,40 @@ export class RunSupervisor {
 				}
 				break;
 			}
-			case "agentTextDelta":
+			case "agentTextDelta": {
+				const store = browsergentStore.getState();
+				if (!store.chat.messagesById[event.messageId]) {
+					initStreamingSignal(event.messageId);
+					store.appendAssistantMessage({
+						kind: "assistant",
+						id: event.messageId,
+						text: "",
+						timestamp: Date.now(),
+					});
+				}
+				if (
+					store.agent.status === "waiting_for_model" ||
+					store.agent.status === "loading"
+				) {
+					store.agentStatusChanged("running");
+				}
 				appendStreamingDelta(event.messageId, event.text);
+				const streamed =
+					getStreamingSignal(event.messageId)?.value ?? event.text;
+				browsergentStore
+					.getState()
+					.finalizeAssistantMessage(event.messageId, streamed);
 				break;
-			case "agentMessageEnd":
+			}
+			case "agentMessageEnd": {
+				const sig = getStreamingSignal(event.messageId);
+				const text = sig?.value ?? "";
+				browsergentStore
+					.getState()
+					.finalizeAssistantMessage(event.messageId, text);
 				finalizeStreamingSignal(event.messageId);
 				break;
+			}
 			case "agentTrace":
 				browsergentStore.getState().traceUpdated(event.entry);
 				break;
@@ -353,9 +384,7 @@ export class RunSupervisor {
 		if (state) {
 			this.registry.attach(sessionId);
 			browsergentStore.getState().agentRunRequested(state.runId);
-			browsergentStore
-				.getState()
-				.agentStatusChanged(state.status, undefined);
+			browsergentStore.getState().agentStatusChanged(state.status, undefined);
 		} else {
 			this.resetForegroundUi();
 		}
@@ -379,10 +408,13 @@ export class RunSupervisor {
 	}
 
 	stopForegroundRun(runId?: string): void {
-		if (!this.foregroundSessionId) return;
-		const bridge = this.bridges.get(this.foregroundSessionId);
+		const sid = this.foregroundSessionId;
+		if (!sid) return;
+		const bridge = this.bridges.get(sid);
 		if (!bridge) return; // no worker → nothing to stop
-		bridge.post({ type: "agentStop", runId });
+		const effectiveRunId =
+			runId ?? browsergentStore.getState().agent.activeRunId ?? undefined;
+		bridge.post({ type: "agentStop", runId: effectiveRunId });
 	}
 
 	dispose(): void {
@@ -400,7 +432,15 @@ export class RunSupervisor {
 		runId: string,
 		event: WorkerToPanel,
 	): Promise<void> {
-		const state = this.registry.getByRunId(runId);
+		let state = this.registry.getByRunId(runId);
+		if (!state) {
+			// Premature clear recovery: re-bind if this is still the active UI run.
+			const sid = this.foregroundSessionId;
+			if (sid && browsergentStore.getState().agent.activeRunId === runId) {
+				this.registry.register(sid, runId, "running");
+				state = this.registry.getByRunId(runId);
+			}
+		}
 		if (!state) return;
 
 		if (event.type === "agentStatus") {

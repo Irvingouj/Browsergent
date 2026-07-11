@@ -94,10 +94,7 @@ export class WorkerBridge {
 		if (this.runRouting) {
 			return this.runRouting.shouldUpdateUi(runId);
 		}
-		return !isStaleRunId(
-			runId,
-			browsergentStore.getState().agent.activeRunId,
-		);
+		return !isStaleRunId(runId, browsergentStore.getState().agent.activeRunId);
 	}
 
 	private shouldApplyBridgeEffects(): boolean {
@@ -212,8 +209,15 @@ export class WorkerBridge {
 				if (message.kind === "user") {
 					browsergentStore.getState().appendUserMessage(message);
 				} else if (message.kind === "assistant") {
-					initStreamingSignal(message.id);
-					browsergentStore.getState().appendAssistantMessage(message);
+					// Idempotent: post-tool turns can redeliver empty assistant shells.
+					const existing =
+						browsergentStore.getState().chat.messagesById[message.id];
+					if (!existing) {
+						initStreamingSignal(message.id);
+						browsergentStore.getState().appendAssistantMessage(message);
+					} else {
+						initStreamingSignal(message.id);
+					}
 				} else {
 					browsergentStore.getState().appendSystemMessage(message);
 				}
@@ -222,7 +226,30 @@ export class WorkerBridge {
 			case "agentTextDelta": {
 				this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;
+				const store = browsergentStore.getState();
+				// Self-heal: if agentMessage was dropped (registry gate race), still
+				// create the bubble so post-tool streams are visible.
+				if (!store.chat.messagesById[raw.messageId]) {
+					initStreamingSignal(raw.messageId);
+					store.appendAssistantMessage({
+						kind: "assistant",
+						id: raw.messageId,
+						text: "",
+						timestamp: Date.now(),
+					});
+				}
+				if (
+					store.agent.status === "waiting_for_model" ||
+					store.agent.status === "loading"
+				) {
+					store.agentStatusChanged("running");
+				}
 				appendStreamingDelta(raw.messageId, raw.text);
+				// Mirror into store so chat survives signal/render glitches.
+				const streamed = getStreamingSignal(raw.messageId)?.value ?? raw.text;
+				browsergentStore
+					.getState()
+					.finalizeAssistantMessage(raw.messageId, streamed);
 				break;
 			}
 			case "agentMessageEnd": {

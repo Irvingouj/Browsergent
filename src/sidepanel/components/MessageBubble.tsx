@@ -21,18 +21,23 @@ export const MessageBubble: FunctionalComponent<{ messageId: string }> = ({
 	);
 	const [, forceUpdate] = useState(0);
 
-	const streamingSig = getStreamingSignal(messageId);
+	// Re-resolve signal each effect tick — post-tool streams may create the
+	// signal after the first paint of an empty assistant shell.
 	useSignalEffect(() => {
-		if (streamingSig) {
-			void streamingSig.value;
+		const sig = getStreamingSignal(messageId);
+		if (sig) {
+			void sig.value;
 			forceUpdate((n) => n + 1);
 		}
 	});
 
 	if (!message) return null;
 
+	const streamingSig = getStreamingSignal(messageId);
 	const isStreaming = !!streamingSig;
-	const text = isStreaming ? streamingSig?.value : message.text;
+	const text = isStreaming
+		? (streamingSig?.value ?? message.text)
+		: message.text;
 
 	const rendererRef = useRef<ReturnType<
 		typeof createStreamingMarkdownRenderer

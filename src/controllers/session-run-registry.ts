@@ -1,4 +1,5 @@
 import type { AgentRunStatus } from "../state/slices/agent-slice";
+import { browsergentStore } from "../state/store";
 
 /** foreground = chat UI session; headless = in-panel background run (panel still open). */
 export type RunAttachment = "foreground" | "headless";
@@ -64,9 +65,14 @@ export class SessionRunRegistry {
 	}
 
 	shouldUpdateUi(runId: string): boolean {
+		// Active UI run always paints — matches pre-multi-window WorkerBridge
+		// (isStaleRunId only). Registry attachment is secondary: a premature
+		// clear/detach after tool batches must not swallow post-tool text.
+		if (browsergentStore.getState().agent.activeRunId === runId) {
+			return true;
+		}
 		const state = this.getByRunId(runId);
-		if (!state) return false;
-		return state.attachment === "foreground";
+		return state?.attachment === "foreground";
 	}
 
 	clear(sessionId: string): void {

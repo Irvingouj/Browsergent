@@ -49,6 +49,21 @@ describe("RunSupervisor", () => {
 		vi.unstubAllGlobals();
 	});
 
+	test("stopForegroundRun posts agentStop with store runId when omitted", async () => {
+		const sessionA = await controller.resolveOrCreateForWindow(1);
+		supervisor.setForegroundSession(sessionA);
+		supervisor.registerRun(sessionA, "run-stop-test");
+		browsergentStore.getState().agentRunRequested("run-stop-test");
+		supervisor.ensureWorkerForSession(sessionA);
+
+		postMessageSpy.mockClear();
+		supervisor.stopForegroundRun();
+		expect(postMessageSpy).toHaveBeenCalledWith({
+			type: "agentStop",
+			runId: "run-stop-test",
+		});
+	});
+
 	test("detach keeps registry entry headless", async () => {
 		const sessionA = await controller.resolveOrCreateForWindow(1);
 		supervisor.startForeground(sessionA);
@@ -98,9 +113,8 @@ describe("RunSupervisor", () => {
 		supervisor.detachToHeadless(sessionA);
 		supervisor.attachForeground(sessionB);
 
-		const workerA = (
-			globalThis.Worker as ReturnType<typeof vi.fn>
-		).mock.results[0]?.value;
+		const workerA = (globalThis.Worker as ReturnType<typeof vi.fn>).mock
+			.results[0]?.value;
 		workerA.onmessage?.({
 			data: {
 				type: "agentStatus",
@@ -122,9 +136,8 @@ describe("RunSupervisor", () => {
 		browsergentStore.getState().clearChat();
 
 		const bridgeA = supervisor.ensureBridge(sessionA);
-		const workerA = (
-			globalThis.Worker as ReturnType<typeof vi.fn>
-		).mock.results[0]?.value;
+		const workerA = (globalThis.Worker as ReturnType<typeof vi.fn>).mock
+			.results[0]?.value;
 		workerA.onmessage?.({
 			data: {
 				type: "agentMessage",

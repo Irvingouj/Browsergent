@@ -265,7 +265,29 @@ describe("WorkerBridge", () => {
 				},
 			}),
 		);
-		expect(browsergentStore.getState().chat.messagesById.a1.text).toBe("");
+		// Deltas are mirrored into the store so post-tool chat survives signal glitches.
+		expect(browsergentStore.getState().chat.messagesById.a1.text).toBe("world");
+	});
+
+	test("agentTextDelta promotes waiting_for_model to running", () => {
+		browsergentStore.getState().agentRunRequested("run-1");
+		browsergentStore
+			.getState()
+			.agentStatusChanged("waiting_for_model", "Calling model...");
+		const bridge = new WorkerBridge();
+		bridge.start();
+		const worker = getWorkerInstance();
+		worker.onmessage?.(
+			new MessageEvent("message", {
+				data: {
+					type: "agentTextDelta",
+					runId: "run-1",
+					messageId: "a1",
+					text: "hi",
+				},
+			}),
+		);
+		expect(browsergentStore.getState().agent.status).toBe("running");
 	});
 
 	test("agentMessageEnd finalizes assistant message", () => {
