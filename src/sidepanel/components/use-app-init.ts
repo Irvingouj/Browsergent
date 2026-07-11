@@ -133,10 +133,7 @@ export function useAppInit(): AppInitResult {
 						throw new Error(`${label} timeout after ${ms}ms`);
 					})
 					.catch((err: unknown) => {
-						if (
-							err instanceof Error &&
-							err.message.includes("timeout after")
-						) {
+						if (err instanceof Error && err.message.includes("timeout after")) {
 							throw err;
 						}
 						return pageTimer;
@@ -433,6 +430,7 @@ export function useAppInit(): AppInitResult {
 				bootStep("window-init");
 				const rebindSession = (nextId: string, nextWid: number) => {
 					if (cancelled) return;
+					supervisor.setForegroundSession(nextId);
 					supervisor.startForeground(nextId);
 					browsergentStore.getState().activeSessionChanged(nextId);
 					if (nextWid > 0) {
@@ -473,11 +471,9 @@ export function useAppInit(): AppInitResult {
 					}
 					sessionId = sessionCtrl.adoptEphemeralSession(wid);
 					// Best-effort durable write so multi-window list/merge can see this session.
-					void sessionCtrl
-						.persistEphemeralSession(wid, sessionId)
-						.catch(() => {
-							/* ok */
-						});
+					void sessionCtrl.persistEphemeralSession(wid, sessionId).catch(() => {
+						/* ok */
+					});
 					bootStep("window-ephemeral");
 				}
 				paintShell(sessionId, wid, "shell-ready");
@@ -498,8 +494,9 @@ export function useAppInit(): AppInitResult {
 								.hydrateDiagnostics(session.diagnostics);
 						}
 						sessionCtrl.hydrated = true;
-						const { sessions: sessionList } =
-							await sessionCtrl.listSessions(wid > 0 ? wid : undefined);
+						const { sessions: sessionList } = await sessionCtrl.listSessions(
+							wid > 0 ? wid : undefined,
+						);
 						if (cancelled) return;
 						browsergentStore.getState().sessionListLoaded(sessionList);
 						bootStep("hydrate-ok");
