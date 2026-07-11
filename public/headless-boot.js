@@ -1,10 +1,10 @@
-(function () {
+(() => {
 	const workers = new Map();
 
 	function publish(sessionId, event) {
 		chrome.runtime
 			.sendMessage({ type: "offscreenRunEvent", sessionId, event })
-			.catch(function () {});
+			.catch(() => {});
 	}
 
 	function ensureWorker(sessionId) {
@@ -13,7 +13,7 @@
 		const worker = new Worker(chrome.runtime.getURL("agent-worker.js"), {
 			type: "module",
 		});
-		worker.onmessage = function (event) {
+		worker.onmessage = (event) => {
 			publish(sessionId, event.data);
 		};
 		workers.set(sessionId, worker);
@@ -31,11 +31,11 @@
 		);
 	}
 
-	chrome.runtime.onMessage.addListener(function (message) {
+	chrome.runtime.onMessage.addListener((message) => {
 		if (!isRunCommand(message)) return;
 		const worker = ensureWorker(message.sessionId);
 		worker.postMessage(message.message);
 	});
 
-	chrome.runtime.sendMessage({ type: "offscreenHostReady" }).catch(function () {});
+	chrome.runtime.sendMessage({ type: "offscreenHostReady" }).catch(() => {});
 })();

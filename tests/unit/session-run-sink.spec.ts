@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { SessionController } from "../../src/controllers/session-controller";
 import { SessionRunSink } from "../../src/controllers/session-run-sink";
 import { MemoryStorage } from "../../src/storage/memory-storage";

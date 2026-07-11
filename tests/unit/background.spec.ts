@@ -152,7 +152,7 @@ describe("background service worker", () => {
 		expect(resolveListener).toBeTypeOf("function");
 
 		let responded: unknown;
-		resolveListener!(
+		resolveListener?.(
 			{ type: "resolvePanelWindowId" },
 			{
 				url: "chrome-extension://ext/sidepanel.html?windowId=999",
@@ -215,13 +215,13 @@ describe("background service worker", () => {
 		expect(relayListener).toBeTypeOf("function");
 
 		chrome.runtime.sendMessage.mockClear();
-		relayListener!(relay, {
+		relayListener?.(relay, {
 			url: "chrome-extension://abc/sidepanel.html",
 		});
 		expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(relay);
 
 		chrome.runtime.sendMessage.mockClear();
-		relayListener!(relay, { id: "abc" });
+		relayListener?.(relay, { id: "abc" });
 		expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
 	});
 
