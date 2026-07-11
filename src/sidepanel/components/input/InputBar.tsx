@@ -38,7 +38,8 @@ function domSyncFor(state: InputState): DomSync {
 
 interface InputBarProps {
 	isRunning: boolean;
-	onRun: () => void;
+	/** Optional submitted text — required when draft is cleared before onRun. */
+	onRun: (submittedText?: string) => void;
 	onSteer: (text: string) => void;
 	onStop: () => void;
 	inputRef?: Ref<HTMLDivElement>;
@@ -105,15 +106,18 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				browsergentStore.getState().setTaskDraft(serializeDraft(result.draft));
 			} else if (result.kind === "submitted") {
 				if (!result.value.trim()) return;
-				browsergentStore.getState().setTaskDraft(result.value);
+				// Clear input immediately. Do NOT write result.value back into
+				// taskDraft first — that re-fills contentEditable via the
+				// taskInput effect and looks like a half-second bounce.
 				setInputState({
 					kind: "needs-dom-reconcile",
 					draft: result.nextDraft,
 				});
+				browsergentStore.getState().setTaskDraft("");
 				if (isRunning) {
 					onSteer(result.value);
 				} else {
-					onRun();
+					onRun(result.value);
 				}
 			}
 		},

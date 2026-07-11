@@ -23,12 +23,29 @@ export function createChatSlice(
 	return {
 		chat: { messageIds: [], messagesById: {} },
 		appendUserMessage(message) {
-			set((state) => ({
-				chat: {
-					messageIds: [...state.chat.messageIds, message.id],
-					messagesById: { ...state.chat.messagesById, [message.id]: message },
-				},
-			}));
+			set((state) => {
+				// Idempotent for optimistic panel paint + worker agentMessage redelivery.
+				if (state.chat.messagesById[message.id]) return state;
+				const lastId = state.chat.messageIds[state.chat.messageIds.length - 1];
+				const last = lastId ? state.chat.messagesById[lastId] : undefined;
+				if (
+					last?.kind === "user" &&
+					last.text === message.text &&
+					// Same-run redelivery window (steer / agentStart).
+					Math.abs(message.timestamp - last.timestamp) < 30_000
+				) {
+					return state;
+				}
+				return {
+					chat: {
+						messageIds: [...state.chat.messageIds, message.id],
+						messagesById: {
+							...state.chat.messagesById,
+							[message.id]: message,
+						},
+					},
+				};
+			});
 		},
 		appendAssistantMessage(message) {
 			set((state) => ({

@@ -1,5 +1,11 @@
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks";
 import { useStore } from "zustand/react";
 import {
 	buildExportSnapshot,
@@ -7,18 +13,22 @@ import {
 } from "../controllers/export-controller";
 import { isTextFile } from "../controllers/files";
 import {
-	buildSkillXmlBlock,
-	parseSkillActivation,
-} from "../skills/resolve-skill-activations";
-import { getSkillService } from "../skills/skill-service";
-import type { SkillDiagnostic } from "../skills/skill-types";
-import { matchSkillsToUrl } from "../skills/url-match";
+	CROSS_WINDOW_SESSION_MESSAGE,
+	collectRunningSessionIds,
+} from "../controllers/session-window-utils";
 import {
 	formatDiagSnapshot,
 	getMemoryDiagRing,
 	readDiagRingFromSession,
 	reportError,
 } from "../errors/report";
+import {
+	buildSkillXmlBlock,
+	parseSkillActivation,
+} from "../skills/resolve-skill-activations";
+import { getSkillService } from "../skills/skill-service";
+import type { SkillDiagnostic } from "../skills/skill-types";
+import { matchSkillsToUrl } from "../skills/url-match";
 import {
 	selectActiveProvider,
 	selectActiveSessionId,
@@ -70,10 +80,6 @@ import {
 	parseTabMentions,
 	resolveTabMentions,
 } from "./resolve-tab-mentions";
-import {
-	CROSS_WINDOW_SESSION_MESSAGE,
-	collectRunningSessionIds,
-} from "../controllers/session-window-utils";
 import { SessionPanel } from "./session-panel";
 import { getUrlTracker } from "./url-tracker";
 
@@ -268,271 +274,286 @@ const App: FunctionalComponent = () => {
 		return unsub;
 	}, [supervisorRef]);
 
-	const handleRun = useCallback(async () => {
-		const task = browsergentStore.getState().ui.taskDraft.trim();
-		if (!task) return;
-		if (!activeProvider?.apiKey) {
-			browsergentStore.getState().setActiveTab("settings");
-			return;
-		}
-		const sessionId = sessionControllerRef.current?.getActiveSessionId();
-		if (!sessionId) return;
+	const handleRun = useCallback(
+		async (submittedText?: string) => {
+			const task = (
+				submittedText ?? browsergentStore.getState().ui.taskDraft
+			).trim();
+			if (!task) return;
+			if (!activeProvider?.apiKey) {
+				browsergentStore.getState().setActiveTab("settings");
+				return;
+			}
+			const sessionId = sessionControllerRef.current?.getActiveSessionId();
+			if (!sessionId) return;
 
-		// Lazy acting host: init extension-js with this panel's windowId on first Run.
-		const wid =
-			windowId ?? windowContextRef.current?.getWindowId() ?? undefined;
-		try {
-			await extjsControllerRef.current?.init(
-				typeof wid === "number" && wid > 0 ? { windowId: wid } : undefined,
-			);
-			browsergentStore.getState().bootComponentSet("extjs", "ok");
-		} catch (err: unknown) {
-			browsergentStore.getState().bootComponentSet("extjs", "fail");
-			browsergentStore.getState().appendSystemMessage({
-				kind: "system",
+			// Optimistic paint (steer-parity): clear draft + user bubble + loading
+			// BEFORE slow preflight (extjs init / skills / files). Without this the
+			// input sits full for ~500ms then clears while the user bubble only
+			// appears when the worker echoes agentMessage — feels laggy / bouncey.
+			browsergentStore.getState().setTaskDraft("");
+			browsergentStore.getState().appendUserMessage({
+				kind: "user",
 				id: crypto.randomUUID(),
-				text: `Browser runtime failed to start: ${err instanceof Error ? err.message : String(err)}`,
+				text: task,
 				timestamp: Date.now(),
 			});
-			return;
-		}
+			const runId = crypto.randomUUID();
+			browsergentStore.getState().agentRunRequested(runId);
 
-		let resolvedTask = task;
-		let skillCatalog = "";
-		let activatedSkills: string[] = [];
-		try {
-			const resolved = await getSkillService().resolveRunTask(task);
-			resolvedTask = resolved.resolvedTask;
-			skillCatalog = resolved.skillCatalog;
-			activatedSkills = resolved.activatedSkills;
-		} catch (err: unknown) {
-			if (parseSkillActivation(task)) {
-				const message = err instanceof Error ? err.message : String(err);
-				browsergentStore.getState().appendSystemMessage({
-					kind: "system",
-					id: crypto.randomUUID(),
-					text: `Skill activation failed: ${message}`,
-					timestamp: Date.now(),
-				});
-				return;
-			}
-			console.warn("Skill catalog failed:", err);
-		}
-
-		// Idle-path environmental skills: drain staged names, load each body,
-		// and bake into resolvedTask (parity with the running-path steer and
-		// the compose-time /skill: injection). Without this an idle-matched
-		// skill only appeared in the catalog; the LLM never saw its body.
-		const pendingSkillNames = drainPendingAutoSkills();
-		if (pendingSkillNames.length > 0) {
-			activatedSkills = Array.from(
-				new Set([...activatedSkills, ...pendingSkillNames]),
-			);
+			// Lazy acting host: init extension-js with this panel's windowId on first Run.
+			const wid =
+				windowId ?? windowContextRef.current?.getWindowId() ?? undefined;
 			try {
-				const allSkills = await getSkillService().listSkills();
-				const url = getUrlTracker().getCurrentUrl();
-				const blocks: string[] = [];
-				for (const name of pendingSkillNames) {
-					const meta = allSkills.find((s) => s.name === name);
-					if (!meta) continue;
-					const body = await getSkillService().loadSkill(name, undefined, {
-						source: "tool",
-					});
-					const inner = buildSkillXmlBlock(meta, body);
-					blocks.push(
-						url
-							? `<navigation_trigger url="${url}">${inner}</navigation_trigger>`
-							: inner,
-					);
-				}
-				if (blocks.length > 0) {
-					resolvedTask = `${resolvedTask}\n${blocks.join("\n")}`;
-				}
+				await extjsControllerRef.current?.init(
+					typeof wid === "number" && wid > 0 ? { windowId: wid } : undefined,
+				);
+				browsergentStore.getState().bootComponentSet("extjs", "ok");
 			} catch (err: unknown) {
-				console.warn("[auto-skill] failed to bake idle skills:", err);
-			}
-		}
-
-		// Resolve file mentions
-		const fileMentions = parseFileMentions(task);
-		if (fileMentions.length > 0) {
-			const filesController = filesControllerRef.current;
-			if (!filesController) {
+				browsergentStore.getState().bootComponentSet("extjs", "fail");
 				browsergentStore.getState().appendSystemMessage({
 					kind: "system",
 					id: crypto.randomUUID(),
-					text: "File attachment failed: files controller not available",
+					text: `Browser runtime failed to start: ${err instanceof Error ? err.message : String(err)}`,
 					timestamp: Date.now(),
 				});
 				return;
 			}
+
+			let resolvedTask = task;
+			let skillCatalog = "";
+			let activatedSkills: string[] = [];
 			try {
-				const attachments = await resolveFileMentions(
-					fileMentions,
-					filesController,
-				);
-				resolvedTask = mergeSkillAndFileAttachments(
-					task,
-					resolvedTask,
-					attachments,
-				);
+				const resolved = await getSkillService().resolveRunTask(task);
+				resolvedTask = resolved.resolvedTask;
+				skillCatalog = resolved.skillCatalog;
+				activatedSkills = resolved.activatedSkills;
 			} catch (err: unknown) {
-				const message = err instanceof Error ? err.message : String(err);
-				browsergentStore.getState().appendSystemMessage({
-					kind: "system",
-					id: crypto.randomUUID(),
-					text: `File attachment failed: ${message}`,
-					timestamp: Date.now(),
-				});
-				return;
-			}
-		}
-
-		// Resolve @[dir:...] mentions: list their immediate children so the agent
-		// knows what's inside without wasting turns on file_list.
-		const dirMentions = parseDirMentions(task);
-		if (dirMentions.length > 0) {
-			const filesController = filesControllerRef.current;
-			const deduped = dedupeDirMentionsById(dirMentions);
-			if (filesController) {
-				const blocks: string[] = [];
-				for (const mention of deduped) {
-					let children: DirContextChild[] = [];
-					try {
-						const nodes = await filesController.listDirectChildren(
-							mention.path,
-						);
-						children = nodes.map(
-							(node): DirContextChild => ({
-								name: node.name,
-								path: node.path,
-								kind: node.kind,
-								size: node.size ?? 0,
-								isText: isTextFile(node.name),
-							}),
-						);
-					} catch {
-						// degrade gracefully: emit note form on failure
-					}
-					blocks.push(buildDirContextXmlBlock(mention, children));
-				}
-				const dirBlock = blocks.join("\n");
-				if (dirBlock) {
-					resolvedTask = `${resolvedTask}\n${dirBlock}`;
-				}
-			}
-		}
-
-		// Resolve @-mentioned open tabs: inject tabId/url/title so the agent can act on a specific tab.
-		const tabMentions = parseTabMentions(task);
-		if (tabMentions.length > 0) {
-			try {
-				const resolved = await resolveTabMentions(tabMentions);
-				const missing = resolved.filter(
-					(
-						r,
-					): r is {
-						ok: false;
-						missing: { tabId: string; displayName: string };
-					} => !r.ok,
-				);
-				if (missing.length > 0) {
-					const labels = missing
-						.map((m) => `@[tab:${m.missing.tabId}:${m.missing.displayName}]`)
-						.join(", ");
+				if (parseSkillActivation(task)) {
+					const message = err instanceof Error ? err.message : String(err);
 					browsergentStore.getState().appendSystemMessage({
 						kind: "system",
 						id: crypto.randomUUID(),
-						text: `Tab reference failed: no open tab for ${labels}`,
+						text: `Skill activation failed: ${message}`,
 						timestamp: Date.now(),
 					});
 					return;
 				}
-				const tabBlock = resolved
-					.map((r) => (r.ok ? r.tab : null))
-					.filter((t): t is NonNullable<typeof t> => t !== null)
-					.map((t) => buildTabContextXmlBlock(t))
-					.join("\n");
-				if (tabBlock) {
-					resolvedTask = `${resolvedTask}\n${tabBlock}`;
+				console.warn("Skill catalog failed:", err);
+			}
+
+			// Idle-path environmental skills: drain staged names, load each body,
+			// and bake into resolvedTask (parity with the running-path steer and
+			// the compose-time /skill: injection). Without this an idle-matched
+			// skill only appeared in the catalog; the LLM never saw its body.
+			const pendingSkillNames = drainPendingAutoSkills();
+			if (pendingSkillNames.length > 0) {
+				activatedSkills = Array.from(
+					new Set([...activatedSkills, ...pendingSkillNames]),
+				);
+				try {
+					const allSkills = await getSkillService().listSkills();
+					const url = getUrlTracker().getCurrentUrl();
+					const blocks: string[] = [];
+					for (const name of pendingSkillNames) {
+						const meta = allSkills.find((s) => s.name === name);
+						if (!meta) continue;
+						const body = await getSkillService().loadSkill(name, undefined, {
+							source: "tool",
+						});
+						const inner = buildSkillXmlBlock(meta, body);
+						blocks.push(
+							url
+								? `<navigation_trigger url="${url}">${inner}</navigation_trigger>`
+								: inner,
+						);
+					}
+					if (blocks.length > 0) {
+						resolvedTask = `${resolvedTask}\n${blocks.join("\n")}`;
+					}
+				} catch (err: unknown) {
+					console.warn("[auto-skill] failed to bake idle skills:", err);
 				}
-			} catch (err: unknown) {
-				const message = err instanceof Error ? err.message : String(err);
-				browsergentStore.getState().appendSystemMessage({
-					kind: "system",
-					id: crypto.randomUUID(),
-					text: `Tab reference failed: ${message}`,
-					timestamp: Date.now(),
+			}
+
+			// Resolve file mentions
+			const fileMentions = parseFileMentions(task);
+			if (fileMentions.length > 0) {
+				const filesController = filesControllerRef.current;
+				if (!filesController) {
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: "File attachment failed: files controller not available",
+						timestamp: Date.now(),
+					});
+					return;
+				}
+				try {
+					const attachments = await resolveFileMentions(
+						fileMentions,
+						filesController,
+					);
+					resolvedTask = mergeSkillAndFileAttachments(
+						task,
+						resolvedTask,
+						attachments,
+					);
+				} catch (err: unknown) {
+					const message = err instanceof Error ? err.message : String(err);
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: `File attachment failed: ${message}`,
+						timestamp: Date.now(),
+					});
+					return;
+				}
+			}
+
+			// Resolve @[dir:...] mentions: list their immediate children so the agent
+			// knows what's inside without wasting turns on file_list.
+			const dirMentions = parseDirMentions(task);
+			if (dirMentions.length > 0) {
+				const filesController = filesControllerRef.current;
+				const deduped = dedupeDirMentionsById(dirMentions);
+				if (filesController) {
+					const blocks: string[] = [];
+					for (const mention of deduped) {
+						let children: DirContextChild[] = [];
+						try {
+							const nodes = await filesController.listDirectChildren(
+								mention.path,
+							);
+							children = nodes.map(
+								(node): DirContextChild => ({
+									name: node.name,
+									path: node.path,
+									kind: node.kind,
+									size: node.size ?? 0,
+									isText: isTextFile(node.name),
+								}),
+							);
+						} catch {
+							// degrade gracefully: emit note form on failure
+						}
+						blocks.push(buildDirContextXmlBlock(mention, children));
+					}
+					const dirBlock = blocks.join("\n");
+					if (dirBlock) {
+						resolvedTask = `${resolvedTask}\n${dirBlock}`;
+					}
+				}
+			}
+
+			// Resolve @-mentioned open tabs: inject tabId/url/title so the agent can act on a specific tab.
+			const tabMentions = parseTabMentions(task);
+			if (tabMentions.length > 0) {
+				try {
+					const resolved = await resolveTabMentions(tabMentions);
+					const missing = resolved.filter(
+						(
+							r,
+						): r is {
+							ok: false;
+							missing: { tabId: string; displayName: string };
+						} => !r.ok,
+					);
+					if (missing.length > 0) {
+						const labels = missing
+							.map((m) => `@[tab:${m.missing.tabId}:${m.missing.displayName}]`)
+							.join(", ");
+						browsergentStore.getState().appendSystemMessage({
+							kind: "system",
+							id: crypto.randomUUID(),
+							text: `Tab reference failed: no open tab for ${labels}`,
+							timestamp: Date.now(),
+						});
+						return;
+					}
+					const tabBlock = resolved
+						.map((r) => (r.ok ? r.tab : null))
+						.filter((t): t is NonNullable<typeof t> => t !== null)
+						.map((t) => buildTabContextXmlBlock(t))
+						.join("\n");
+					if (tabBlock) {
+						resolvedTask = `${resolvedTask}\n${tabBlock}`;
+					}
+				} catch (err: unknown) {
+					const message = err instanceof Error ? err.message : String(err);
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: `Tab reference failed: ${message}`,
+						timestamp: Date.now(),
+					});
+					return;
+				}
+			}
+
+			// Append timestamp as footnote so system prompt stays stable for prefix caching.
+			const now = new Date().toISOString();
+			resolvedTask = `${resolvedTask}\n\n[Current time: ${now}]`;
+
+			const activeModel = activeProvider
+				? defaultModelForProvider(activeProvider)
+				: null;
+			if (activeProvider && !activeModel) {
+				browsergentStore.getState().agentFailed({
+					code: "E_BAD_SETTINGS",
+					message: "Add a model to the active provider before running a task",
+					source: "settings",
 				});
 				return;
 			}
-		}
 
-		// Append timestamp as footnote so system prompt stays stable for prefix caching.
-		const now = new Date().toISOString();
-		resolvedTask = `${resolvedTask}\n\n[Current time: ${now}]`;
+			supervisorRef.current?.registerRun(sessionId, runId);
+			const local = syncLocalRunningToCoordinator();
+			const persisted =
+				sessionControllerRef.current?.getGlobalRunningSessionIds() ?? [];
+			const allRunning = collectRunningSessionIds(
+				local,
+				persisted,
+				globalRunningBySession,
+			);
+			setRunningSessionIds(allRunning);
 
-		browsergentStore.getState().setTaskDraft("");
-
-		const activeModel = activeProvider
-			? defaultModelForProvider(activeProvider)
-			: null;
-		if (activeProvider && !activeModel) {
-			browsergentStore.getState().agentFailed({
-				code: "E_BAD_SETTINGS",
-				message: "Add a model to the active provider before running a task",
-				source: "settings",
+			supervisorRef.current?.ensureWorkerForSession(sessionId);
+			supervisorRef.current?.postToForeground({
+				type: "agentStart",
+				runId,
+				sessionId,
+				task,
+				resolvedTask,
+				skillCatalog,
+				activatedSkills,
+				settings: activeProvider
+					? {
+							wireFormat: activeProvider.wireFormat,
+							apiKey: activeProvider.apiKey,
+							chatEndpointUrl: activeProvider.chatEndpointUrl,
+							model: activeModel?.model ?? "",
+						}
+					: {
+							wireFormat: WireFormat.AnthropicMessages,
+							apiKey: "",
+							chatEndpointUrl: "",
+							model: "",
+						},
 			});
-			return;
-		}
-
-		const runId = crypto.randomUUID();
-		browsergentStore.getState().agentRunRequested(runId);
-		supervisorRef.current?.registerRun(sessionId, runId);
-		const local = syncLocalRunningToCoordinator();
-		const persisted =
-			sessionControllerRef.current?.getGlobalRunningSessionIds() ?? [];
-		const allRunning = collectRunningSessionIds(
-			local,
-			persisted,
+		},
+		[
+			activeProvider,
+			sessionControllerRef,
+			supervisorRef,
+			extjsControllerRef,
+			windowContextRef,
+			windowId,
+			filesControllerRef,
+			syncLocalRunningToCoordinator,
 			globalRunningBySession,
-		);
-		setRunningSessionIds(allRunning);
-
-		supervisorRef.current?.ensureWorkerForSession(sessionId);
-		supervisorRef.current?.postToForeground({
-			type: "agentStart",
-			runId,
-			sessionId,
-			task,
-			resolvedTask,
-			skillCatalog,
-			activatedSkills,
-			settings: activeProvider
-				? {
-						wireFormat: activeProvider.wireFormat,
-						apiKey: activeProvider.apiKey,
-						chatEndpointUrl: activeProvider.chatEndpointUrl,
-						model: activeModel?.model ?? "",
-					}
-				: {
-						wireFormat: WireFormat.AnthropicMessages,
-						apiKey: "",
-						chatEndpointUrl: "",
-						model: "",
-					},
-		});
-	}, [
-		activeProvider,
-		sessionControllerRef,
-		supervisorRef,
-		extjsControllerRef,
-		windowContextRef,
-		windowId,
-		filesControllerRef,
-		syncLocalRunningToCoordinator,
-		globalRunningBySession,
-	]);
+		],
+	);
 
 	const handleStop = useCallback(() => {
 		const runId = browsergentStore.getState().agent.activeRunId;
@@ -624,13 +645,37 @@ const App: FunctionalComponent = () => {
 	]);
 
 	useEffect(() => {
+		// Running badge updates only — full list reload on every agent event caused IDB storms.
 		onRunningSessionsChangedRef.current = () => {
-			void reloadSessionList();
+			syncLocalRunningToCoordinator();
+			const local =
+				supervisorRef.current?.getRegistry().getRunningSessionIds() ?? [];
+			const ctrl = sessionControllerRef.current;
+			const runningIds = collectRunningSessionIds(
+				local,
+				ctrl?.getGlobalRunningSessionIds() ?? [],
+				globalRunningBySessionRef.current,
+			);
+			const runningSet = new Set(runningIds);
+			setRunningSessionIds(runningIds);
+			const current = browsergentStore.getState().session.sessions;
+			if (current.length === 0) return;
+			browsergentStore.getState().sessionListLoaded(
+				current.map((s) => ({
+					...s,
+					running: runningSet.has(s.id),
+				})),
+			);
 		};
 		return () => {
 			onRunningSessionsChangedRef.current = null;
 		};
-	}, [onRunningSessionsChangedRef, reloadSessionList]);
+	}, [
+		onRunningSessionsChangedRef,
+		supervisorRef,
+		sessionControllerRef,
+		syncLocalRunningToCoordinator,
+	]);
 
 	useEffect(() => {
 		const ctx = windowContextRef.current;
@@ -678,7 +723,12 @@ const App: FunctionalComponent = () => {
 				running: runningSet.has(s.id),
 			})),
 		);
-	}, [initialized, globalRunningBySession, supervisorRef, sessionControllerRef]);
+	}, [
+		initialized,
+		globalRunningBySession,
+		supervisorRef,
+		sessionControllerRef,
+	]);
 
 	// Full IDB-backed list load: once when shell ready, and when session panel opens.
 	useEffect(() => {
@@ -712,10 +762,7 @@ const App: FunctionalComponent = () => {
 				if (message.kind === "merge") {
 					const removed = message.removedWindowId;
 					const survivor = message.survivorWindowId;
-					if (
-						typeof removed !== "number" ||
-						typeof survivor !== "number"
-					) {
+					if (typeof removed !== "number" || typeof survivor !== "number") {
 						return;
 					}
 					await sessionCtrl.applyWindowMerge(removed, survivor);
@@ -725,9 +772,7 @@ const App: FunctionalComponent = () => {
 						extjsControllerRef.current?.rebindWindow(survivor);
 						const rebound = message.reboundRunningSessionIds ?? [];
 						if (rebound.length > 0 && typeof chrome !== "undefined") {
-							const { sendMessageSafe } = await import(
-								"../errors/report"
-							);
+							const { sendMessageSafe } = await import("../errors/report");
 							void sendMessageSafe(
 								{
 									type: "offscreenAdoptRuns",
@@ -894,11 +939,7 @@ const App: FunctionalComponent = () => {
 			snapshot.trace,
 			snapshot.diagnostics,
 		);
-		if (
-			supervisor &&
-			prevId &&
-			supervisor.getRegistry().isRunning(prevId)
-		) {
+		if (supervisor && prevId && supervisor.getRegistry().isRunning(prevId)) {
 			supervisor.detachToHeadless(prevId);
 			await sessionCtrl?.setSessionLifecycle(prevId, "background");
 		}
@@ -1037,9 +1078,7 @@ const App: FunctionalComponent = () => {
 						type="button"
 						class="text-error/70 hover:text-error cursor-pointer px-xs"
 						aria-label="Dismiss host error"
-						onClick={() =>
-							browsergentStore.getState().bootHostErrorDismissed()
-						}
+						onClick={() => browsergentStore.getState().bootHostErrorDismissed()}
 					>
 						×
 					</button>

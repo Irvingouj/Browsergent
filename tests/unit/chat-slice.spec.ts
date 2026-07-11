@@ -28,6 +28,24 @@ describe("chat-slice (normalized)", () => {
 		expect(state.chat.messagesById.u1).toEqual(msg);
 	});
 
+	test("appendUserMessage dedupes optimistic + worker redelivery of same text", () => {
+		const store = createTestStore();
+		const t = Date.now();
+		store.getState().appendUserMessage({
+			kind: "user",
+			id: "u-opt",
+			text: "hello",
+			timestamp: t,
+		});
+		store.getState().appendUserMessage({
+			kind: "user",
+			id: "u-worker",
+			text: "hello",
+			timestamp: t + 50,
+		});
+		expect(store.getState().chat.messageIds).toEqual(["u-opt"]);
+	});
+
 	test("appendAssistantMessage adds to both structures", () => {
 		const store = createTestStore();
 		const msg = makeMessage("assistant", "a1", "response");
