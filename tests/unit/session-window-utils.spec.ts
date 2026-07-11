@@ -21,11 +21,7 @@ describe("session window utils", () => {
 
 	test("collectRunningSessionIds dedupes local, persisted, and global running", () => {
 		expect(
-			collectRunningSessionIds(
-				["a", "b"],
-				["b", "c"],
-				{ c: 1, d: 2 },
-			).sort(),
+			collectRunningSessionIds(["a", "b"], ["b", "c"], { c: 1, d: 2 }).sort(),
 		).toEqual(["a", "b", "c", "d"]);
 	});
 });

@@ -229,8 +229,10 @@ describe("ExtensionJsClient", () => {
 		expect(result).toEqual({ status: "ok", value: "hello" });
 	});
 
-	test("runJs throws when not initialized", async () => {
-		await expect(client.runJs("1+1")).rejects.toThrow("not initialized");
+	test("runJs propagates lazy init failure", async () => {
+		const { mockInit } = await getMocks();
+		mockInit.mockRejectedValueOnce(new Error("init failed"));
+		await expect(client.runJs("1+1")).rejects.toThrow("init failed");
 	});
 
 	test("stop tears down and reinitializes session", async () => {

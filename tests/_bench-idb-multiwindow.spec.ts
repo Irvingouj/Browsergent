@@ -5,8 +5,9 @@
  *
  * Prints a machine-readable BENCH JSON block at the end.
  */
-import { expect, test } from "@playwright/test";
+
 import type { Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
 	focusExtensionPage,
 	launchExtension,
@@ -151,7 +152,10 @@ async function runPureBench(
 function parseBootOpenMs(lines: Harvest[], panel: string): number | null {
 	const hit = [...lines]
 		.reverse()
-		.find((l) => l.panel === panel && /onsuccess/.test(l.text) && /openMs/.test(l.text));
+		.find(
+			(l) =>
+				l.panel === panel && /onsuccess/.test(l.text) && /openMs/.test(l.text),
+		);
 	if (!hit) return null;
 	const m = hit.text.match(/"openMs"\s*:\s*(\d+)/);
 	return m ? Number(m[1]) : null;
@@ -170,7 +174,9 @@ function parseMigrateMs(lines: Harvest[], panel: string): number | null {
 	return m ? Number(m[1]) : null;
 }
 
-function parseSlowOps(lines: Harvest[]): Array<{ panel: string; text: string }> {
+function parseSlowOps(
+	lines: Harvest[],
+): Array<{ panel: string; text: string }> {
 	return lines
 		.filter((l) => l.text.includes("op_slow") || l.text.includes("op_done"))
 		.filter((l) => {
@@ -185,8 +191,12 @@ test("bench: multi-window IndexedDB open/get/set", async () => {
 	const harvest: Harvest[] = [];
 	const wall0 = Date.now();
 
-	const { context, extensionId, sidePanel: panelA, close } =
-		await launchExtension();
+	const {
+		context,
+		extensionId,
+		sidePanel: panelA,
+		close,
+	} = await launchExtension();
 
 	// Capture boot timings on A via reload
 	attachHarvest(panelA, "A", harvest);
@@ -323,7 +333,10 @@ test("bench: multi-window IndexedDB open/get/set", async () => {
 			"Boot open was slow but pure open later is fast → boot-time contention/throttle, not permanent IDB death.",
 		);
 	}
-	if (getB > 1000 || (summary.bootMigrateMsB !== null && summary.bootMigrateMsB > 1000)) {
+	if (
+		getB > 1000 ||
+		(summary.bootMigrateMsB !== null && summary.bootMigrateMsB > 1000)
+	) {
 		console.log(
 			"Trivial get/migrate slow on B → IDB callback scheduling under dual panel, not large data.",
 		);

@@ -1,15 +1,18 @@
-import type { SessionController } from "./session-controller";
+import type { WorkerToPanel } from "../types/messages";
 import {
 	applyRunEvent,
 	createSessionSnapshot,
 	type SessionSnapshot,
 } from "./apply-run-event";
-import type { WorkerToPanel } from "../types/messages";
+import type { SessionController } from "./session-controller";
 
 export class SessionRunSink {
 	private readonly buffers = new Map<string, SessionSnapshot>();
 	private readonly bufferLoads = new Map<string, Promise<SessionSnapshot>>();
-	private readonly saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private readonly saveTimers = new Map<
+		string,
+		ReturnType<typeof setTimeout>
+	>();
 
 	constructor(private readonly sessionController: SessionController) {}
 

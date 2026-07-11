@@ -33,8 +33,12 @@ test.describe("natural window lifecycle", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const windowA = Number(
 				await panelA
@@ -97,8 +101,12 @@ test.describe("natural window lifecycle", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const { sidePanel: panelB } = await openSecondWindow(
 				context,

@@ -9,8 +9,12 @@ test("second window becomes shell-ready while first stays open", async () => {
 	// Second panel often falls open to memory within ~1.5s when IDB is contended;
 	// shell ready is marked via chrome.storage.session (avoids frozen page CDP).
 	test.setTimeout(120_000);
-	const { context, extensionId, sidePanel: panelA, close } =
-		await launchExtension();
+	const {
+		context,
+		extensionId,
+		sidePanel: panelA,
+		close,
+	} = await launchExtension();
 	try {
 		// Capture A window id BEFORE opening B — evaluate on A freezes after dual open.
 		const windowA = await readPanelWindowId(panelA);
@@ -29,9 +33,6 @@ test("second window becomes shell-ready while first stays open", async () => {
 		// Non-blocking IDB: shell should paint well under a minute even when IDB is slow.
 		expect(elapsed).toBeLessThan(90_000);
 	} finally {
-		await Promise.race([
-			close(),
-			new Promise((r) => setTimeout(r, 15_000)),
-		]);
+		await Promise.race([close(), new Promise((r) => setTimeout(r, 15_000))]);
 	}
 });

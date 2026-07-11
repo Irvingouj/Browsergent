@@ -1,13 +1,9 @@
 import type { SessionController } from "../controllers/session-controller";
+import { reportError, reportWarn, sendMessageSafe } from "../errors/report";
 import {
-	reportError,
-	reportWarn,
-	sendMessageSafe,
-} from "../errors/report";
-import {
+	type GlobalRunningSessionsMessage,
 	isGlobalRunningSessionsMessage,
 	isWindowLifecycleMessage,
-	type GlobalRunningSessionsMessage,
 	type WindowLifecycleMessage,
 } from "../protocol/window-lifecycle";
 
@@ -280,11 +276,7 @@ export class WindowContextController {
 					await this.sessionController.init();
 					const durable =
 						await this.sessionController.resolveOrCreateForWindow(windowId);
-					if (
-						durable &&
-						durable !== sessionId &&
-						options?.onSessionResolved
-					) {
+					if (durable && durable !== sessionId && options?.onSessionResolved) {
 						options.onSessionResolved(durable, windowId);
 					} else if (durable === sessionId) {
 						void this.sessionController
@@ -386,8 +378,8 @@ export class WindowContextController {
 				if (areaName !== undefined && areaName !== "session") return;
 				const change = changes.windowLifecycleEvent;
 				if (!change?.newValue || typeof change.newValue !== "object") return;
-				const { emittedAt: _emittedAt, ...lifecycle } = change.newValue as
-					WindowLifecycleMessage & { emittedAt?: number };
+				const { emittedAt: _emittedAt, ...lifecycle } =
+					change.newValue as WindowLifecycleMessage & { emittedAt?: number };
 				if (isWindowLifecycleMessage(lifecycle)) {
 					deliver(lifecycle);
 				}

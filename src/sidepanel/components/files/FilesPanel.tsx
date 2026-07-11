@@ -1,5 +1,11 @@
 import type { FunctionalComponent } from "preact";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks";
 import { useStore } from "zustand";
 import type { FilesController } from "../../../controllers/files";
 import { findSkillManifest } from "../../../controllers/files";

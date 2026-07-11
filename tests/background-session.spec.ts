@@ -113,7 +113,9 @@ test.describe("background headless session", () => {
 
 			await sidePanel.getByRole("button", { name: "More options" }).click();
 			await sidePanel.locator('[data-testid="session-item"]').first().click();
-			await expect(sidePanel.getByTestId("agent-status")).not.toHaveText("idle");
+			await expect(sidePanel.getByTestId("agent-status")).not.toHaveText(
+				"idle",
+			);
 			await expect(
 				sidePanel.locator('[data-testid="chat-message-assistant"]').last(),
 			).toContainText("Still going", { timeout: 15000 });

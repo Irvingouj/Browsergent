@@ -242,10 +242,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 											data-testid="delete-session-button"
 											aria-label="Delete session"
 											onClick={(e) =>
-												handleDeleteClick(
-													e as unknown as MouseEvent,
-													session,
-												)
+												handleDeleteClick(e as unknown as MouseEvent, session)
 											}
 											class="absolute top-sm right-md p-[2px_6px] bg-transparent border-none text-text-dim cursor-pointer text-sm opacity-0 group-hover:opacity-100 hover:text-danger transition-opacity"
 										>

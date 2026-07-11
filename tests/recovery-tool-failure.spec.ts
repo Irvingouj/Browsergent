@@ -47,11 +47,7 @@ const HTML = `
 const RECOVERY_CODE =
 	'const d=await page.snapshot_data();const s=d.nodes.find(n=>n.name==="Swap");await page.click({refId:s.refId});const d2=await page.snapshot_data();const t=d2.nodes.find(n=>n.name==="Target");if(!t)throw new Error("no Target");await page.click({refId:t.refId});';
 
-function makeToolStream(
-	code: string,
-	toolId: string,
-	msgId: string,
-): string[] {
+function makeToolStream(code: string, toolId: string, msgId: string): string[] {
 	return [
 		`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: msgId, type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n`,
 		`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: toolId, name: "run_js", input: {} } })}\n\n`,

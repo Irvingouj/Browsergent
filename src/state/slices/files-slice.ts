@@ -320,8 +320,8 @@ export function createFilesSlice(
 						? state.files.selectedFileId
 						: null;
 
-				const expandedFolderIds = state.files.expandedFolderIds.filter(
-					(id) => Object.hasOwn(nodes, id),
+				const expandedFolderIds = state.files.expandedFolderIds.filter((id) =>
+					Object.hasOwn(nodes, id),
 				);
 
 				return {

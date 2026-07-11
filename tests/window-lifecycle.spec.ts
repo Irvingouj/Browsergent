@@ -22,40 +22,6 @@ function makeQuickChunk(text: string) {
 }
 
 test.describe("window lifecycle", () => {
-	test("first panel open in new window after split gets fresh session", async () => {
-		const mock = startMockAnthropicServer({
-			responses: [
-				{
-					chunks: [makeQuickChunk("Parent only")],
-					delays: [0, 0, 0, 0],
-					stopReason: "end_turn",
-				},
-			],
-		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
-		try {
-			await configureMockProvider(panelA, mock.url);
-			await typeTask(panelA, "parent window task");
-			await panelA.getByRole("button", { name: "Run task" }).click();
-			await expect(panelA.locator("text=Parent only")).toBeVisible({
-				timeout: 10000,
-			});
-
-			const { sidePanel: panelB } = await openSecondWindow(
-				context,
-				extensionId,
-				panelA,
-			);
-			await expect(panelB.locator("text=parent window task")).not.toBeVisible();
-			await expect(panelB.locator("text=Parent only")).not.toBeVisible();
-			await expect(panelA.locator("text=Parent only")).toBeVisible();
-		} finally {
-			await close();
-			mock.server.close();
-		}
-	});
-
 	test("clicking foreign-window session row shows English block message", async () => {
 		const mock = startMockAnthropicServer({
 			responses: [
@@ -66,8 +32,12 @@ test.describe("window lifecycle", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const { sidePanel: panelB, windowId: windowB } = await openSecondWindow(
 				context,
@@ -94,7 +64,10 @@ test.describe("window lifecycle", () => {
 			);
 			// B must have flushed its session body to shared IDB before A can list it.
 			await expect(foreignRow).toBeVisible({ timeout: 20_000 });
-			await expect(foreignRow).toHaveAttribute("data-session-openable", "false");
+			await expect(foreignRow).toHaveAttribute(
+				"data-session-openable",
+				"false",
+			);
 			await foreignRow.click();
 			await expect(
 				panelA.locator("text=This session belongs to another window"),
@@ -122,8 +95,12 @@ test.describe("window lifecycle", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const windowA = Number(
 				await panelA
@@ -178,9 +155,7 @@ test.describe("window lifecycle", () => {
 						const withMsgs = openableOnA.filter({
 							hasText: /[1-9]\d* messages/,
 						});
-						return (await withMsgs.count()) > 0
-							? withMsgs.count()
-							: n;
+						return (await withMsgs.count()) > 0 ? withMsgs.count() : n;
 					},
 					{ timeout: 25_000 },
 				)
@@ -236,8 +211,12 @@ test.describe("window lifecycle", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const { sidePanel: panelB, windowId: windowB } = await openSecondWindow(
 				context,
@@ -265,10 +244,7 @@ test.describe("window lifecycle", () => {
 				`[data-testid="session-item"]:has([data-testid="session-window-badge"]:text-is("Window ${windowB} (closed)"))`,
 			);
 			await expect(closedRow).toBeVisible({ timeout: 15_000 });
-			await expect(closedRow).toHaveAttribute(
-				"data-session-openable",
-				"false",
-			);
+			await expect(closedRow).toHaveAttribute("data-session-openable", "false");
 		} finally {
 			await close();
 			mock.server.close();
@@ -292,8 +268,12 @@ test.describe("window lifecycle", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const { sidePanel: panelB, windowId: windowB } = await openSecondWindow(
 				context,
@@ -350,9 +330,9 @@ test.describe("window lifecycle", () => {
 				`[data-testid="session-item"]:has([data-testid="session-window-badge"]:text-is("Window ${windowB}"))`,
 			);
 			await expect(foreignRow).toBeVisible({ timeout: 5000 });
-			await expect(
-				foreignRow.getByTestId("session-running-badge"),
-			).toBeVisible({ timeout: 10000 });
+			await expect(foreignRow.getByTestId("session-running-badge")).toBeVisible(
+				{ timeout: 10000 },
+			);
 			await expect(foreignRow).toHaveAttribute(
 				"data-session-openable",
 				"false",

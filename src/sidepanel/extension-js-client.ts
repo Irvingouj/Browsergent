@@ -140,13 +140,14 @@ export class ExtensionJsClient implements FsClient {
 				typeof options?.windowId === "number"
 					? options.windowId
 					: this.boundWindowId;
-			const initOptions = typeof wid === "number" ? { windowId: wid } : undefined;
-			type InitFn = (opts?: { windowId?: number }) => Promise<
-				[ExtensionSessionType, Promise<void>]
-			>;
-			const [session, runner] = await (
-				ExtensionSession.init as InitFn
-			)(initOptions);
+			const initOptions =
+				typeof wid === "number" ? { windowId: wid } : undefined;
+			type InitFn = (opts?: {
+				windowId?: number;
+			}) => Promise<[ExtensionSessionType, Promise<void>]>;
+			const [session, runner] = await (ExtensionSession.init as InitFn)(
+				initOptions,
+			);
 			session.setFuelLimit(Number.MAX_SAFE_INTEGER);
 			// Atomic publish: only set session + initialized after BOTH creation and runner start succeed.
 			this.session = session;

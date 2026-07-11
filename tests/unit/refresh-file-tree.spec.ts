@@ -4,9 +4,7 @@ import { refreshShallowFileTree } from "../../src/sidepanel/components/files/ref
 import type { FileNode } from "../../src/state/slices/files-slice";
 import { browsergentStore } from "../../src/state/store";
 
-function makeCtrl(
-	lists: Record<string, FileNode[]>,
-): FilesController {
+function makeCtrl(lists: Record<string, FileNode[]>): FilesController {
 	return {
 		listDirectChildren: vi.fn(async (dirPath: string) => {
 			return lists[dirPath] ?? [];
@@ -54,9 +52,7 @@ describe("refreshShallowFileTree", () => {
 	test("also reloads expanded directories shallowly", async () => {
 		browsergentStore.getState().toggleFolderExpanded("/notes");
 		const ctrl = makeCtrl({
-			"/": [
-				{ id: "/notes", name: "notes", path: "/notes", kind: "directory" },
-			],
+			"/": [{ id: "/notes", name: "notes", path: "/notes", kind: "directory" }],
 			"/notes": [
 				{
 					id: "/notes/a.md",

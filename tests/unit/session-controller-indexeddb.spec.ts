@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
-import {
-	initBoundController,
-	requireActiveId,
-} from "./session-test-utils";
+import { initBoundController, requireActiveId } from "./session-test-utils";
 
 import "fake-indexeddb/auto";
 

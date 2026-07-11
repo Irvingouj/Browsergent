@@ -144,9 +144,7 @@ describe("WindowContextController lifecycle dedupe", () => {
 			chrome.runtime.onMessage.addListener as ReturnType<typeof vi.fn>
 		).mock.calls[0]?.[0] as (message: unknown) => void;
 		const storageListener = (
-			chrome.storage.session.onChanged.addListener as ReturnType<
-				typeof vi.fn
-			>
+			chrome.storage.session.onChanged.addListener as ReturnType<typeof vi.fn>
 		).mock.calls[0]?.[0] as (
 			changes: Record<string, { newValue: unknown }>,
 			areaName: string,

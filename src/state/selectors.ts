@@ -85,7 +85,8 @@ export const selectActiveSessionId = (s: BrowsergentStore) =>
 export const selectSessionError = (s: BrowsergentStore) => s.session.error;
 export const selectExtjsStatus = (s: BrowsergentStore) => s.extjs.status;
 export const selectBootHealth = (s: BrowsergentStore) => s.boot;
-export const selectBootHostError = (s: BrowsergentStore) => s.boot.lastHostError;
+export const selectBootHostError = (s: BrowsergentStore) =>
+	s.boot.lastHostError;
 export const selectSkillDiagnostics = (s: BrowsergentStore) =>
 	s.skills.diagnostics;
 export const selectSkillCatalog = (s: BrowsergentStore) => s.skills.catalog;

@@ -26,7 +26,10 @@ type PanelEntry = {
 
 /** Pure lifecycle message builder — unit-tested without Chrome APIs. */
 export class WindowSessionCoordinatorLogic {
-	emitSplit(sourceWindowId: number, newWindowId: number): WindowLifecycleMessage {
+	emitSplit(
+		sourceWindowId: number,
+		newWindowId: number,
+	): WindowLifecycleMessage {
 		return {
 			type: "windowLifecycle",
 			kind: "split",
@@ -133,16 +136,14 @@ function broadcastGlobalRunning(): void {
 		type: "globalRunningSessions",
 		bySession,
 	};
-	chrome.runtime
-		?.sendMessage?.(message)
-		?.catch?.((err: unknown) => {
-			reportWarn({
-				code: "E_SW_FANOUT",
-				source: "sw",
-				message: "globalRunning runtime broadcast failed",
-				cause: err,
-			});
+	chrome.runtime?.sendMessage?.(message)?.catch?.((err: unknown) => {
+		reportWarn({
+			code: "E_SW_FANOUT",
+			source: "sw",
+			message: "globalRunning runtime broadcast failed",
+			cause: err,
 		});
+	});
 	void chrome.storage?.session
 		?.set?.({ [GLOBAL_RUNNING_STORAGE_KEY]: bySession })
 		?.catch?.((err: unknown) => {
@@ -327,4 +328,4 @@ export function initWindowSessionCoordinator(): void {
 	);
 }
 
-export { registry, lifecycleTracker };
+export { lifecycleTracker, registry };

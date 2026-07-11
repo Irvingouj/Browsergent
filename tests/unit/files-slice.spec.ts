@@ -199,9 +199,11 @@ describe("FilesSlice", () => {
 	});
 
 	test("setDirectoryChildren for root replaces rootIds only", () => {
-		browsergentStore.getState().setDirectoryChildren(null, [
-			{ id: "/a", name: "a", path: "/a", kind: "directory" },
-		]);
+		browsergentStore
+			.getState()
+			.setDirectoryChildren(null, [
+				{ id: "/a", name: "a", path: "/a", kind: "directory" },
+			]);
 		browsergentStore.getState().setDirectoryChildren("/a", [
 			{
 				id: "/a/x.txt",
@@ -211,9 +213,11 @@ describe("FilesSlice", () => {
 				parentId: "/a",
 			},
 		]);
-		browsergentStore.getState().setDirectoryChildren(null, [
-			{ id: "/b", name: "b", path: "/b", kind: "directory" },
-		]);
+		browsergentStore
+			.getState()
+			.setDirectoryChildren(null, [
+				{ id: "/b", name: "b", path: "/b", kind: "directory" },
+			]);
 		const state = browsergentStore.getState().files;
 		expect(state.rootIds).toEqual(["/b"]);
 		expect(state.nodes["/a"]).toBeUndefined();

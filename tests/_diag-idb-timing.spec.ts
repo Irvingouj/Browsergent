@@ -18,7 +18,11 @@ import {
 
 type TimingLine = { panel: string; text: string; t: number };
 
-function attachIdbConsole(page: import("@playwright/test").Page, panel: string, sink: TimingLine[]) {
+function attachIdbConsole(
+	page: import("@playwright/test").Page,
+	panel: string,
+	sink: TimingLine[],
+) {
 	page.on("console", (msg) => {
 		const text = msg.text();
 		if (text.includes("[idb-timing]") || text.includes("E_BOOT_IDB")) {
@@ -136,8 +140,12 @@ test("diag: measure IndexedDB open A vs B (boot + pure)", async () => {
 	const lines: TimingLine[] = [];
 	const t0 = Date.now();
 
-	const { context, extensionId, sidePanel: panelA, close } =
-		await launchExtension();
+	const {
+		context,
+		extensionId,
+		sidePanel: panelA,
+		close,
+	} = await launchExtension();
 	// launchExtension already booted A — reload with listener to capture [idb-timing].
 	attachIdbConsole(panelA, "A", lines);
 	await panelA.reload({ waitUntil: "domcontentloaded" });
@@ -172,16 +180,26 @@ test("diag: measure IndexedDB open A vs B (boot + pure)", async () => {
 			onPage: (p) => attachIdbConsole(p, "B", lines),
 		},
 	);
-	console.log(
-		"[summary] openSecondWindow done",
-		{ windowB, elapsed: Date.now() - t0 },
-	);
+	console.log("[summary] openSecondWindow done", {
+		windowB,
+		elapsed: Date.now() - t0,
+	});
 
 	// Give B boot a moment to emit idb-timing (or fast-gate error).
 	await new Promise((r) => setTimeout(r, 3_000));
 
-	let pureB_freshName = { openMs: -1, upgraded: false, blocked: false, error: "skip" as string | null };
-	let pureB_appDb = { openMs: -1, upgraded: false, blocked: false, error: "skip" as string | null };
+	let pureB_freshName = {
+		openMs: -1,
+		upgraded: false,
+		blocked: false,
+		error: "skip" as string | null,
+	};
+	let pureB_appDb = {
+		openMs: -1,
+		upgraded: false,
+		blocked: false,
+		error: "skip" as string | null,
+	};
 	try {
 		pureB_freshName = await pureOpenMs(panelB);
 		console.log("[summary] pure open unrelated DB name on B", pureB_freshName);

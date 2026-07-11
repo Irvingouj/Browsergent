@@ -161,9 +161,7 @@ describe("SessionController session meta index", () => {
 			id,
 			windowId: TEST_WINDOW_ID,
 			lifecycle: "foreground",
-			messages: [
-				{ id: "1", kind: "user" as const, text: "hi", timestamp: 1 },
-			],
+			messages: [{ id: "1", kind: "user" as const, text: "hi", timestamp: 1 }],
 			trace: [],
 			diagnostics: [],
 			timestamp: 42,

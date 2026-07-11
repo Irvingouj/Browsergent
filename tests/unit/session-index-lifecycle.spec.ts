@@ -5,8 +5,8 @@ import {
 	applyWindowSplitToIndex,
 	planCreateSessionForWindow,
 	resolveActiveSessionForWindow,
-	sessionOpenable,
 	type SessionIndexSnapshot,
+	sessionOpenable,
 } from "../../src/controllers/session-index-lifecycle";
 
 function snap(partial?: Partial<SessionIndexSnapshot>): SessionIndexSnapshot {

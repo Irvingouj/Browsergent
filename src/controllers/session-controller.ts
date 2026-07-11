@@ -122,7 +122,11 @@ function parseStoredSessionMeta(raw: unknown): StoredSessionMeta | null {
 	const lifecycle: SessionLifecycle =
 		v.lifecycle === "background" ? "background" : "foreground";
 	// Missing/invalid bytes forces lazy re-derive from the full body.
-	if (typeof v.bytes !== "number" || !Number.isFinite(v.bytes) || v.bytes <= 0) {
+	if (
+		typeof v.bytes !== "number" ||
+		!Number.isFinite(v.bytes) ||
+		v.bytes <= 0
+	) {
 		return null;
 	}
 	const meta: StoredSessionMeta = {
@@ -282,10 +286,7 @@ export class SessionController {
 
 	constructor(private readonly storage: StorageBackend) {}
 
-	private failStore(
-		err: unknown,
-		details: Record<string, unknown>,
-	): void {
+	private failStore(err: unknown, details: Record<string, unknown>): void {
 		const message = err instanceof Error ? err.message : String(err);
 		browsergentStore.getState().sessionStoreFailed({
 			code: "E_SESSION_STORE",
@@ -573,9 +574,7 @@ export class SessionController {
 		await this.persistMeta();
 	}
 
-	private toIndexSnapshot(
-		metas: StoredSessionMeta[],
-	): SessionIndexSnapshot {
+	private toIndexSnapshot(metas: StoredSessionMeta[]): SessionIndexSnapshot {
 		const sessions: SessionIndexEntry[] = metas.map((m) => ({
 			id: m.id,
 			windowId: m.windowId,
@@ -613,8 +612,7 @@ export class SessionController {
 			const prev = metas.find((m) => m.id === entry.id);
 			if (
 				!prev ||
-				(prev.windowId === entry.windowId &&
-					prev.lifecycle === entry.lifecycle)
+				(prev.windowId === entry.windowId && prev.lifecycle === entry.lifecycle)
 			) {
 				continue;
 			}
@@ -693,8 +691,7 @@ export class SessionController {
 		const existing = await this.getSessionRecord(sessionId);
 		// Ephemeral sessions may not have a body yet — upsert rather than silent no-op.
 		const base =
-			existing ??
-			emptySessionData(sessionId, this.panelWindowId ?? null);
+			existing ?? emptySessionData(sessionId, this.panelWindowId ?? null);
 
 		const trimmedDiagnostics = normalizeDiagnostics(diagnostics).diagnostics;
 		const data: SessionData = {

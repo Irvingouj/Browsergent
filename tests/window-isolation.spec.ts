@@ -43,7 +43,9 @@ test.describe("window session isolation", () => {
 	test("sidepanel exposes bound chrome window id", async () => {
 		const { sidePanel, close } = await launchExtension();
 		try {
-			await expect(sidePanel.locator('[data-initialized="true"]')).toBeVisible();
+			await expect(
+				sidePanel.locator('[data-initialized="true"]'),
+			).toBeVisible();
 			const windowId = await sidePanel
 				.locator('[data-initialized="true"]')
 				.getAttribute("data-window-id");
@@ -57,7 +59,9 @@ test.describe("window session isolation", () => {
 	test("session list disables rows attached to another window", async () => {
 		const { sidePanel, close } = await launchExtension();
 		try {
-			await expect(sidePanel.locator('[data-initialized="true"]')).toBeVisible();
+			await expect(
+				sidePanel.locator('[data-initialized="true"]'),
+			).toBeVisible();
 			const panelWindowId = Number(
 				await sidePanel
 					.locator('[data-initialized="true"]')
@@ -72,7 +76,8 @@ test.describe("window session isolation", () => {
 					async () =>
 						sidePanel.evaluate(
 							() =>
-								document.querySelectorAll('[data-testid="session-item"]').length,
+								document.querySelectorAll('[data-testid="session-item"]')
+									.length,
 						),
 					{ timeout: 10_000 },
 				)

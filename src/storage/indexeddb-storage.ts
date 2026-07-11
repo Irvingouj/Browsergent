@@ -384,9 +384,7 @@ export class IndexedDBStorage implements StorageBackend {
 					resolve(request.result as string[]);
 				};
 				request.onerror = () => {
-					reject(
-						new Error(`Failed to getAllKeys: ${request.error?.message}`),
-					);
+					reject(new Error(`Failed to getAllKeys: ${request.error?.message}`));
 				};
 				tx.onerror = () => {
 					reject(new Error(`Transaction failed for getAllKeys`));

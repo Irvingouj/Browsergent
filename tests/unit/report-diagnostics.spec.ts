@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	clearMemoryDiagRing,
+	type DiagnosticReport,
 	getMemoryDiagRing,
 	reportError,
 	reportWarn,
 	safeListener,
-	type DiagnosticReport,
 } from "../../src/errors/report";
 
 describe("report diagnostics", () => {
@@ -69,9 +69,13 @@ describe("report diagnostics", () => {
 	});
 
 	test("safeListener swallows sync throw and reports", () => {
-		const wrapped = safeListener("unit-throw", () => {
-			throw new Error("sync fail");
-		}, "sw");
+		const wrapped = safeListener(
+			"unit-throw",
+			() => {
+				throw new Error("sync fail");
+			},
+			"sw",
+		);
 
 		expect(() => wrapped()).not.toThrow();
 		expect(errorSpy).toHaveBeenCalled();

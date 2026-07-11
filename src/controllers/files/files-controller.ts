@@ -2,11 +2,7 @@ import type { FsClient } from "../../skills/skill-types";
 import type { FileNode } from "../../state/slices/files-slice";
 import { editFile } from "./edit";
 import { newPathForRename } from "./paths";
-import {
-	listAllFiles,
-	listDirectChildren,
-	type ListOptions,
-} from "./scan";
+import { type ListOptions, listAllFiles, listDirectChildren } from "./scan";
 import { uploadFiles } from "./upload";
 
 /**

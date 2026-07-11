@@ -39,8 +39,12 @@ test.describe("merge during headless run", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const windowA = Number(
 				await panelA
@@ -74,19 +78,19 @@ test.describe("merge during headless run", () => {
 					req.onsuccess = () => resolve(req.result);
 					req.onerror = () => reject(req.error);
 				});
-				const meta = await new Promise<{ panelActiveSession?: Record<string, string> } | null>(
-					(resolve, reject) => {
-						const tx = db.transaction("sessions", "readonly");
-						const req = tx.objectStore("sessions").get("__meta");
-						req.onsuccess = () =>
-							resolve(
-								req.result as {
-									panelActiveSession?: Record<string, string>;
-								} | null,
-							);
-						req.onerror = () => reject(req.error);
-					},
-				);
+				const meta = await new Promise<{
+					panelActiveSession?: Record<string, string>;
+				} | null>((resolve, reject) => {
+					const tx = db.transaction("sessions", "readonly");
+					const req = tx.objectStore("sessions").get("__meta");
+					req.onsuccess = () =>
+						resolve(
+							req.result as {
+								panelActiveSession?: Record<string, string>;
+							} | null,
+						);
+					req.onerror = () => reject(req.error);
+				});
 				db.close();
 				const wid = document
 					.querySelector('[data-initialized="true"]')
@@ -115,9 +119,9 @@ test.describe("merge during headless run", () => {
 				})
 				.toBe("true");
 			await expect(mergedRow).toHaveCount(1);
-			await expect(
-				mergedRow.getByTestId("session-window-badge"),
-			).toContainText(`Window ${windowA}`);
+			await expect(mergedRow.getByTestId("session-window-badge")).toContainText(
+				`Window ${windowA}`,
+			);
 
 			await mergedRow.click();
 			await expect(

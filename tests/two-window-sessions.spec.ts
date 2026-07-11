@@ -45,8 +45,12 @@ test.describe("two-window session isolation", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const windowA = await readPanelWindowId(panelA);
 			expect(windowA).toBeGreaterThan(0);
@@ -100,10 +104,7 @@ test.describe("two-window session isolation", () => {
 			// A already had Reply A before B opened; mock consumed two independent
 			// requests. Avoid re-evaluating frozen panel A after dual-window open.
 		} finally {
-			await Promise.race([
-				close(),
-				new Promise((r) => setTimeout(r, 20_000)),
-			]);
+			await Promise.race([close(), new Promise((r) => setTimeout(r, 20_000))]);
 			mock.server.close();
 		}
 	});
@@ -119,8 +120,12 @@ test.describe("two-window session isolation", () => {
 				},
 			],
 		});
-		const { context, extensionId, sidePanel: panelA, close } =
-			await launchExtension();
+		const {
+			context,
+			extensionId,
+			sidePanel: panelA,
+			close,
+		} = await launchExtension();
 		try {
 			const windowA = await readPanelWindowId(panelA);
 			// Pre-configure A while alone (settings are global / IDB-shared).
@@ -188,8 +193,7 @@ test.describe("two-window session isolation", () => {
 								found: !!row,
 								openable: row?.getAttribute("data-session-openable") ?? null,
 								badge:
-									row
-										?.querySelector('[data-testid="session-window-badge"]')
+									row?.querySelector('[data-testid="session-window-badge"]')
 										?.textContent ?? null,
 							};
 						}, windowB);
@@ -212,8 +216,7 @@ test.describe("two-window session isolation", () => {
 							found: !!row,
 							openable: row?.getAttribute("data-session-openable") ?? null,
 							badge:
-								row
-									?.querySelector('[data-testid="session-window-badge"]')
+								row?.querySelector('[data-testid="session-window-badge"]')
 									?.textContent ?? null,
 						};
 					}, windowB),
@@ -223,10 +226,7 @@ test.describe("two-window session isolation", () => {
 			expect(foreignState.openable).toBe("false");
 			expect(foreignState.badge).toContain(`Window ${windowB}`);
 		} finally {
-			await Promise.race([
-				close(),
-				new Promise((r) => setTimeout(r, 20_000)),
-			]);
+			await Promise.race([close(), new Promise((r) => setTimeout(r, 20_000))]);
 			mock.server.close();
 		}
 	});

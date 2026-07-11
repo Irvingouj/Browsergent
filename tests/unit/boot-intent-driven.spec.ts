@@ -66,9 +66,7 @@ describe("intent-driven boot contracts (shipped modules)", () => {
 		const { SessionController } = await import(
 			"../../src/controllers/session-controller"
 		);
-		const { MemoryStorage } = await import(
-			"../../src/storage/memory-storage"
-		);
+		const { MemoryStorage } = await import("../../src/storage/memory-storage");
 
 		const storage = new MemoryStorage();
 		const sessions = new SessionController(storage);
@@ -98,9 +96,7 @@ describe("intent-driven boot contracts (shipped modules)", () => {
 		const { SettingsController } = await import(
 			"../../src/controllers/settings-controller"
 		);
-		const { MemoryStorage } = await import(
-			"../../src/storage/memory-storage"
-		);
+		const { MemoryStorage } = await import("../../src/storage/memory-storage");
 		const { browsergentStore } = await import("../../src/state/store");
 
 		browsergentStore.getState().settingsLoaded({

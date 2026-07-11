@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest";
 import "fake-indexeddb/auto";
-import { openPanelStorage } from "../../src/storage/open-panel-storage";
 import { MemoryStorage } from "../../src/storage/memory-storage";
+import { openPanelStorage } from "../../src/storage/open-panel-storage";
 import type { StorageBackend } from "../../src/storage/storage-backend";
 import { initBoundController } from "./session-test-utils";
 
@@ -55,7 +55,12 @@ describe("openPanelStorage", () => {
 		expect(ctrl.getActiveSessionId()).toBe(sessionId);
 		expect(ctrl.getPanelWindowId()).toBe(99);
 		const messages = [
-			{ id: "u1", kind: "user" as const, text: "from openPanelStorage", timestamp: 1 },
+			{
+				id: "u1",
+				kind: "user" as const,
+				text: "from openPanelStorage",
+				timestamp: 1,
+			},
 		];
 		await ctrl.save(messages, []);
 		const loaded = await ctrl.load();

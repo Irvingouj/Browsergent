@@ -45,11 +45,7 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
 			?.set?.({ offscreenLastMessage: message })
 			?.catch?.(() => {});
 		if (isOffscreenRunCommandMessage(message)) {
-			handleCommand(
-				message.sessionId,
-				message.windowId,
-				message.message,
-			);
+			handleCommand(message.sessionId, message.windowId, message.message);
 			return;
 		}
 		if (isOffscreenPanelRelayResponse(message)) {

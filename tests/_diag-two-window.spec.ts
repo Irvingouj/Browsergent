@@ -12,7 +12,10 @@ import {
 } from "./helpers";
 
 function log(step: string, t0: number, extra?: unknown) {
-	console.log(`[diag +${Date.now() - t0}ms] ${step}`, extra !== undefined ? JSON.stringify(extra) : "");
+	console.log(
+		`[diag +${Date.now() - t0}ms] ${step}`,
+		extra !== undefined ? JSON.stringify(extra) : "",
+	);
 }
 
 function makeQuickChunk(text: string) {
@@ -29,15 +32,32 @@ test("diag two-window independent chats", async () => {
 	const t0 = Date.now();
 	const mock = startMockAnthropicServer({
 		responses: [
-			{ chunks: [makeQuickChunk("Reply A")], delays: [0, 0, 0, 0], stopReason: "end_turn" },
-			{ chunks: [makeQuickChunk("Reply B")], delays: [0, 0, 0, 0], stopReason: "end_turn" },
+			{
+				chunks: [makeQuickChunk("Reply A")],
+				delays: [0, 0, 0, 0],
+				stopReason: "end_turn",
+			},
+			{
+				chunks: [makeQuickChunk("Reply B")],
+				delays: [0, 0, 0, 0],
+				stopReason: "end_turn",
+			},
 		],
 	});
 	log("mock up", t0, { url: mock.url });
-	const { context, extensionId, sidePanel: panelA, close } = await launchExtension();
+	const {
+		context,
+		extensionId,
+		sidePanel: panelA,
+		close,
+	} = await launchExtension();
 	log("A launched", t0);
 	try {
-		const { sidePanel: panelB, windowId: windowB } = await openSecondWindow(context, extensionId, panelA);
+		const { sidePanel: panelB, windowId: windowB } = await openSecondWindow(
+			context,
+			extensionId,
+			panelA,
+		);
 		log("B opened", t0, { windowB });
 		const windowA = await readPanelWindowId(panelA);
 		log("ids", t0, { windowA, windowB });
@@ -55,21 +75,51 @@ test("diag two-window independent chats", async () => {
 		await typeTask(panelA, "task window A");
 		await domClickButton(panelA, "Run task");
 		log("wait Reply A", t0);
-		const gotA = await expect.poll(async () => {
-			const t = await evalOnPanel(panelA, () => document.body.innerText.includes("Reply A"));
-			return t;
-		}, { timeout: 60_000 }).toBe(true).then(() => true).catch(() => false);
-		log("Reply A", t0, { gotA, reqs: mock.requestBodies.length, body: await evalOnPanel(panelA, () => document.body.innerText.slice(0, 300)).catch(e => String(e)) });
+		const gotA = await expect
+			.poll(
+				async () => {
+					const t = await evalOnPanel(panelA, () =>
+						document.body.innerText.includes("Reply A"),
+					);
+					return t;
+				},
+				{ timeout: 60_000 },
+			)
+			.toBe(true)
+			.then(() => true)
+			.catch(() => false);
+		log("Reply A", t0, {
+			gotA,
+			reqs: mock.requestBodies.length,
+			body: await evalOnPanel(panelA, () =>
+				document.body.innerText.slice(0, 300),
+			).catch((e) => String(e)),
+		});
 
 		log("run B", t0);
 		await focusExtensionPage(panelB);
 		await typeTask(panelB, "task window B");
 		await domClickButton(panelB, "Run task");
 		log("wait Reply B", t0);
-		const gotB = await expect.poll(async () => {
-			return evalOnPanel(panelB, () => document.body.innerText.includes("Reply B"));
-		}, { timeout: 60_000 }).toBe(true).then(() => true).catch(() => false);
-		log("Reply B", t0, { gotB, reqs: mock.requestBodies.length, body: await evalOnPanel(panelB, () => document.body.innerText.slice(0, 300)).catch(e => String(e)) });
+		const gotB = await expect
+			.poll(
+				async () => {
+					return evalOnPanel(panelB, () =>
+						document.body.innerText.includes("Reply B"),
+					);
+				},
+				{ timeout: 60_000 },
+			)
+			.toBe(true)
+			.then(() => true)
+			.catch(() => false);
+		log("Reply B", t0, {
+			gotB,
+			reqs: mock.requestBodies.length,
+			body: await evalOnPanel(panelB, () =>
+				document.body.innerText.slice(0, 300),
+			).catch((e) => String(e)),
+		});
 
 		expect(gotA).toBe(true);
 		expect(gotB).toBe(true);

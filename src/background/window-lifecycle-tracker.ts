@@ -4,7 +4,10 @@ export type LifecycleDecision =
 	| { action: "split"; sourceWindowId: number; newWindowId: number }
 	| { action: "merge"; removedWindowId: number; survivorWindowId: number }
 	| { action: "close"; removedWindowId: number }
-	| { action: "none"; mergePending?: { removedWindowId: number; survivorWindowId: number } };
+	| {
+			action: "none";
+			mergePending?: { removedWindowId: number; survivorWindowId: number };
+	  };
 
 /**
  * Pure Chrome window/tab lifecycle correlation (unit-tested without Chrome APIs).
@@ -78,7 +81,10 @@ export class WindowLifecycleTracker {
 		this.mergeTargets.set(oldWindowId, newWindowId);
 		return {
 			action: "none",
-			mergePending: { removedWindowId: oldWindowId, survivorWindowId: newWindowId },
+			mergePending: {
+				removedWindowId: oldWindowId,
+				survivorWindowId: newWindowId,
+			},
 		};
 	}
 

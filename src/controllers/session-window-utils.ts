@@ -32,10 +32,6 @@ export function collectRunningSessionIds(
 	globalBySession: Readonly<Record<string, number>>,
 ): string[] {
 	return [
-		...new Set([
-			...local,
-			...persisted,
-			...Object.keys(globalBySession),
-		]),
+		...new Set([...local, ...persisted, ...Object.keys(globalBySession)]),
 	];
 }
