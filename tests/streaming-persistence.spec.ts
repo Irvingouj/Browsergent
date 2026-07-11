@@ -223,6 +223,9 @@ test("text before run_js tool call continues after run_js tool result", async ()
 	await expect(sidePanel.locator("text=Checked.")).toBeVisible({
 		timeout: 5000,
 	});
+	await expect(sidePanel.getByTestId("agent-status")).toHaveText(/done/i, {
+		timeout: 10000,
+	});
 	await expect(sidePanel.locator("text=invalid type: null")).toHaveCount(0);
 
 	await close();
@@ -262,6 +265,9 @@ test("get_doc tool returns JS API docs and continues the agent turn", async () =
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Docs loaded.")).toBeVisible({
+		timeout: 10000,
+	});
+	await expect(sidePanel.getByTestId("agent-status")).toHaveText(/done/i, {
 		timeout: 10000,
 	});
 

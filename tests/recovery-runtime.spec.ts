@@ -51,7 +51,12 @@ test("tool compile error — agent surfaces error and completes", async () => {
 		sidePanel.locator('[data-testid="trace-entry"]').first(),
 	).toContainText("✗", { timeout: 15000 });
 
-	// Agent continues and completes
+	// Agent continues and surfaces a final assistant reply (not status-only).
+	await expect(
+		sidePanel
+			.locator('[data-testid="chat-message-assistant"]')
+			.filter({ hasText: "Compile error handled." }),
+	).toBeVisible({ timeout: 15000 });
 	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(
 		/done/,
 		{ timeout: 15000 },
@@ -90,7 +95,11 @@ test("runtime corrupted — session rebuilds and health check passes", async () 
 		sidePanel.locator('[data-testid="trace-entry"]').first(),
 	).toContainText("✗", { timeout: 15000 });
 
-	// Agent continues and completes
+	await expect(
+		sidePanel
+			.locator('[data-testid="chat-message-assistant"]')
+			.filter({ hasText: "Runtime error handled." }),
+	).toBeVisible({ timeout: 15000 });
 	await expect(sidePanel.locator('[data-testid="agent-status"]')).toHaveText(
 		/done/,
 		{ timeout: 15000 },

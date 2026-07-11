@@ -9,6 +9,7 @@ import {
 	type Page,
 	test,
 } from "@playwright/test";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionPath = path.resolve(__dirname, "../dist");
 
@@ -41,7 +42,9 @@ export async function domClickTestId(
 		if (clicked) return;
 		await sleep(50);
 	}
-	throw new Error(`domClickTestId: [${testId}] not found within ${timeoutMs}ms`);
+	throw new Error(
+		`domClickTestId: [${testId}] not found within ${timeoutMs}ms`,
+	);
 }
 
 /** Click a button by exact trimmed textContent. */
@@ -232,29 +235,32 @@ export async function openSecondWindow(
 	const before = new Set(context.pages());
 	// Create window first to learn its id, then open sidepanel with ?windowId=
 	// so resolveOrCreateForWindow binds correctly without hung getCurrent.
-	const createdWindowId = await serviceWorker.evaluate(async (extId: string) => {
-		const w = await chrome.windows.create({
-			url: "about:blank",
-			focused: true,
-			type: "normal",
-			width: 900,
-			height: 700,
-		});
-		if (typeof w.id !== "number") {
-			throw new Error("windows.create returned no id");
-		}
-		const tabs = await chrome.tabs.query({ windowId: w.id });
-		const tabId = tabs[0]?.id;
-		if (tabId === undefined) {
-			throw new Error("no tab in created window");
-		}
-		await chrome.tabs.update(tabId, {
-			url: `chrome-extension://${extId}/sidepanel.html?windowId=${w.id}`,
-		});
-		// Keep the new window focused so boot is not timer-throttled.
-		await chrome.windows.update(w.id, { focused: true });
-		return w.id;
-	}, extensionId);
+	const createdWindowId = await serviceWorker.evaluate(
+		async (extId: string) => {
+			const w = await chrome.windows.create({
+				url: "about:blank",
+				focused: true,
+				type: "normal",
+				width: 900,
+				height: 700,
+			});
+			if (typeof w.id !== "number") {
+				throw new Error("windows.create returned no id");
+			}
+			const tabs = await chrome.tabs.query({ windowId: w.id });
+			const tabId = tabs[0]?.id;
+			if (tabId === undefined) {
+				throw new Error("no tab in created window");
+			}
+			await chrome.tabs.update(tabId, {
+				url: `chrome-extension://${extId}/sidepanel.html?windowId=${w.id}`,
+			});
+			// Keep the new window focused so boot is not timer-throttled.
+			await chrome.windows.update(w.id, { focused: true });
+			return w.id;
+		},
+		extensionId,
+	);
 
 	const sidepanelUrl = `chrome-extension://${extensionId}/sidepanel.html?windowId=${createdWindowId}`;
 	const findDeadline = Date.now() + 20_000;
@@ -313,7 +319,11 @@ export async function openSecondWindow(
 			const marker = await serviceWorker.evaluate(async (wid: number) => {
 				const key = `panelReady:${wid}`;
 				const got = await chrome.storage.session.get(key);
-				return (got[key] as { ts?: number; step?: string; idb?: string } | undefined) ?? null;
+				return (
+					(got[key] as
+						| { ts?: number; step?: string; idb?: string }
+						| undefined) ?? null
+				);
 			}, createdWindowId);
 			if (marker && typeof marker.ts === "number") {
 				readyVia = "storage";
@@ -392,13 +402,7 @@ export async function mergeWindowsByMovingTab(
 	survivorWindowId: number,
 ): Promise<void> {
 	await removedPanel.evaluate(
-		async ({
-			removed,
-			survivor,
-		}: {
-			removed: number;
-			survivor: number;
-		}) => {
+		async ({ removed, survivor }: { removed: number; survivor: number }) => {
 			const tabs = await chrome.tabs.query({ windowId: removed });
 			const tabId = tabs[0]?.id;
 			if (tabId === undefined) {
@@ -452,6 +456,35 @@ export async function pollPersistedRunningSessions(
 			{ timeout: timeoutMs },
 		)
 		.toBeGreaterThanOrEqual(minCount);
+}
+
+/** Broadcast a window split lifecycle event (drag tab → new window). */
+export async function broadcastWindowSplit(
+	context: BrowserContext,
+	panel: Page,
+	sourceWindowId: number,
+	newWindowId: number,
+): Promise<void> {
+	let serviceWorker = context.serviceWorkers()[0];
+	if (!serviceWorker) {
+		serviceWorker = await context.waitForEvent("serviceworker");
+	}
+	await serviceWorker.evaluate(
+		async ({ source, newWin }: { source: number; newWin: number }) => {
+			const message = {
+				type: "windowLifecycle",
+				kind: "split",
+				sourceWindowId: source,
+				newWindowId: newWin,
+			};
+			chrome.runtime.sendMessage(message);
+			await chrome.storage.session.set({
+				windowLifecycleEvent: { ...message, emittedAt: Date.now() },
+			});
+		},
+		{ source: sourceWindowId, newWin: newWindowId },
+	);
+	await panel.waitForTimeout(500);
 }
 
 /** Broadcast a window close lifecycle event from the service worker. */
@@ -985,4 +1018,197 @@ export function startMockAnthropicServer(options: {
 	const port =
 		typeof address === "object" && address !== null ? address.port : 0;
 	return { url: `http://localhost:${port}`, server, requestBodies };
+}
+
+export interface MockOpenAIServer {
+	url: string;
+	server: ReturnType<typeof createServer>;
+	requestBodies: unknown[];
+}
+
+/**
+ * Minimal OpenAI Chat Completions SSE mock for agent-visibility E2E.
+ * Frames are raw `data: {...}\n\n` (no event: lines).
+ */
+export function startMockOpenAIServer(options: {
+	responses: Array<{ frames: string[]; delays?: number[] }>;
+}): MockOpenAIServer {
+	const requestBodies: unknown[] = [];
+	const server = createServer((req, res) => {
+		if (req.method === "OPTIONS") {
+			res.writeHead(204, {
+				"Access-Control-Allow-Origin": "*",
+				"Access-Control-Allow-Headers":
+					"content-type, authorization, x-api-key",
+				"Access-Control-Allow-Methods": "POST",
+			});
+			res.end();
+			return;
+		}
+		const path = req.url ?? "";
+		const isChat =
+			req.method === "POST" &&
+			(path.includes("/v1/chat/completions") ||
+				path.endsWith("/chat/completions"));
+		if (!isChat) {
+			res.writeHead(404);
+			res.end();
+			return;
+		}
+		let body = "";
+		req.on("data", (chunk) => {
+			body += chunk;
+		});
+		req.on("end", () => {
+			try {
+				requestBodies.push(JSON.parse(body));
+			} catch {
+				requestBodies.push(body);
+			}
+			const response = options.responses[requestBodies.length - 1] ?? {
+				frames: [],
+				delays: [],
+			};
+			res.writeHead(200, {
+				"Content-Type": "text/event-stream",
+				"Cache-Control": "no-cache",
+				"Access-Control-Allow-Origin": "*",
+			});
+			let i = 0;
+			const sendNext = () => {
+				if (i >= response.frames.length) {
+					res.write("data: [DONE]\n\n");
+					res.end();
+					return;
+				}
+				const frame = response.frames[i];
+				const delay = response.delays?.[i] ?? 0;
+				setTimeout(() => {
+					res.write(frame);
+					i++;
+					sendNext();
+				}, delay);
+			};
+			sendNext();
+		});
+	});
+	server.listen(0);
+	const address = server.address();
+	const port =
+		typeof address === "object" && address !== null ? address.port : 0;
+	return { url: `http://localhost:${port}`, server, requestBodies };
+}
+
+export function openAITextFrames(text: string): string[] {
+	return [
+		`data: ${JSON.stringify({
+			id: "chatcmpl-1",
+			object: "chat.completion.chunk",
+			choices: [
+				{ index: 0, delta: { role: "assistant" }, finish_reason: null },
+			],
+		})}\n\n`,
+		`data: ${JSON.stringify({
+			id: "chatcmpl-1",
+			object: "chat.completion.chunk",
+			choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
+		})}\n\n`,
+		`data: ${JSON.stringify({
+			id: "chatcmpl-1",
+			object: "chat.completion.chunk",
+			choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+		})}\n\n`,
+	];
+}
+
+export function openAIToolOnlyRunJsFrames(
+	callId: string,
+	code: string,
+): string[] {
+	const args = JSON.stringify({ code });
+	return [
+		`data: ${JSON.stringify({
+			id: "chatcmpl-tool",
+			object: "chat.completion.chunk",
+			choices: [
+				{
+					index: 0,
+					delta: {
+						role: "assistant",
+						tool_calls: [
+							{
+								index: 0,
+								id: callId,
+								type: "function",
+								function: { name: "run_js", arguments: "" },
+							},
+						],
+					},
+					finish_reason: null,
+				},
+			],
+		})}\n\n`,
+		`data: ${JSON.stringify({
+			id: "chatcmpl-tool",
+			object: "chat.completion.chunk",
+			choices: [
+				{
+					index: 0,
+					delta: {
+						tool_calls: [{ index: 0, function: { arguments: args } }],
+					},
+					finish_reason: null,
+				},
+			],
+		})}\n\n`,
+		`data: ${JSON.stringify({
+			id: "chatcmpl-tool",
+			object: "chat.completion.chunk",
+			choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+		})}\n\n`,
+	];
+}
+
+/** Configure an OpenAI Chat Completions provider pointing at a mock base. */
+export async function configureMockOpenAIProvider(
+	sidePanel: Page,
+	mockUrl: string,
+	apiKey = "test-key",
+): Promise<void> {
+	await focusExtensionPage(sidePanel);
+	await domClickButton(sidePanel, "Settings");
+	await waitForTestId(sidePanel, "settings-list");
+
+	const hasEdit = await evalOnPanel(
+		sidePanel,
+		() => !!document.querySelector('[data-testid^="settings-edit-"]'),
+	);
+	if (hasEdit) {
+		await domClickSelector(sidePanel, '[data-testid^="settings-edit-"]');
+	} else {
+		await domClickTestId(sidePanel, "settings-add-provider");
+		await domClickTestId(sidePanel, "settings-add-openai");
+	}
+
+	await waitForTestId(sidePanel, "settings-edit");
+	await domFillTestId(
+		sidePanel,
+		"settings-baseurl-input",
+		`${mockUrl}/v1/chat/completions`,
+	);
+	await domFillTestId(sidePanel, "settings-apikey-input", apiKey);
+	// Ensure a model is selected if empty.
+	await sidePanel.evaluate(() => {
+		const sel = document.querySelector(
+			'[data-testid="settings-default-model-select"]',
+		) as HTMLSelectElement | null;
+		if (!sel || sel.options.length === 0) return;
+		if (!sel.value && sel.options[0]) {
+			sel.value = sel.options[0].value;
+			sel.dispatchEvent(new Event("change", { bubbles: true }));
+		}
+	});
+	await domClickTestId(sidePanel, "settings-done-button");
+	await domClickButton(sidePanel, "Chat");
+	await waitForTestId(sidePanel, "task-input");
 }
