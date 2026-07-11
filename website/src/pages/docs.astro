@@ -4,22 +4,36 @@ import { SITE } from "../site";
 ---
 
 <Base
-  title="Docs"
-  description="How Browsergent works: the agent loop, the run_js tool, page.* command protocol, configuration, and limits."
+  title="Docs — how the AI browser agent works"
+  description="Browsergent documentation: agent loop, run_js tool, page.* command protocol, BYOK configuration, skills, limits, and safety for the Chrome AI agent."
+  breadcrumbs={[{ name: "Docs", href: "/docs/" }]}
 >
   <article class="container container-prose prose">
     <header class="doc-head">
       <p class="eyebrow">Documentation</p>
       <h1>How Browsergent works</h1>
       <p class="lead">
-        Browsergent is an AI agent for the browser. You give it a task in plain
+        Browsergent is an AI browser agent for Chrome. You give it a task in plain
         English; it reasons with an LLM, generates JavaScript, runs that JS in a
         sandboxed runtime, observes the result, and iterates until the task is
         done.
       </p>
     </header>
 
-    <section>
+    <nav class="toc" aria-label="On this page">
+      <strong>On this page</strong>
+      <ol>
+        <li><a href="#core-principle">Core principle</a></li>
+        <li><a href="#agent-loop">Agent loop</a></li>
+        <li><a href="#command-protocol">Command protocol</a></li>
+        <li><a href="#configuration">Configuration</a></li>
+        <li><a href="#skills">Skills &amp; files</a></li>
+        <li><a href="#limitations">Limitations</a></li>
+        <li><a href="#safety">Safety</a></li>
+      </ol>
+    </nav>
+
+    <section id="core-principle">
       <h2>The core principle</h2>
       <p>
         <strong>LLM does reasoning, JS does acting.</strong> The model&rsquo;s
@@ -34,9 +48,13 @@ import { SITE } from "../site";
         called over the Anthropic Messages API. Side effects happen only through
         the typed command protocol.
       </p>
+      <p>
+        That separation is the product thesis: an open-source browser agent can
+        stay powerful without giving the model raw <code>chrome.*</code> access.
+      </p>
     </section>
 
-    <section>
+    <section id="agent-loop">
       <h2>The agent loop</h2>
       <ol>
         <li><strong>Observe</strong> — snapshot the active tab into a structured element list (refs, roles, labels).</li>
@@ -45,9 +63,14 @@ import { SITE } from "../site";
         <li><strong>Observe again</strong> — the result feeds back into the next turn.</li>
         <li><strong>Stop</strong> — the model signals completion or you stop the run.</li>
       </ol>
+      <p>
+        If you have used Claude Code, the rhythm will feel familiar: plan, tool
+        call, observation, repeat. Browsergent applies that loop to a live
+        Chrome tab instead of a local filesystem.
+      </p>
     </section>
 
-    <section>
+    <section id="command-protocol">
       <h2>The command protocol</h2>
       <p>
         Every browser action is a typed <code>BrowserCommand</code>. A few
@@ -69,7 +92,7 @@ import { SITE } from "../site";
       </p>
     </section>
 
-    <section>
+    <section id="configuration">
       <h2>Configuration</h2>
       <p>Open <strong>Settings</strong> in the side panel and provide:</p>
       <table>
@@ -87,9 +110,14 @@ import { SITE } from "../site";
         Messages API. Your key stays in the browser &mdash; it&rsquo;s only ever
         sent to the base URL you configure.
       </p>
+      <p>
+        Prefer the <a href="/download/">prebuilt Chrome extension zip</a> if you
+        just want to try the agent. Build from source when you want to inspect or
+        modify the runtime.
+      </p>
     </section>
 
-    <section>
+    <section id="skills">
       <h2>Skills &amp; files</h2>
       <ul>
         <li><code>/skill:&lt;name&gt;</code> activates a reusable skill at compose time &mdash; its instructions are folded into the prompt.</li>
@@ -98,7 +126,7 @@ import { SITE } from "../site";
       </ul>
     </section>
 
-    <section>
+    <section id="limitations">
       <h2>Known limitations</h2>
       <ul>
         <li><strong>Chrome only.</strong> MV3 side panel + content scripts; not ported to Firefox/Safari.</li>
@@ -111,15 +139,18 @@ import { SITE } from "../site";
       </ul>
     </section>
 
-    <section>
+    <section id="safety">
       <h2>Experimental &amp; safety</h2>
       <p>
-        Browsergent is <strong>v0.1 experimental</strong>. Its current
+        Browsergent is <strong>experimental</strong>. Its current
         philosophy is to expose everything the Chrome extension can access so we
         can learn the boundary of browser-agent capability. It may read page
         content, cookies, auth headers, and request/response metadata. Always
         review its actions and avoid using it on accounts where that level of
         access is unacceptable.
+      </p>
+      <p>
+        More context: <a href="/faq/">FAQ</a> · <a href="/use-cases/">use cases</a>.
       </p>
     </section>
 
@@ -129,7 +160,7 @@ import { SITE } from "../site";
         <li><a href={SITE.repo}>Source on GitHub</a></li>
         <li><a href={`${SITE.repo}/blob/main/docs/ARCHITECTURE.md`}>Architecture (docs/ARCHITECTURE.md)</a></li>
         <li><a href={`${SITE.repo}/blob/main/AGENTS.md`}>Contributor conventions (AGENTS.md)</a></li>
-        <li><a href="/download">Download the latest release →</a></li>
+        <li><a href="/download/">Download the latest release →</a></li>
       </ul>
     </section>
   </article>
@@ -139,4 +170,14 @@ import { SITE } from "../site";
   .doc-head { margin: 3.5rem 0 2.5rem; }
   .doc-head h1 { margin-bottom: 0.75rem; }
   .prose section { margin-top: 2.5rem; }
+  .toc {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+  .toc strong { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; }
+  .toc ol { margin: 0; padding-left: 1.2rem; }
+  .toc li { margin-bottom: 0.25rem; }
 </style>

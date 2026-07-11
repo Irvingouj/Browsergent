@@ -5,16 +5,19 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Rust → WASM](https://img.shields.io/badge/Rust-WASM-CE422B?logo=rust&logoColor=white)](https://rustwasm.github.io/)
 [![Status: Experimental](https://img.shields.io/badge/Status-Experimental-orange)](#status)
+[![Website](https://img.shields.io/badge/website-browsergent.com-2b6cb0)](https://browsergent.com)
 
-**Claude Code for the browser** — an AI agent that lives in a Chrome side panel, sees web pages, and acts on them autonomously.
+**AI browser agent for Chrome** — Claude Code for the browser. An open-source agent that lives in a Chrome side panel, sees web pages, and acts on them autonomously.
 
-<video src="http://browsergent.com/demo.mp4" width="100%" controls muted playsinline></video>
+**Site:** [browsergent.com](https://browsergent.com) · [Download](https://browsergent.com/download/) · [Docs](https://browsergent.com/docs/) · [Use cases](https://browsergent.com/use-cases/) · [FAQ](https://browsergent.com/faq/)
+
+<video src="https://browsergent.com/demo.mp4" width="100%" controls muted playsinline poster="https://browsergent.com/demo-poster.jpg"></video>
 
 > A 30-second demo: type a task, watch the agent reason, act, and recover.
 
-> ⚠️ **Experimental (v0.1).** Browsergent is an exploratory project. Its current philosophy is to expose everything the Chrome extension can access to the agent so we can learn the boundary of browser-agent capability. The agent may be able to read page content, cookies, auth headers, request/response metadata, and other browser-accessible data. Always review its actions and avoid using it on accounts or pages where that level of access is unacceptable. Security controls will be introduced later as the capability boundary becomes clearer.
+> ⚠️ **Experimental.** Browsergent is an exploratory project. Its current philosophy is to expose everything the Chrome extension can access to the agent so we can learn the boundary of browser-agent capability. The agent may be able to read page content, cookies, auth headers, request/response metadata, and other browser-accessible data. Always review its actions and avoid using it on accounts or pages where that level of access is unacceptable. Security controls will be introduced later as the capability boundary becomes clearer.
 
-Type a task in plain English. The agent reasons with an LLM, generates JavaScript, runs it against the current page, observes the result, and iterates until the task is done — just like Claude Code, but for browser automation.
+Type a task in plain English. The agent reasons with an LLM, generates JavaScript, runs it against the current page, observes the result, and iterates until the task is done — just like Claude Code, but for browser automation. Bring your own Anthropic-compatible API key (BYOK). No remote browser farm: it drives your real Chrome tab through a sandboxed `run_js` → `page.*` protocol.
 
 ---
 
@@ -53,6 +56,12 @@ The side panel is the extension's own page — it is never the target of `page.*
 ---
 
 ## Quick Start
+
+**Easiest:** download the prebuilt Chrome extension zip from
+[browsergent.com/download](https://browsergent.com/download/), unzip it, then
+**Load unpacked** in `chrome://extensions` with Developer mode on.
+
+**From source:**
 
 ```bash
 git clone https://github.com/Irvingouj/Browsergent.git
@@ -99,12 +108,37 @@ Your API key stays in the browser — never sent anywhere except the base URL yo
 
 ## Status
 
-Browsergent is **experimental (v0.1)** and under active development. It works well on forms, search, reading, and multi-step navigation, but it is not a production automation tool:
+Browsergent is **experimental** and under active development. It works well on forms, search, reading, and multi-step navigation, but it is not a production automation tool:
 
 - It can misread dynamic UI (SPAs, shadow DOM, canvas).
 - Actions are not transactional — a failed mid-flow click can leave the page in a partial state.
 - There is no built-in spend limit; the agent will keep calling the model until the task ends or you stop it.
 - Snapshot refIds (`eNNN`) are single-use within an observation; reusing a stale refId is the most common failure mode.
+
+---
+
+## Website
+
+The marketing site is a static Astro app in [`website/`](./website/), deployed to GitHub Pages at [browsergent.com](https://browsergent.com).
+
+```bash
+cd website
+npm install
+npm run dev      # local preview
+npm run build    # output → website/dist
+```
+
+Useful public URLs:
+
+| URL | Purpose |
+|-----|---------|
+| https://browsergent.com/ | Product homepage |
+| https://browsergent.com/download/ | Prebuilt extension zip |
+| https://browsergent.com/docs/ | Architecture & setup docs |
+| https://browsergent.com/use-cases/ | Practical automation scenarios |
+| https://browsergent.com/faq/ | FAQ |
+| https://browsergent.com/llms.txt | AI/search citation brief |
+| https://browsergent.com/sitemap-index.xml | Sitemap |
 
 ---
 

@@ -1,4 +1,38 @@
+# Browsergent — https://browsergent.com
+# Prefer search + AI citation visibility over training-only blocks.
+
 User-agent: *
+Allow: /
+
+# Explicitly allow major search crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# AI search / answer engines that cite sources (not just train)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Gemini training is separate from Google Search / AI Overviews.
+# Keep Googlebot unrestricted; allow Google-Extended for product discovery.
+User-agent: Google-Extended
 Allow: /
 
 Sitemap: https://browsergent.com/sitemap-index.xml

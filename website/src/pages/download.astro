@@ -4,25 +4,28 @@ import { SITE, DOWNLOADS } from "../site";
 ---
 
 <Base
-  title="Download"
-  description={`Download Browsergent v${SITE.latestVersion} — prebuilt Chrome extension zip or build from source.`}
+  title={`Download v${SITE.latestVersion} — Chrome AI browser agent`}
+  description={`Download Browsergent v${SITE.latestVersion} free for Chrome. Prebuilt open-source AI browser agent zip, or build from source. BYOK, MIT/Apache-2.0.`}
+  breadcrumbs={[{ name: "Download", href: "/download/" }]}
 >
   <section class="section" style="border-top:none; padding-top:4rem">
     <div class="container container-prose">
       <p class="eyebrow">Download</p>
-      <h1>Get Browsergent.</h1>
+      <h1>Download Browsergent for Chrome</h1>
       <p class="lead">
-        Latest release: <span class="badge">v{SITE.latestVersion}</span> ·
-        Chrome MV3 · MIT / Apache-2.0
+        Get the open-source <strong>AI browser agent</strong> as a prebuilt
+        Chrome MV3 extension.
+        <span class="badge">v{SITE.latestVersion}</span>
+        · MIT / Apache-2.0 · BYOK
       </p>
 
       <div class="grid" style="margin-top:2.5rem">
         <div class="card option">
-          <h3>Prebuilt .zip <span class="muted">— recommended</span></h3>
+          <h2 class="card-title">Prebuilt .zip <span class="muted">— recommended</span></h2>
           <p class="muted">
             Unzip, then <strong>Load unpacked</strong> the folder in
             <code>chrome://extensions</code> with Developer mode on. Easiest
-            path; you can read every file.
+            path; you can read every file before it runs.
           </p>
           <a class="btn btn-primary" href={DOWNLOADS.latestZip} download>
             Download .zip ↓
@@ -44,6 +47,10 @@ import { SITE, DOWNLOADS } from "../site";
           <li>Click <strong>Load unpacked</strong> and select the unzipped folder.</li>
           <li>Open the Browsergent side panel and add your API key in <strong>Settings</strong>.</li>
         </ol>
+        <p class="muted">
+          Need model/provider details? See
+          <a href="/docs/#configuration">configuration in the docs</a>.
+        </p>
       </section>
 
       <section>
@@ -54,21 +61,34 @@ npm install
 npm run build
 # then Load unpacked → dist/`}</code></pre>
         <p class="muted">
-          See the <a href="/docs">docs</a> for configuration and the
+          See the <a href="/docs/">docs</a> for configuration and the
           <a href={`${SITE.repo}/blob/main/docs/ARCHITECTURE.md`}>architecture
-          guide</a> for how it works inside.
+          guide</a> for how the agent runtime works inside.
         </p>
+      </section>
+
+      <section>
+        <h2>System requirements</h2>
+        <ul>
+          <li>Google Chrome with Manifest V3 extension support</li>
+          <li>An Anthropic Messages–compatible API key (Anthropic, DeepSeek, GLM, …)</li>
+          <li>Permission to load unpacked extensions (Developer mode)</li>
+        </ul>
       </section>
 
       <section>
         <h2>Before you run it</h2>
         <p class="muted">
-          Browsergent is <strong>experimental (v0.1)</strong>. It exposes
+          Browsergent is <strong>experimental</strong>. It exposes
           everything the extension can access to the agent &mdash; page content,
           cookies, auth headers &mdash; so we can learn the capability boundary.
           Always review its actions and avoid running it on accounts where that
           access is unacceptable. There is no built-in spend limit; the agent
           will keep calling the model until the task ends or you stop it.
+        </p>
+        <p class="muted">
+          Questions? Read the <a href="/faq/">FAQ</a> or browse
+          <a href="/use-cases/">use cases</a>.
         </p>
       </section>
     </div>
@@ -78,8 +98,12 @@ npm run build
 <style>
   .option { display: flex; flex-direction: column; gap: 0.5rem; }
   .option .btn { align-self: flex-start; margin-top: 0.5rem; }
+  .card-title {
+    font-size: 1.2rem;
+    margin: 0;
+  }
   .muted { color: var(--fg-muted); }
   .fallback { margin-top: 1.5rem; font-size: 0.9rem; }
   .lead { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-  .prose section { margin-top: 2.5rem; }
+  .prose section, .container-prose section { margin-top: 2.5rem; }
 </style>

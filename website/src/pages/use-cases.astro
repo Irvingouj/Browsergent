@@ -1,0 +1,130 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../site";
+
+const cases = [
+  {
+    title: "Multi-step form filling",
+    problem:
+      "Sign-up flows, vendor portals, and admin consoles change markup often enough to break brittle selector scripts.",
+    approach:
+      "Describe the outcome (“create a project named X and invite Y”). The agent re-snapshots between steps and recovers from stale refs.",
+    keywords: "AI form filling, browser agent workflows",
+  },
+  {
+    title: "Authenticated SaaS ops",
+    problem:
+      "Internal tools rarely expose complete APIs, and cloud browser farms struggle with corporate SSO cookies.",
+    approach:
+      "Run Browsergent on the Chrome profile where you are already logged in. The agent acts in-context without exporting session state to a third-party farm.",
+    keywords: "authenticated browser automation, Chrome side panel agent",
+  },
+  {
+    title: "Research across many pages",
+    problem:
+      "Competitive research and docs spelunking means reading, clicking, and compiling notes across a trail of URLs.",
+    approach:
+      "Give a research goal. The agent navigates, reads snapshots, and can work with attached session files for notes you want to keep.",
+    keywords: "AI web research agent, page extraction",
+  },
+  {
+    title: "QA smoke paths on real UI",
+    problem:
+      "Critical product paths regress visually or interaction-wise even when unit tests stay green.",
+    approach:
+      "Ask the agent to walk a checklist (“open billing, change plan, confirm modal”) and report failures with the same UI a user sees.",
+    keywords: "AI QA agent, exploratory testing Chrome",
+  },
+  {
+    title: "Data cleanup in admin UIs",
+    problem:
+      "One-off cleanup tasks are too expensive to script and too tedious to do manually at scale.",
+    approach:
+      "Pair plain-English instructions with skills for repeated patterns. Review the run; stop anytime.",
+    keywords: "browser RPA alternative, open source browser agent",
+  },
+  {
+    title: "Prototype agent product ideas",
+    problem:
+      "Teams evaluating “Claude Code for the browser” want a local, inspectable reference before building their own stack.",
+    approach:
+      "Browsergent’s run_js + page.* boundary is a concrete architecture to study, fork, and extend under MIT / Apache-2.0.",
+    keywords: "open source AI browser agent, Claude Code browser",
+  },
+];
+---
+
+<Base
+  title="Use cases — AI browser automation"
+  description="Practical Browsergent use cases: AI form filling, authenticated SaaS ops, web research, QA smoke paths, and open-source browser agent prototyping."
+  breadcrumbs={[{ name: "Use cases", href: "/use-cases/" }]}
+>
+  <article class="container container-prose prose">
+    <header class="doc-head">
+      <p class="eyebrow">Use cases</p>
+      <h1>What to automate with an AI browser agent</h1>
+      <p class="lead">
+        Browsergent is strongest when the UI is real, logged-in, and a bit messy —
+        the situations where fixed Playwright scripts become expensive to maintain.
+      </p>
+    </header>
+
+    <section>
+      <p>
+        These scenarios are a good fit for a <strong>Chrome AI agent</strong>
+        that can see the page and iterate. They are a weaker fit for fully
+        deterministic CI suites that should never freestyle.
+      </p>
+    </section>
+
+    {cases.map((c, i) => (
+      <section class="case" id={`case-${i + 1}`}>
+        <h2>{c.title}</h2>
+        <p><strong>Problem.</strong> {c.problem}</p>
+        <p><strong>How Browsergent helps.</strong> {c.approach}</p>
+        <p class="tags">{c.keywords}</p>
+      </section>
+    ))}
+
+    <section>
+      <h2>When not to use Browsergent</h2>
+      <ul>
+        <li>You need bit-for-bit deterministic CI with no LLM variance.</li>
+        <li>You cannot allow an agent near production credentials yet.</li>
+        <li>You need Firefox/Safari parity today.</li>
+        <li>You want a fully managed cloud browser with vendor SLAs.</li>
+      </ul>
+      <p>
+        For architecture details, read the <a href="/docs/">docs</a>. To try it
+        on your machine, <a href="/download/">download the Chrome extension</a>.
+      </p>
+    </section>
+
+    <section class="cta-inline">
+      <a class="btn btn-primary" href="/download/">Download Browsergent</a>
+      <a class="btn btn-secondary" href="/faq/">Read the FAQ</a>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .doc-head { margin: 3.5rem 0 2.5rem; }
+  .doc-head h1 { margin-bottom: 0.75rem; }
+  .case {
+    padding: 1.5rem 0;
+    border-top: 1px solid var(--border);
+  }
+  .case h2 { font-size: 1.25rem; }
+  .tags {
+    font-size: 0.85rem;
+    color: var(--fg-subtle);
+    margin-bottom: 0;
+  }
+  .cta-inline {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin: 2.5rem 0 1rem;
+  }
+  .prose section { margin-top: 1.5rem; }
+</style>

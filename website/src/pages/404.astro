@@ -1,14 +1,19 @@
 ---
 import Base from "../layouts/Base.astro";
 ---
-<Base title="Not found">
+<Base
+  title="Page not found"
+  description="That Browsergent page doesn’t exist. Head home, read the docs, or download the Chrome AI browser agent."
+  noindex={true}
+>
   <section class="section" style="border-top:none; padding-top:6rem">
     <div class="container center">
       <h1 style="font-size: clamp(3rem, 10vw, 6rem); margin-bottom:0.25rem">404</h1>
       <p class="lead" style="text-align:center">That page doesn&rsquo;t exist.</p>
       <div class="cta-row center" style="margin-top:1.5rem">
         <a class="btn btn-primary" href="/">Back home</a>
-        <a class="btn btn-secondary" href="/docs">Docs</a>
+        <a class="btn btn-secondary" href="/docs/">Docs</a>
+        <a class="btn btn-secondary" href="/download/">Download</a>
       </div>
     </div>
   </section>

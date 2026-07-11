@@ -10,18 +10,21 @@ const year = new Date().getFullYear();
         <div class="brand">
           <span class="mark" aria-hidden="true">◆</span> {SITE.name}
         </div>
-        <p class="muted">{SITE.tagline}. Experimental.</p>
+        <p class="muted">{SITE.tagline}. Open source. Experimental.</p>
+      </div>
+      <div class="col">
+        <h4>Product</h4>
+        <a href="/docs/">Docs</a>
+        <a href="/use-cases/">Use cases</a>
+        <a href="/faq/">FAQ</a>
+        <a href="/download/">Download</a>
       </div>
       <div class="col">
         <h4>Project</h4>
         <a href={SITE.repo}>GitHub</a>
         <a href={SITE.releases}>Releases</a>
         <a href={SITE.issues}>Issues</a>
-      </div>
-      <div class="col">
-        <h4>Site</h4>
-        <a href="/docs">Docs</a>
-        <a href="/download">Download</a>
+        <a href="/llms.txt">llms.txt</a>
       </div>
     </div>
     <div class="legal">

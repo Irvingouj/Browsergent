@@ -1,0 +1,134 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../site";
+
+const faqs: { q: string; a: string }[] = [
+  {
+    q: "What is Browsergent?",
+    a: "Browsergent is an open-source AI browser agent for Google Chrome. It lives in a side panel, observes the active web page, and completes plain-English tasks by generating JavaScript that runs through a sandboxed page.* command protocol.",
+  },
+  {
+    q: "Who is Browsergent for?",
+    a: "Developers, power users, and small teams who want Claude Code–style autonomy inside the browser: form filling, research, QA smoke paths, and authenticated internal tools — without standing up a remote browser farm.",
+  },
+  {
+    q: "How does the AI browser agent work?",
+    a: "You describe a goal. Browsergent snapshots the active tab into structured element refs. An LLM reasons over the task and snapshot, then returns JavaScript via a single tool called run_js. The extension runtime turns that into typed commands such as page.click, page.fill, page.goto, and page.snapshot, then feeds results back until the task ends.",
+  },
+  {
+    q: "How is Browsergent different from Playwright or Selenium?",
+    a: "Playwright and Selenium are scripted automation frameworks: you write selectors and control flow. Browsergent is an LLM agent. You state the outcome; the model chooses steps and recovers from common UI failures. It also runs on your real Chrome tab rather than a separate headless browser process.",
+  },
+  {
+    q: "How is Browsergent different from hosted browser agents?",
+    a: "Hosted products typically run in a vendor cloud browser. Browsergent is a local Chrome MV3 extension. Sessions, cookies, and keys stay under your control. You bring your own model API key; there is no Browsergent-operated model proxy required.",
+  },
+  {
+    q: "Is Browsergent free?",
+    a: "Yes. The project is dual-licensed MIT OR Apache-2.0. Download and use are free. You pay only your LLM provider under a bring-your-own-key (BYOK) model.",
+  },
+  {
+    q: "Which models and providers work?",
+    a: "Browsergent speaks the Anthropic Messages API. Use Anthropic directly, or compatible endpoints such as DeepSeek’s Anthropic-compatible base URL and z.ai / GLM. Configure API key, base URL, and model in the side-panel Settings.",
+  },
+  {
+    q: "Does Browsergent work on Firefox or Safari?",
+    a: "Not today. Browsergent targets Chrome Manifest V3 (side panel + content scripts). Ports to other browsers are not available yet.",
+  },
+  {
+    q: "Where does my API key go?",
+    a: "Your key is stored in the extension and sent only to the base URL you configure. Browsergent does not require a Browsergent cloud account for inference.",
+  },
+  {
+    q: "Can the agent access cookies and logged-in sessions?",
+    a: "Yes — by design it drives your real tab, so it can act inside authenticated pages the same way you can. That is powerful and risky. Review actions carefully and avoid high-stakes accounts while the project is experimental.",
+  },
+  {
+    q: "Is Browsergent safe for production accounts?",
+    a: "Treat it as experimental. The current philosophy exposes a wide capability surface so the project can learn browser-agent limits. Prefer low-risk profiles, watch the run, and stop the agent if it drifts.",
+  },
+  {
+    q: "What is run_js?",
+    a: "run_js is the model’s only browser tool. The LLM does not call chrome.* APIs directly. It writes JavaScript; the @pi-oxide/extension-js runtime executes allowed page.* operations and returns structured results or typed errors.",
+  },
+  {
+    q: "Can I install without building from source?",
+    a: "Yes. Download the prebuilt zip from the Download page, unzip it, enable Developer mode in chrome://extensions, and Load unpacked. You can also build from the GitHub repository if you prefer.",
+  },
+  {
+    q: "Where should I report bugs or request features?",
+    a: `Open an issue on GitHub: ${SITE.issues}`,
+  },
+];
+
+// FAQPage schema remains useful as an entity/AI-citation signal even though
+// Google retired FAQ rich results for most sites (May 2026).
+const faqSchema = {
+  "@type": "FAQPage",
+  "@id": `${SITE.url}/faq/#faqpage`,
+  mainEntity: faqs.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.a,
+    },
+  })),
+};
+---
+
+<Base
+  title="FAQ — AI browser agent for Chrome"
+  description="Answers about Browsergent: what the AI browser agent is, how run_js works, BYOK pricing, Chrome install, privacy, and how it compares to Playwright."
+  breadcrumbs={[{ name: "FAQ", href: "/faq/" }]}
+  schemaExtra={faqSchema}
+>
+  <article class="container container-prose prose">
+    <header class="doc-head">
+      <p class="eyebrow">FAQ</p>
+      <h1>Browsergent FAQ</h1>
+      <p class="lead">
+        Straight answers about the open-source AI browser agent for Chrome —
+        setup, architecture, safety, and how it compares to classic automation.
+      </p>
+    </header>
+
+    <section class="faq-list" aria-label="Frequently asked questions">
+      {faqs.map((item, i) => (
+        <div class="faq-block" id={`q${i + 1}`}>
+          <h2>{item.q}</h2>
+          <p>{item.a}</p>
+        </div>
+      ))}
+    </section>
+
+    <section>
+      <h2>Next steps</h2>
+      <ul>
+        <li><a href="/download/">Download Browsergent for Chrome</a></li>
+        <li><a href="/docs/">Read how the agent loop works</a></li>
+        <li><a href="/use-cases/">See practical use cases</a></li>
+        <li><a href={SITE.repo}>Browse the source on GitHub</a></li>
+      </ul>
+    </section>
+  </article>
+</Base>
+
+<style>
+  .doc-head { margin: 3.5rem 0 2.5rem; }
+  .doc-head h1 { margin-bottom: 0.75rem; }
+  .faq-block {
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .faq-block:first-child { border-top: 1px solid var(--border); }
+  .faq-block h2 {
+    font-size: 1.15rem;
+    margin: 0 0 0.5rem;
+  }
+  .faq-block p {
+    margin: 0;
+    color: var(--fg-muted);
+  }
+  .prose section { margin-top: 2.5rem; }
+</style>

@@ -1,10 +1,14 @@
 ---
 import { SITE, NAV } from "../site";
 
-const path = Astro.url.pathname;
+const path = Astro.url.pathname.replace(/\/$/, "") || "/";
 // Treat "/docs/..." as active under the Docs nav item.
-const isActive = (href: string) =>
-  href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
+const isActive = (href: string) => {
+  const clean = href.replace(/\/$/, "") || "/";
+  return clean === "/"
+    ? path === "/"
+    : path === clean || path.startsWith(`${clean}/`);
+};
 ---
 
 <header class="site-header">
@@ -15,11 +19,11 @@ const isActive = (href: string) =>
     </a>
     <nav aria-label="Primary">
       {NAV.map((item) => (
-        <a href={item.href} class={isActive(item.href) ? "active" : ""}>
+        <a href={item.href === "/" ? "/" : `${item.href.replace(/\/$/, "")}/`} class={isActive(item.href) ? "active" : ""}>
           {item.label}
         </a>
       ))}
-      <a href={SITE.repo} class="ghost">GitHub</a>
+      <a href={SITE.repo} class="ghost" rel="noopener noreferrer">GitHub</a>
     </nav>
   </div>
 </header>
@@ -68,8 +72,9 @@ const isActive = (href: string) =>
     padding: 0.35rem 0.85rem;
   }
   nav a.ghost:hover { background: var(--bg-subtle); }
-  @media (max-width: 640px) {
-    nav { gap: 1rem; }
-    nav a { font-size: 0.88rem; }
+  @media (max-width: 800px) {
+    .bar { height: auto; min-height: 60px; padding: 0.65rem 0; flex-wrap: wrap; gap: 0.5rem 1rem; }
+    nav { gap: 0.65rem 0.9rem; flex-wrap: wrap; justify-content: flex-end; }
+    nav a { font-size: 0.86rem; }
   }
 </style>

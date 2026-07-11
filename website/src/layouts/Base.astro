@@ -2,34 +2,159 @@
 import "../styles/global.css";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import { SITE } from "../site";
+import { SITE, type Breadcrumb } from "../site";
 
 interface Props {
   title?: string;
   description?: string;
   image?: string;
+  /** When true, emit noindex,nofollow (404 and other non-canonical pages). */
+  noindex?: boolean;
+  /** Optional breadcrumbs for UX + BreadcrumbList schema. */
+  breadcrumbs?: Breadcrumb[];
+  /** Optional page-specific JSON-LD nodes merged into @graph. */
+  schemaExtra?: Record<string, unknown> | Record<string, unknown>[];
 }
 
-const { title, description, image } = Astro.props;
-const pageTitle = title ? `${title} · ${SITE.name}` : `${SITE.name} — ${SITE.tagline}`;
+const {
+  title,
+  description,
+  image,
+  noindex = false,
+  breadcrumbs = [],
+  schemaExtra,
+} = Astro.props;
+
+const pageTitle = title
+  ? `${title} · ${SITE.name}`
+  : `${SITE.name} — ${SITE.tagline}`;
 const pageDesc = description ?? SITE.description;
-const pageUrl = new URL(Astro.url.pathname, SITE.url).toString();
-const ogImage = image ?? "/demo-poster.jpg";
+
+// Prefer trailing-slash URLs to match GitHub Pages redirects + sitemap.
+const rawPath = Astro.url.pathname;
+const normalizedPath =
+  rawPath === "/" ? "/" : rawPath.endsWith("/") ? rawPath : `${rawPath}/`;
+const pageUrl = new URL(normalizedPath, SITE.url).toString();
+
+const ogImage = image ?? SITE.ogImage;
 const ogImageUrl = new URL(ogImage, SITE.url).toString();
+const robots = noindex ? "noindex, nofollow" : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+
+const orgId = `${SITE.url}/#organization`;
+const websiteId = `${SITE.url}/#website`;
+const appId = `${SITE.url}/#software`;
+const webpageId = `${pageUrl}#webpage`;
+
+const organization = {
+  "@type": "Organization",
+  "@id": orgId,
+  name: SITE.name,
+  url: SITE.url,
+  logo: {
+    "@type": "ImageObject",
+    url: new URL("/favicon.svg", SITE.url).toString(),
+  },
+  sameAs: [...SITE.sameAs],
+};
+
+const website = {
+  "@type": "WebSite",
+  "@id": websiteId,
+  name: SITE.name,
+  url: SITE.url,
+  description: SITE.description,
+  publisher: { "@id": orgId },
+  inLanguage: "en",
+};
+
+const software = {
+  "@type": "SoftwareApplication",
+  "@id": appId,
+  name: SITE.name,
+  description: SITE.longDescription,
+  applicationCategory: "BrowserApplication",
+  applicationSubCategory: "Browser extension",
+  operatingSystem: "Chrome",
+  url: SITE.url,
+  downloadUrl: `${SITE.url}/download/`,
+  installUrl: `${SITE.url}/download/`,
+  softwareVersion: SITE.latestVersion,
+  softwareHelp: `${SITE.url}/docs/`,
+  isAccessibleForFree: true,
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
+    availability: "https://schema.org/InStock",
+  },
+  author: { "@id": orgId },
+  publisher: { "@id": orgId },
+  license: "https://opensource.org/licenses/MIT",
+  codeRepository: SITE.repo,
+  featureList: [
+    "Plain-English browser tasks",
+    "Page snapshot observation",
+    "run_js tool with typed page.* commands",
+    "Bring your own API key (Anthropic-compatible)",
+    "Skills and session files",
+    "Fully local Chrome extension (no remote browser farm)",
+  ],
+  screenshot: new URL("/demo-poster.jpg", SITE.url).toString(),
+  image: ogImageUrl,
+};
+
+const webpage = {
+  "@type": "WebPage",
+  "@id": webpageId,
+  url: pageUrl,
+  name: pageTitle,
+  description: pageDesc,
+  isPartOf: { "@id": websiteId },
+  about: { "@id": appId },
+  primaryImageOfPage: {
+    "@type": "ImageObject",
+    url: ogImageUrl,
+    width: SITE.ogImageWidth,
+    height: SITE.ogImageHeight,
+  },
+  inLanguage: "en",
+};
+
+const graph: Record<string, unknown>[] = [
+  organization,
+  website,
+  software,
+  webpage,
+];
+
+if (breadcrumbs.length > 0) {
+  const items = [
+    { name: "Home", href: "/" },
+    ...breadcrumbs,
+  ];
+  graph.push({
+    "@type": "BreadcrumbList",
+    "@id": `${pageUrl}#breadcrumb`,
+    itemListElement: items.map((crumb, i) => {
+      const path = crumb.href === "/" ? "/" : crumb.href.endsWith("/") ? crumb.href : `${crumb.href}/`;
+      return {
+        "@type": "ListItem",
+        position: i + 1,
+        name: crumb.name,
+        item: new URL(path, SITE.url).toString(),
+      };
+    }),
+  });
+}
+
+if (schemaExtra) {
+  const extras = Array.isArray(schemaExtra) ? schemaExtra : [schemaExtra];
+  graph.push(...extras);
+}
 
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: SITE.name,
-  description: SITE.description,
-  applicationCategory: "BrowserExtension",
-  operatingSystem: "Chrome",
-  url: SITE.url,
-  downloadUrl: `${SITE.url}/download`,
-  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-  author: { "@type": "Organization", name: SITE.name, url: SITE.url },
-  version: SITE.latestVersion,
-  license: "https://opensource.org/licenses/MIT",
+  "@graph": graph,
 };
 ---
 
@@ -40,31 +165,62 @@ const jsonLd = {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     <meta name="description" content={pageDesc} />
+    <meta name="keywords" content={SITE.keywords.join(", ")} />
+    <meta name="author" content={SITE.name} />
+    <meta name="robots" content={robots} />
+    <meta name="googlebot" content={robots} />
+    <meta name="theme-color" content="#2b6cb0" />
+    <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href={pageUrl} />
+    {/* 404 / noindex pages should not advertise a self-canonical dead URL */}
+    {!noindex && <link rel="canonical" href={pageUrl} />}
+    <link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
+    <link rel="alternate" type="text/plain" title="llms.txt" href="/llms.txt" />
 
+    <!-- Open Graph -->
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={pageDesc} />
     <meta property="og:url" content={pageUrl} />
     <meta property="og:type" content="website" />
     <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:width" content={String(SITE.ogImageWidth)} />
+    <meta property="og:image:height" content={String(SITE.ogImageHeight)} />
+    <meta property="og:image:alt" content={`${SITE.name} — ${SITE.tagline}`} />
     <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:locale" content={SITE.locale} />
 
+    <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={pageDesc} />
     <meta name="twitter:image" content={ogImageUrl} />
-
-    <meta name="theme-color" content="#2b6cb0" />
-    <meta name="robots" content="index, follow" />
+    <meta name="twitter:image:alt" content={`${SITE.name} — ${SITE.tagline}`} />
 
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <Header />
-    <main>
+    <main id="main">
       <slot />
     </main>
     <Footer />
   </body>
 </html>
+
+<style is:global>
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    background: var(--accent);
+    color: #fff;
+    padding: 0.6rem 1rem;
+    border-radius: 0 0 6px 0;
+    font-weight: 600;
+  }
+  .skip-link:focus {
+    left: 0;
+  }
+</style>

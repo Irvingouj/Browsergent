@@ -3,33 +3,110 @@ import Base from "../layouts/Base.astro";
 import { SITE } from "../site";
 
 const steps = [
-  { n: "01", label: "You describe the task" },
-  { n: "02", label: "Agent generates JS" },
-  { n: "03", label: "Runtime runs page.*" },
-  { n: "04", label: "Observes & iterates" },
+  { n: "01", label: "You describe the task", detail: "Plain English in the Chrome side panel." },
+  { n: "02", label: "Agent generates JS", detail: "The LLM’s only browser tool is run_js." },
+  { n: "03", label: "Runtime runs page.*", detail: "Typed click, fill, goto, snapshot commands." },
+  { n: "04", label: "Observes & iterates", detail: "Results and errors feed the next turn." },
 ];
 
 const features = [
-  "Plain-English tasks",
-  "Sees the page",
-  "Acts via run_js",
-  "Bring your own key",
-  "Skill-aware",
-  "Fully traceable",
+  {
+    title: "Plain-English tasks",
+    body: "Describe the outcome you want — fill a form, scrape a table, walk a multi-step flow — without writing selectors by hand.",
+  },
+  {
+    title: "Sees the page",
+    body: "Structured snapshots expose refs, roles, and labels so the model can ground actions in the live DOM.",
+  },
+  {
+    title: "Acts via run_js",
+    body: "The model never touches Chrome APIs directly. JavaScript runs in a sandbox that only emits typed page.* commands.",
+  },
+  {
+    title: "Bring your own key",
+    body: "Use Anthropic, DeepSeek, GLM, or any Anthropic Messages–compatible endpoint. Your key stays in the browser.",
+  },
+  {
+    title: "Skill-aware",
+    body: "Activate reusable skills and attach session files so repeated workflows stay consistent across runs.",
+  },
+  {
+    title: "Fully local Chrome",
+    body: "No remote browser farm. Browsergent drives the tab you already have open — cookies, login, and all.",
+  },
 ];
+
+const useCases = [
+  {
+    title: "Form filling & multi-step flows",
+    body: "Walk sign-up, checkout, or admin wizards that break brittle scripts when the UI shifts.",
+  },
+  {
+    title: "Research & extraction",
+    body: "Read pages, follow links, and pull structured facts from sites that don’t offer clean APIs.",
+  },
+  {
+    title: "QA smoke checks",
+    body: "Have the agent click through critical paths and report what broke — on your real browser profile.",
+  },
+  {
+    title: "Internal tools & dashboards",
+    body: "Automate ops work inside authenticated SaaS UIs where traditional RPA is too rigid.",
+  },
+];
+
+const faqs = [
+  {
+    q: "What is Browsergent?",
+    a: "Browsergent is an open-source AI browser agent for Chrome. It lives in a side panel, reads the active page, and acts on it by generating JavaScript that runs through a sandboxed page.* command protocol.",
+  },
+  {
+    q: "How is it different from Playwright or Selenium?",
+    a: "Playwright and Selenium are scripted automation frameworks. Browsergent is an LLM agent: you describe the goal, it decides the steps, recovers from errors, and works on your real logged-in Chrome tab instead of a headless farm.",
+  },
+  {
+    q: "Does Browsergent send my browsing data to a cloud?",
+    a: "The extension runs locally. Model calls go only to the API base URL you configure (for example Anthropic). There is no Browsergent cloud that brokers your session.",
+  },
+  {
+    q: "Is Browsergent free?",
+    a: "Yes — MIT OR Apache-2.0. You pay only for the LLM provider key you bring (BYOK).",
+  },
+];
+
+const videoSchema = {
+  "@type": "VideoObject",
+  "@id": `${SITE.url}/#demo-video`,
+  name: "Browsergent demo — AI browser agent for Chrome",
+  description:
+    "30-second demo of Browsergent: type a plain-English task in the Chrome side panel and watch the AI agent reason, act on the page, and iterate.",
+  thumbnailUrl: new URL("/demo-poster.jpg", SITE.url).toString(),
+  contentUrl: new URL("/demo.mp4", SITE.url).toString(),
+  embedUrl: SITE.url,
+  uploadDate: "2026-07-01",
+  encodingFormat: "video/mp4",
+  isFamilyFriendly: true,
+};
 ---
 
-<Base>
+<Base
+  title={undefined}
+  description={SITE.description}
+  schemaExtra={videoSchema}
+>
   <section class="hero">
     <div class="container">
-      <p class="eyebrow">Experimental · v{SITE.latestVersion}</p>
-      <h1>Claude Code for the browser.</h1>
-      <p class="sub">An AI agent that lives in your side panel.</p>
+      <p class="eyebrow">Open source · Experimental · v{SITE.latestVersion}</p>
+      <h1>AI browser agent for Chrome</h1>
+      <p class="sub">
+        Browsergent is Claude Code for the browser — an agent in your side panel
+        that sees the page, writes JavaScript, and acts until the task is done.
+      </p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="/download">Download for Chrome →</a>
+        <a class="btn btn-primary" href="/download/">Download for Chrome →</a>
         <a class="btn btn-secondary" href={SITE.repo}>View on GitHub</a>
       </div>
-      <p class="fineprint">BYOK · Anthropic-compatible · Chrome MV3</p>
+      <p class="fineprint">BYOK · Anthropic-compatible · Chrome MV3 · MIT / Apache-2.0</p>
 
       <figure class="demo">
         <video
@@ -40,45 +117,175 @@ const features = [
           loop
           playsinline
           preload="metadata"
+          title="Browsergent demo: AI browser agent completing a task in Chrome"
+          aria-label="Browsergent product demo video"
         ></video>
-        <figcaption>30-second demo — type a task, watch it work.</figcaption>
+        <figcaption>
+          30-second demo — type a task, watch the agent work on a real Chrome tab.
+        </figcaption>
       </figure>
     </div>
   </section>
 
-  <section class="band">
+  <section class="band intro" aria-labelledby="what-heading">
+    <div class="container container-prose">
+      <h2 id="what-heading">What is an AI browser agent?</h2>
+      <p>
+        An <strong>AI browser agent</strong> uses a large language model to
+        operate a web browser the way a person would: read the page, choose the
+        next action, click, type, navigate, and recover when something fails.
+        Browsergent is a <strong>Chrome extension AI agent</strong> built for
+        that loop — not a hosted RPA cloud and not a headless script runner.
+      </p>
+      <p>
+        You keep using your normal Chrome profile. The agent runs in the side
+        panel, observes the active tab, and drives it with a single tool:
+        <code>run_js</code>. That design keeps model reasoning separate from
+        browser side effects, so every action stays typed, inspectable, and
+        local.
+      </p>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="how-heading">
     <div class="container split">
       <div class="col">
-        <h2>LLM reasons.<br />JavaScript acts.</h2>
+        <h2 id="how-heading">LLM reasons.<br />JavaScript acts.</h2>
         <ol class="steps">
           {steps.map((s) => (
-            <li><span class="n">{s.n}</span> {s.label}</li>
+            <li>
+              <span class="n">{s.n}</span>
+              <span class="step-body">
+                <strong>{s.label}</strong>
+                <span class="step-detail">{s.detail}</span>
+              </span>
+            </li>
           ))}
         </ol>
       </div>
       <div class="col">
-        <h2>What it does.</h2>
-        <ul class="chips">
-          {features.map((f) => (<li>{f}</li>))}
+        <h2>Built for real tabs</h2>
+        <p class="col-lead">
+          Unlike remote browser farms, Browsergent operates on the page you
+          already have open — including authenticated sessions — through a
+          sandboxed <code>page.*</code> protocol.
+        </p>
+        <ul class="link-list">
+          <li><a href="/docs/">How the agent loop works →</a></li>
+          <li><a href="/use-cases/">Browse practical use cases →</a></li>
+          <li><a href="/download/">Install the Chrome extension →</a></li>
         </ul>
       </div>
     </div>
   </section>
 
+  <section class="band features" aria-labelledby="features-heading">
+    <div class="container">
+      <h2 id="features-heading">Why teams try Browsergent</h2>
+      <div class="grid grid-3">
+        {features.map((f) => (
+          <article class="card">
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="usecases-heading">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="usecases-heading">What people automate</h2>
+        <a class="section-more" href="/use-cases/">All use cases →</a>
+      </div>
+      <div class="grid grid-2">
+        {useCases.map((u) => (
+          <article class="card">
+            <h3>{u.title}</h3>
+            <p>{u.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="band compare" aria-labelledby="compare-heading">
+    <div class="container container-prose">
+      <h2 id="compare-heading">Browsergent vs classic automation</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Approach</th>
+            <th>You write</th>
+            <th>Runs on</th>
+            <th>Best for</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Browsergent</strong></td>
+            <td>Plain-English goals</td>
+            <td>Your Chrome tab</td>
+            <td>Changing UIs, exploratory flows, logged-in work</td>
+          </tr>
+          <tr>
+            <td>Playwright / Selenium</td>
+            <td>Selectors & scripts</td>
+            <td>Headless / remote browsers</td>
+            <td>Stable CI, deterministic test suites</td>
+          </tr>
+          <tr>
+            <td>Hosted browser agents</td>
+            <td>Prompts + cloud config</td>
+            <td>Vendor browser farm</td>
+            <td>Teams that want managed infra</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted-note">
+        Browsergent is the right fit when you want <strong>open-source browser
+        automation with an LLM in the loop</strong>, local control, and a BYOK
+        model — not when you need a sealed enterprise RPA platform.
+      </p>
+    </div>
+  </section>
+
+  <section class="band faq" aria-labelledby="faq-heading">
+    <div class="container container-prose">
+      <div class="section-head">
+        <h2 id="faq-heading">Quick answers</h2>
+        <a class="section-more" href="/faq/">Full FAQ →</a>
+      </div>
+      {faqs.map((item) => (
+        <details class="faq-item">
+          <summary>{item.q}</summary>
+          <p>{item.a}</p>
+        </details>
+      ))}
+    </div>
+  </section>
+
   <section class="quick">
     <div class="container">
+      <h2 class="sr-only">Build from source</h2>
       <pre><code>{`git clone ${SITE.repo}.git
 cd Browsergent && npm install && npm run build`}</code></pre>
-      <p class="hint">Then load <code>dist/</code> in <code>chrome://extensions</code> with Developer mode on.</p>
+      <p class="hint">
+        Then load <code>dist/</code> in <code>chrome://extensions</code> with
+        Developer mode on — or grab the
+        <a href="/download/">prebuilt zip</a>.
+      </p>
     </div>
   </section>
 
   <section class="cta">
     <div class="container">
-      <h2>Try Browsergent.</h2>
+      <h2>Try the AI browser agent.</h2>
+      <p class="cta-sub">Free, open source, and ready for Chrome in a few minutes.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="/download">Get the extension</a>
-        <a class="btn btn-secondary" href="/docs">Read the docs</a>
+        <a class="btn btn-primary" href="/download/">Get the extension</a>
+        <a class="btn btn-secondary" href="/docs/">Read the docs</a>
       </div>
     </div>
   </section>
@@ -90,8 +297,13 @@ cd Browsergent && npm install && npm run build`}</code></pre>
     text-align: center;
   }
   .hero .container { display: flex; flex-direction: column; align-items: center; }
-  .hero h1 { max-width: 16ch; margin-bottom: 0.5rem; }
-  .sub { font-size: 1.15rem; color: var(--fg-muted); margin-bottom: 1.5rem; }
+  .hero h1 { max-width: 18ch; margin-bottom: 0.5rem; }
+  .sub {
+    font-size: 1.15rem;
+    color: var(--fg-muted);
+    margin-bottom: 1.5rem;
+    max-width: 46ch;
+  }
   .cta-row {
     display: flex;
     gap: 0.75rem;
@@ -120,12 +332,31 @@ cd Browsergent && npm install && npm run build`}</code></pre>
   }
 
   .band { padding: 3rem 0; border-top: 1px solid var(--border); }
+  .intro p { color: var(--fg); }
   .split { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
   @media (max-width: 720px) { .split { grid-template-columns: 1fr; gap: 2rem; } }
   .band h2 { font-size: 1.35rem; margin-bottom: 1rem; }
+  .features h2, .section-head h2 { font-size: clamp(1.5rem, 3vw, 1.9rem); }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+  .section-head h2 { margin-bottom: 0; }
+  .section-more {
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .col-lead { color: var(--fg-muted); margin-bottom: 1rem; }
   .steps { list-style: none; padding: 0; margin: 0; }
   .steps li {
-    padding: 0.55rem 0;
+    display: flex;
+    align-items: flex-start;
+    padding: 0.7rem 0;
     border-bottom: 1px solid var(--border);
     color: var(--fg);
     font-size: 0.98rem;
@@ -137,17 +368,46 @@ cd Browsergent && npm install && npm run build`}</code></pre>
     font-weight: 700;
     margin-right: 0.75rem;
     font-size: 0.85rem;
+    line-height: 1.6;
   }
-  .chips { list-style: none; padding: 0; margin: 0; }
-  .chips li {
-    display: inline-block;
-    margin: 0 0.4rem 0.5rem 0;
-    padding: 0.4rem 0.85rem;
-    background: var(--bg-subtle);
+  .step-body { display: flex; flex-direction: column; gap: 0.15rem; }
+  .step-detail { color: var(--fg-muted); font-size: 0.9rem; }
+  .link-list { list-style: none; padding: 0; margin: 0; }
+  .link-list li { margin-bottom: 0.55rem; }
+
+  .features .card p,
+  .band .card p { color: var(--fg-muted); margin: 0; }
+
+  .compare table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+  }
+  .compare th, .compare td {
+    text-align: left;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .compare th { background: var(--bg-subtle); font-weight: 600; }
+  .muted-note { color: var(--fg-muted); font-size: 0.95rem; }
+
+  .faq-item {
     border: 1px solid var(--border);
-    border-radius: 999px;
-    font-size: 0.9rem;
+    border-radius: var(--radius-sm);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.65rem;
+    background: var(--bg);
+  }
+  .faq-item summary {
+    cursor: pointer;
+    font-weight: 600;
     color: var(--fg);
+  }
+  .faq-item p {
+    margin: 0.65rem 0 0;
+    color: var(--fg-muted);
   }
 
   .quick { padding: 2.5rem 0; border-top: 1px solid var(--border); }
@@ -160,5 +420,18 @@ cd Browsergent && npm install && npm run build`}</code></pre>
     background: var(--bg-subtle);
     border-top: 1px solid var(--border);
   }
-  .cta h2 { margin-bottom: 1.25rem; }
+  .cta h2 { margin-bottom: 0.5rem; }
+  .cta-sub { color: var(--fg-muted); margin-bottom: 1.25rem; }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 </style>
