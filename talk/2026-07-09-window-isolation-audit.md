@@ -1,5 +1,7 @@
 # Window isolation process — status audit
 
+> **⚠️ Superseded (2026-07-10)** for gate/E2E status. Use [`2026-07-10-e2e-green-and-status.md`](./2026-07-10-e2e-green-and-status.md) and [`2026-07-10-split-window-audit.md`](./2026-07-10-split-window-audit.md). This file is kept as historical context only.
+
 **Date:** 2026-07-09  
 **Purpose:** Stop and inventory — what is done vs not, without continuing implementation.  
 **North star:** `WINDOW_ISOLATION_REFACTOR.md` (B1–B10 + phases 0–5)

@@ -4,7 +4,7 @@
 **Version:** 0.5.7  
 **Status:** Mock Playwright **122 passed / 1 skipped / 0 failed** (`--workers=1`). Real multi-window Chrome still needs a manual smoke.  
 **Partner repo:** `../web-js` (extension-js linked via `node_modules/@pi-oxide/extension-js`)  
-**Latest session note:** [`talk/2026-07-10-e2e-green-and-status.md`](./talk/2026-07-10-e2e-green-and-status.md)
+**Latest session notes:** [`talk/2026-07-10-e2e-green-and-status.md`](./talk/2026-07-10-e2e-green-and-status.md) · [`talk/2026-07-10-split-window-audit.md`](./talk/2026-07-10-split-window-audit.md)
 
 ---
 
@@ -42,12 +42,12 @@ Full design: [`WINDOW_SESSION_ISOLATION_PLAN.md`](./WINDOW_SESSION_ISOLATION_PLA
 | ID | Status | Notes |
 |----|--------|-------|
 | B1 | ✅ | Two windows → independent sessions |
-| B2 | ✅ | Split → fresh session in new window |
+| B2 | ✅ mock / ⚠️ real drag | `window-split-lifecycle.spec.ts` (`broadcastWindowSplit` + attach); real **drag tab** still manual §6 |
 | B3 | ✅ | Merge → survivor rebind openable + hydrate (mock E2E green 2026-07-10) |
 | B4 / B4b | ✅ | Foreign rows disabled + English block message |
 | B5 | ✅ **by design** | In-panel: switch session → prior run can keep going **while panel open**. Close panel → runs **stop**. |
-| B6 | ⚠️ | Reopen panel: hydrate stored chat; no live run if panel was closed |
-| B7 | ⚠️ mock ✅ / real ⚠️ | Merge while panels open: mock E2E green; real Chrome still needs smoke |
+| B6 | ⚠️ unit ✅ | Reopen panel: same `sessionId` + messages (`window-context-controller` unit); no dedicated close→reopen E2E |
+| B7 | ✅ mock / ⚠️ real | `window-merge-headless` + lifecycle merge; natural tab-merge E2E **fixme** (headless); real Chrome §6 |
 
 ### 2026-07-10 fixes (summary)
 
@@ -142,10 +142,10 @@ If panel B is closed, that run is gone — no survival path.
 
 ### Still fragile
 
-- E2E tests flaky under parallel Chromium load (`data-worker-ready` timeouts observed)
+- Run Playwright with `--workers=1` for multi-window (parallel load can timeout `data-worker-ready`)
 - No real-LLM smoke run completed for this workstream
-- Duplicate relay handling: originating panel skips `applyRemoteRunEvent` if `isLocalWorkerHost`, but ordering/timing edge cases may remain
-- Multi-window open stability (crashes) — separate from panel-close semantics
+- **Natural** drag merge/split in headless Chromium: `tabs.onDetached`/`onAttached` often missing — use broadcast helpers or manual Chrome (split audit)
+- Relay: `isLocalWorkerHost` + remote badge-only shipped; rare ordering edge cases possible
 
 ---
 
@@ -166,8 +166,12 @@ If panel B is closed, that run is gone — no survival path.
 - `src/sidepanel/app.tsx` — merge handler, session switch, lifecycle effects
 
 ### Tests
-- `tests/window-lifecycle.spec.ts` — B2–B4
+- `tests/window-split-lifecycle.spec.ts` — **B2** split broadcast + independent sessions
+- `tests/window-lifecycle.spec.ts` — B3–B4
+- `tests/second-window-boot.spec.ts` — B8 second shell
 - `tests/window-merge-headless.spec.ts` — **B7**
+- `tests/window-lifecycle-natural.spec.ts` — natural merge **fixme**; running sync
+- `talk/2026-07-10-split-window-audit.md` — B2 gaps
 - `tests/background-session.spec.ts` — headless switch/subscribe
 - `tests/two-window-sessions.spec.ts`, `tests/window-isolation.spec.ts`
 - `tests/unit/window-*.spec.ts`, `tests/unit/background.spec.ts`
@@ -182,7 +186,7 @@ cd /Users/oujunyi/code/Browsergent
 # Build (syncs manifest version, typecheck, vite)
 npm run build
 
-# Unit (should be 1058/1058 when clean)
+# Unit (expect ~1118/1120; 2 known failures in background + extension-js-client as of 2026-07-10)
 npm run test:unit
 
 # Mock E2E — run serially if flaky
@@ -204,7 +208,7 @@ npx playwright test tests/real-deepseek.spec.ts
 1. Build + reload extension; confirm **no SW registration error**
 2. Open side panel in window A — UI loads, `data-initialized="true"`
 3. Open several new tabs (Ctrl+T) — **panel must not crash**
-4. Open second window, open side panel — independent empty/fresh session
+4. **Split:** drag a tab out of window A into a **new** window → open side panel there — **empty chat**, A unchanged. (Or: second window + panel — independent session; mock E2E path.)
 5. Run task in B, switch session (in-panel background) — running badge on prior session; panel still open
 6. Merge B into A (drag tab / close B's last tab into A) **while B’s panel still open**:
    - Run on B may complete if panel B still open
@@ -219,11 +223,15 @@ npx playwright test tests/real-deepseek.spec.ts
 ### P0 — Stability
 - [ ] Confirm Fixes A–D in real Chrome after reload (user-reported crashes)
 - [ ] Add E2E regression: SW stays registered; open 3 tabs with panel open, no console errors
-- [ ] Kill duplicate relay paths (runtime + storage double-apply on survivor)
+- [x] Relay double-apply on survivor/origin — `isLocalWorkerHost` + remote badge-only (2026-07-10)
+- [x] **B2 split lifecycle E2E** — `broadcastWindowSplit` + `window-split-lifecycle.spec.ts`
+- [ ] **B2 real Chrome:** drag tab → new window → first panel (§6)
+- [ ] Fix 2 unit failures: `background.spec.ts`, `extension-js-client.spec.ts`
 
 ### P1 — Multi-window while panels open
-- [ ] Stabilize B7 merge **with panels still open** (rebind + list UX)
-- [ ] In-panel multi-session concurrent runs stay correct (foreground vs background UI)
+- [x] B7 merge with panels open — mock E2E (`window-merge-headless`, lifecycle merge)
+- [ ] Natural merge/split E2E when Chromium emits detach/attach (or headed Chrome)
+- [ ] In-panel multi-session concurrent runs — spot-check foreground vs background UI
 
 ### P2 — Validation
 - [ ] `npm run smoke` with DeepSeek key
