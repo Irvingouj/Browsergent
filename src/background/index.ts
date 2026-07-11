@@ -36,7 +36,8 @@ chrome.runtime?.onMessage?.addListener(
 				return;
 			}
 			const ms = Number((message as { ms?: number }).ms);
-			const delay = Number.isFinite(ms) && ms > 0 ? Math.min(ms, 30_000) : 1_000;
+			const delay =
+				Number.isFinite(ms) && ms > 0 ? Math.min(ms, 30_000) : 1_000;
 			// SW timers are not subject to background-tab throttling like panel pages.
 			setTimeout(() => {
 				sendResponse({ ok: true });
@@ -62,28 +63,31 @@ chrome.runtime?.onMessage?.addListener(
 			) {
 				return;
 			}
-			const windowId =
-				typeof sender.tab?.windowId === "number"
-					? sender.tab.windowId
-					: typeof sender.documentId === "string" &&
-							typeof (sender as { windowId?: number }).windowId === "number"
-						? (sender as { windowId?: number }).windowId
-						: null;
-			// MV3 extension pages often send without tab; use last focused as hint.
+			// Side panel URL carries ?windowId= when opened via windows.create (E2E + multi-window).
+			const fromSenderTab =
+				typeof sender.tab?.windowId === "number" ? sender.tab.windowId : null;
+			const fromSenderField =
+				typeof (sender as { windowId?: number }).windowId === "number"
+					? (sender as { windowId?: number }).windowId
+					: null;
+			const fromSenderUrl = (() => {
+				const url = sender.url ?? sender.tab?.url;
+				if (!url) return null;
+				try {
+					const raw = new URL(url).searchParams.get("windowId");
+					const n = raw ? Number(raw) : 0;
+					return Number.isFinite(n) && n > 0 ? n : null;
+				} catch {
+					return null;
+				}
+			})();
+			const windowId = fromSenderTab ?? fromSenderField ?? fromSenderUrl;
+			// Never use getLastFocused here — second panel would bind to wrong window → E_TAB_NOT_OWNED.
 			if (typeof windowId === "number" && windowId > 0) {
 				sendResponse({ windowId });
 				return true;
 			}
-			void chrome.windows
-				?.getLastFocused?.()
-				?.then((w) => {
-					sendResponse({
-						windowId: typeof w?.id === "number" ? w.id : 0,
-					});
-				})
-				?.catch?.(() => {
-					sendResponse({ windowId: 0 });
-				});
+			sendResponse({ windowId: 0 });
 			return true;
 		},
 		"sw",
@@ -117,17 +121,15 @@ chrome.runtime?.onMessage?.addListener(
 			// service worker re-broadcasts to itself and can spin until it crashes.
 			if (!sender.url?.includes("/sidepanel.html")) return;
 
-			void chrome.runtime
-				.sendMessage(message)
-				.catch((err: unknown) => {
-					reportWarn({
-						code: "E_SW_FANOUT",
-						source: "relay",
-						message: "sessionRunRelay fanout failed",
-						details: { sessionId: message.sessionId },
-						cause: err,
-					});
+			void chrome.runtime.sendMessage(message).catch((err: unknown) => {
+				reportWarn({
+					code: "E_SW_FANOUT",
+					source: "relay",
+					message: "sessionRunRelay fanout failed",
+					details: { sessionId: message.sessionId },
+					cause: err,
 				});
+			});
 		},
 		"relay",
 	),

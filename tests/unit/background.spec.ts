@@ -20,12 +20,16 @@ function chromeStub(overrides: Record<string, unknown> = {}) {
 		sidePanel: { open: vi.fn().mockResolvedValue(undefined) },
 		tabs: {
 			onDetached: {
-				addListener: (fn: (tabId: number, info: { oldWindowId: number }) => void) => {
+				addListener: (
+					fn: (tabId: number, info: { oldWindowId: number }) => void,
+				) => {
 					detachedListeners.push(fn);
 				},
 			},
 			onAttached: {
-				addListener: (fn: (tabId: number, info: { newWindowId: number }) => void) => {
+				addListener: (
+					fn: (tabId: number, info: { newWindowId: number }) => void,
+				) => {
 					attachedListeners.push(fn);
 				},
 			},
@@ -85,7 +89,9 @@ describe("background service worker", () => {
 	test("opens side panel on action click", async () => {
 		const chrome = chromeStub();
 		const listeners: Array<(tab: { id?: number }) => void> = [];
-		chrome.action.onClicked.addListener = (fn: (tab: { id?: number }) => void) => {
+		chrome.action.onClicked.addListener = (
+			fn: (tab: { id?: number }) => void,
+		) => {
 			listeners.push(fn);
 		};
 
@@ -101,7 +107,9 @@ describe("background service worker", () => {
 	test("does nothing when tab has no id", async () => {
 		const chrome = chromeStub();
 		const listeners: Array<(tab: { id?: number }) => void> = [];
-		chrome.action.onClicked.addListener = (fn: (tab: { id?: number }) => void) => {
+		chrome.action.onClicked.addListener = (
+			fn: (tab: { id?: number }) => void,
+		) => {
 			listeners.push(fn);
 		};
 
@@ -111,6 +119,50 @@ describe("background service worker", () => {
 
 		await listeners[0]({});
 		expect(chrome.sidePanel.open).not.toHaveBeenCalled();
+	});
+
+	test("resolvePanelWindowId prefers sender tab and sidepanel URL query", async () => {
+		const chrome = chromeStub();
+		vi.stubGlobal("chrome", chrome);
+
+		await import("../../src/background/index");
+
+		type ResolveListener = (
+			message: unknown,
+			sender: { url?: string; tab?: { windowId?: number } },
+			sendResponse: (r: unknown) => void,
+		) => void;
+		const listeners = chrome.runtime.onMessage.addListener.mock.calls.map(
+			(call) => call[0] as ResolveListener,
+		);
+		const resolveListener = listeners.find((fn) => {
+			let responded: unknown;
+			fn(
+				{ type: "resolvePanelWindowId" },
+				{
+					url: "chrome-extension://ext/sidepanel.html?windowId=999",
+					tab: { windowId: 111 },
+				},
+				(r) => {
+					responded = r;
+				},
+			);
+			return responded !== undefined;
+		});
+		expect(resolveListener).toBeTypeOf("function");
+
+		let responded: unknown;
+		resolveListener!(
+			{ type: "resolvePanelWindowId" },
+			{
+				url: "chrome-extension://ext/sidepanel.html?windowId=999",
+				tab: { windowId: 111 },
+			},
+			(r) => {
+				responded = r;
+			},
+		);
+		expect(responded).toEqual({ windowId: 111 });
 	});
 
 	test("registers window lifecycle listeners", async () => {
@@ -142,12 +194,24 @@ describe("background service worker", () => {
 			event: { type: "agentStatus", runId: "r-1", status: "running" },
 		};
 
-		type RelayListener = (
-			message: unknown,
-			sender: { url?: string },
-		) => void;
-		const relayListener = chrome.runtime.onMessage.addListener.mock
-			.calls[1]?.[0] as RelayListener | undefined;
+		type RelayListener = (message: unknown, sender: { url?: string }) => void;
+		const listeners = chrome.runtime.onMessage.addListener.mock.calls.map(
+			(call) => call[0] as RelayListener,
+		);
+		const relayListener = listeners.find((fn) => {
+			chrome.runtime.sendMessage.mockClear();
+			fn(
+				{
+					type: "sessionRunRelay",
+					sessionId: "s-probe",
+					event: { type: "agentStatus", runId: "r", status: "running" },
+				},
+				{ url: "chrome-extension://abc/sidepanel.html" },
+			);
+			const called = chrome.runtime.sendMessage.mock.calls.length > 0;
+			chrome.runtime.sendMessage.mockClear();
+			return called;
+		});
 		expect(relayListener).toBeTypeOf("function");
 
 		chrome.runtime.sendMessage.mockClear();

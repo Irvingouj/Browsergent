@@ -86,9 +86,7 @@ export class SkillService {
 				const result = await registry.listSkills();
 				this.skillsCache = result.skills;
 				this.diagnostics = result.diagnostics;
-				browsergentStore
-					.getState()
-					.skillsDiagnosticsChanged(this.diagnostics);
+				browsergentStore.getState().skillsDiagnosticsChanged(this.diagnostics);
 				return this.skillsCache;
 			} finally {
 				this.inflightList = null;
@@ -108,18 +106,29 @@ export class SkillService {
 		};
 	}
 
+	private notifyRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
 	/**
 	 * Invalidate cache and re-list. No-op if skills were never initialized
 	 * (next on-demand load will seed/list fresh).
+	 *
+	 * Debounced: every agent terminal status used to call this and walk OPFS
+	 * (dozens of fsCall), stalling the panel while status still said
+	 * waiting_for_model / Calling model.
 	 */
 	notifySkillsChanged(): void {
 		if (!this.registry && !this.readyPromise) return;
-		void this.refresh().catch((err: unknown) => {
-			console.debug(
-				"[skills] refresh after notify failed:",
-				err instanceof Error ? err.message : String(err),
-			);
-		});
+		this.invalidateCache();
+		if (this.notifyRefreshTimer) clearTimeout(this.notifyRefreshTimer);
+		this.notifyRefreshTimer = setTimeout(() => {
+			this.notifyRefreshTimer = null;
+			void this.refresh().catch((err: unknown) => {
+				console.debug(
+					"[skills] refresh after notify failed:",
+					err instanceof Error ? err.message : String(err),
+				);
+			});
+		}, 750);
 	}
 
 	private emitSkillsChanged(skills: SkillMeta[]): void {
