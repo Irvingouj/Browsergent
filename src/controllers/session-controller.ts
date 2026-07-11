@@ -20,8 +20,12 @@ import {
 	type SessionIndexSnapshot,
 } from "./session-index-lifecycle";
 import {
+	type ClaimClosedSessionResult,
 	canOpenSessionForWindow,
 	formatWindowLabel,
+	isClaimableClosedSession,
+	type LiveWindowIdsOption,
+	listLiveChromeWindowIds,
 	type SessionLifecycle,
 } from "./session-window-utils";
 
@@ -322,6 +326,68 @@ export class SessionController {
 		const meta = await this.getOrMigrateSessionMeta(sessionId);
 		if (!meta) return false;
 		return canOpenSessionForWindow(meta.windowId, panelWindowId);
+	}
+
+	/**
+	 * C1 + R1: rebind a session whose window is closed *or gone* onto this panel.
+	 * Same session id; updates windowId + lifecycle=background.
+	 * Refuses live foreign windows (still present in Chrome).
+	 */
+	async claimClosedSession(
+		sessionId: string,
+		options?: LiveWindowIdsOption,
+	): Promise<ClaimClosedSessionResult> {
+		if (this.panelWindowId === null) {
+			this.failStore(new Error("claimClosedSession requires bindPanelWindow"), {
+				operation: "claimClosedSession",
+				sessionId,
+			});
+			return { ok: false, reason: "unavailable" };
+		}
+		const panelWindowId = this.panelWindowId;
+		const meta = await this.getOrMigrateSessionMeta(sessionId);
+		if (!meta) return { ok: false, reason: "unavailable" };
+		const closed = new Set(this.meta.closedWindowIds ?? []);
+		const fromWid = meta.windowId;
+		if (fromWid === null || fromWid === undefined) {
+			return { ok: false, reason: "unavailable" };
+		}
+		if (fromWid === panelWindowId) return { ok: true };
+
+		let live: Set<number> | undefined =
+			options?.liveWindowIds !== undefined
+				? new Set(options.liveWindowIds)
+				: undefined;
+		if (!live) {
+			const ids = await listLiveChromeWindowIds();
+			if (ids) live = new Set(ids);
+		}
+		if (live?.has(fromWid)) {
+			return { ok: false, reason: "live_foreign" };
+		}
+		if (!isClaimableClosedSession(fromWid, panelWindowId, closed, live)) {
+			return { ok: false, reason: "unavailable" };
+		}
+
+		// Remember closed so labels stay consistent after claim.
+		if (!closed.has(fromWid)) {
+			this.meta.closedWindowIds = [...closed, fromWid];
+			await this.persistMeta();
+		}
+
+		const data = await this.getSessionRecord(sessionId);
+		if (data) {
+			data.windowId = panelWindowId;
+			data.lifecycle = "background";
+			await this.persistSessionBody(data);
+		} else {
+			await this.writeSessionMeta({
+				...meta,
+				windowId: panelWindowId,
+				lifecycle: "background",
+			});
+		}
+		return { ok: true };
 	}
 
 	async getSessionRecord(id: string): Promise<SessionData | null> {
@@ -944,7 +1010,10 @@ export class SessionController {
 		}
 	}
 
-	async listSessions(panelWindowId?: number): Promise<ListSessionsResult> {
+	async listSessions(
+		panelWindowId?: number,
+		options?: LiveWindowIdsOption,
+	): Promise<ListSessionsResult> {
 		const sessions = await this.listAllSessionMetas();
 		sessions.sort((a, b) => b.timestamp - a.timestamp);
 
@@ -959,21 +1028,35 @@ export class SessionController {
 		}
 
 		const closed = new Set(this.meta.closedWindowIds ?? []);
+		const live =
+			options?.liveWindowIds !== undefined
+				? new Set(options.liveWindowIds)
+				: undefined;
 
 		return {
-			sessions: sessions.map((s) => ({
-				id: s.id,
-				title: s.customTitle || s.title || `Session ${s.id.slice(0, 8)}`,
-				timestamp: s.timestamp,
-				messageCount: s.messageCount,
-				windowId: s.windowId,
-				windowLabel: formatWindowLabel(s.windowId, closed),
-				lifecycle: s.lifecycle,
-				openable:
+			sessions: sessions.map((s) => {
+				const openable =
 					panelWindowId === undefined
 						? true
-						: canOpenSessionForWindow(s.windowId, panelWindowId),
-			})),
+						: canOpenSessionForWindow(s.windowId, panelWindowId);
+				const claimable = isClaimableClosedSession(
+					s.windowId,
+					panelWindowId,
+					closed,
+					live,
+				);
+				return {
+					id: s.id,
+					title: s.customTitle || s.title || `Session ${s.id.slice(0, 8)}`,
+					timestamp: s.timestamp,
+					messageCount: s.messageCount,
+					windowId: s.windowId,
+					windowLabel: formatWindowLabel(s.windowId, closed, live),
+					lifecycle: s.lifecycle,
+					openable,
+					claimable,
+				};
+			}),
 			prunedIds,
 		};
 	}

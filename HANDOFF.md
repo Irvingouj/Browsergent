@@ -2,9 +2,9 @@
 
 **Date:** 2026-07-10  
 **Version:** 0.5.7  
-**Status:** Mock Playwright **122 passed / 1 skipped / 0 failed** (`--workers=1`). Real multi-window Chrome still needs a manual smoke.  
+**Status:** Mock Playwright green path + claim-closed E2E. Real multi-window Chrome still needs a light manual smoke after reload.  
 **Partner repo:** `../web-js` (extension-js linked via `node_modules/@pi-oxide/extension-js`)  
-**Latest session notes:** [`talk/2026-07-10-e2e-green-and-status.md`](./talk/2026-07-10-e2e-green-and-status.md) · [`talk/2026-07-10-split-window-audit.md`](./talk/2026-07-10-split-window-audit.md)
+**Latest session notes:** [`talk/2026-07-10-e2e-green-and-status.md`](./talk/2026-07-10-e2e-green-and-status.md) · [`talk/2026-07-10-split-window-audit.md`](./talk/2026-07-10-split-window-audit.md) · [`talk/2026-07-10-claim-closed-session.md`](./talk/2026-07-10-claim-closed-session.md)
 
 ---
 
@@ -43,8 +43,8 @@ Full design: [`WINDOW_SESSION_ISOLATION_PLAN.md`](./WINDOW_SESSION_ISOLATION_PLA
 |----|--------|-------|
 | B1 | ✅ | Two windows → independent sessions |
 | B2 | ✅ mock / ⚠️ real drag | `window-split-lifecycle.spec.ts` (`broadcastWindowSplit` + attach); real **drag tab** still manual §6 |
-| B3 | ✅ | Merge → survivor rebind openable + hydrate (mock E2E green 2026-07-10) |
-| B4 / B4b | ✅ | Foreign rows disabled + English block message |
+| B3 | ✅ mock / ⚠️ real | Merge auto-rebind when lifecycle fires; if only close/orphan, user **Open in this window** (C1 claim, same session id) — `tests/claim-closed-session.spec.ts` |
+| B4 / B4b | ✅ | Live foreign rows blocked; closed/orphan rows claimable (not steal from live windows) |
 | B5 | ✅ **by design** | In-panel: switch session → prior run can keep going **while panel open**. Close panel → runs **stop**. |
 | B6 | ⚠️ unit ✅ | Reopen panel: same `sessionId` + messages (`window-context-controller` unit); no dedicated close→reopen E2E |
 | B7 | ✅ mock / ⚠️ real | `window-merge-headless` + lifecycle merge; natural tab-merge E2E **fixme** (headless); real Chrome §6 |
@@ -54,7 +54,9 @@ Full design: [`WINDOW_SESSION_ISOLATION_PLAN.md`](./WINDOW_SESSION_ISOLATION_PLA
 - **Relay:** remote run events are badge-only unless session is local foreground; no triple chat/IDB apply.
 - **Ephemeral boot:** persist claimed session id instead of minting a second one; `saveForSession` upserts.
 - **IDB:** durable-only open + serial queue (no Memory fail-open).
-- **Todo next:** lease hang on `page.fill`/`page.click` completion; real dual-window smoke; optional SW single-writer.
+- **Post-tool chat:** `STATUS_MAP.completed → running`; activeRunId always paints; optimistic Run UX.
+- **Claim closed session (C1/R1):** explicit **Open in this window** for closed/orphan sessions (live `getAll` veto); lands on chat; no sole-survivor auto-merge.
+- **Todo next:** lease hang on `page.fill`/`page.click` completion; real dual-window smoke; natural tab-merge still fixme.
 
 ---
 

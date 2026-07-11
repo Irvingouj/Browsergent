@@ -11,6 +11,11 @@ export interface SessionListItem {
 	windowLabel?: string;
 	lifecycle?: "foreground" | "background";
 	openable?: boolean;
+	/**
+	 * C1 explicit claim: session belongs to a *closed* window and may be
+	 * rebound onto this panel via claimClosedSession (not live cross-window).
+	 */
+	claimable?: boolean;
 	running?: boolean;
 }
 

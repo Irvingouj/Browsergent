@@ -10,6 +10,8 @@ interface SessionPanelProps {
 	panelWindowId: number | null;
 	runningSessionIds?: string[];
 	onSwitchSession: (id: string) => void;
+	/** C1: claim a closed-window session onto this panel, then open it. */
+	onClaimClosedSession: (id: string) => void;
 	onCreateSession: () => void;
 	onDeleteSession: (id: string) => void;
 	onUpdateTitle: (id: string, title: string) => void;
@@ -35,6 +37,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	panelWindowId,
 	runningSessionIds = [],
 	onSwitchSession,
+	onClaimClosedSession,
 	onCreateSession,
 	onDeleteSession,
 	onUpdateTitle,
@@ -56,13 +59,18 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 
 	const handleItemClick = useCallback(
 		(session: SessionListItem) => {
+			// Claimable closed/orphan rows: whole row claims (don't only bury CTA).
+			if (session.claimable === true) {
+				onClaimClosedSession(session.id);
+				return;
+			}
 			if (session.openable === false) {
 				onBlockedSession();
 				return;
 			}
 			onSwitchSession(session.id);
 		},
-		[onSwitchSession, onBlockedSession],
+		[onSwitchSession, onClaimClosedSession, onBlockedSession],
 	);
 
 	const handleTitleClick = useCallback(
@@ -187,6 +195,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 							const isActive = session.id === activeSessionId;
 							const isEditing = editingId === session.id;
 							const rowOpenable = session.openable !== false;
+							const rowClaimable = session.claimable === true;
 							const isRunning = session.running === true;
 							return (
 								<div
@@ -194,20 +203,25 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 									data-testid="session-item"
 									data-session-id={session.id}
 									data-session-openable={session.openable !== false}
+									data-session-claimable={rowClaimable ? "true" : "false"}
 									onClick={() => handleItemClick(session)}
 									class={[
 										"group px-md py-sm border-b border-border transition-all relative",
 										rowOpenable
 											? "cursor-pointer hover:bg-bg-hover"
-											: "opacity-50 cursor-not-allowed",
+											: rowClaimable
+												? "opacity-80"
+												: "opacity-50 cursor-not-allowed",
 										isActive ? "bg-accent-soft border-l-2 border-l-accent" : "",
 									].join(" ")}
 									title={
-										session.openable === false
-											? "Open this session in its window"
-											: isRunning && !isActive
-												? "Agent running in background — click to subscribe"
-												: undefined
+										rowClaimable
+											? "Window closed — use Open in this window"
+											: session.openable === false
+												? "Open this session in its window"
+												: isRunning && !isActive
+													? "Agent running in background — click to subscribe"
+													: undefined
 									}
 								>
 									<div class="flex items-center">
@@ -279,6 +293,19 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 											</span>
 										) : null}
 									</div>
+									{rowClaimable ? (
+										<button
+											type="button"
+											data-testid="claim-closed-session"
+											onClick={(e) => {
+												e.stopPropagation();
+												onClaimClosedSession(session.id);
+											}}
+											class="mt-xs text-[11px] px-sm py-[2px] rounded-md border border-accent text-accent bg-accent-soft hover:bg-accent hover:text-white transition-colors cursor-pointer"
+										>
+											Open in this window
+										</button>
+									) : null}
 								</div>
 							);
 						})

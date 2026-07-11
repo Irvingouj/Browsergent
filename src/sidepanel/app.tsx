@@ -13,8 +13,10 @@ import {
 } from "../controllers/export-controller";
 import { isTextFile } from "../controllers/files";
 import {
+	CLAIM_SESSION_UNAVAILABLE_MESSAGE,
 	CROSS_WINDOW_SESSION_MESSAGE,
 	collectRunningSessionIds,
+	listLiveChromeWindowIds,
 } from "../controllers/session-window-utils";
 import {
 	formatDiagSnapshot,
@@ -617,7 +619,13 @@ const App: FunctionalComponent = () => {
 			const wid = windowId ?? ctrl?.getPanelWindowId() ?? undefined;
 			if (!ctrl) return;
 			await ctrl.refreshMeta();
-			const result = await ctrl.listSessions(wid);
+			// Live Chrome windows: sessions on gone windows are claimable even if
+			// we never received a lifecycle close event (real merge/close gap).
+			const liveWindowIds = await listLiveChromeWindowIds();
+			const result = await ctrl.listSessions(
+				wid,
+				liveWindowIds ? { liveWindowIds } : undefined,
+			);
 			const local = syncLocalRunningToCoordinator();
 			const runningIds = collectRunningSessionIds(
 				local,
@@ -918,6 +926,8 @@ const App: FunctionalComponent = () => {
 			clearPendingAutoSkills();
 			browsergentStore.getState().sessionPanelOpenChanged(false);
 			browsergentStore.getState().setSettingsOpen(false);
+			// Always land on chat after opening a session (from Files/Settings too).
+			browsergentStore.getState().setActiveTab("chat");
 			await reloadSessionList();
 		},
 		[
@@ -927,6 +937,32 @@ const App: FunctionalComponent = () => {
 			supervisorRef,
 			windowId,
 		],
+	);
+
+	/** C1 + R1: user explicitly claims a closed-window session onto this panel. */
+	const handleClaimClosedSession = useCallback(
+		async (id: string) => {
+			const sessionCtrl = sessionControllerRef.current;
+			if (!sessionCtrl) return;
+			// Leave Files/Settings immediately so claim always surfaces chat.
+			browsergentStore.getState().setActiveTab("chat");
+			browsergentStore.getState().setSettingsOpen(false);
+			const result = await sessionCtrl.claimClosedSession(id);
+			if (!result.ok) {
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text:
+						result.reason === "live_foreign"
+							? CROSS_WINDOW_SESSION_MESSAGE
+							: CLAIM_SESSION_UNAVAILABLE_MESSAGE,
+					timestamp: Date.now(),
+				});
+				return;
+			}
+			await handleSwitchSession(id);
+		},
+		[handleSwitchSession, sessionControllerRef],
 	);
 
 	const handleCreateSession = useCallback(async () => {
@@ -1242,6 +1278,7 @@ const App: FunctionalComponent = () => {
 					panelWindowId={windowId}
 					runningSessionIds={runningSessionIds}
 					onSwitchSession={handleSwitchSession}
+					onClaimClosedSession={handleClaimClosedSession}
 					onCreateSession={handleCreateSession}
 					onDeleteSession={handleDeleteSession}
 					onUpdateTitle={handleUpdateTitle}
