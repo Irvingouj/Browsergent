@@ -32,12 +32,29 @@ try {
 				: "disconnected",
 		);
 	} else if (command === "run") {
-		const code = args.join(" ").trim();
-		if (!code) {
-			console.error("usage: browsergent run <js>");
-			process.exit(1);
+		const fileFlag = args[0] === "--file" || args[0] === "-f";
+		if (fileFlag) {
+			const pathArg = args[1];
+			if (!pathArg) {
+				console.error("usage: browsergent run --file <path>");
+				process.exit(1);
+			}
+			console.log(await cli.runFile(pathArg));
+		} else if (args.length === 0 || args[0] === "-") {
+			const chunks: Buffer[] = [];
+			for await (const chunk of process.stdin) {
+				chunks.push(chunk as Buffer);
+			}
+			const code = Buffer.concat(chunks).toString("utf8").trim();
+			if (!code) {
+				console.error("usage: browsergent run <js> | run --file <path> | run -");
+				process.exit(1);
+			}
+			console.log(await cli.run(code));
+		} else {
+			const code = args.join(" ").trim();
+			console.log(await cli.run(code));
 		}
-		console.log(await cli.run(code));
 	} else if (command === "help" || command === "--help" || command === "-h") {
 		console.log(`browsergent bridge — local CLI for the Browsergent sidepanel
 
@@ -50,10 +67,13 @@ Then:
   npm run bridge -- docs              # API index (page, chrome, fs, ...)
   npm run bridge -- docs page         # page.click / snapshot / fill / ...
   npm run bridge -- run 'await page.snapshot()'
+  npm run bridge -- run --file cell.js     # prefer this over quoting a novel
+  npm run bridge -- run - < cell.js         # stdin
   npm run bridge -- write /notes.md hello
   npm run bridge -- reset | stop
 
-An agent should call docs (get_doc) for a namespace before guessing run_js APIs.
+Prefer run --file for multi-line cells. Snapshot before click/fill. Prefer web.tab.*(tabId)
+over page.* after new_tab. Call docs (get_doc) before guessing APIs.
 `);
 	} else if (command === "docs") {
 		console.log(await cli.docs(args[0]));

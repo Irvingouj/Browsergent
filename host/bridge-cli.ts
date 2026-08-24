@@ -111,6 +111,14 @@ export class BridgeCli {
 		return response.result;
 	}
 
+	async runFile(path: string): Promise<string> {
+		const code = await readFile(path, "utf8");
+		if (!code.trim()) {
+			throw new Error(`run file is empty: ${path}`);
+		}
+		return this.run(code);
+	}
+
 	async run(code: string): Promise<string> {
 		const config = await this.readConfig();
 		const sessionId = await this.ensureSession(config.token, config.sessionId);

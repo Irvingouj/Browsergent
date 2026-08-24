@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -55,6 +55,49 @@ describe("BridgeCli enroll", () => {
 			throw new Error("expected run_js");
 		}
 		expect(run.params.code).toBe("await page.snapshot()");
+	});
+
+	test("runFile sends the file body as run_js code so the agent does not quote a novel on argv", async () => {
+		const configDir = await mkdtemp(join(tmpdir(), "browsergent-bridge-"));
+		const sent: SentRequest[] = [];
+		const cli = new BridgeCli({
+			configDir,
+			send: async (request: SentRequest): Promise<BridgeResponse> => {
+				sent.push(request);
+				if (request.method === "session.create") {
+					return {
+						id: request.id,
+						ok: true,
+						method: "session.create",
+						result: {
+							id: "cli-session-1",
+							title: "Session cli-ses",
+							timestamp: 1,
+							messageCount: 0,
+							windowId: 1,
+							lifecycle: "background",
+							origin: "cli",
+						},
+					};
+				}
+				return {
+					id: request.id,
+					ok: true,
+					method: "run_js",
+					result: "from-file",
+				};
+			},
+		});
+		await cli.enroll("tok-123");
+		const script = join(configDir, "cell.js");
+		await writeFile(
+			script,
+			"const s = await page.snapshot();\nconsole.log(s);\ns;\n",
+		);
+		expect(await cli.runFile(script)).toBe("from-file");
+		const run = sent.find((request) => request.method === "run_js");
+		if (run?.method !== "run_js") throw new Error("expected run_js");
+		expect(run.params.code).toContain("await page.snapshot()");
 	});
 
 	test("writeFile sends the path and content on the CLI session", async () => {

@@ -65,5 +65,6 @@ describe("host/cli.ts argv", () => {
 		expect(result.stdout).toMatch(/npm run bridge -- docs page/);
 		expect(result.stdout).toMatch(/npm run bridge -- run/);
 		expect(result.stdout).toMatch(/get_doc/);
+		expect(result.stdout).toMatch(/run --file/);
 	});
 });

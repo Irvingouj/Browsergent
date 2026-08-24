@@ -22,7 +22,7 @@ describe("EnrollmentPanel", () => {
 		expect(html).toContain("CLI not enrolled");
 		expect(html).not.toContain("enroll-revoke");
 		expect(html).toContain("npm run bridge -- docs page");
-		expect(html).toContain("npm run bridge -- run");
+		expect(html).toContain("npm run bridge -- run --file");
 	});
 
 	test("token generated does not claim the CLI is enrolled", () => {

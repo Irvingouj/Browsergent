@@ -97,7 +97,7 @@ export const EnrollmentPanel: FunctionalComponent<EnrollmentPanelProps> = ({
 npm run host
 npm run bridge -- enroll <token>
 npm run bridge -- docs page
-npm run bridge -- run 'await page.snapshot()'
+npm run bridge -- run --file cell.js
 npm run bridge -- write /notes.md hello`}
 			</div>
 
