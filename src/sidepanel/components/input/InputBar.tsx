@@ -38,6 +38,7 @@ function domSyncFor(state: InputState): DomSync {
 
 interface InputBarProps {
 	isRunning: boolean;
+	disabled?: boolean;
 	/** Optional submitted text — required when draft is cleared before onRun. */
 	onRun: (submittedText?: string) => void;
 	onSteer: (text: string) => void;
@@ -50,6 +51,7 @@ interface InputBarProps {
 
 export const InputBar: FunctionalComponent<InputBarProps> = ({
 	isRunning,
+	disabled = false,
 	onRun,
 	onSteer,
 	onStop,
@@ -105,6 +107,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				});
 				browsergentStore.getState().setTaskDraft(serializeDraft(result.draft));
 			} else if (result.kind === "submitted") {
+				if (disabled) return;
 				if (!result.value.trim()) return;
 				// Clear input immediately. Do NOT write result.value back into
 				// taskDraft first — that re-fills contentEditable via the
@@ -121,12 +124,13 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 				}
 			}
 		},
-		[isRunning, onRun, onSteer],
+		[disabled, isRunning, onRun, onSteer],
 	);
 
 	const mode = useInputMode({
 		filesController,
 		isRunning,
+		locked: disabled,
 		onSubmit: () => dispatch({ kind: "submit" }),
 		getDraft,
 		dispatch,
@@ -207,11 +211,12 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 	);
 
 	const handleDragOver = useCallback((e: DragEvent) => {
+		if (disabled) return;
 		if (e.dataTransfer?.types?.includes("Files")) {
 			e.preventDefault();
 			browsergentStore.getState().setChatDragOver(true);
 		}
-	}, []);
+	}, [disabled]);
 
 	const handleDragLeave = useCallback((e: DragEvent) => {
 		e.preventDefault();
@@ -220,23 +225,25 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 
 	const handleDrop = useCallback(
 		(e: DragEvent) => {
+			if (disabled) return;
 			const fileList = e.dataTransfer?.files;
 			if (!fileList || fileList.length === 0) return;
 			e.preventDefault();
 			browsergentStore.getState().setChatDragOver(false);
 			void uploadAndInsertMentions(Array.from(fileList));
 		},
-		[uploadAndInsertMentions],
+		[disabled, uploadAndInsertMentions],
 	);
 
 	const handlePaste = useCallback(
 		(e: ClipboardEvent) => {
+			if (disabled) return;
 			const fileList = e.clipboardData?.files;
 			if (!fileList || fileList.length === 0) return;
 			e.preventDefault();
 			void uploadAndInsertMentions(Array.from(fileList));
 		},
-		[uploadAndInsertMentions],
+		[disabled, uploadAndInsertMentions],
 	);
 
 	useEffect(() => {
@@ -314,8 +321,8 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						onKeyDown={mode.onKeyDown}
 						onBlur={mode.onBlur}
 						onPaste={handlePaste}
-						placeholder="Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"
-						disabled={isUploading}
+						placeholder={disabled ? "CLI session — Chat input is locked" : "Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"}
+						disabled={isUploading || disabled}
 						class={INPUT_CLASS}
 					/>
 				</div>
@@ -331,7 +338,7 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 							<rect x="3" y="3" width="10" height="10" rx="1.5" />
 						</svg>
 					</button>
-				) : (
+				) : disabled ? null : (
 					<button
 						type="button"
 						data-testid="run-button"

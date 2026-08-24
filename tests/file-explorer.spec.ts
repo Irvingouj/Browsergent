@@ -365,3 +365,162 @@ test("deletes a non-empty directory via context menu Delete button", async () =>
 		mock.server.close();
 	}
 });
+
+// =============================================================================
+// OPFS helpers — mutate disk UNDER the Files tree (no UI / store update).
+// Mirrors agent run_js fs.move/delete: OPFS changes while the in-memory tree
+// still shows the old paths. Opening Files / clicking must re-list and recover.
+// =============================================================================
+async function opfsWriteText(
+	sidePanel: import("@playwright/test").Page,
+	path: string,
+	content: string,
+): Promise<void> {
+	await sidePanel.evaluate(
+		async ({ path: p, content: c }) => {
+			const root = await navigator.storage.getDirectory();
+			const parts = p.replace(/^\/+/, "").split("/").filter(Boolean);
+			if (parts.length === 0) throw new Error("empty path");
+			let dir = root;
+			for (let i = 0; i < parts.length - 1; i++) {
+				dir = await dir.getDirectoryHandle(parts[i]!, { create: true });
+			}
+			const fh = await dir.getFileHandle(parts[parts.length - 1]!, {
+				create: true,
+			});
+			const w = await fh.createWritable();
+			await w.write(c);
+			await w.close();
+		},
+		{ path, content },
+	);
+}
+
+async function opfsRemove(
+	sidePanel: import("@playwright/test").Page,
+	path: string,
+): Promise<void> {
+	await sidePanel.evaluate(async (p) => {
+		const root = await navigator.storage.getDirectory();
+		const parts = p.replace(/^\/+/, "").split("/").filter(Boolean);
+		if (parts.length === 0) throw new Error("empty path");
+		let dir = root;
+		for (let i = 0; i < parts.length - 1; i++) {
+			dir = await dir.getDirectoryHandle(parts[i]!);
+		}
+		await dir.removeEntry(parts[parts.length - 1]!, { recursive: true });
+	}, path);
+}
+
+async function opfsMove(
+	sidePanel: import("@playwright/test").Page,
+	from: string,
+	to: string,
+): Promise<void> {
+	// Read + write + remove so we do not depend on FileSystemHandle.move support.
+	const text = await sidePanel.evaluate(async (p) => {
+		const root = await navigator.storage.getDirectory();
+		const parts = p.replace(/^\/+/, "").split("/").filter(Boolean);
+		let dir = root;
+		for (let i = 0; i < parts.length - 1; i++) {
+			dir = await dir.getDirectoryHandle(parts[i]!);
+		}
+		const fh = await dir.getFileHandle(parts[parts.length - 1]!);
+		const file = await fh.getFile();
+		return await file.text();
+	}, from);
+	await opfsWriteText(sidePanel, to, text);
+	await opfsRemove(sidePanel, from);
+}
+
+// =============================================================================
+// Test 6: Opening Files re-lists OPFS after an out-of-band move (ghost prune)
+// =============================================================================
+//
+// Regression: agent/run_js fs.move updates OPFS but used to leave the old path
+// in the Files tree. Clicking the ghost showed E_NOT_FOUND. Opening the Files
+// tab must re-list OPFS so the old path is gone and the new path opens cleanly.
+test("opening Files tab prunes ghost nodes after out-of-band OPFS move", async () => {
+	test.setTimeout(90000);
+
+	const { sidePanel, close } = await launchExtension();
+	try {
+		await openFilesTab(sidePanel);
+
+		// Seed a root file through the UI so the tree has loaded root children
+		// (the historical skip-if-loaded path) and shows ghost.md.
+		await createViaToolbar(sidePanel, "file", "ghost.md");
+		await waitForTreeNode(sidePanel, "tree-file", "ghost.md");
+		// Give the empty toolbar file real content so the destination preview is checkable.
+		await opfsWriteText(sidePanel, "/ghost.md", "moved-body");
+
+		// Leave Files so the in-memory tree is not live-updated; then move under
+		// the tree the way agent run_js fs.move does (OPFS only).
+		await sidePanel.getByRole("button", { name: "Chat" }).click();
+		await expect(sidePanel.getByTestId("files-panel")).not.toBeVisible({
+			timeout: 5000,
+		});
+		await opfsMove(sidePanel, "/ghost.md", "/dest/ghost.md");
+
+		// Click into Files — mount must re-list OPFS (not reuse stale rootIds).
+		await openFilesTab(sidePanel);
+
+		// Ghost at root must be gone.
+		await expect(
+			rootTreeNodes(sidePanel, "tree-file").filter({ hasText: "ghost.md" }),
+		).toHaveCount(0, { timeout: 15000 });
+
+		// dest/ exists and holds the moved file.
+		const destNode = await waitForTreeNode(sidePanel, "tree-directory", "dest");
+		await destNode.click(); // expand → re-lists children from OPFS
+		const moved = await waitForTreeNode(sidePanel, "tree-file", "ghost.md");
+
+		// Click must open a real preview, not E_NOT_FOUND / not-found error.
+		await moved.click();
+		const preview = sidePanel.getByTestId("file-preview");
+		await expect(preview).toBeVisible({ timeout: 10000 });
+		await expect(preview).toContainText("moved-body", { timeout: 10000 });
+		await expect(preview).not.toContainText(
+			/E_NOT_FOUND|not found|no longer exists/i,
+		);
+		await expect(sidePanel.locator(".text-danger")).toHaveCount(0);
+	} finally {
+		await close();
+	}
+});
+
+// =============================================================================
+// Test 7: Clicking a vanished path refreshes the tree (no stuck E_NOT_FOUND)
+// =============================================================================
+test("clicking a deleted file refreshes the tree instead of E_NOT_FOUND", async () => {
+	test.setTimeout(90000);
+
+	const { sidePanel, close } = await launchExtension();
+	try {
+		await openFilesTab(sidePanel);
+		await createViaToolbar(sidePanel, "file", "vanish.md");
+		const vanish = await waitForTreeNode(sidePanel, "tree-file", "vanish.md");
+
+		// Delete from OPFS under the live tree (no store update) — same class of
+		// bug as agent fs.delete while the Files panel still shows the node.
+		await opfsRemove(sidePanel, "/vanish.md");
+
+		// Click the ghost. Refresh-before-open must prune it and avoid E_NOT_FOUND.
+		await vanish.click();
+
+		await expect(
+			sidePanel.getByText(/File no longer exists/i),
+		).toBeVisible({ timeout: 10000 });
+		await expect(
+			sidePanel
+				.locator('[data-testid="tree-file"]')
+				.filter({ hasText: "vanish.md" }),
+		).toHaveCount(0, { timeout: 10000 });
+
+		const preview = sidePanel.getByTestId("file-preview");
+		await expect(preview).toHaveCount(0);
+		await expect(sidePanel.getByText(/E_NOT_FOUND/i)).toHaveCount(0);
+	} finally {
+		await close();
+	}
+});

@@ -93,6 +93,21 @@ describe("interpretKey — plain-mode Enter", () => {
 		// routes it to onSteer (not onRun) when isRunning.
 		expect(result).toEqual({ type: "prevent-default", effect: "submit" });
 	});
+
+	test("Enter on a locked CLI session does not submit", () => {
+		const result = interpretKey(
+			{ kind: "plain" },
+			{ key: "Enter", shiftKey: false } as KeyboardEvent,
+			{
+				itemCount: 0,
+				caretAtStart: false,
+				caretAtEnd: false,
+				isRunning: false,
+				locked: true,
+			},
+		);
+		expect(result).toBeNull();
+	});
 });
 
 // ---------------------------------------------------------------------------

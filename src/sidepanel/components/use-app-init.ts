@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { EnrollmentController } from "../../controllers/enrollment-controller";
+import { EnrollmentHost } from "../../controllers/enrollment-host";
 import { ExtjsController } from "../../controllers/extjs-controller";
 import { FilesController } from "../../controllers/files";
 import { RunSupervisor } from "../../controllers/run-supervisor";
@@ -20,14 +22,20 @@ import {
 	isSessionRunRelayMessage,
 	type OffscreenRunStateMessage,
 } from "../../protocol/offscreen-run";
+import { getSkillService } from "../../skills/skill-service";
 import { browsergentStore } from "../../state/store";
 import { openPanelStorage } from "../../storage/open-panel-storage";
 import type { StorageBackend } from "../../storage/storage-backend";
+import { createAgentTools } from "../../worker/agent-tools";
+import { connectBridgeClient } from "../bridge-client";
 import { ExtensionJsClient } from "../extension-js-client";
 import { handleFileOp } from "../file-op-handler";
 import { getUrlTracker } from "../url-tracker";
 import { WindowContextController } from "../window-context-controller";
-import { refreshShallowFileTree } from "./files/refresh-file-tree";
+import {
+	bindFileTreeController,
+	refreshShallowFileTree,
+} from "./files/refresh-file-tree";
 
 export interface AppInitResult {
 	initialized: boolean;
@@ -42,6 +50,11 @@ export interface AppInitResult {
 	sessionControllerRef: { current: SessionController | null };
 	filesControllerRef: { current: FilesController | null };
 	windowContextRef: { current: WindowContextController | null };
+	enrollmentToken: string | null;
+	bridgeConnected: boolean;
+	cliEnrolled: boolean;
+	generateEnrollment: () => Promise<void>;
+	revokeEnrollment: () => Promise<void>;
 }
 
 function attachDiagGlobals(): void {
@@ -84,6 +97,12 @@ export function useAppInit(): AppInitResult {
 	const sessionControllerRef = useRef<SessionController | null>(null);
 	const filesControllerRef = useRef<FilesController | null>(null);
 	const windowContextRef = useRef<WindowContextController | null>(null);
+	const enrollmentControllerRef = useRef<EnrollmentController | null>(null);
+	const enrollmentHostRef = useRef<EnrollmentHost | null>(null);
+	const [enrollmentToken, setEnrollmentToken] = useState<string | null>(null);
+	const [bridgeConnected, setBridgeConnected] = useState(false);
+	const [cliEnrolled, setCliEnrolled] = useState(false);
+	const disconnectBridgeRef = useRef<(() => void) | null>(null);
 
 	useEffect(() => {
 		installGlobalErrorHandlers("panel");
@@ -192,6 +211,12 @@ export function useAppInit(): AppInitResult {
 			const settingsCtrl = new SettingsController(storage);
 			settingsControllerRef.current = settingsCtrl;
 			if (!cancelled) setSettingsController(settingsCtrl);
+			const enrollmentCtrl = new EnrollmentController(storage);
+			enrollmentControllerRef.current = enrollmentCtrl;
+			const existingToken = await enrollmentCtrl.current();
+			if (!cancelled) setEnrollmentToken(existingToken);
+			const previouslyEnrolled = await enrollmentCtrl.wasCliEnrolled();
+			if (!cancelled && previouslyEnrolled) setCliEnrolled(true);
 			// Optimistic loaded=true so Settings UI is never stuck if IDB get hangs
 			// under multi-window contention (B8). Real values overwrite when load completes.
 			browsergentStore.getState().settingsLoaded({
@@ -361,6 +386,49 @@ export function useAppInit(): AppInitResult {
 
 			const filesCtrl = new FilesController(ExtensionJsClient.getInstance());
 			filesControllerRef.current = filesCtrl;
+			bindFileTreeController(filesCtrl);
+			const ensureActingHost = async (): Promise<void> => {
+				const wid = windowContextRef.current?.getWindowId();
+				await extjs.init(
+					typeof wid === "number" && wid > 0
+						? { windowId: wid }
+						: undefined,
+				);
+			};
+			const enrollmentHost = new EnrollmentHost({
+				enrollment: enrollmentCtrl,
+				sessions: sessionCtrl,
+				onCliEnrolled: (enrolled) => {
+					if (!cancelled) setCliEnrolled(enrolled);
+				},
+				tools: createAgentTools(
+					async (code) => {
+						await ensureActingHost();
+						return ExtensionJsClient.getInstance().runJs(code);
+					},
+					async (format) => {
+						await ensureActingHost();
+						return ExtensionJsClient.getInstance().getApiDocs(format);
+					},
+					(skill, path) => getSkillService().loadSkill(skill, path),
+					async (op) => {
+						await ensureActingHost();
+						return handleFileOp({ id: "bridge", op }, filesCtrl);
+					},
+				),
+				runtime: {
+					reset: async () => {
+						await ensureActingHost();
+						await ExtensionJsClient.getInstance().reset();
+					},
+					stop: async () => {
+						await ensureActingHost();
+						await ExtensionJsClient.getInstance().stop();
+					},
+				},
+			});
+			enrollmentHostRef.current = enrollmentHost;
+			void enrollmentHost.restoreCliEnrollment();
 
 			// Acting (extension-js) and agent-worker start on first Run / first OPFS need — not on boot.
 			// Window bind then shell paint; never block paint more than a few seconds.
@@ -373,6 +441,7 @@ export function useAppInit(): AppInitResult {
 				if (wid > 0) {
 					setWindowId(wid);
 					browsergentStore.getState().bootWindowIdSet(wid);
+					ExtensionJsClient.getInstance().bindWindowId(wid);
 				}
 				browsergentStore.getState().bootComponentSet("sw", "ok");
 				try {
@@ -393,6 +462,16 @@ export function useAppInit(): AppInitResult {
 				}
 				browsergentStore.getState().activeSessionChanged(sessionId);
 				setInitialized(true);
+				disconnectBridgeRef.current?.();
+				disconnectBridgeRef.current = connectBridgeClient({
+					handle: (request) => enrollmentHost.handle(request),
+					onOpen: () => {
+						if (!cancelled) setBridgeConnected(true);
+					},
+					onClose: () => {
+						if (!cancelled) setBridgeConnected(false);
+					},
+				});
 				bootStep(step);
 				// Out-of-band ready marker — Playwright can poll this via the service
 				// worker when page.evaluate on the extension document is frozen (CDP).
@@ -553,6 +632,9 @@ export function useAppInit(): AppInitResult {
 
 		return () => {
 			cancelled = true;
+			disconnectBridgeRef.current?.();
+			disconnectBridgeRef.current = null;
+			bindFileTreeController(null);
 			windowContextRef.current?.dispose();
 			supervisorRef.current?.dispose();
 			supervisorRef.current = null;
@@ -785,6 +867,41 @@ export function useAppInit(): AppInitResult {
 		};
 	}, []);
 
+	const generateEnrollment = async (): Promise<void> => {
+		try {
+			const token =
+				(await enrollmentHostRef.current?.generate()) ??
+				(await enrollmentControllerRef.current?.generate());
+			if (token !== undefined) setEnrollmentToken(token);
+		} catch (err: unknown) {
+			reportWarn({
+				code: "E_HOST_UNKNOWN",
+				source: "panel",
+				message: "Failed to generate enrollment token",
+				cause: err,
+			});
+		}
+	};
+
+	const revokeEnrollment = async (): Promise<void> => {
+		try {
+			if (enrollmentHostRef.current) {
+				await enrollmentHostRef.current.revoke();
+			} else {
+				await enrollmentControllerRef.current?.revoke();
+			}
+			setEnrollmentToken(null);
+			setCliEnrolled(false);
+		} catch (err: unknown) {
+			reportWarn({
+				code: "E_HOST_UNKNOWN",
+				source: "panel",
+				message: "Failed to revoke enrollment token",
+				cause: err,
+			});
+		}
+	};
+
 	return {
 		initialized,
 		workerReady,
@@ -797,5 +914,10 @@ export function useAppInit(): AppInitResult {
 		sessionControllerRef,
 		filesControllerRef,
 		windowContextRef,
+		enrollmentToken,
+		bridgeConnected,
+		cliEnrolled,
+		generateEnrollment,
+		revokeEnrollment,
 	};
 }

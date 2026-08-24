@@ -4,6 +4,7 @@ import {
 	ExtensionJsClient,
 	type ExtjsRelayResponse,
 } from "../sidepanel/extension-js-client";
+import { scheduleFileTreeRefresh } from "../sidepanel/components/files/refresh-file-tree";
 import { getSkillService } from "../skills/skill-service";
 import { browsergentStore } from "../state/store";
 import type { PanelToWorker } from "../types/messages";
@@ -29,8 +30,11 @@ export class ExtjsController {
 			ExtensionJsClient.relayCallback = (msg: ExtjsRelayResponse) => {
 				this.postToWorker(msg);
 			};
+			// Panel FS writes and successful run_js cells (agent fs.move/delete/…)
+			// only used to bump filesVersion; the Files tree no longer re-lists on
+			// that counter (feedback loop). Schedule a real shallow re-list instead.
 			this.client.setOnFsMutation(() => {
-				browsergentStore.getState().incrementFilesVersion();
+				scheduleFileTreeRefresh();
 			});
 			browsergentStore.getState().extjsReady();
 		} catch (err: unknown) {

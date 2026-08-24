@@ -16,7 +16,9 @@
 		"test:mock": "npx playwright test tests/steer-mock.spec.ts",
 		"replay": "node scripts/replay-llm.mjs",
 		"record": "node scripts/record-cassette.mjs",
-		"smoke": "node scripts/smoke.mjs"
+		"smoke": "node scripts/smoke.mjs",
+		"host": "node --experimental-strip-types --no-warnings host/listen.ts",
+		"bridge": "node --experimental-strip-types --no-warnings host/cli.ts"
 	},
 	"dependencies": {
 		"@pi-oxide/dom-semantic-tree": "^0.1.1",

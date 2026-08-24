@@ -242,7 +242,7 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 
 	return (
 		<div class="relative">
-			{isEmpty && !disabled && placeholder && (
+			{isEmpty && placeholder && (
 				<div class="absolute inset-0 px-md py-sm text-sm text-text-dim pointer-events-none whitespace-pre-wrap truncate">
 					{placeholder}
 				</div>
@@ -254,12 +254,13 @@ export const ChipInput: FunctionalComponent<ChipInputProps> = ({
 				data-testid="task-input"
 				role="textbox"
 				aria-multiline="true"
+				aria-disabled={disabled ? "true" : "false"}
 				aria-label={placeholder ?? "Task input"}
-				onInput={handleInput}
-				onKeyDown={onKeyDown}
+				onInput={disabled ? undefined : handleInput}
+				onKeyDown={disabled ? undefined : onKeyDown}
 				onFocus={handleFocus}
 				onBlur={handleBlur}
-				onPaste={handlePaste}
+				onPaste={disabled ? undefined : handlePaste}
 				onCompositionStart={handleCompositionStart}
 				onCompositionEnd={handleCompositionEnd}
 				class={[

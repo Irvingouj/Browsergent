@@ -2,11 +2,14 @@ import type { StoreApi } from "zustand/vanilla";
 import type { BrowsergentError } from "../../errors/browsergent-error";
 import type { BrowsergentStore } from "../store";
 
+export type SessionOrigin = "chat" | "cli";
+
 export interface SessionListItem {
 	id: string;
 	title: string;
 	timestamp: number;
 	messageCount: number;
+	origin: SessionOrigin;
 	windowId?: number | null;
 	windowLabel?: string;
 	lifecycle?: "foreground" | "background";
@@ -33,7 +36,7 @@ export interface SessionSlice {
 	activeSessionChanged(id: string): void;
 	sessionTitleUpdated(id: string, title: string): void;
 	sessionDeleted(id: string): void;
-	sessionCreated(id: string): void;
+	sessionCreated(id: string, origin: SessionOrigin): void;
 	sessionStoreFailed(error: BrowsergentError): void;
 	sessionErrorDismissed(): void;
 }
@@ -53,7 +56,18 @@ export function createSessionSlice(
 			}));
 		},
 		sessionListLoaded(sessions) {
-			set((state) => ({ session: { ...state.session, sessions } }));
+			set((state) => {
+				const loadedIds = new Set(sessions.map((session) => session.id));
+				const missingCli = state.session.sessions.filter(
+					(session) => session.origin === "cli" && !loadedIds.has(session.id),
+				);
+				return {
+					session: {
+						...state.session,
+						sessions: [...missingCli, ...sessions],
+					},
+				};
+			});
 		},
 		activeSessionChanged(id) {
 			set((state) => ({ session: { ...state.session, activeSessionId: id } }));
@@ -82,19 +96,21 @@ export function createSessionSlice(
 				};
 			});
 		},
-		sessionCreated(id) {
+		sessionCreated(id, origin) {
 			set((state) => {
 				const newSession: SessionListItem = {
 					id,
 					title: `Session ${id.slice(0, 8)}`,
 					timestamp: Date.now(),
 					messageCount: 0,
+					origin,
 				};
 				return {
 					session: {
 						...state.session,
 						sessions: [newSession, ...state.session.sessions],
-						activeSessionId: id,
+						activeSessionId:
+							origin === "cli" ? state.session.activeSessionId : id,
 					},
 				};
 			});

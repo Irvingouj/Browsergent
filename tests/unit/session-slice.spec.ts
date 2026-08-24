@@ -14,8 +14,20 @@ describe("session slice", () => {
 
 	test("sessionListLoaded replaces the entire session list", () => {
 		const sessions = [
-			{ id: "s1", title: "Session 1", timestamp: 1000, messageCount: 3 },
-			{ id: "s2", title: "Session 2", timestamp: 2000, messageCount: 5 },
+			{
+				id: "s1",
+				title: "Session 1",
+				timestamp: 1000,
+				messageCount: 3,
+				origin: "chat" as const,
+			},
+			{
+				id: "s2",
+				title: "Session 2",
+				timestamp: 2000,
+				messageCount: 5,
+				origin: "chat" as const,
+			},
 		];
 
 		browsergentStore.getState().sessionListLoaded(sessions);
@@ -38,8 +50,20 @@ describe("session slice", () => {
 
 	test("sessionTitleUpdated finds session by id and updates title", () => {
 		browsergentStore.getState().sessionListLoaded([
-			{ id: "s1", title: "Old Title", timestamp: 1000, messageCount: 2 },
-			{ id: "s2", title: "Untouched", timestamp: 2000, messageCount: 4 },
+			{
+				id: "s1",
+				title: "Old Title",
+				timestamp: 1000,
+				messageCount: 2,
+				origin: "chat",
+			},
+			{
+				id: "s2",
+				title: "Untouched",
+				timestamp: 2000,
+				messageCount: 4,
+				origin: "chat",
+			},
 		]);
 
 		browsergentStore.getState().sessionTitleUpdated("s1", "New Title");
@@ -50,8 +74,20 @@ describe("session slice", () => {
 
 	test("sessionDeleted removes session and clears activeSessionId if it was active", () => {
 		browsergentStore.getState().sessionListLoaded([
-			{ id: "s1", title: "Session 1", timestamp: 1000, messageCount: 1 },
-			{ id: "s2", title: "Session 2", timestamp: 2000, messageCount: 2 },
+			{
+				id: "s1",
+				title: "Session 1",
+				timestamp: 1000,
+				messageCount: 1,
+				origin: "chat",
+			},
+			{
+				id: "s2",
+				title: "Session 2",
+				timestamp: 2000,
+				messageCount: 2,
+				origin: "chat",
+			},
 		]);
 		browsergentStore.getState().activeSessionChanged("s1");
 
@@ -63,8 +99,20 @@ describe("session slice", () => {
 
 	test("sessionDeleted removes session without clearing activeSessionId if another was active", () => {
 		browsergentStore.getState().sessionListLoaded([
-			{ id: "s1", title: "Session 1", timestamp: 1000, messageCount: 1 },
-			{ id: "s2", title: "Session 2", timestamp: 2000, messageCount: 2 },
+			{
+				id: "s1",
+				title: "Session 1",
+				timestamp: 1000,
+				messageCount: 1,
+				origin: "chat",
+			},
+			{
+				id: "s2",
+				title: "Session 2",
+				timestamp: 2000,
+				messageCount: 2,
+				origin: "chat",
+			},
 		]);
 		browsergentStore.getState().activeSessionChanged("s2");
 
@@ -74,18 +122,48 @@ describe("session slice", () => {
 	});
 
 	test("sessionCreated adds a new placeholder session and sets it as active", () => {
-		browsergentStore
-			.getState()
-			.sessionListLoaded([
-				{ id: "s1", title: "Existing", timestamp: 1000, messageCount: 1 },
-			]);
+		browsergentStore.getState().sessionListLoaded([
+			{
+				id: "s1",
+				title: "Existing",
+				timestamp: 1000,
+				messageCount: 1,
+				origin: "chat",
+			},
+		]);
 
-		browsergentStore.getState().sessionCreated("s2");
+		browsergentStore.getState().sessionCreated("s2", "chat");
 		const state = browsergentStore.getState().session;
 		expect(state.sessions).toHaveLength(2);
 		expect(state.sessions[0].id).toBe("s2");
 		expect(state.sessions[0].title).toBe("Session s2");
 		expect(state.sessions[0].messageCount).toBe(0);
+		expect(state.sessions[0].origin).toBe("chat");
 		expect(state.activeSessionId).toBe("s2");
+	});
+
+	test("sessionListLoaded keeps a CLI placeholder that the boot hydrate missed", () => {
+		browsergentStore.getState().sessionListLoaded([
+			{
+				id: "chat-1",
+				title: "Chat",
+				timestamp: 1000,
+				messageCount: 1,
+				origin: "chat",
+			},
+		]);
+		browsergentStore.getState().sessionCreated("cli-1", "cli");
+		browsergentStore.getState().sessionListLoaded([
+			{
+				id: "chat-1",
+				title: "Chat",
+				timestamp: 1000,
+				messageCount: 1,
+				origin: "chat",
+			},
+		]);
+		const ids = browsergentStore.getState().session.sessions.map((s) => s.id);
+		expect(ids).toContain("chat-1");
+		expect(ids).toContain("cli-1");
 	});
 });

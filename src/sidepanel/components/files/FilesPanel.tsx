@@ -9,6 +9,7 @@ import {
 import { useStore } from "zustand";
 import type { FilesController } from "../../../controllers/files";
 import { findSkillManifest } from "../../../controllers/files";
+import { reportWarn } from "../../../errors/report";
 import { getSkillService } from "../../../skills/skill-service";
 import {
 	selectContextMenu,
@@ -19,13 +20,13 @@ import {
 	selectSelectedFileId,
 } from "../../../state/selectors";
 import type { FileNode, FileNodeId } from "../../../state/slices/files-slice";
-import { ROOT_DIR_PATH } from "../../../state/slices/files-slice";
 import { browsergentStore } from "../../../state/store";
 import { FileContextMenu } from "./FileContextMenu";
 import { FilePreview } from "./FilePreview";
 import { FilesToolbar } from "./FilesToolbar";
 import { FileTree } from "./FileTree";
 import { MoveDialog } from "./MoveDialog";
+import { refreshShallowFileTree } from "./refresh-file-tree";
 
 interface FilesPanelProps {
 	filesController: FilesController;
@@ -70,23 +71,27 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		[expandedFolderIds],
 	);
 
-	// Load only root children when the Files panel mounts. Do NOT re-list on
-	// filesVersion — that loops: setDirectoryChildren bumps filesVersion →
-	// effect re-fires → selection/preview thrash.
+	// Always re-list when the Files panel opens. Agent run_js fs.move/delete can
+	// leave the in-memory tree stale (ghost nodes → E_NOT_FOUND on click).
+	// Do NOT re-list on filesVersion — that loops: setDirectoryChildren bumps
+	// filesVersion → effect re-fires → selection/preview thrash.
 	useEffect(() => {
+		let cancelled = false;
 		const timer = setTimeout(() => {
-			const loaded = browsergentStore.getState().files.loadedDirPaths;
-			if (loaded.includes(ROOT_DIR_PATH)) return;
-			filesController
-				.listDirectChildren(ROOT_DIR_PATH)
-				.then((nodes) =>
-					browsergentStore.getState().setDirectoryChildren(null, nodes),
-				)
-				.catch((err: unknown) => {
-					console.warn("Failed to load files:", err);
+			void refreshShallowFileTree(filesController).catch((err: unknown) => {
+				if (cancelled) return;
+				reportWarn({
+					code: "E_HOST_UNKNOWN",
+					source: "panel",
+					message: "Failed to load files",
+					cause: err,
 				});
+			});
 		}, 0);
-		return () => clearTimeout(timer);
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
 	}, [filesController]);
 
 	useEffect(() => {
@@ -152,7 +157,8 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 			const isExpanding = !state.files.expandedFolderIds.includes(id);
 			state.toggleFolderExpanded(id);
 			if (!isExpanding) return;
-			if (state.files.loadedDirPaths.includes(id)) return;
+			// Always re-list on expand so moved/deleted children disappear even when
+			// the folder was listed earlier this session.
 			if (loadingDirsRef.current.has(id)) return;
 			loadingDirsRef.current.add(id);
 			filesController
@@ -161,7 +167,12 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 					browsergentStore.getState().setDirectoryChildren(id, children);
 				})
 				.catch((err: unknown) => {
-					console.warn("Failed to load folder:", err);
+					reportWarn({
+						code: "E_HOST_UNKNOWN",
+						source: "panel",
+						message: "Failed to load folder",
+						cause: err,
+					});
 				})
 				.finally(() => {
 					loadingDirsRef.current.delete(id);
@@ -170,9 +181,30 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 		[filesController],
 	);
 
-	const handleFileClick = useCallback((fileId: string) => {
-		browsergentStore.getState().setSelectedFileId(fileId);
-	}, []);
+	const handleFileClick = useCallback(
+		async (fileId: string): Promise<void> => {
+			// Re-sync the tree before opening a file so ghost nodes (agent moves)
+			// are pruned instead of showing E_NOT_FOUND in the preview.
+			try {
+				await refreshShallowFileTree(filesController);
+			} catch (err: unknown) {
+				reportWarn({
+					code: "E_HOST_UNKNOWN",
+					source: "panel",
+					message: "Failed to refresh files before open",
+					cause: err,
+				});
+			}
+			const stillThere = browsergentStore.getState().files.nodes[fileId];
+			if (!stillThere || stillThere.kind !== "file") {
+				browsergentStore.getState().setSelectedFileId(null);
+				setError("File no longer exists — tree refreshed");
+				return;
+			}
+			browsergentStore.getState().setSelectedFileId(fileId);
+		},
+		[filesController],
+	);
 
 	const handleDelete = useCallback(
 		async (id: FileNodeId): Promise<void> => {
@@ -295,7 +327,7 @@ export const FilesPanel: FunctionalComponent<FilesPanelProps> = ({
 						renamingNodeId={renamingNodeId}
 						childrenByParent={childrenByParent}
 						onToggle={toggleExpand}
-						onSelectFile={handleFileClick}
+						onSelectFile={(id) => void handleFileClick(id)}
 						onDelete={(id) => void handleDelete(id)}
 						onContextMenu={openContextMenu}
 						onRename={handleRename}

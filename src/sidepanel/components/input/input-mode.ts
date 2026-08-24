@@ -39,6 +39,7 @@ export interface KeyActionCtx {
 	caretAtStart: boolean;
 	caretAtEnd: boolean;
 	isRunning: boolean;
+	locked?: boolean;
 }
 
 function textEditEffect(e: KeyboardEvent): KeyAction["effect"] | null {
@@ -116,6 +117,7 @@ export function interpretKey(
 	e: KeyboardEvent,
 	ctx: KeyActionCtx,
 ): KeyAction | null {
+	if (ctx.locked) return null;
 	switch (mode.kind) {
 		case "picker-at":
 		case "picker-slash": {

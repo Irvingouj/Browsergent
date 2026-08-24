@@ -62,6 +62,7 @@ export interface InputModeApi {
 interface UseInputModeArgs {
 	filesController: FilesController | null;
 	isRunning: boolean;
+	locked?: boolean;
 	onSubmit: () => void;
 	/** Read the latest Draft synchronously (key handlers close over one render). */
 	getDraft: () => Draft;
@@ -72,6 +73,7 @@ interface UseInputModeArgs {
 export function useInputMode({
 	filesController,
 	isRunning,
+	locked = false,
 	onSubmit,
 	getDraft,
 	dispatch,
@@ -230,6 +232,7 @@ export function useInputMode({
 				caretAtStart,
 				caretAtEnd,
 				isRunning,
+				locked,
 			};
 			const action = interpretKey(modeRef.current, e, ctx);
 			if (!action) return;
@@ -343,7 +346,7 @@ export function useInputMode({
 			// will pick up the result. (They are Ctrl-Backspace / Cmd-K combos;
 			// falling through to default browser behavior is acceptable.)
 		},
-		[isRunning, onSubmit, getDraft, dispatch, pickerItems, userHistory],
+		[isRunning, locked, onSubmit, getDraft, dispatch, pickerItems, userHistory],
 	);
 
 	// --- Blur ---

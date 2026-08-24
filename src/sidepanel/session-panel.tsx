@@ -121,7 +121,8 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	);
 
 	const visibleSessions = sessions.filter(
-		(s) => s.messageCount > 0 || s.id === activeSessionId,
+		(s) =>
+			s.messageCount > 0 || s.id === activeSessionId || s.origin === "cli",
 	);
 
 	return (
@@ -204,6 +205,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 									data-session-id={session.id}
 									data-session-openable={session.openable !== false}
 									data-session-claimable={rowClaimable ? "true" : "false"}
+									data-session-origin={session.origin}
 									onClick={() => handleItemClick(session)}
 									class={[
 										"group px-md py-sm border-b border-border transition-all relative",

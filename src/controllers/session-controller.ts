@@ -5,7 +5,10 @@ import {
 	isChatMessage,
 } from "../protocol/worker-guards";
 
-import type { SessionListItem } from "../state/slices/session-slice";
+import type {
+	SessionListItem,
+	SessionOrigin,
+} from "../state/slices/session-slice";
 import { browsergentStore } from "../state/store";
 import type { StorageBackend } from "../storage/storage-backend";
 import type {
@@ -34,6 +37,7 @@ interface SessionData {
 	id: string;
 	windowId?: number | null;
 	lifecycle?: SessionLifecycle;
+	origin: SessionOrigin;
 	messages: ChatMessage[];
 	trace: AgentTraceEntry[];
 	diagnostics: AgentDiagnosticEvent[];
@@ -51,6 +55,7 @@ interface StoredSessionMeta {
 	id: string;
 	windowId: number | null;
 	lifecycle: SessionLifecycle;
+	origin: SessionOrigin;
 	timestamp: number;
 	title?: string;
 	customTitle?: string;
@@ -98,6 +103,7 @@ function metaFromSessionData(
 		id: data.id,
 		windowId: data.windowId ?? null,
 		lifecycle: data.lifecycle ?? "foreground",
+		origin: data.origin === "cli" ? "cli" : "chat",
 		timestamp: data.timestamp,
 		title: data.title,
 		customTitle: data.customTitle,
@@ -137,6 +143,7 @@ function parseStoredSessionMeta(raw: unknown): StoredSessionMeta | null {
 		id: v.id,
 		windowId,
 		lifecycle,
+		origin: v.origin === "cli" ? "cli" : "chat",
 		timestamp: v.timestamp,
 		messageCount: Math.max(0, Math.floor(v.messageCount)),
 		bytes: v.bytes,
@@ -248,11 +255,16 @@ function normalizeDiagnostics(
 	};
 }
 
-function emptySessionData(id: string, windowId?: number | null): SessionData {
+function emptySessionData(
+	id: string,
+	windowId?: number | null,
+	origin: SessionOrigin = "chat",
+): SessionData {
 	return {
 		id,
 		windowId: windowId ?? null,
 		lifecycle: "foreground",
+		origin,
 		messages: [],
 		trace: [],
 		diagnostics: [],
@@ -584,20 +596,28 @@ export class SessionController {
 		return this.createSessionAttachedTo(windowId);
 	}
 
-	async createSessionAttachedTo(windowId: number): Promise<string> {
+	async createSessionAttachedTo(
+		windowId: number,
+		origin: SessionOrigin = "chat",
+	): Promise<string> {
 		this.bindPanelWindow(windowId);
-		const attached = await this.findSessionsForWindow(windowId);
-		for (const session of attached) {
-			if (session.lifecycle === "foreground") {
-				await this.setSessionLifecycle(session.id, "background");
+		if (origin === "chat") {
+			const attached = await this.findSessionsForWindow(windowId);
+			for (const session of attached) {
+				if (session.lifecycle === "foreground") {
+					await this.setSessionLifecycle(session.id, "background");
+				}
 			}
 		}
 
 		const newId = crypto.randomUUID();
-		const empty = emptySessionData(newId, windowId);
+		const empty = emptySessionData(newId, windowId, origin);
+		if (origin === "cli") empty.lifecycle = "background";
 		await this.persistSessionBody(empty);
-		this.meta.panelActiveSession[String(windowId)] = newId;
-		await this.persistMeta();
+		if (origin === "chat") {
+			this.meta.panelActiveSession[String(windowId)] = newId;
+			await this.persistMeta();
+		}
 		await this.trimStoredSessions();
 		return newId;
 	}
@@ -920,6 +940,7 @@ export class SessionController {
 			id: activeId,
 			windowId: existing?.windowId ?? this.panelWindowId,
 			lifecycle: existing?.lifecycle ?? "foreground",
+			origin: existing?.origin === "cli" ? "cli" : "chat",
 			messages,
 			trace,
 			diagnostics: diags,
@@ -957,11 +978,11 @@ export class SessionController {
 		}
 	}
 
-	async createSession(): Promise<string> {
+	async createSession(origin: SessionOrigin = "chat"): Promise<string> {
 		if (this.panelWindowId === null) {
 			throw new Error("createSession requires bindPanelWindow");
 		}
-		return this.createSessionAttachedTo(this.panelWindowId);
+		return this.createSessionAttachedTo(this.panelWindowId, origin);
 	}
 
 	async switchSession(id: string): Promise<{
@@ -1050,6 +1071,7 @@ export class SessionController {
 					title: s.customTitle || s.title || `Session ${s.id.slice(0, 8)}`,
 					timestamp: s.timestamp,
 					messageCount: s.messageCount,
+					origin: s.origin === "cli" ? "cli" : "chat",
 					windowId: s.windowId,
 					windowLabel: formatWindowLabel(s.windowId, closed, live),
 					lifecycle: s.lifecycle,

@@ -235,6 +235,13 @@ describe("ExtensionJsClient", () => {
 		await expect(client.runJs("1+1")).rejects.toThrow("init failed");
 	});
 
+	test("lazy runJs after bindWindowId inits the acting host for that window", async () => {
+		const { mockInit } = await getMocks();
+		client.bindWindowId(42);
+		await client.runJs("1+1");
+		expect(mockInit).toHaveBeenCalledWith({ windowId: 42 });
+	});
+
 	test("stop tears down and reinitializes session", async () => {
 		await client.init();
 		const { mockStopWith } = await getMocks();
@@ -272,6 +279,44 @@ describe("ExtensionJsClient", () => {
 			id: "req-1",
 			result: { status: "ok", value: 42 },
 		});
+	});
+
+	test("handleRelayRequest fires onFsMutation after successful run_js", async () => {
+		await client.init();
+		const { mockRunCellAsync } = await getMocks();
+		mockRunCellAsync.mockResolvedValue({ status: "ok", value: null });
+
+		const calls: string[] = [];
+		client.setOnFsMutation(() => calls.push("hit"));
+		ExtensionJsClient.relayCallback = () => {};
+
+		client.handleRelayRequest({
+			type: "extjsRunRequest",
+			id: "req-fs",
+			code: "await fs.move('/a','/b')",
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(calls).toEqual(["hit"]);
+	});
+
+	test("handleRelayRequest does NOT fire onFsMutation on failure", async () => {
+		await client.init();
+		const { mockRunCellAsync } = await getMocks();
+		mockRunCellAsync.mockRejectedValue(new Error("boom"));
+
+		const calls: string[] = [];
+		client.setOnFsMutation(() => calls.push("hit"));
+		ExtensionJsClient.relayCallback = () => {};
+
+		client.handleRelayRequest({
+			type: "extjsRunRequest",
+			id: "req-fail",
+			code: "throw new Error('x')",
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(calls).toEqual([]);
 	});
 
 	test("handleRelayRequest logs error when relay callback is not installed", async () => {

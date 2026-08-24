@@ -1,3 +1,4 @@
+import type { SessionOrigin } from "./slices/session-slice";
 import type { ProviderConfig } from "./slices/settings-slice";
 import type { BrowsergentStore } from "./store";
 
@@ -82,6 +83,13 @@ export const selectSessionPanelOpen = (s: BrowsergentStore) =>
 export const selectSessions = (s: BrowsergentStore) => s.session.sessions;
 export const selectActiveSessionId = (s: BrowsergentStore) =>
 	s.session.activeSessionId;
+export const selectActiveSessionOrigin = (
+	s: BrowsergentStore,
+): SessionOrigin => {
+	const id = s.session.activeSessionId;
+	const origin = s.session.sessions.find((session) => session.id === id)?.origin;
+	return origin ?? "chat";
+};
 export const selectSessionError = (s: BrowsergentStore) => s.session.error;
 export const selectExtjsStatus = (s: BrowsergentStore) => s.extjs.status;
 export const selectBootHealth = (s: BrowsergentStore) => s.boot;

@@ -34,6 +34,7 @@ import { matchSkillsToUrl } from "../skills/url-match";
 import {
 	selectActiveProvider,
 	selectActiveSessionId,
+	selectActiveSessionOrigin,
 	selectActiveTab,
 	selectAgentStatus,
 	selectAgentStatusReason,
@@ -45,7 +46,6 @@ import {
 	selectRetryState,
 	selectSessionError,
 	selectSessionPanelOpen,
-	selectSessions,
 	selectSettingsOpen,
 	selectSkillDiagnostics,
 	selectTraceEntries,
@@ -58,6 +58,7 @@ import { ChatPanel } from "./components/ChatPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
 import { refreshShallowFileTree } from "./components/files/refresh-file-tree";
 import { InputBar } from "./components/input/InputBar";
+import { EnrollmentPanel } from "./components/EnrollmentPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
@@ -147,8 +148,11 @@ const App: FunctionalComponent = () => {
 	const activeProvider = useStore(browsergentStore, selectActiveProvider);
 	const showSettings = useStore(browsergentStore, selectSettingsOpen);
 	const sessionPanelOpen = useStore(browsergentStore, selectSessionPanelOpen);
-	const _sessions = useStore(browsergentStore, selectSessions);
 	const _activeSessionId = useStore(browsergentStore, selectActiveSessionId);
+	const activeSessionOrigin = useStore(
+		browsergentStore,
+		selectActiveSessionOrigin,
+	);
 	const sessionError = useStore(browsergentStore, selectSessionError);
 	const bootHealth = useStore(browsergentStore, selectBootHealth);
 	const bootHostError = useStore(browsergentStore, selectBootHostError);
@@ -170,6 +174,11 @@ const App: FunctionalComponent = () => {
 		sessionControllerRef,
 		filesControllerRef,
 		windowContextRef,
+		enrollmentToken,
+		bridgeConnected,
+		cliEnrolled,
+		generateEnrollment,
+		revokeEnrollment,
 	} = useAppInit();
 	const chatScrollRef = useRef<HTMLDivElement | null>(null);
 	const inputRef = useRef<HTMLDivElement | null>(null);
@@ -288,6 +297,9 @@ const App: FunctionalComponent = () => {
 			}
 			const sessionId = sessionControllerRef.current?.getActiveSessionId();
 			if (!sessionId) return;
+			if (selectActiveSessionOrigin(browsergentStore.getState()) === "cli") {
+				return;
+			}
 
 			// Optimistic paint (steer-parity): clear draft + user bubble + loading
 			// BEFORE slow preflight (extjs init / skills / files). Without this the
@@ -566,6 +578,9 @@ const App: FunctionalComponent = () => {
 		(text: string) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
+			if (selectActiveSessionOrigin(browsergentStore.getState()) === "cli") {
+				return;
+			}
 			const runId = browsergentStore.getState().agent.activeRunId;
 			if (!runId) return;
 			browsergentStore.getState().setTaskDraft("");
@@ -989,7 +1004,7 @@ const App: FunctionalComponent = () => {
 			supervisor.startForeground(newId);
 			supervisor.resetForegroundUi();
 		}
-		browsergentStore.getState().sessionCreated(newId);
+		browsergentStore.getState().sessionCreated(newId, "chat");
 		browsergentStore.getState().sessionPanelOpenChanged(false);
 		await reloadSessionList();
 	}, [reloadSessionList, sessionControllerRef, supervisorRef]);
@@ -1151,6 +1166,20 @@ const App: FunctionalComponent = () => {
 						<button
 							type="button"
 							onClick={() =>
+								browsergentStore.getState().setActiveTab("enroll")
+							}
+							class={[
+								"px-sm py-[3px] text-xs font-medium cursor-pointer transition-all rounded-full",
+								activeTab === "enroll"
+									? "bg-text-primary text-bg-base"
+									: "bg-transparent text-text-secondary hover:text-text-primary",
+							].join(" ")}
+						>
+							Enroll
+						</button>
+						<button
+							type="button"
+							onClick={() =>
 								browsergentStore.getState().setActiveTab("settings")
 							}
 							class={[
@@ -1220,6 +1249,19 @@ const App: FunctionalComponent = () => {
 						settingsController={settingsController}
 						onExportConversation={handleExportConversation}
 					/>
+				) : activeTab === "enroll" ? (
+					<EnrollmentPanel
+						token={enrollmentToken}
+						connected={bridgeConnected}
+						cliEnrolled={cliEnrolled}
+						ready={initialized}
+						onGenerate={() => {
+							void generateEnrollment();
+						}}
+						onRevoke={() => {
+							void revokeEnrollment();
+						}}
+					/>
 				) : initialized && filesControllerRef.current ? (
 					<FilesPanel
 						filesController={filesControllerRef.current}
@@ -1262,6 +1304,7 @@ const App: FunctionalComponent = () => {
 			{activeTab === "chat" && (
 				<InputBar
 					isRunning={isRunning}
+					disabled={activeSessionOrigin === "cli"}
 					onRun={handleRun}
 					onSteer={handleSteer}
 					onStop={handleStop}

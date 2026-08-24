@@ -123,6 +123,10 @@ export class ExtensionJsClient implements FsClient {
 		this.onFsMutation = cb;
 	}
 
+	bindWindowId(windowId: number): void {
+		this.boundWindowId = windowId;
+	}
+
 	async init(options?: { windowId?: number }): Promise<void> {
 		if (typeof options?.windowId === "number") {
 			this.boundWindowId = options.windowId;
@@ -310,6 +314,10 @@ export class ExtensionJsClient implements FsClient {
 		this.runJs(code, traceId)
 			.then((result) => {
 				this.dispatchRelayResponse({ type: "extjsRunResult", id, result });
+				// Agent cells use session.fs.* directly (not the panel FsClient wrappers),
+				// so move/delete/write never hit the per-method onFsMutation hooks.
+				// Treat a successful run_js as a possible FS mutation and refresh the tree.
+				this.onFsMutation?.();
 			})
 			.catch((err: Error) => {
 				if (ExtensionJsClient.relayCallback) {
@@ -371,6 +379,14 @@ export class ExtensionJsClient implements FsClient {
 	}
 
 	static relayCallback: ((msg: ExtjsRelayResponse) => void) | null = null;
+
+	async reset(): Promise<void> {
+		await this.ensureReady();
+		if (!this.session) {
+			throw new Error("ExtensionSession not available");
+		}
+		await this.session.reset();
+	}
 
 	async stop(): Promise<void> {
 		if (!this.session || !this.runnerPromise) return;

@@ -147,7 +147,7 @@ describe("ExtjsController", () => {
 		expect(mockStoreState.incrementFilesVersion).not.toHaveBeenCalled();
 	});
 
-	test("init wires onFsMutation to bump filesVersion", async () => {
+	test("init wires onFsMutation to schedule a file-tree refresh", async () => {
 		const { mockInstance, mockStoreState } = await getMocks();
 		const { post } = makePoster();
 		const ctrl = new ExtjsController(post);
@@ -156,6 +156,8 @@ describe("ExtjsController", () => {
 		expect(mockInstance.setOnFsMutation).toHaveBeenCalledTimes(1);
 		const cb = mockInstance.setOnFsMutation.mock.calls[0][0] as () => void;
 		cb();
+		// scheduleFileTreeRefresh bumps filesVersion immediately (mention picker),
+		// then debounces the actual shallow re-list when a controller is bound.
 		expect(mockStoreState.incrementFilesVersion).toHaveBeenCalledTimes(1);
 	});
 

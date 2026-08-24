@@ -48,4 +48,13 @@ describe("createUiSlice", () => {
 		slice.setActiveTab("files");
 		expect(calls[0].ui.activeTab).toBe("files");
 	});
+
+	test("setActiveTab can open the Enroll tab", () => {
+		const { set, calls } = makeSet();
+		const slice = createUiSlice(
+			set as unknown as Parameters<typeof createUiSlice>[0],
+		);
+		slice.setActiveTab("enroll");
+		expect(calls[0].ui.activeTab).toBe("enroll");
+	});
 });

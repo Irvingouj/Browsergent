@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
 	selectActiveProvider,
 	selectActiveSessionId,
+	selectActiveSessionOrigin,
 	selectActiveTab,
 	selectAgentActiveRunId,
 	selectAgentStatus,
@@ -93,7 +94,7 @@ describe("selectors", () => {
 		},
 		session: {
 			sessionPanelOpen: true,
-			sessions: [{ id: "s1", title: "Test" }],
+			sessions: [{ id: "s1", title: "Test", origin: "chat" as const }],
 			activeSessionId: "s1",
 		},
 		extjs: { status: "ready" as const, output: "" },
@@ -165,11 +166,25 @@ describe("selectors", () => {
 	});
 
 	test("selectSessions returns sessions", () => {
-		expect(selectSessions(mockStore)).toEqual([{ id: "s1", title: "Test" }]);
+		expect(selectSessions(mockStore)).toEqual([
+			{ id: "s1", title: "Test", origin: "chat" },
+		]);
 	});
 
 	test("selectActiveSessionId returns active session id", () => {
 		expect(selectActiveSessionId(mockStore)).toBe("s1");
+	});
+
+	test("selectActiveSessionOrigin reads origin from the active session, not a captured closure", () => {
+		expect(selectActiveSessionOrigin(mockStore)).toBe("chat");
+		const cliStore = {
+			...mockStore,
+			session: {
+				...mockStore.session,
+				sessions: [{ id: "s1", title: "CLI", origin: "cli" as const }],
+			},
+		} as unknown as BrowsergentStore;
+		expect(selectActiveSessionOrigin(cliStore)).toBe("cli");
 	});
 
 	test("selectExtjsStatus returns extjs status", () => {

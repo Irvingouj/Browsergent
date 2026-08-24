@@ -107,6 +107,23 @@ describe("InputBar", () => {
 		expect(html).toContain('data-testid="stop-button"');
 	});
 
+	test("locks Chat input and hides Run when the session belongs to the CLI", () => {
+		const html = render(
+			<InputBar
+				isRunning={false}
+				disabled={true}
+				onRun={() => {}}
+				onSteer={() => {}}
+				onStop={() => {}}
+				filesController={null}
+				sessionId="session-1"
+			/>,
+		);
+		expect(html).toContain("CLI session — Chat input is locked");
+		expect(html).toContain('aria-disabled="true"');
+		expect(html).not.toContain('data-testid="run-button"');
+	});
+
 	test("does not disable input when not running", () => {
 		const html = render(
 			<InputBar
