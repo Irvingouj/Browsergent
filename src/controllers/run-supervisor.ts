@@ -336,6 +336,8 @@ export class RunSupervisor {
 					.finalizeAssistantMessage(event.messageId, streamed);
 				break;
 			}
+			case "agentHistoryMessage":
+				break;
 			case "agentMessageEnd": {
 				const sig = getStreamingSignal(event.messageId);
 				const text = sig?.value ?? "";
@@ -464,12 +466,16 @@ export class RunSupervisor {
 			"agentMessage",
 			"agentTextDelta",
 			"agentMessageEnd",
+			"agentHistoryMessage",
 			"agentTrace",
 			"agentDiagnostic",
 			"agentError",
 		]);
 		if (persistTypes.has(event.type)) {
 			await this.sink.applyEvent(state.sessionId, event);
+			if (event.type === "agentHistoryMessage") {
+				await this.sink.flush(state.sessionId);
+			}
 		}
 	}
 }

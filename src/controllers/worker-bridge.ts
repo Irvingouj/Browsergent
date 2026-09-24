@@ -258,6 +258,10 @@ export class WorkerBridge {
 				this.finalizeMessageSignal(raw.messageId);
 				break;
 			}
+			case "agentHistoryMessage": {
+				this.dispatchRunEvent(raw.runId, raw);
+				break;
+			}
 			case "agentTrace": {
 				this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;

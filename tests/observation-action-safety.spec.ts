@@ -136,6 +136,7 @@ test("navigation click can read the destination title in the same run_js cell", 
 	const code = `const d = await page.snapshot_data();
 	const link = d.nodes.find(n => n.name === "More information...");
 	await page.click({ refId: link.refId });
+	await page.wait_for("title", 10000);
 	throw new Error("DESTINATION_TITLE:" + await page.title());`;
 	const mock = startMockAnthropicServer({
 		responses: [

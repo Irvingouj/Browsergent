@@ -226,7 +226,7 @@ export async function openSecondWindow(
 	extensionId: string,
 	_anchor?: Page,
 	options?: { onPage?: (page: Page) => void },
-): Promise<{ sidePanel: Page; windowId: number }> {
+): Promise<{ sidePanel: Page; windowId: number; sessionId: string | null }> {
 	let serviceWorker = context.serviceWorkers()[0];
 	if (!serviceWorker) {
 		serviceWorker = await context.waitForEvent("serviceworker");
@@ -378,7 +378,12 @@ export async function openSecondWindow(
 	if (!Number.isFinite(windowId) || windowId <= 0) {
 		throw new Error(`Second window has invalid data-window-id: ${windowId}`);
 	}
-	return { sidePanel: newPage, windowId };
+	return {
+		sidePanel: newPage,
+		windowId,
+		sessionId:
+			typeof finalState?.sessionId === "string" ? finalState.sessionId : null,
+	};
 }
 
 /** Close a Chrome window by id (simulates merge destroying the removed window). */

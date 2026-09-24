@@ -9,6 +9,7 @@ import type { SessionController } from "./session-controller";
 export class SessionRunSink {
 	private readonly buffers = new Map<string, SessionSnapshot>();
 	private readonly bufferLoads = new Map<string, Promise<SessionSnapshot>>();
+	private readonly eventQueues = new Map<string, Promise<void>>();
 	private readonly saveTimers = new Map<
 		string,
 		ReturnType<typeof setTimeout>
@@ -19,6 +20,7 @@ export class SessionRunSink {
 	invalidate(sessionId: string): void {
 		this.buffers.delete(sessionId);
 		this.bufferLoads.delete(sessionId);
+		this.eventQueues.delete(sessionId);
 		const timer = this.saveTimers.get(sessionId);
 		if (timer) {
 			clearTimeout(timer);
@@ -27,9 +29,20 @@ export class SessionRunSink {
 	}
 
 	async applyEvent(sessionId: string, event: WorkerToPanel): Promise<void> {
-		const snapshot = await this.ensureBuffer(sessionId);
-		applyRunEvent(snapshot, event);
-		this.scheduleSave(sessionId, snapshot);
+		const previous = this.eventQueues.get(sessionId) ?? Promise.resolve();
+		const current = previous.then(async () => {
+			const snapshot = await this.ensureBuffer(sessionId);
+			applyRunEvent(snapshot, event);
+			this.scheduleSave(sessionId, snapshot);
+		});
+		this.eventQueues.set(sessionId, current);
+		try {
+			await current;
+		} finally {
+			if (this.eventQueues.get(sessionId) === current) {
+				this.eventQueues.delete(sessionId);
+			}
+		}
 	}
 
 	private async ensureBuffer(sessionId: string): Promise<SessionSnapshot> {
@@ -45,6 +58,7 @@ export class SessionRunSink {
 				loaded?.messages ?? [],
 				loaded?.trace ?? [],
 				loaded?.diagnostics ?? [],
+				loaded?.transcript,
 			);
 			this.buffers.set(sessionId, snapshot);
 			this.bufferLoads.delete(sessionId);
@@ -64,12 +78,14 @@ export class SessionRunSink {
 				snapshot.messages,
 				snapshot.trace,
 				snapshot.diagnostics,
+				snapshot.transcript,
 			);
 		}, 300);
 		this.saveTimers.set(sessionId, timer);
 	}
 
 	async flush(sessionId: string): Promise<void> {
+		await this.eventQueues.get(sessionId);
 		const timer = this.saveTimers.get(sessionId);
 		if (timer) {
 			clearTimeout(timer);
@@ -82,6 +98,7 @@ export class SessionRunSink {
 			snapshot.messages,
 			snapshot.trace,
 			snapshot.diagnostics,
+			snapshot.transcript,
 		);
 	}
 }

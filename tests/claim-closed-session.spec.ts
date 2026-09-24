@@ -20,11 +20,12 @@ async function runBThenClose(
 	assistantText: string,
 	userText: string,
 ) {
-	const { sidePanel: panelB, windowId: windowB } = await openSecondWindow(
-		context,
-		extensionId,
-		panelA,
-	);
+	const {
+		sidePanel: panelB,
+		windowId: windowB,
+		sessionId,
+	} = await openSecondWindow(context, extensionId, panelA);
+	if (!sessionId) throw new Error("Window B did not bind a session");
 	await configureMockProvider(panelB, mockUrl);
 	await typeTask(panelB, userText);
 	await clickRun(panelB);
@@ -34,9 +35,15 @@ async function runBThenClose(
 	await expect(panelB.getByTestId("agent-status")).toContainText(/done/, {
 		timeout: 15_000,
 	});
+	await panelB.reload();
+	await expect(
+		panelB
+			.locator('[data-testid="chat-message-assistant"]')
+			.filter({ hasText: assistantText }),
+	).toBeVisible({ timeout: 15_000 });
 	await panelA.bringToFront();
 	await closeChromeWindow(context, windowB);
-	return { windowB };
+	return { windowB, sessionId };
 }
 
 /**
@@ -108,10 +115,10 @@ test("claim closed session: Open in this window rebinds and hydrates chat", asyn
 });
 
 /**
- * Orphan path: only Chrome window gone — no broadcastWindowClose.
- * Relies on chrome.windows.getAll live set (real merge/close event gap).
+ * The remaining panel can reclaim a persisted session after the other Chrome
+ * window disappears, using the real window lifecycle and live-window state.
  */
-test("claim orphan session without close event uses live window set", async () => {
+test("claim session after its Chrome window disappears", async () => {
 	test.setTimeout(90_000);
 	const mock = startMockAnthropicServer({
 		responses: [finalTextTurn("msg-orphan-b", "Orphan content from B")],
@@ -123,7 +130,7 @@ test("claim orphan session without close event uses live window set", async () =
 		close,
 	} = await launchExtension();
 	try {
-		await runBThenClose(
+		const { windowB, sessionId } = await runBThenClose(
 			panelA,
 			context,
 			extensionId,
@@ -131,27 +138,27 @@ test("claim orphan session without close event uses live window set", async () =
 			"Orphan content from B",
 			"orphan user on B",
 		);
-		// Intentionally no broadcastWindowClose.
-
-		await domClickButton(panelA, "More options");
-		const claimable = panelA.locator(
-			'[data-testid="session-item"][data-session-claimable="true"]',
-		);
+		// Intentionally no explicit lifecycle broadcast; wait until Chrome's live
+		// window set confirms B is gone before checking the public session list.
 		await expect
 			.poll(
-				async () => {
-					const n = await claimable.count();
-					if (n === 0) {
-						await panelA.keyboard.press("Escape").catch(() => {});
-						await domClickButton(panelA, "More options");
-					}
-					return n;
-				},
-				{ timeout: 25_000 },
+				() =>
+					panelA.evaluate(async (closedWindowId) => {
+						const windows = await chrome.windows.getAll();
+						return windows.some((window) => window.id === closedWindowId);
+					}, windowB),
+				{ timeout: 10_000 },
 			)
-			.toBeGreaterThan(0);
+			.toBe(false);
 
-		await claimable.first().getByTestId("claim-closed-session").click();
+		await domClickButton(panelA, "More options");
+		const sessionRow = panelA.locator(
+			`[data-testid="session-item"][data-session-id="${sessionId}"]`,
+		);
+		await expect(sessionRow).toBeVisible({ timeout: 25_000 });
+		await expect(sessionRow).toHaveAttribute("data-session-claimable", "true");
+
+		await sessionRow.getByTestId("claim-closed-session").click();
 		await expect(
 			panelA
 				.locator('[data-testid="chat-message-assistant"]')

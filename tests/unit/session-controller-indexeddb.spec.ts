@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { SessionController } from "../../src/controllers/session-controller";
 import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
-import { initBoundController, requireActiveId } from "./session-test-utils";
+import {
+	initBoundController,
+	requireActiveId,
+	transcriptFromMessages,
+} from "./session-test-utils";
 
 import "fake-indexeddb/auto";
 
@@ -65,6 +70,34 @@ describe("SessionController with IndexedDB (window-bound)", () => {
 		await ctrl.clear();
 
 		expect(await ctrl.load()).toBeNull();
+	});
+
+	test("active transcript branch survives an IndexedDB reload", async () => {
+		const { ctrl, sessionId } = await initBoundController(storage);
+		const messages = [
+			{ kind: "user" as const, id: "u1", text: "First", timestamp: 1 },
+			{ kind: "assistant" as const, id: "a1", text: "Answer", timestamp: 2 },
+			{ kind: "user" as const, id: "u2", text: "Second", timestamp: 3 },
+		];
+		await ctrl.saveForSession(
+			sessionId,
+			messages,
+			[],
+			[],
+			transcriptFromMessages(messages),
+		);
+		await ctrl.selectTranscriptLeaf(sessionId, "u1");
+
+		await storage.close();
+		storage = new IndexedDBStorage();
+		await storage.init();
+		const reloaded = new SessionController(storage);
+		await reloaded.init();
+		const loaded = await reloaded.loadForSession(sessionId);
+
+		expect(loaded?.history.map((entry) => entry.entryId)).toEqual(["u1"]);
+		expect(Object.keys(loaded?.transcript.entries ?? {})).toHaveLength(3);
+		expect(loaded?.messages).toEqual([messages[0]]);
 	});
 
 	test("load() rejects malformed session", async () => {

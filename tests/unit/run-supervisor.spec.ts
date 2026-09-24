@@ -3,6 +3,8 @@ import { RunSupervisor } from "../../src/controllers/run-supervisor";
 import { SessionController } from "../../src/controllers/session-controller";
 import { browsergentStore } from "../../src/state/store";
 import { MemoryStorage } from "../../src/storage/memory-storage";
+import { transcriptPath } from "../../src/types/session-transcript";
+import { transcriptFromMessages } from "./session-test-utils";
 
 describe("RunSupervisor", () => {
 	let storage: MemoryStorage;
@@ -136,18 +138,21 @@ describe("RunSupervisor", () => {
 		browsergentStore.getState().clearChat();
 
 		const bridgeA = supervisor.ensureBridge(sessionA);
+		const assistant = {
+			kind: "assistant" as const,
+			id: "a1",
+			text: "headless done",
+			timestamp: 1,
+		};
+		const [entry] = transcriptPath(transcriptFromMessages([assistant]));
+		if (!entry) throw new Error("missing transcript fixture");
 		const workerA = (globalThis.Worker as ReturnType<typeof vi.fn>).mock
 			.results[0]?.value;
 		workerA.onmessage?.({
 			data: {
-				type: "agentMessage",
+				type: "agentHistoryMessage",
 				runId: "run-a",
-				message: {
-					kind: "assistant",
-					id: "a1",
-					text: "headless done",
-					timestamp: 1,
-				},
+				entry,
 			},
 		});
 

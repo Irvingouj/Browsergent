@@ -33,6 +33,7 @@ test("stop during stream then re-run produces a new final answer", async () => {
 		await expect(
 			sidePanel.getByRole("button", { name: "Stop agent" }),
 		).toBeVisible({ timeout: 10_000 });
+		await expect.poll(() => mock.requestBodies.length).toBe(1);
 		await sidePanel.getByRole("button", { name: "Stop agent" }).click();
 
 		await expect(sidePanel.getByTestId("agent-status")).toHaveText(/stopped/i, {

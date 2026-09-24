@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { SessionController } from "../../src/controllers/session-controller";
 import { MemoryStorage } from "../../src/storage/memory-storage";
+import { transcriptFromMessages } from "./session-test-utils";
 
 describe("SessionController window attachment", () => {
 	let storage: MemoryStorage;
@@ -29,10 +30,13 @@ describe("SessionController window attachment", () => {
 		const s99 = await ctrl.resolveOrCreateForWindow(99);
 
 		ctrl.bindPanelWindow(42);
-		await ctrl.save(
-			[{ kind: "user", id: "1", text: "hello A", timestamp: 1 }],
-			[],
-		);
+		const message = {
+			kind: "user" as const,
+			id: "1",
+			text: "hello A",
+			timestamp: 1,
+		};
+		await ctrl.save([message], [], [], transcriptFromMessages([message]));
 
 		ctrl.bindPanelWindow(99);
 		const loaded99 = await ctrl.loadForSession(s99);
@@ -104,10 +108,13 @@ describe("SessionController window attachment", () => {
 
 		const sa = await ctrl.resolveOrCreateForWindow(1);
 		ctrl.bindPanelWindow(1);
-		await ctrl.save(
-			[{ kind: "user", id: "u1", text: "parent window chat", timestamp: 1 }],
-			[],
-		);
+		const message = {
+			kind: "user" as const,
+			id: "u1",
+			text: "parent window chat",
+			timestamp: 1,
+		};
+		await ctrl.save([message], [], [], transcriptFromMessages([message]));
 
 		const sb = await ctrl.resolveOrCreateForWindow(2);
 		expect(sb).not.toBe(sa);
@@ -140,10 +147,13 @@ describe("SessionController window attachment", () => {
 		const sa = await ctrl.resolveOrCreateForWindow(10);
 		const sb = await ctrl.resolveOrCreateForWindow(20);
 		ctrl.bindPanelWindow(20);
-		await ctrl.save(
-			[{ kind: "user", id: "u-b", text: "from window B", timestamp: 1 }],
-			[],
-		);
+		const message = {
+			kind: "user" as const,
+			id: "u-b",
+			text: "from window B",
+			timestamp: 1,
+		};
+		await ctrl.save([message], [], [], transcriptFromMessages([message]));
 		await ctrl.applyWindowClose(20);
 
 		ctrl.bindPanelWindow(10);

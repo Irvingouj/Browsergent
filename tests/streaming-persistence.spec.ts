@@ -29,9 +29,11 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 	await typeTask(sidePanel, "say hello");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
-	await expect(sidePanel.locator("text=Hello")).toBeVisible({ timeout: 5000 });
-	await expect(sidePanel.locator("text=Hello world")).toHaveCount(0);
-	await expect(sidePanel.locator("text=Hello world")).toBeVisible({
+	const assistantMessage = sidePanel
+		.getByTestId("chat-message-assistant")
+		.last();
+	await expect(assistantMessage).toHaveText("Hello", { timeout: 5000 });
+	await expect(assistantMessage).toHaveText("Hello world", {
 		timeout: 10000,
 	});
 

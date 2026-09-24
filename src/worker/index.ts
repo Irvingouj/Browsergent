@@ -9,7 +9,9 @@
 
 /// <reference lib="webworker" />
 
+import type { AgentHistoryEntry } from "@pi-oxide/pi-host-web";
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
+import { isAgentStartMessage } from "../protocol/worker-guards";
 import type { CellResult } from "../types/extjs-utils";
 import type {
 	AgentTraceEntry,
@@ -240,11 +242,13 @@ function postIfCurrentRun(runId: string, message: WorkerToPanel): void {
 function handleAgentStart(
 	sessionId: string,
 	task: string,
+	userMessageId: string,
 	settings: WorkerSettings,
 	runId: string,
-	resolvedTask?: string,
-	skillCatalog?: string,
-	activatedSkills?: string[],
+	resolvedTask: string,
+	skillCatalog: string,
+	activatedSkills: string[],
+	history: AgentHistoryEntry[],
 ): void {
 	currentRunId = runId;
 	currentSessionId = sessionId;
@@ -285,6 +289,13 @@ function handleAgentStart(
 					text,
 					timestamp: Date.now(),
 				},
+			});
+		},
+		onHistoryEntry(entry) {
+			postIfCurrentRun(runId, {
+				type: "agentHistoryMessage",
+				runId,
+				entry,
 			});
 		},
 		onTextDelta(messageId, text) {
@@ -341,9 +352,11 @@ function handleAgentStart(
 		.run(
 			sessionId,
 			task,
+			userMessageId,
 			resolvedTask ?? task,
-			skillCatalog ?? "",
+			skillCatalog,
 			settings,
+			history,
 			callbacks,
 		)
 		.catch((err) => {
@@ -403,16 +416,21 @@ function handleAgentReset(): void {
 
 self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 	const msg = event.data;
+	if (msg.type === "agentStart" && !isAgentStartMessage(msg)) {
+		throw new Error("Invalid agentStart message or transcript history");
+	}
 	switch (msg.type) {
 		case "agentStart":
 			handleAgentStart(
 				msg.sessionId,
 				msg.task,
+				msg.userMessageId,
 				msg.settings,
 				msg.runId,
-				msg.resolvedTask,
-				msg.skillCatalog,
-				msg.activatedSkills,
+				msg.resolvedTask ?? msg.task,
+				msg.skillCatalog ?? "",
+				msg.activatedSkills ?? [],
+				msg.history,
 			);
 			break;
 		case "agentStop":
@@ -457,11 +475,18 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 		case "fileOpError":
 			handleFileOpRelayError(msg.id, msg.error);
 			break;
-		case "skillAutoActivate":
-			if (msg.runId === currentRunId) {
-				void agentLoop?.steerSkill(msg.skillName, msg.skillBody, msg.url);
+		case "skillAutoActivate": {
+			const loop = agentLoop;
+			if (loop && currentCallbacks && msg.runId === currentRunId) {
+				void loop.steerSkill(
+					msg.skillName,
+					msg.skillBody,
+					msg.url,
+					currentCallbacks,
+				);
 			}
 			break;
+		}
 		case "agentSteer": {
 			const loop = agentLoop;
 			if (
@@ -470,7 +495,7 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 				msg.runId === currentRunId &&
 				msg.text.trim().length > 0
 			) {
-				void loop.steerUser(msg.text, currentCallbacks);
+				void loop.steerUser(msg.text, msg.messageId, currentCallbacks);
 			}
 			break;
 		}
