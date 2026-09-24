@@ -7,6 +7,7 @@
 
 import type {
 	AgentContentBlock,
+	AgentMessage,
 	AgentModel,
 	ModelEvent,
 	ModelRequest,
@@ -23,6 +24,14 @@ import type { LlmStream } from "./llm-streamer";
 import { sdkToolToWasmTool, sdkToWasmMessages } from "./sdk-message-conversion";
 
 type DiagnosticSink = (event: AgentDiagnosticEvent) => void;
+
+const COMPACTION_INSTRUCTIONS = [
+	"Summarize this conversation so the agent can continue accurately.",
+	"Preserve the user's goals, constraints, decisions, important facts, identifiers, and unresolved work.",
+	"Include completed actions and their external side effects; do not imply that browser or file changes were undone.",
+	"Distinguish confirmed facts from assumptions. Do not invent missing details.",
+	"Return only the summary text.",
+].join(" ");
 
 export interface LlmStreamerLike {
 	call(context: LlmContext, signal?: AbortSignal): Promise<LlmStream>;
@@ -187,6 +196,35 @@ export function createLlmModel(
 			});
 			return response.response;
 		},
+		summarize: async (
+			messages: AgentMessage[],
+			signal?: AbortSignal,
+		): Promise<string> => {
+			const stream = await streamer.call(
+				{
+					system_prompt: COMPACTION_INSTRUCTIONS,
+					messages: sdkToWasmMessages(messages),
+					tools: [],
+				},
+				signal,
+			);
+			const result = await drainStreamToResponse(stream);
+			if (signal?.aborted) {
+				throw new DOMException("Summary request was cancelled", "AbortError");
+			}
+			if (result.response.stopReason === "error") {
+				throw new Error(
+					`Summary request failed: ${result.rawProviderStopReason}`,
+				);
+			}
+			const summary = result.response.content
+				.filter((block) => block.type === "text")
+				.map((block) => block.text)
+				.join("\n")
+				.trim();
+			if (!summary) throw new Error("Summary model returned no text");
+			return summary;
+		},
 		generateStream: async function* (
 			request: ModelRequest,
 			signal?: AbortSignal,
@@ -250,20 +288,6 @@ export function createLlmModel(
 						return;
 				}
 			}
-		},
-		summarize: async (messages, signal) => {
-			const context = {
-				system_prompt:
-					"Summarize the following conversation context concisely. Preserve key facts, decisions, and action items.",
-				messages: sdkToWasmMessages(messages),
-				tools: [],
-			};
-			const stream = await streamer.call(context, signal);
-			let text = "";
-			for await (const chunk of stream.chunks) {
-				if (chunk.kind === "text_delta") text += chunk.text;
-			}
-			return text || "[Context summarized]";
 		},
 	});
 }
