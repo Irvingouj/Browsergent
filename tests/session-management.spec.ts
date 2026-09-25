@@ -201,6 +201,9 @@ test("tree rewind preserves the old branch and fork opens a child session", asyn
 				hasText: answer,
 			}),
 		).toBeVisible({ timeout: 10000 });
+		await expect(sidePanel.getByTestId("agent-status")).toHaveText("done", {
+			timeout: 10000,
+		});
 	}
 
 	await typeTask(sidePanel, "/tree");
@@ -221,6 +224,9 @@ test("tree rewind preserves the old branch and fork opens a child session", asyn
 	await expect(sidePanel.locator("text=Answer two")).not.toBeVisible();
 
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await expect
+		.poll(() => mock.requestBodies.length, { timeout: 15000 })
+		.toBeGreaterThanOrEqual(3);
 	await expect(
 		sidePanel.locator('[data-testid="chat-message-assistant"]', {
 			hasText: "Answer on new branch",
