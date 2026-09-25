@@ -166,9 +166,19 @@ export class RunSupervisor {
 				shouldApplyBridgeEffects: () =>
 					this.foregroundSessionId === bridgeSessionId,
 				onRunEvent: (runId, event) => {
-					void this.handleRunEvent(runId, event);
-					this.handlers.onRunEventPublished?.(bridgeSessionId, event);
-					this.handlers.onSessionRunRelay?.(bridgeSessionId, event);
+					const publish = () => {
+						this.handlers.onRunEventPublished?.(bridgeSessionId, event);
+						this.handlers.onSessionRunRelay?.(bridgeSessionId, event);
+					};
+					const handling = this.handleRunEvent(runId, event);
+					if (
+						event.type === "agentStatus" &&
+						TERMINAL_STATUSES.has(event.status)
+					) {
+						return handling.then(publish);
+					}
+					void handling;
+					publish();
 				},
 			},
 			onWorkerReady: () => {

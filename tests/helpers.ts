@@ -406,11 +406,21 @@ export async function openSecondWindow(
 				const got = await chrome.storage.session.get(key);
 				return (
 					(got[key] as
-						| { ts?: number; step?: string; idb?: string }
+						| {
+								ts?: number;
+								step?: string;
+								idb?: string;
+								sessionId?: string;
+						  }
 						| undefined) ?? null
 				);
 			}, createdWindowId);
-			if (marker && typeof marker.ts === "number") {
+			if (
+				marker &&
+				typeof marker.ts === "number" &&
+				typeof marker.sessionId === "string" &&
+				marker.sessionId.length > 0
+			) {
 				readyVia = "storage";
 				finalState = { via: "storage", ...marker, windowId: createdWindowId };
 				break;
@@ -428,13 +438,16 @@ export async function openSecondWindow(
 					workerReady: el?.getAttribute("data-worker-ready") ?? null,
 					bootWorker: el?.getAttribute("data-boot-worker") ?? null,
 					windowId: el?.getAttribute("data-window-id") ?? null,
+					sessionId: el?.getAttribute("data-active-session-id") ?? null,
 					bootStep: document.documentElement.dataset.bootStep ?? null,
 				};
 			});
 			finalState = snap;
 			if (
 				snap.initialized === "true" &&
-				(snap.workerReady === "true" || snap.bootWorker === "ok")
+				(snap.workerReady === "true" || snap.bootWorker === "ok") &&
+				typeof snap.sessionId === "string" &&
+				snap.sessionId.length > 0
 			) {
 				readyVia = "dom";
 				break;
@@ -456,10 +469,20 @@ export async function openSecondWindow(
 		createdWindowId,
 		finalState,
 	);
+	const panelWindowId = Number(finalState?.windowId);
+	if (
+		Number.isFinite(panelWindowId) &&
+		panelWindowId > 0 &&
+		panelWindowId !== createdWindowId
+	) {
+		throw new Error(
+			`Second window id mismatch: created=${createdWindowId}, panel=${panelWindowId}`,
+		);
+	}
 	const windowId =
-		typeof createdWindowId === "number" && createdWindowId > 0
-			? createdWindowId
-			: Number(finalState?.windowId);
+		Number.isFinite(panelWindowId) && panelWindowId > 0
+			? panelWindowId
+			: createdWindowId;
 	if (!Number.isFinite(windowId) || windowId <= 0) {
 		throw new Error(`Second window has invalid data-window-id: ${windowId}`);
 	}

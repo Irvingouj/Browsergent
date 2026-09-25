@@ -164,9 +164,18 @@ describe("WorkerBridge", () => {
 		expect(browsergentStore.getState().agent.status).toBe("loading");
 	});
 
-	test("agentStatus finalizes signals on terminal states", () => {
+	test("terminal agentStatus waits for run persistence before updating the UI", async () => {
 		browsergentStore.getState().agentRunRequested("run-1");
-		const bridge = new WorkerBridge();
+		let finishPersistence: (() => void) | undefined;
+		const persistence = new Promise<void>((resolve) => {
+			finishPersistence = resolve;
+		});
+		const bridge = new WorkerBridge({
+			runRouting: {
+				shouldUpdateUi: () => true,
+				onRunEvent: () => persistence,
+			},
+		});
 		bridge.start();
 		const worker = getWorkerInstance();
 		worker.onmessage?.(
@@ -174,10 +183,16 @@ describe("WorkerBridge", () => {
 				data: { type: "agentStatus", runId: "run-1", status: "done" },
 			}),
 		);
-		expect(browsergentStore.getState().agent.status).toBe("done");
+
+		await Promise.resolve();
+		expect(browsergentStore.getState().agent.status).toBe("loading");
+		finishPersistence?.();
+		await vi.waitFor(() =>
+			expect(browsergentStore.getState().agent.status).toBe("done"),
+		);
 	});
 
-	test("agentStatus refreshes skills on terminal states", () => {
+	test("agentStatus finalizes signals on terminal states", async () => {
 		browsergentStore.getState().agentRunRequested("run-1");
 		const bridge = new WorkerBridge();
 		bridge.start();
@@ -187,7 +202,24 @@ describe("WorkerBridge", () => {
 				data: { type: "agentStatus", runId: "run-1", status: "done" },
 			}),
 		);
-		expect(notifySkillsChanged).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() =>
+			expect(browsergentStore.getState().agent.status).toBe("done"),
+		);
+	});
+
+	test("agentStatus refreshes skills on terminal states", async () => {
+		browsergentStore.getState().agentRunRequested("run-1");
+		const bridge = new WorkerBridge();
+		bridge.start();
+		const worker = getWorkerInstance();
+		worker.onmessage?.(
+			new MessageEvent("message", {
+				data: { type: "agentStatus", runId: "run-1", status: "done" },
+			}),
+		);
+		await vi.waitFor(() =>
+			expect(notifySkillsChanged).toHaveBeenCalledTimes(1),
+		);
 	});
 
 	test("agentMessage appends user message", () => {
