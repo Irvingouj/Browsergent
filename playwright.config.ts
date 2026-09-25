@@ -16,7 +16,6 @@ export default defineConfig({
 	// Extension boot + two-window flows exceed 30s under load.
 	timeout: 90_000,
 	retries: 0,
-	workers: process.env.CI ? 1 : undefined,
 	use: {
 		headless: true,
 		screenshot: "only-on-failure",
