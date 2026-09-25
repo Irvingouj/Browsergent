@@ -133,6 +133,59 @@ export async function domFillTestId(
 	throw new Error(`domFillTestId: [${testId}] not found within ${timeoutMs}ms`);
 }
 
+async function readProviderFailureDiagnostics(page: Page): Promise<string[]> {
+	return page.evaluate(async () => {
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open("browsergent", 2);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			const records = await new Promise<unknown[]>((resolve, reject) => {
+				const request = db
+					.transaction("sessions", "readonly")
+					.objectStore("sessions")
+					.getAll() as IDBRequest<unknown[]>; // Persisted IndexedDB values are external data.
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			const diagnostics = records.flatMap((record) => {
+				if (
+					typeof record !== "object" ||
+					record === null ||
+					!("diagnostics" in record) ||
+					!Array.isArray(record.diagnostics)
+				) {
+					return [];
+				}
+				return record.diagnostics;
+			});
+			return diagnostics.flatMap((diagnostic) => {
+				if (typeof diagnostic !== "object" || diagnostic === null) return [];
+				if (
+					"kind" in diagnostic &&
+					diagnostic.kind === "provider_retry" &&
+					"error" in diagnostic
+				) {
+					return [`provider_retry: ${String(diagnostic.error)}`];
+				}
+				if (
+					"kind" in diagnostic &&
+					diagnostic.kind === "model_response" &&
+					"sdkStopReason" in diagnostic &&
+					diagnostic.sdkStopReason === "error" &&
+					"providerStopReason" in diagnostic
+				) {
+					return [`model_response: ${String(diagnostic.providerStopReason)}`];
+				}
+				return [];
+			});
+		} finally {
+			db.close();
+		}
+	});
+}
+
 export async function launchExtension(userDataDir?: string): Promise<{
 	context: BrowserContext;
 	extensionId: string;
@@ -194,6 +247,14 @@ export async function launchExtension(userDataDir?: string): Promise<{
 		extensionId,
 		sidePanel,
 		close: async () => {
+			const providerFailures = await readProviderFailureDiagnostics(
+				sidePanel,
+			).catch((error: unknown) => [`diagnostic read failed: ${String(error)}`]);
+			if (providerFailures.length > 0) {
+				console.log(
+					`\n--- Provider failure diagnostics ---\n${providerFailures.join("\n")}\n`,
+				);
+			}
 			await context.close();
 			if (shouldRemoveUserDataDir) {
 				await fs.rm(actualUserDataDir, { recursive: true, force: true });
