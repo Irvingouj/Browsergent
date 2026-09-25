@@ -14,6 +14,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionPath = path.resolve(__dirname, "../dist");
 
 const consoleErrors: string[] = [];
+const mockProviderDiagnostics: Array<{
+	provider: "anthropic" | "openai";
+	url: string;
+	requestPaths: string[];
+	responseMarkers: string[];
+}> = [];
 
 /** Sleep without Playwright page APIs (page.waitForTimeout can hang on extension pages). */
 function sleep(ms: number): Promise<void> {
@@ -563,12 +569,20 @@ export async function broadcastWindowMerge(
 }
 
 test.afterEach(({ page: _page }, testInfo) => {
-	if (testInfo.status !== "passed" && consoleErrors.length > 0) {
-		console.log(
-			`\n--- Console errors for "${testInfo.title}" ---\n${consoleErrors.join("\n")}\n`,
-		);
+	if (testInfo.status !== "passed") {
+		if (consoleErrors.length > 0) {
+			console.log(
+				`\n--- Console errors for "${testInfo.title}" ---\n${consoleErrors.join("\n")}\n`,
+			);
+		}
+		if (mockProviderDiagnostics.length > 0) {
+			console.log(
+				`\n--- Mock provider diagnostics for "${testInfo.title}" ---\n${JSON.stringify(mockProviderDiagnostics)}\n`,
+			);
+		}
 	}
 	consoleErrors.length = 0;
+	mockProviderDiagnostics.length = 0;
 });
 
 export async function createTestPage(
@@ -959,7 +973,10 @@ export function startMockAnthropicServer(options: {
 	}>;
 }): MockAnthropicServer {
 	const requestBodies: unknown[] = [];
+	const requestPaths: string[] = [];
+	const responseMarkers: string[] = [];
 	const server = createServer((req, res) => {
+		requestPaths.push(`${req.method} ${req.url ?? ""}`);
 		if (req.method === "OPTIONS") {
 			res.writeHead(204, {
 				"Access-Control-Allow-Origin": "*",
@@ -986,6 +1003,7 @@ export function startMockAnthropicServer(options: {
 					delays: [],
 					stopReason: "end_turn",
 				};
+				responseMarkers.push(response.stopReason);
 				res.writeHead(200, {
 					"Content-Type": "text/event-stream",
 					"Cache-Control": "no-cache",
@@ -1022,7 +1040,14 @@ export function startMockAnthropicServer(options: {
 	const address = server.address();
 	const port =
 		typeof address === "object" && address !== null ? address.port : 0;
-	return { url: `http://localhost:${port}`, server, requestBodies };
+	const url = `http://localhost:${port}`;
+	mockProviderDiagnostics.push({
+		provider: "anthropic",
+		url,
+		requestPaths,
+		responseMarkers,
+	});
+	return { url, server, requestBodies };
 }
 
 export interface MockOpenAIServer {
@@ -1039,7 +1064,10 @@ export function startMockOpenAIServer(options: {
 	responses: Array<{ frames: string[]; delays?: number[] }>;
 }): MockOpenAIServer {
 	const requestBodies: unknown[] = [];
+	const requestPaths: string[] = [];
+	const responseMarkers: string[] = [];
 	const server = createServer((req, res) => {
+		requestPaths.push(`${req.method} ${req.url ?? ""}`);
 		if (req.method === "OPTIONS") {
 			res.writeHead(204, {
 				"Access-Control-Allow-Origin": "*",
@@ -1074,6 +1102,7 @@ export function startMockOpenAIServer(options: {
 				frames: [],
 				delays: [],
 			};
+			responseMarkers.push("chat_completion");
 			res.writeHead(200, {
 				"Content-Type": "text/event-stream",
 				"Cache-Control": "no-cache",
@@ -1101,7 +1130,14 @@ export function startMockOpenAIServer(options: {
 	const address = server.address();
 	const port =
 		typeof address === "object" && address !== null ? address.port : 0;
-	return { url: `http://localhost:${port}`, server, requestBodies };
+	const url = `http://localhost:${port}`;
+	mockProviderDiagnostics.push({
+		provider: "openai",
+		url,
+		requestPaths,
+		responseMarkers,
+	});
+	return { url, server, requestBodies };
 }
 
 export function openAITextFrames(text: string): string[] {
