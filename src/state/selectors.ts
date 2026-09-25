@@ -87,7 +87,9 @@ export const selectActiveSessionOrigin = (
 	s: BrowsergentStore,
 ): SessionOrigin => {
 	const id = s.session.activeSessionId;
-	const origin = s.session.sessions.find((session) => session.id === id)?.origin;
+	const origin = s.session.sessions.find(
+		(session) => session.id === id,
+	)?.origin;
 	return origin ?? "chat";
 };
 export const selectSessionError = (s: BrowsergentStore) => s.session.error;

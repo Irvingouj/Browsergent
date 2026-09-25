@@ -49,7 +49,9 @@ describe("BridgeHost Chat tool parity", () => {
 			fakeFileOp,
 		);
 		const host = new BridgeHost({ tools });
-		const chatToolNames = tools.definitions.map((definition) => definition.name);
+		const chatToolNames = tools.definitions.map(
+			(definition) => definition.name,
+		);
 
 		expect(chatToolNames.sort()).toEqual(
 			[...Object.keys(CHAT_TOOL_PARAMS)].sort(),

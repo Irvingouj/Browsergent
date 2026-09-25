@@ -46,7 +46,9 @@ describe("BridgeSessionHost session.create", () => {
 		expect(ids).toContain(chatId);
 		expect(ids).toContain(created.result.id);
 
-		const chat = listed.result.sessions.find((session) => session.id === chatId);
+		const chat = listed.result.sessions.find(
+			(session) => session.id === chatId,
+		);
 		const cli = listed.result.sessions.find(
 			(session) => session.id === created.result.id,
 		);

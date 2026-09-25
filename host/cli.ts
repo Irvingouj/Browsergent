@@ -47,7 +47,9 @@ try {
 			}
 			const code = Buffer.concat(chunks).toString("utf8").trim();
 			if (!code) {
-				console.error("usage: browsergent run <js> | run --file <path> | run -");
+				console.error(
+					"usage: browsergent run <js> | run --file <path> | run -",
+				);
 				process.exit(1);
 			}
 			console.log(await cli.run(code));

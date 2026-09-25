@@ -26,7 +26,12 @@ describe("BridgeCli docs/reset/stop", () => {
 					return { id: request.id, ok: true, method: "reset", result: "reset" };
 				}
 				if (request.method === "stop") {
-					return { id: request.id, ok: true, method: "stop", result: "stopped" };
+					return {
+						id: request.id,
+						ok: true,
+						method: "stop",
+						result: "stopped",
+					};
 				}
 				return {
 					id: request.id,

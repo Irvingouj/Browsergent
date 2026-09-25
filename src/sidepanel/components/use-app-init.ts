@@ -390,9 +390,7 @@ export function useAppInit(): AppInitResult {
 			const ensureActingHost = async (): Promise<void> => {
 				const wid = windowContextRef.current?.getWindowId();
 				await extjs.init(
-					typeof wid === "number" && wid > 0
-						? { windowId: wid }
-						: undefined,
+					typeof wid === "number" && wid > 0 ? { windowId: wid } : undefined,
 				);
 			};
 			const enrollmentHost = new EnrollmentHost({

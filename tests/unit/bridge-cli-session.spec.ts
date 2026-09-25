@@ -90,7 +90,10 @@ describe("BridgeCli run session", () => {
 						},
 					};
 				}
-				if (request.method === "run_js" && sent.filter((item) => item.method === "run_js").length === 1) {
+				if (
+					request.method === "run_js" &&
+					sent.filter((item) => item.method === "run_js").length === 1
+				) {
 					await firstGate;
 				}
 				return {
@@ -108,7 +111,9 @@ describe("BridgeCli run session", () => {
 		releaseFirst?.();
 		expect(await first).toBe("echo:one");
 		expect(await second).toBe("echo:two");
-		const creates = sent.filter((request) => request.method === "session.create");
+		const creates = sent.filter(
+			(request) => request.method === "session.create",
+		);
 		const runs = sent.filter((request) => request.method === "run_js");
 		expect(creates).toHaveLength(1);
 		expect(runs).toHaveLength(2);

@@ -1,9 +1,9 @@
 import { reportWarn } from "../errors/report";
 import {
-	isBridgeFailure,
-	parseBridgeRequest,
 	type BridgeResponse,
 	type BridgeWireRequest,
+	isBridgeFailure,
+	parseBridgeRequest,
 } from "../protocol/bridge";
 
 export const BRIDGE_WS_URL = "ws://127.0.0.1:8787/extension";
@@ -67,9 +67,7 @@ export function connectBridgeClient(options: {
 							error: {
 								code: "E_PROTOCOL",
 								message:
-									err instanceof Error
-										? err.message
-										: "Bridge handle failed",
+									err instanceof Error ? err.message : "Bridge handle failed",
 							},
 						}),
 					);

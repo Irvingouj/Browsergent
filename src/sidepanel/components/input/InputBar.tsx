@@ -210,13 +210,16 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 		[filesController, sessionId, dispatch, onFilesChanged],
 	);
 
-	const handleDragOver = useCallback((e: DragEvent) => {
-		if (disabled) return;
-		if (e.dataTransfer?.types?.includes("Files")) {
-			e.preventDefault();
-			browsergentStore.getState().setChatDragOver(true);
-		}
-	}, [disabled]);
+	const handleDragOver = useCallback(
+		(e: DragEvent) => {
+			if (disabled) return;
+			if (e.dataTransfer?.types?.includes("Files")) {
+				e.preventDefault();
+				browsergentStore.getState().setChatDragOver(true);
+			}
+		},
+		[disabled],
+	);
 
 	const handleDragLeave = useCallback((e: DragEvent) => {
 		e.preventDefault();
@@ -321,7 +324,11 @@ export const InputBar: FunctionalComponent<InputBarProps> = ({
 						onKeyDown={mode.onKeyDown}
 						onBlur={mode.onBlur}
 						onPaste={handlePaste}
-						placeholder={disabled ? "CLI session — Chat input is locked" : "Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"}
+						placeholder={
+							disabled
+								? "CLI session — Chat input is locked"
+								: "Type a task... (/ for skills, @ for files or tabs, Shift+Enter for newline)"
+						}
 						disabled={isUploading || disabled}
 						class={INPUT_CLASS}
 					/>

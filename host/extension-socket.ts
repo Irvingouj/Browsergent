@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
 import {
-	parseBridgeResponse,
 	type BridgeResponse,
 	type BridgeWireRequest,
+	parseBridgeResponse,
 } from "../src/protocol/bridge.ts";
 
 const WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -198,7 +198,10 @@ function decodeFrame(
 	}
 	const maskLength = masked ? 4 : 0;
 	if (buffer.length < offset + maskLength + length) return null;
-	let payload = buffer.subarray(offset + maskLength, offset + maskLength + length);
+	let payload = buffer.subarray(
+		offset + maskLength,
+		offset + maskLength + length,
+	);
 	if (masked) {
 		const mask = buffer.subarray(offset, offset + 4);
 		payload = Buffer.from(payload);
@@ -212,5 +215,3 @@ function decodeFrame(
 		rest: buffer.subarray(offset + maskLength + length),
 	};
 }
-
-

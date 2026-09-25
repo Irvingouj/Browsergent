@@ -5,8 +5,8 @@ import { afterEach, describe, expect, test } from "vitest";
 import { BridgeCli } from "../../host/bridge-cli";
 import { postBridgeRequest } from "../../host/bridge-http";
 import { BridgeServer } from "../../host/bridge-server";
-import { connectBridgeClient } from "../../src/sidepanel/bridge-client";
 import type { BridgeWireRequest } from "../../src/protocol/bridge";
+import { connectBridgeClient } from "../../src/sidepanel/bridge-client";
 
 describe("connectBridgeClient", () => {
 	let server: BridgeServer | null = null;
@@ -101,6 +101,8 @@ describe("connectBridgeClient", () => {
 				postBridgeRequest(`http://127.0.0.1:${port}/bridge`, request),
 		});
 		await cli.enroll("tok-123");
-		await expect(cli.run("await page.snapshot()")).rejects.toThrow(/persist failed|Invalid bridge response|E_PROTOCOL/i);
+		await expect(cli.run("await page.snapshot()")).rejects.toThrow(
+			/persist failed|Invalid bridge response|E_PROTOCOL/i,
+		);
 	});
 });
