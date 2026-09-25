@@ -8,6 +8,7 @@ import {
 	expect,
 	type Page,
 	test,
+	type Worker,
 } from "@playwright/test";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -133,8 +134,10 @@ export async function domFillTestId(
 	throw new Error(`domFillTestId: [${testId}] not found within ${timeoutMs}ms`);
 }
 
-async function readProviderFailureDiagnostics(page: Page): Promise<string[]> {
-	return page.evaluate(async () => {
+async function readProviderFailureDiagnostics(
+	serviceWorker: Worker,
+): Promise<string[]> {
+	return serviceWorker.evaluate(async () => {
 		const db = await new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open("browsergent", 2);
 			request.onsuccess = () => resolve(request.result);
@@ -149,7 +152,7 @@ async function readProviderFailureDiagnostics(page: Page): Promise<string[]> {
 				request.onsuccess = () => resolve(request.result);
 				request.onerror = () => reject(request.error);
 			});
-			const diagnostics = records.flatMap((record) => {
+			return records.flatMap((record) => {
 				if (
 					typeof record !== "object" ||
 					record === null ||
@@ -158,27 +161,42 @@ async function readProviderFailureDiagnostics(page: Page): Promise<string[]> {
 				) {
 					return [];
 				}
-				return record.diagnostics;
-			});
-			return diagnostics.flatMap((diagnostic) => {
-				if (typeof diagnostic !== "object" || diagnostic === null) return [];
+				const diagnostics: unknown[] = record.diagnostics;
+				const lastResponse = diagnostics.findLast(
+					(diagnostic) =>
+						typeof diagnostic === "object" &&
+						diagnostic !== null &&
+						"kind" in diagnostic &&
+						diagnostic.kind === "model_response",
+				);
 				if (
-					"kind" in diagnostic &&
-					diagnostic.kind === "provider_retry" &&
-					"error" in diagnostic
+					typeof lastResponse !== "object" ||
+					lastResponse === null ||
+					!("sdkStopReason" in lastResponse) ||
+					lastResponse.sdkStopReason !== "error"
 				) {
-					return [`provider_retry: ${String(diagnostic.error)}`];
+					return [];
 				}
-				if (
-					"kind" in diagnostic &&
-					diagnostic.kind === "model_response" &&
-					"sdkStopReason" in diagnostic &&
-					diagnostic.sdkStopReason === "error" &&
-					"providerStopReason" in diagnostic
-				) {
-					return [`model_response: ${String(diagnostic.providerStopReason)}`];
-				}
-				return [];
+				return diagnostics.flatMap((diagnostic) => {
+					if (typeof diagnostic !== "object" || diagnostic === null) return [];
+					if (
+						"kind" in diagnostic &&
+						diagnostic.kind === "provider_retry" &&
+						"error" in diagnostic
+					) {
+						return [`provider_retry: ${String(diagnostic.error)}`];
+					}
+					if (
+						"kind" in diagnostic &&
+						diagnostic.kind === "model_response" &&
+						"sdkStopReason" in diagnostic &&
+						diagnostic.sdkStopReason === "error" &&
+						"providerStopReason" in diagnostic
+					) {
+						return [`model_response: ${String(diagnostic.providerStopReason)}`];
+					}
+					return [];
+				});
 			});
 		} finally {
 			db.close();
@@ -248,7 +266,7 @@ export async function launchExtension(userDataDir?: string): Promise<{
 		sidePanel,
 		close: async () => {
 			const providerFailures = await readProviderFailureDiagnostics(
-				sidePanel,
+				serviceWorker,
 			).catch((error: unknown) => [`diagnostic read failed: ${String(error)}`]);
 			if (providerFailures.length > 0) {
 				console.log(

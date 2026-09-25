@@ -196,11 +196,14 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 	}, [editingId, providers]);
 	const updateProvider = useCallback(
 		(id: string, patch: Partial<ProviderConfig>) => {
-			const next = providers.map((p) => (p.id === id ? { ...p, ...patch } : p));
+			const settings = browsergentStore.getState().settings;
+			const next = settings.providers.map((provider) =>
+				provider.id === id ? { ...provider, ...patch } : provider,
+			);
 			browsergentStore.getState().providersChanged(next);
-			persist(settingsController, next, activeProviderId);
+			persist(settingsController, next, settings.activeProviderId);
 		},
-		[providers, activeProviderId, settingsController],
+		[settingsController],
 	);
 
 	const runModelDiscovery = useCallback(async () => {
