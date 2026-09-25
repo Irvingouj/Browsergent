@@ -80,7 +80,7 @@ describe("post-tool chat UI applies assistant text", () => {
 		expect(getStreamingSignal("asst-final")?.value).toBe("I see 4 tabs.");
 	});
 
-	test("full post-tool sequence: tool status then final assistant stream", () => {
+	test("full post-tool sequence: tool status then final assistant stream", async () => {
 		const registry = new SessionRunRegistry();
 		browsergentStore.getState().agentRunRequested("run-1");
 		registry.register("sess", "run-1", "loading");
@@ -138,6 +138,8 @@ describe("post-tool chat UI applies assistant text", () => {
 		const msg = browsergentStore.getState().chat.messagesById["a-final"];
 		expect(msg?.kind).toBe("assistant");
 		expect(msg?.text).toBe("There are 4 open tabs.");
-		expect(browsergentStore.getState().agent.status).toBe("done");
+		await vi.waitFor(() =>
+			expect(browsergentStore.getState().agent.status).toBe("done"),
+		);
 	});
 });

@@ -508,9 +508,9 @@ test("clicking a deleted file refreshes the tree instead of E_NOT_FOUND", async 
 		// Click the ghost. Refresh-before-open must prune it and avoid E_NOT_FOUND.
 		await vanish.click();
 
-		await expect(
-			sidePanel.getByText(/File no longer exists/i),
-		).toBeVisible({ timeout: 10000 });
+		await expect(sidePanel.getByText(/File no longer exists/i)).toBeVisible({
+			timeout: 10000,
+		});
 		await expect(
 			sidePanel
 				.locator('[data-testid="tree-file"]')

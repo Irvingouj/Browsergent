@@ -32,9 +32,9 @@ export function sdkToWasmMessages(
 		const content = msg.content.map(sdkMessageToWasmContent);
 		const timestamp = msg.timestamp ?? Date.now();
 		if (msg.role === "tool_result") {
-			const isError = content.some(
-				(c) => c.type === "text" && isToolErrorEnvelope(c.text),
-			);
+			const isError =
+				msg.is_error === true ||
+				content.some((c) => c.type === "text" && isToolErrorEnvelope(c.text));
 			const displayContent = isError
 				? content.map((c) =>
 						c.type === "text"

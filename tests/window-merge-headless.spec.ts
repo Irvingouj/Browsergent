@@ -51,11 +51,11 @@ test.describe("merge during headless run", () => {
 					.locator('[data-initialized="true"]')
 					.getAttribute("data-window-id"),
 			);
-			const { sidePanel: panelB, windowId: windowB } = await openSecondWindow(
-				context,
-				extensionId,
-				panelA,
-			);
+			const {
+				sidePanel: panelB,
+				windowId: windowB,
+				sessionId: mergedSessionId,
+			} = await openSecondWindow(context, extensionId, panelA);
 			await configureMockProvider(panelA, mock.url);
 			await configureMockProvider(panelB, mock.url);
 
@@ -71,32 +71,6 @@ test.describe("merge during headless run", () => {
 				/^(idle|done|stopped)$/,
 				{ timeout: 5000 },
 			);
-
-			const mergedSessionId = await panelB.evaluate(async () => {
-				const db = await new Promise<IDBDatabase>((resolve, reject) => {
-					const req = indexedDB.open("browsergent", 2);
-					req.onsuccess = () => resolve(req.result);
-					req.onerror = () => reject(req.error);
-				});
-				const meta = await new Promise<{
-					panelActiveSession?: Record<string, string>;
-				} | null>((resolve, reject) => {
-					const tx = db.transaction("sessions", "readonly");
-					const req = tx.objectStore("sessions").get("__meta");
-					req.onsuccess = () =>
-						resolve(
-							req.result as {
-								panelActiveSession?: Record<string, string>;
-							} | null,
-						);
-					req.onerror = () => reject(req.error);
-				});
-				db.close();
-				const wid = document
-					.querySelector('[data-initialized="true"]')
-					?.getAttribute("data-window-id");
-				return meta?.panelActiveSession?.[wid ?? ""] ?? null;
-			});
 
 			await panelA.bringToFront();
 			await broadcastWindowMerge(context, panelA, windowB, windowA, {

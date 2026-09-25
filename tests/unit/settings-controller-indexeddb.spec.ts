@@ -1,10 +1,47 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { SettingsController } from "../../src/controllers/settings-controller";
 import type { ProviderConfig } from "../../src/state/slices/settings-slice";
 import { browsergentStore } from "../../src/state/store";
 import { IndexedDBStorage } from "../../src/storage/indexeddb-storage";
+import type { StorageBackend } from "../../src/storage/storage-backend";
 
 import "fake-indexeddb/auto";
+
+type PendingSettingWrite = {
+	store: string;
+	key: string;
+	complete: () => void;
+};
+
+class DeferredSettingsStorage implements StorageBackend {
+	readonly writes: PendingSettingWrite[] = [];
+
+	async get<T>(): Promise<T | null> {
+		return null;
+	}
+
+	set<T>(store: string, key: string, _value: T): Promise<void> {
+		return new Promise((resolve) => {
+			this.writes.push({ store, key, complete: resolve });
+		});
+	}
+
+	async remove(): Promise<void> {}
+	async getAll<T>(): Promise<T[]> {
+		return [];
+	}
+	async getAllKeys(): Promise<string[]> {
+		return [];
+	}
+	async clear(): Promise<void> {}
+	async close(): Promise<void> {}
+
+	completeWrite(index: number): void {
+		const write = this.writes[index];
+		if (!write) throw new Error(`Missing deferred write at index ${index}`);
+		write.complete();
+	}
+}
 
 function anthropicConfig(
 	overrides: Partial<ProviderConfig> = {},
@@ -107,6 +144,50 @@ describe("SettingsController with IndexedDB", () => {
 		const state = browsergentStore.getState().settings;
 		expect(state.providers).toEqual(providers);
 		expect(state.loaded).toBe(true);
+	});
+
+	test("overlapping saves do not let an older snapshot replace newer edits", async () => {
+		const delayedStorage = new DeferredSettingsStorage();
+		const delayedController = new SettingsController(delayedStorage);
+		const staleProviders = [anthropicConfig({ chatEndpointUrl: "" })];
+		const latestProviders = [
+			anthropicConfig({
+				chatEndpointUrl: "http://127.0.0.1:45678/v1/messages",
+			}),
+		];
+
+		const staleSave = delayedController.save({
+			providers: staleProviders,
+			activeProviderId: "p1",
+		});
+		await vi.waitFor(() => expect(delayedStorage.writes).toHaveLength(1));
+
+		browsergentStore.getState().providersChanged(latestProviders);
+		const latestSave = delayedController.save({
+			providers: latestProviders,
+			activeProviderId: "p1",
+		});
+		await Promise.resolve();
+		// A newer save must wait for the earlier persistence operation rather
+		// than letting its completion overwrite the live settings store.
+		expect(delayedStorage.writes).toHaveLength(1);
+
+		delayedStorage.completeWrite(0);
+		await vi.waitFor(() => expect(delayedStorage.writes).toHaveLength(2));
+		delayedStorage.completeWrite(1);
+		await vi.waitFor(() => expect(delayedStorage.writes).toHaveLength(3));
+		await staleSave;
+		expect(browsergentStore.getState().settings.providers).toEqual(
+			latestProviders,
+		);
+
+		delayedStorage.completeWrite(2);
+		await vi.waitFor(() => expect(delayedStorage.writes).toHaveLength(4));
+		delayedStorage.completeWrite(3);
+		await latestSave;
+		expect(browsergentStore.getState().settings.providers).toEqual(
+			latestProviders,
+		);
 	});
 
 	test("save() stores the full providers array (not primitives)", async () => {

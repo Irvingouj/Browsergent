@@ -84,6 +84,17 @@ describe("toOpenAIMessages", () => {
 		});
 	});
 
+	test("marks failed tool results in the OpenAI tool message content", () => {
+		const failed = { ...toolResultMsg("call_1", "not found"), is_error: true };
+		const out = toOpenAIMessages([failed], undefined);
+
+		expect(out[0]).toMatchObject({
+			role: "tool",
+			tool_call_id: "call_1",
+			content: "Tool execution failed:\nnot found",
+		});
+	});
+
 	test("empty assistant turn gets placeholder content (OpenAI rejects empty)", () => {
 		const emptyAssistant: AgentMessage = {
 			role: "assistant",

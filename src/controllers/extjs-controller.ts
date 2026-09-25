@@ -1,10 +1,10 @@
 import { normalizeJsError } from "../errors/normalize-error";
 import { reportError, reportWarn } from "../errors/report";
+import { scheduleFileTreeRefresh } from "../sidepanel/components/files/refresh-file-tree";
 import {
 	ExtensionJsClient,
 	type ExtjsRelayResponse,
 } from "../sidepanel/extension-js-client";
-import { scheduleFileTreeRefresh } from "../sidepanel/components/files/refresh-file-tree";
 import { getSkillService } from "../skills/skill-service";
 import { browsergentStore } from "../state/store";
 import type { PanelToWorker } from "../types/messages";

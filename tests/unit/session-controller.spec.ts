@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SessionController } from "../../src/controllers/session-controller";
 import { MemoryStorage } from "../../src/storage/memory-storage";
+import { emptySessionTranscript } from "../../src/types/session-transcript";
 import {
 	initBoundController,
 	requireActiveId,
 	TEST_WINDOW_ID,
+	transcriptFromMessages,
 } from "./session-test-utils";
 
 describe("SessionController.load", () => {
@@ -152,7 +154,7 @@ describe("SessionController session meta index", () => {
 		expect(gotKeys).toContain(metaKey);
 	});
 
-	test("listSessions lazy-migrates meta from legacy full-only sessions", async () => {
+	test("does not migrate sessions without a transcript", async () => {
 		const id = "legacy-only";
 		await storage.set("sessions", "__meta", {
 			panelActiveSession: { [String(TEST_WINDOW_ID)]: id },
@@ -174,17 +176,8 @@ describe("SessionController session meta index", () => {
 		ctrl.bindPanelWindow(TEST_WINDOW_ID);
 
 		const { sessions } = await ctrl.listSessions();
-		expect(sessions).toHaveLength(1);
-		expect(sessions[0]?.title).toBe("Legacy");
-		expect(sessions[0]?.messageCount).toBe(1);
-		expect(sessions[0]?.timestamp).toBe(42);
-
-		const meta = await storage.get<{ id: string; messageCount: number }>(
-			"sessions",
-			`session_meta_${id}`,
-		);
-		expect(meta?.id).toBe(id);
-		expect(meta?.messageCount).toBe(1);
+		expect(sessions).toHaveLength(0);
+		expect(await storage.get("sessions", `session_${id}`)).toBeNull();
 	});
 
 	test("find path resolveOrCreateForWindow uses meta without full body when present", async () => {
@@ -247,6 +240,7 @@ describe("SessionController session meta index", () => {
 		for (let i = 0; i < 12; i++) {
 			await storage.set("sessions", `session_s${i}`, {
 				id: `s${i}`,
+				transcript: emptySessionTranscript(),
 				windowId: TEST_WINDOW_ID,
 				lifecycle: "foreground" as const,
 				messages: [],
@@ -614,6 +608,7 @@ describe("SessionController diagnostics trimming", () => {
 		const hugeData = "raw_sse_chunk_".repeat(2000);
 		await storage.set("sessions", `session_${id}`, {
 			id,
+			transcript: emptySessionTranscript(),
 			messages: [],
 			trace: [],
 			diagnostics: [
@@ -648,6 +643,7 @@ describe("SessionController diagnostics trimming", () => {
 		for (let i = 0; i < 12; i++) {
 			await storage.set("sessions", `session_s${i}`, {
 				id: `s${i}`,
+				transcript: emptySessionTranscript(),
 				messages: [],
 				trace: [],
 				diagnostics: Array.from({ length: 150 }, (_, j) => ({
@@ -681,6 +677,7 @@ describe("SessionController diagnostics trimming", () => {
 		});
 		await storage.set("sessions", `session_${activeId}`, {
 			id: activeId,
+			transcript: emptySessionTranscript(),
 			messages: [],
 			trace: [],
 			diagnostics: [],
@@ -842,6 +839,7 @@ describe("SessionController diagnostics trimming", () => {
 		for (let i = 0; i < 12; i++) {
 			await storage.set("sessions", `session_s${i}`, {
 				id: `s${i}`,
+				transcript: emptySessionTranscript(),
 				messages: [],
 				trace: [],
 				diagnostics: Array.from({ length: 150 }, (_, j) => ({
@@ -864,6 +862,7 @@ describe("SessionController diagnostics trimming", () => {
 		for (let i = 100; i < 112; i++) {
 			await storage.set("sessions", `session_late${i}`, {
 				id: `late${i}`,
+				transcript: emptySessionTranscript(),
 				messages: [],
 				trace: [],
 				diagnostics: Array.from({ length: 150 }, () => ({
@@ -897,6 +896,7 @@ describe("SessionController diagnostics trimming", () => {
 		const alreadyTruncated = `${"partial_".repeat(500)}... [truncated 4999964 bytes]`;
 		await storage.set("sessions", `session_${id}`, {
 			id,
+			transcript: emptySessionTranscript(),
 			messages: [],
 			trace: [],
 			diagnostics: [
@@ -952,9 +952,13 @@ describe("SessionController diagnostics trimming", () => {
 
 		const { ctrl, sessionId: id } = await initBoundController(flaky);
 		const hugeData = "raw_sse_chunk_".repeat(2000);
+		const persistedMessages = [
+			{ id: "m1", kind: "user" as const, text: "hi", timestamp: 1 },
+		];
 		await flaky.set("sessions", `session_${id}`, {
 			id,
-			messages: [{ id: "m1", kind: "user" as const, text: "hi", timestamp: 1 }],
+			transcript: transcriptFromMessages(persistedMessages),
+			messages: persistedMessages,
 			trace: [],
 			diagnostics: [
 				{
@@ -976,5 +980,42 @@ describe("SessionController diagnostics trimming", () => {
 		expect(loaded?.diagnostics.length).toBe(1);
 		const [ev] = loaded?.diagnostics ?? [];
 		expect(ev?.kind).toBe("provider_sse_event");
+	});
+
+	test("keeps provisional window binding when meta finishes loading", async () => {
+		const storage = new MemoryStorage();
+		const seed = new SessionController(storage);
+		await seed.init();
+		const sessionA = await seed.createSessionAttachedTo(1);
+
+		const originalGet = storage.get.bind(storage);
+		let markReadStarted = (): void => {};
+		let releaseMetaRead = (): void => {};
+		const metaReadStarted = new Promise<void>((resolve) => {
+			markReadStarted = resolve;
+		});
+		const metaReadGate = new Promise<void>((resolve) => {
+			releaseMetaRead = resolve;
+		});
+		vi.spyOn(storage, "get").mockImplementation(
+			async <T>(store: string, key: string): Promise<T | null> => {
+				if (store === "sessions" && key === "__meta") {
+					markReadStarted();
+					await metaReadGate;
+				}
+				return originalGet<T>(store, key);
+			},
+		);
+
+		const controller = new SessionController(storage);
+		controller.bindPanelWindow(2);
+		const initializing = controller.init();
+		await metaReadStarted;
+		const provisionalSessionId = controller.adoptEphemeralSession(2);
+		releaseMetaRead();
+		await initializing;
+
+		expect(controller.getPanelActiveSessionId(1)).toBe(sessionA);
+		expect(controller.getActiveSessionId()).toBe(provisionalSessionId);
 	});
 });

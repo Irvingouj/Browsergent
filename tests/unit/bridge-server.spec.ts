@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { BridgeCli } from "../../host/bridge-cli";
-import { BridgeServer } from "../../host/bridge-server";
 import { postBridgeRequest } from "../../host/bridge-http";
+import { BridgeServer } from "../../host/bridge-server";
 
 describe("BridgeServer HTTP", () => {
 	let server: BridgeServer | null = null;

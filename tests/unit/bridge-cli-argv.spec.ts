@@ -1,7 +1,7 @@
+import { spawn } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { describe, expect, test } from "vitest";
 
 const CLI = join(process.cwd(), "host/cli.ts");

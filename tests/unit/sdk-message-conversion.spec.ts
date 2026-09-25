@@ -19,6 +19,24 @@ describe("sdkToWasmMessages", () => {
 		expect(result[0].is_error).toBe(false);
 	});
 
+	test("preserves an existing failed tool-result flag from history", () => {
+		const result = sdkToWasmMessages([
+			{
+				role: "tool_result",
+				content: [{ type: "text", text: "A previous call failed" }],
+				id: "m3",
+				timestamp: 3,
+				tool_call_id: "tc1",
+				is_error: true,
+			},
+		]);
+
+		expect(result[0]?.is_error).toBe(true);
+		expect(result[0]?.content).toEqual([
+			{ type: "text", text: "A previous call failed" },
+		]);
+	});
+
 	test("sets is_error=true and replaces content when tool result is error envelope", () => {
 		const envelope = formatToolError(
 			"E_JS_TIMEOUT",

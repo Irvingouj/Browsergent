@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import { FilesController } from "../../src/controllers/files";
 import { BridgeHost } from "../../src/controllers/bridge-host";
+import { FilesController } from "../../src/controllers/files";
 import { handleFileOp } from "../../src/sidepanel/file-op-handler";
 import type { FsClient } from "../../src/skills/skill-types";
 import { createAgentTools } from "../../src/worker/agent-tools";
@@ -110,12 +110,7 @@ describe("BridgeHost file tools", () => {
 		const files = new FilesController(createMemoryFs());
 		const fileOp = (op: FileOp): Promise<FileOpResult> =>
 			handleFileOp({ id: "file-op", op }, files);
-		const tools = createAgentTools(
-			vi.fn(),
-			vi.fn(),
-			vi.fn(),
-			fileOp,
-		);
+		const tools = createAgentTools(vi.fn(), vi.fn(), vi.fn(), fileOp);
 		const host = new BridgeHost({ tools });
 
 		const written = await host.handle({

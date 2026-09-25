@@ -22,6 +22,23 @@ async function seedForeignWindowSession(
 				messages: [
 					{ kind: "user", id: "f1", text: "foreign window chat", timestamp: 1 },
 				],
+				transcript: {
+					version: 1,
+					entries: {
+						f1: {
+							entryId: "f1",
+							parentId: null,
+							turnNumber: 1,
+							displayText: "foreign window chat",
+							message: {
+								role: "user",
+								content: [{ type: "text", text: "foreign window chat" }],
+								timestamp: 1,
+							},
+						},
+					},
+					leafId: "f1",
+				},
 				trace: [],
 				diagnostics: [],
 				timestamp: Date.now(),

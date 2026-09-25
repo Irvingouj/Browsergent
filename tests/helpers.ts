@@ -8,12 +8,19 @@ import {
 	expect,
 	type Page,
 	test,
+	type Worker,
 } from "@playwright/test";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionPath = path.resolve(__dirname, "../dist");
 
 const consoleErrors: string[] = [];
+const mockProviderDiagnostics: Array<{
+	provider: "anthropic" | "openai";
+	url: string;
+	requestPaths: string[];
+	responseMarkers: string[];
+}> = [];
 
 /** Sleep without Playwright page APIs (page.waitForTimeout can hang on extension pages). */
 function sleep(ms: number): Promise<void> {
@@ -127,6 +134,76 @@ export async function domFillTestId(
 	throw new Error(`domFillTestId: [${testId}] not found within ${timeoutMs}ms`);
 }
 
+async function readProviderFailureDiagnostics(
+	serviceWorker: Worker,
+): Promise<string[]> {
+	return serviceWorker.evaluate(async () => {
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open("browsergent", 2);
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			const records = await new Promise<unknown[]>((resolve, reject) => {
+				const request = db
+					.transaction("sessions", "readonly")
+					.objectStore("sessions")
+					.getAll() as IDBRequest<unknown[]>; // Persisted IndexedDB values are external data.
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			return records.flatMap((record) => {
+				if (
+					typeof record !== "object" ||
+					record === null ||
+					!("diagnostics" in record) ||
+					!Array.isArray(record.diagnostics)
+				) {
+					return [];
+				}
+				const diagnostics: unknown[] = record.diagnostics;
+				const lastResponse = diagnostics.findLast(
+					(diagnostic) =>
+						typeof diagnostic === "object" &&
+						diagnostic !== null &&
+						"kind" in diagnostic &&
+						diagnostic.kind === "model_response",
+				);
+				if (
+					typeof lastResponse !== "object" ||
+					lastResponse === null ||
+					!("sdkStopReason" in lastResponse) ||
+					lastResponse.sdkStopReason !== "error"
+				) {
+					return [];
+				}
+				return diagnostics.flatMap((diagnostic) => {
+					if (typeof diagnostic !== "object" || diagnostic === null) return [];
+					if (
+						"kind" in diagnostic &&
+						diagnostic.kind === "provider_retry" &&
+						"error" in diagnostic
+					) {
+						return [`provider_retry: ${String(diagnostic.error)}`];
+					}
+					if (
+						"kind" in diagnostic &&
+						diagnostic.kind === "model_response" &&
+						"sdkStopReason" in diagnostic &&
+						diagnostic.sdkStopReason === "error" &&
+						"providerStopReason" in diagnostic
+					) {
+						return [`model_response: ${String(diagnostic.providerStopReason)}`];
+					}
+					return [];
+				});
+			});
+		} finally {
+			db.close();
+		}
+	});
+}
+
 export async function launchExtension(userDataDir?: string): Promise<{
 	context: BrowserContext;
 	extensionId: string;
@@ -188,6 +265,14 @@ export async function launchExtension(userDataDir?: string): Promise<{
 		extensionId,
 		sidePanel,
 		close: async () => {
+			const providerFailures = await readProviderFailureDiagnostics(
+				serviceWorker,
+			).catch((error: unknown) => [`diagnostic read failed: ${String(error)}`]);
+			if (providerFailures.length > 0) {
+				console.log(
+					`\n--- Provider failure diagnostics ---\n${providerFailures.join("\n")}\n`,
+				);
+			}
 			await context.close();
 			if (shouldRemoveUserDataDir) {
 				await fs.rm(actualUserDataDir, { recursive: true, force: true });
@@ -226,7 +311,7 @@ export async function openSecondWindow(
 	extensionId: string,
 	_anchor?: Page,
 	options?: { onPage?: (page: Page) => void },
-): Promise<{ sidePanel: Page; windowId: number }> {
+): Promise<{ sidePanel: Page; windowId: number; sessionId: string | null }> {
 	let serviceWorker = context.serviceWorkers()[0];
 	if (!serviceWorker) {
 		serviceWorker = await context.waitForEvent("serviceworker");
@@ -321,11 +406,21 @@ export async function openSecondWindow(
 				const got = await chrome.storage.session.get(key);
 				return (
 					(got[key] as
-						| { ts?: number; step?: string; idb?: string }
+						| {
+								ts?: number;
+								step?: string;
+								idb?: string;
+								sessionId?: string;
+						  }
 						| undefined) ?? null
 				);
 			}, createdWindowId);
-			if (marker && typeof marker.ts === "number") {
+			if (
+				marker &&
+				typeof marker.ts === "number" &&
+				typeof marker.sessionId === "string" &&
+				marker.sessionId.length > 0
+			) {
 				readyVia = "storage";
 				finalState = { via: "storage", ...marker, windowId: createdWindowId };
 				break;
@@ -343,13 +438,16 @@ export async function openSecondWindow(
 					workerReady: el?.getAttribute("data-worker-ready") ?? null,
 					bootWorker: el?.getAttribute("data-boot-worker") ?? null,
 					windowId: el?.getAttribute("data-window-id") ?? null,
+					sessionId: el?.getAttribute("data-active-session-id") ?? null,
 					bootStep: document.documentElement.dataset.bootStep ?? null,
 				};
 			});
 			finalState = snap;
 			if (
 				snap.initialized === "true" &&
-				(snap.workerReady === "true" || snap.bootWorker === "ok")
+				(snap.workerReady === "true" || snap.bootWorker === "ok") &&
+				typeof snap.sessionId === "string" &&
+				snap.sessionId.length > 0
 			) {
 				readyVia = "dom";
 				break;
@@ -371,14 +469,29 @@ export async function openSecondWindow(
 		createdWindowId,
 		finalState,
 	);
+	const panelWindowId = Number(finalState?.windowId);
+	if (
+		Number.isFinite(panelWindowId) &&
+		panelWindowId > 0 &&
+		panelWindowId !== createdWindowId
+	) {
+		throw new Error(
+			`Second window id mismatch: created=${createdWindowId}, panel=${panelWindowId}`,
+		);
+	}
 	const windowId =
-		typeof createdWindowId === "number" && createdWindowId > 0
-			? createdWindowId
-			: Number(finalState?.windowId);
+		Number.isFinite(panelWindowId) && panelWindowId > 0
+			? panelWindowId
+			: createdWindowId;
 	if (!Number.isFinite(windowId) || windowId <= 0) {
 		throw new Error(`Second window has invalid data-window-id: ${windowId}`);
 	}
-	return { sidePanel: newPage, windowId };
+	return {
+		sidePanel: newPage,
+		windowId,
+		sessionId:
+			typeof finalState?.sessionId === "string" ? finalState.sessionId : null,
+	};
 }
 
 /** Close a Chrome window by id (simulates merge destroying the removed window). */
@@ -558,12 +671,20 @@ export async function broadcastWindowMerge(
 }
 
 test.afterEach(({ page: _page }, testInfo) => {
-	if (testInfo.status !== "passed" && consoleErrors.length > 0) {
-		console.log(
-			`\n--- Console errors for "${testInfo.title}" ---\n${consoleErrors.join("\n")}\n`,
-		);
+	if (testInfo.status !== "passed") {
+		if (consoleErrors.length > 0) {
+			console.log(
+				`\n--- Console errors for "${testInfo.title}" ---\n${consoleErrors.join("\n")}\n`,
+			);
+		}
+		if (mockProviderDiagnostics.length > 0) {
+			console.log(
+				`\n--- Mock provider diagnostics for "${testInfo.title}" ---\n${JSON.stringify(mockProviderDiagnostics)}\n`,
+			);
+		}
 	}
 	consoleErrors.length = 0;
+	mockProviderDiagnostics.length = 0;
 });
 
 export async function createTestPage(
@@ -954,7 +1075,10 @@ export function startMockAnthropicServer(options: {
 	}>;
 }): MockAnthropicServer {
 	const requestBodies: unknown[] = [];
+	const requestPaths: string[] = [];
+	const responseMarkers: string[] = [];
 	const server = createServer((req, res) => {
+		requestPaths.push(`${req.method} ${req.url ?? ""}`);
 		if (req.method === "OPTIONS") {
 			res.writeHead(204, {
 				"Access-Control-Allow-Origin": "*",
@@ -981,6 +1105,7 @@ export function startMockAnthropicServer(options: {
 					delays: [],
 					stopReason: "end_turn",
 				};
+				responseMarkers.push(response.stopReason);
 				res.writeHead(200, {
 					"Content-Type": "text/event-stream",
 					"Cache-Control": "no-cache",
@@ -1017,7 +1142,14 @@ export function startMockAnthropicServer(options: {
 	const address = server.address();
 	const port =
 		typeof address === "object" && address !== null ? address.port : 0;
-	return { url: `http://localhost:${port}`, server, requestBodies };
+	const url = `http://localhost:${port}`;
+	mockProviderDiagnostics.push({
+		provider: "anthropic",
+		url,
+		requestPaths,
+		responseMarkers,
+	});
+	return { url, server, requestBodies };
 }
 
 export interface MockOpenAIServer {
@@ -1034,7 +1166,10 @@ export function startMockOpenAIServer(options: {
 	responses: Array<{ frames: string[]; delays?: number[] }>;
 }): MockOpenAIServer {
 	const requestBodies: unknown[] = [];
+	const requestPaths: string[] = [];
+	const responseMarkers: string[] = [];
 	const server = createServer((req, res) => {
+		requestPaths.push(`${req.method} ${req.url ?? ""}`);
 		if (req.method === "OPTIONS") {
 			res.writeHead(204, {
 				"Access-Control-Allow-Origin": "*",
@@ -1069,6 +1204,7 @@ export function startMockOpenAIServer(options: {
 				frames: [],
 				delays: [],
 			};
+			responseMarkers.push("chat_completion");
 			res.writeHead(200, {
 				"Content-Type": "text/event-stream",
 				"Cache-Control": "no-cache",
@@ -1096,7 +1232,14 @@ export function startMockOpenAIServer(options: {
 	const address = server.address();
 	const port =
 		typeof address === "object" && address !== null ? address.port : 0;
-	return { url: `http://localhost:${port}`, server, requestBodies };
+	const url = `http://localhost:${port}`;
+	mockProviderDiagnostics.push({
+		provider: "openai",
+		url,
+		requestPaths,
+		responseMarkers,
+	});
+	return { url, server, requestBodies };
 }
 
 export function openAITextFrames(text: string): string[] {

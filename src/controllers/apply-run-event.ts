@@ -5,11 +5,18 @@ import type {
 	ChatMessage,
 	WorkerToPanel,
 } from "../types/messages";
+import {
+	appendTranscriptEntry,
+	emptySessionTranscript,
+	projectTranscript,
+	type SessionTranscript,
+} from "../types/session-transcript";
 
 export interface SessionSnapshot {
 	messages: ChatMessage[];
 	trace: AgentTraceEntry[];
 	diagnostics: AgentDiagnosticEvent[];
+	transcript: SessionTranscript;
 	/** Partial assistant text keyed by message id (headless streaming). */
 	streamingText: Map<string, string>;
 }
@@ -18,11 +25,13 @@ export function createSessionSnapshot(
 	messages: ChatMessage[] = [],
 	trace: AgentTraceEntry[] = [],
 	diagnostics: AgentDiagnosticEvent[] = [],
+	transcript: SessionTranscript = emptySessionTranscript(),
 ): SessionSnapshot {
 	return {
 		messages: [...messages],
 		trace: [...trace],
 		diagnostics: [...diagnostics],
+		transcript,
 		streamingText: new Map(),
 	};
 }
@@ -96,6 +105,21 @@ export function applyRunEvent(
 				upsertAssistantText(snapshot, event.messageId, text);
 				snapshot.streamingText.delete(event.messageId);
 			}
+			break;
+		}
+		case "agentHistoryMessage": {
+			snapshot.transcript = appendTranscriptEntry(
+				snapshot.transcript,
+				event.entry,
+			);
+			const systemMessages = snapshot.messages.filter(
+				(message): message is Extract<ChatMessage, { kind: "system" }> =>
+					message.kind === "system",
+			);
+			snapshot.messages = [
+				...projectTranscript(snapshot.transcript),
+				...systemMessages,
+			].sort((left, right) => left.timestamp - right.timestamp);
 			break;
 		}
 		case "agentTrace": {

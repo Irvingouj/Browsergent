@@ -24,6 +24,60 @@ async function waitForTestId(
 	throw new Error(`waitForTestId: ${testId}`);
 }
 
+test("rapid endpoint and API-key edits preserve both provider values", async () => {
+	const { sidePanel, close } = await launchExtension();
+	try {
+		await domClickButton(sidePanel, "Settings");
+		await waitForTestId(sidePanel, "settings-list");
+		await domClickTestId(sidePanel, "settings-add-provider");
+		await domClickTestId(sidePanel, "settings-add-anthropic");
+		await waitForTestId(sidePanel, "settings-edit");
+
+		const endpoint = "http://127.0.0.1:45678/v1/messages";
+		const apiKey = "test-key";
+		await sidePanel.evaluate(
+			({ endpoint, apiKey }) => {
+				const setInput = (testId: string, value: string): void => {
+					const input = document.querySelector(
+						`[data-testid="${testId}"]`,
+					) as HTMLInputElement | null;
+					if (!input) throw new Error(`Missing input: ${testId}`);
+					const setter = Object.getOwnPropertyDescriptor(
+						HTMLInputElement.prototype,
+						"value",
+					)?.set;
+					if (!setter) throw new Error("Input value setter unavailable");
+					setter.call(input, value);
+					input.dispatchEvent(new Event("input", { bubbles: true }));
+				};
+				setInput("settings-baseurl-input", endpoint);
+				setInput("settings-apikey-input", apiKey);
+			},
+			{ endpoint, apiKey },
+		);
+
+		await domClickTestId(sidePanel, "settings-done-button");
+		await waitForTestId(sidePanel, "settings-list");
+		await domClickSelector(sidePanel, '[data-testid^="settings-edit-"]');
+		await waitForTestId(sidePanel, "settings-edit");
+		const savedValues = await sidePanel.evaluate(() => ({
+			endpoint: (
+				document.querySelector(
+					'[data-testid="settings-baseurl-input"]',
+				) as HTMLInputElement | null
+			)?.value,
+			apiKey: (
+				document.querySelector(
+					'[data-testid="settings-apikey-input"]',
+				) as HTMLInputElement | null
+			)?.value,
+		}));
+		expect(savedValues).toEqual({ endpoint, apiKey });
+	} finally {
+		await close();
+	}
+});
+
 test("settings save and load within a session", async () => {
 	const { sidePanel, close } = await launchExtension();
 

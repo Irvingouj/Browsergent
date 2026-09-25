@@ -121,8 +121,7 @@ export const SessionPanel: FunctionalComponent<SessionPanelProps> = ({
 	);
 
 	const visibleSessions = sessions.filter(
-		(s) =>
-			s.messageCount > 0 || s.id === activeSessionId || s.origin === "cli",
+		(s) => s.messageCount > 0 || s.id === activeSessionId || s.origin === "cli",
 	);
 
 	return (

@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import { BridgeHost } from "../../src/controllers/bridge-host";
-import { createAgentTools } from "../../src/worker/agent-tools";
-import { formatJsRunResult } from "../../src/types/extjs-utils";
 import type { CellResult } from "../../src/types/extjs-utils";
+import { formatJsRunResult } from "../../src/types/extjs-utils";
+import { createAgentTools } from "../../src/worker/agent-tools";
 
 describe("BridgeHost run_js", () => {
 	test("CLI run_js returns the same result Chat's run_js tool returns", async () => {

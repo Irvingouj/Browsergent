@@ -77,10 +77,11 @@ export function toOpenAIMessages(
 				break;
 			}
 			case "tool_result": {
+				const text = contentToText(msg.content);
 				result.push({
 					role: "tool",
 					tool_call_id: msg.tool_call_id,
-					content: contentToText(msg.content),
+					content: msg.is_error ? `Tool execution failed:\n${text}` : text,
 				});
 				break;
 			}

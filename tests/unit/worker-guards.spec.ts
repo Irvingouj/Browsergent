@@ -3,6 +3,7 @@ import { isStaleRunId } from "../../src/controllers/worker-bridge";
 import {
 	isAgentDiagnosticEvent,
 	isAgentMessageEnd,
+	isAgentStartMessage,
 	isBrowsergentError,
 	isExtjsDocsError,
 	isExtjsDocsRequest,
@@ -17,6 +18,43 @@ import {
 	isValidFileOpResult,
 } from "../../src/protocol/worker-guards";
 import type { FileOp, FileOpResult } from "../../src/worker/file-op-relay";
+
+describe("isAgentStartMessage", () => {
+	const validStart = {
+		type: "agentStart",
+		runId: "run-1",
+		sessionId: "session-1",
+		task: "visible task",
+		userMessageId: "message-1",
+		history: [
+			{
+				entryId: "earlier-user",
+				turnNumber: 1,
+				message: {
+					role: "user",
+					content: [{ type: "text", text: "Earlier" }],
+					timestamp: 1,
+				},
+			},
+		],
+		settings: {
+			wireFormat: "openai-chat-completions",
+			apiKey: "test-key",
+			chatEndpointUrl: "https://example.com/chat",
+			model: "test-model",
+		},
+	};
+
+	test("accepts a typed history seed", () => {
+		expect(isAgentStartMessage(validStart)).toBe(true);
+	});
+
+	test("rejects malformed history before the worker creates an agent", () => {
+		expect(
+			isAgentStartMessage({ ...validStart, history: [{ entryId: "bad" }] }),
+		).toBe(false);
+	});
+});
 
 describe("isAgentDiagnosticEvent", () => {
 	test("accepts model response stop-reason diagnostics", () => {

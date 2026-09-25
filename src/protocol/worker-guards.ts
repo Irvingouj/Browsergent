@@ -4,8 +4,14 @@ import type {
 	AgentStatus,
 	AgentTraceEntry,
 	ChatMessage,
+	PanelToWorker,
 	WorkerToPanel,
 } from "../types/messages";
+import {
+	isAgentHistoryEntry,
+	isSessionTranscriptEntry,
+	repairAgentHistoryEntry,
+} from "../types/session-transcript";
 import type { FileOp, FileOpResult } from "../worker/file-op-relay";
 
 const AGENT_STATUSES: readonly AgentStatus[] = [
@@ -79,6 +85,106 @@ export function isBrowsergentError(err: unknown): err is {
 		if (!isObject(err.details)) return false;
 	}
 	return true;
+}
+
+export function isAgentStartMessage(
+	msg: unknown,
+): msg is Extract<PanelToWorker, { type: "agentStart" }> {
+	if (!isObject(msg) || msg.type !== "agentStart") return false;
+	if (
+		!isString(msg.runId) ||
+		!isString(msg.sessionId) ||
+		!isString(msg.task) ||
+		!isString(msg.userMessageId) ||
+		!Array.isArray(msg.history) ||
+		!msg.history.every(isAgentHistoryEntry) ||
+		!isObject(msg.settings)
+	) {
+		return false;
+	}
+	const settings = msg.settings;
+	if (
+		(settings.wireFormat !== "anthropic-messages" &&
+			settings.wireFormat !== "openai-chat-completions") ||
+		!isString(settings.apiKey) ||
+		!isString(settings.chatEndpointUrl) ||
+		!isString(settings.model)
+	) {
+		return false;
+	}
+	return (
+		isOptionalString(msg.resolvedTask) &&
+		isOptionalString(msg.skillCatalog) &&
+		(msg.activatedSkills === undefined || isStringArray(msg.activatedSkills))
+	);
+}
+
+function historyFailure(history: unknown): string | null {
+	if (!Array.isArray(history)) return "history";
+	const entries: unknown[] = history;
+	const index = entries.findIndex((entry) => !isAgentHistoryEntry(entry));
+	return index === -1 ? null : `history[${index}]`;
+}
+
+/** Why a panel agentStart was rejected, or null when it is valid. */
+export function describeAgentStartFailure(msg: unknown): string | null {
+	if (isAgentStartMessage(msg)) return null;
+	if (!isObject(msg) || msg.type !== "agentStart") {
+		return "message is not agentStart";
+	}
+	const problems: string[] = [];
+	for (const key of ["runId", "sessionId", "task", "userMessageId"] as const) {
+		if (!isString(msg[key])) problems.push(key);
+	}
+	const history = historyFailure(msg.history);
+	if (history) problems.push(history);
+	if (!isObject(msg.settings)) {
+		problems.push("settings");
+	} else {
+		const settings = msg.settings;
+		if (
+			settings.wireFormat !== "anthropic-messages" &&
+			settings.wireFormat !== "openai-chat-completions"
+		) {
+			problems.push(`settings.wireFormat (${String(settings.wireFormat)})`);
+		}
+		for (const key of ["apiKey", "chatEndpointUrl", "model"] as const) {
+			if (!isString(settings[key])) problems.push(`settings.${key}`);
+		}
+	}
+	if (!isOptionalString(msg.resolvedTask)) problems.push("resolvedTask");
+	if (!isOptionalString(msg.skillCatalog)) problems.push("skillCatalog");
+	if (
+		msg.activatedSkills !== undefined &&
+		!isStringArray(msg.activatedSkills)
+	) {
+		problems.push("activatedSkills");
+	}
+	return problems.join(", ") || "transcript history";
+}
+
+/**
+ * Keep a start that is valid except for transcript entries the model history
+ * cannot replay. Unrepairable entries are dropped. Settings are not guessed.
+ */
+export function repairAgentStartMessage(
+	msg: unknown,
+): Extract<PanelToWorker, { type: "agentStart" }> | null {
+	if (
+		!isObject(msg) ||
+		msg.type !== "agentStart" ||
+		!Array.isArray(msg.history)
+	) {
+		return null;
+	}
+	const history: unknown[] = msg.history;
+	const repaired = {
+		...msg,
+		history: history
+			.map(repairAgentHistoryEntry)
+			.filter((entry): entry is NonNullable<typeof entry> => entry !== null),
+	};
+	return isAgentStartMessage(repaired) ? repaired : null;
 }
 
 export function isWorkerReady(msg: unknown): msg is { type: "workerReady" } {
@@ -195,6 +301,17 @@ export function isAgentDiagnostic(msg: unknown): msg is {
 		msg.type === "agentDiagnostic" &&
 		isString(msg.runId) &&
 		isAgentDiagnosticEvent(msg.event)
+	);
+}
+
+export function isAgentHistoryMessageEvent(
+	msg: unknown,
+): msg is Extract<WorkerToPanel, { type: "agentHistoryMessage" }> {
+	return (
+		isObject(msg) &&
+		msg.type === "agentHistoryMessage" &&
+		isString(msg.runId) &&
+		isSessionTranscriptEntry(msg.entry)
 	);
 }
 
@@ -436,6 +553,7 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isAgentTrace(msg) ||
 		isAgentDiagnostic(msg) ||
 		isAgentMessageEnd(msg) ||
+		isAgentHistoryMessageEvent(msg) ||
 		isAgentError(msg) ||
 		isExtjsOutput(msg) ||
 		isExtjsError(msg) ||

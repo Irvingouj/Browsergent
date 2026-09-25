@@ -41,11 +41,11 @@ async function addMessageWithoutMock(
 	await sidePanel.waitForTimeout(1000);
 }
 
-function makeQuickChunk() {
+function makeQuickChunk(text = "Done") {
 	return (
 		`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "msg-quick", type: "message", role: "assistant", content: [], model: "test", stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })}\n\n` +
 		`event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n` +
-		`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Done" } })}\n\n` +
+		`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text } })}\n\n` +
 		`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`
 	);
 }
@@ -169,6 +169,185 @@ test("Switch session", async () => {
 	await sessionItems.nth(1).click();
 	await expect(sidePanel.locator("text=Message A")).toBeVisible();
 	await expect(sidePanel.locator("text=Message B")).not.toBeVisible();
+	await close();
+});
+
+test("tree rewind preserves the old branch and fork opens a child session", async () => {
+	const { sidePanel, close } = await launchExtension();
+	const mock = startMockAnthropicServer({
+		responses: [
+			"Answer one",
+			"Answer two",
+			"Answer on new branch",
+			"Answer after reload",
+			"Answer on original branch",
+		].map((text) => ({
+			chunks: [makeQuickChunk(text)],
+			delays: [0],
+			stopReason: "end_turn" as const,
+		})),
+	});
+	sessionMocks.push(mock);
+	await configureMockSettings(sidePanel, mock.url);
+
+	for (const [question, answer] of [
+		["Question one", "Answer one"],
+		["Question two", "Answer two"],
+	] as const) {
+		await typeTask(sidePanel, question);
+		await sidePanel.getByRole("button", { name: "Run task" }).click();
+		await expect(
+			sidePanel.locator('[data-testid="chat-message-assistant"]', {
+				hasText: answer,
+			}),
+		).toBeVisible({ timeout: 10000 });
+		await expect(sidePanel.getByTestId("agent-status")).toHaveText("done", {
+			timeout: 10000,
+		});
+	}
+
+	await typeTask(sidePanel, "/tree");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	const tree = sidePanel.getByTestId("transcript-tree-panel");
+	await expect(tree).toBeVisible();
+	const secondQuestion = tree
+		.getByTestId("transcript-tree-entry")
+		.filter({ hasText: "Question two" })
+		.first();
+	await secondQuestion.getByRole("button", { name: "Edit & rewind" }).click();
+	await expect(tree).not.toBeVisible();
+	await expect(sidePanel.getByTestId("task-input")).toContainText(
+		"Question two",
+	);
+	await expect(sidePanel.locator("text=Question one")).toBeVisible();
+	await expect(sidePanel.locator("text=Answer one")).toBeVisible();
+	await expect(sidePanel.locator("text=Answer two")).not.toBeVisible();
+
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await expect
+		.poll(() => mock.requestBodies.length, { timeout: 15000 })
+		.toBeGreaterThanOrEqual(3);
+	await expect(
+		sidePanel.locator('[data-testid="chat-message-assistant"]', {
+			hasText: "Answer on new branch",
+		}),
+	).toBeVisible({ timeout: 10000 });
+	await expect(sidePanel.getByTestId("agent-status")).toHaveText("done", {
+		timeout: 10000,
+	});
+	await expect(sidePanel.locator("text=Answer two")).not.toBeVisible();
+	const branchRequest = JSON.stringify(mock.requestBodies[2]) ?? "";
+	expect(branchRequest).toContain("Question one");
+	expect(branchRequest).toContain("Answer one");
+	expect(branchRequest).toContain("Question two");
+	expect(branchRequest).not.toContain("Answer two");
+
+	await sidePanel.reload();
+	await expect(
+		sidePanel.locator('[data-testid="chat-message-assistant"]', {
+			hasText: "Answer on new branch",
+		}),
+	).toBeVisible({ timeout: 10000 });
+	await expect(
+		sidePanel
+			.getByTestId("chat-message-assistant")
+			.filter({ hasText: "Answer two" }),
+	).toHaveCount(0);
+	await typeTask(sidePanel, "Question after reload");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await expect(
+		sidePanel.locator('[data-testid="chat-message-assistant"]', {
+			hasText: "Answer after reload",
+		}),
+	).toBeVisible({ timeout: 10000 });
+	const reloadedBranchRequest = JSON.stringify(mock.requestBodies[3]) ?? "";
+	expect(reloadedBranchRequest).toContain("Answer on new branch");
+	expect(reloadedBranchRequest).not.toContain("Answer two");
+
+	await sidePanel.getByTestId("open-transcript-tree").click();
+	await expect(tree).toBeVisible();
+	await expect(
+		tree
+			.getByTestId("transcript-tree-entry")
+			.filter({ hasText: "Question two" })
+			.first(),
+	).toBeVisible();
+	await expect(
+		tree.getByTestId("transcript-tree-entry").filter({ hasText: "Answer two" }),
+	).toBeVisible();
+	const oldBranchAnswer = tree
+		.getByTestId("transcript-tree-entry")
+		.filter({ hasText: "Answer two" })
+		.first();
+	await oldBranchAnswer.getByRole("button", { name: "Continue here" }).click();
+	await expect(tree).not.toBeVisible();
+	await expect(
+		sidePanel.locator('[data-testid="chat-message-assistant"]', {
+			hasText: "Answer two",
+		}),
+	).toBeVisible();
+	await expect(
+		sidePanel
+			.getByTestId("chat-message-assistant")
+			.filter({ hasText: "Answer on new branch" }),
+	).toHaveCount(0);
+	await typeTask(sidePanel, "Continue the original branch");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await expect(
+		sidePanel.locator('[data-testid="chat-message-assistant"]', {
+			hasText: "Answer on original branch",
+		}),
+	).toBeVisible({ timeout: 10000 });
+	const originalBranchRequest = JSON.stringify(mock.requestBodies[4]) ?? "";
+	expect(originalBranchRequest).toContain("Answer two");
+	expect(originalBranchRequest).not.toContain("Answer on new branch");
+
+	await sidePanel.getByTestId("open-transcript-tree").click();
+	await expect(tree).toBeVisible();
+	const branchAnswer = tree
+		.getByTestId("transcript-tree-entry")
+		.filter({ hasText: "Answer on new branch" })
+		.first();
+	await branchAnswer.getByRole("button", { name: "Fork here" }).click();
+	await expect(tree).not.toBeVisible();
+	await expect(
+		sidePanel.locator('[data-testid="chat-message-assistant"]', {
+			hasText: "Answer on new branch",
+		}),
+	).toBeVisible();
+	await expect(
+		sidePanel
+			.getByTestId("chat-message-assistant")
+			.filter({ hasText: "Answer after reload" }),
+	).toHaveCount(0);
+
+	const activeSessionRoot = sidePanel.locator("[data-initialized]");
+	const previousSessionId = await activeSessionRoot.getAttribute(
+		"data-active-session-id",
+	);
+	expect(previousSessionId).not.toBeNull();
+	await typeTask(sidePanel, "/fork");
+	await sidePanel.getByRole("button", { name: "Run task" }).click();
+	await expect(activeSessionRoot).not.toHaveAttribute(
+		"data-active-session-id",
+		previousSessionId ?? "",
+		{ timeout: 10000 },
+	);
+	await expect(
+		sidePanel.locator('[data-testid="chat-message-assistant"]', {
+			hasText: "Answer on new branch",
+		}),
+	).toBeVisible();
+	await expect(
+		sidePanel
+			.getByTestId("chat-message-assistant")
+			.filter({ hasText: "Answer after reload" }),
+	).toHaveCount(0);
+	await sidePanel.getByRole("button", { name: "More options" }).click();
+	await expect(sidePanel.getByTestId("close-session-panel")).toBeVisible();
+	await expect(sidePanel.getByTestId("session-item")).toHaveCount(3, {
+		timeout: 10000,
+	});
 	await close();
 });
 

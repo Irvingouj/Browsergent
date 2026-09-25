@@ -7,6 +7,7 @@ import {
 } from "../../src/sidepanel/window-context-controller";
 import { MemoryStorage } from "../../src/storage/memory-storage";
 import type { ChatMessage } from "../../src/types/messages";
+import { transcriptFromMessages } from "./session-test-utils";
 
 describe("lifecycleEventKey", () => {
 	test("dedupes merge events from runtime and storage transports", () => {
@@ -48,7 +49,13 @@ describe("WindowContextController.init attach path (B1/B2)", () => {
 			text: "prior chat in window 42",
 			timestamp: 1,
 		};
-		await ctrl1.saveForSession(first.sessionId, [userMsg], [], []);
+		await ctrl1.saveForSession(
+			first.sessionId,
+			[userMsg],
+			[],
+			[],
+			transcriptFromMessages([userMsg]),
+		);
 
 		// Simulate panel reopen: new controller stack, same storage.
 		const ctrl2 = new SessionController(storage);

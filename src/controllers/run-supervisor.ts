@@ -166,9 +166,19 @@ export class RunSupervisor {
 				shouldApplyBridgeEffects: () =>
 					this.foregroundSessionId === bridgeSessionId,
 				onRunEvent: (runId, event) => {
-					void this.handleRunEvent(runId, event);
-					this.handlers.onRunEventPublished?.(bridgeSessionId, event);
-					this.handlers.onSessionRunRelay?.(bridgeSessionId, event);
+					const publish = () => {
+						this.handlers.onRunEventPublished?.(bridgeSessionId, event);
+						this.handlers.onSessionRunRelay?.(bridgeSessionId, event);
+					};
+					const handling = this.handleRunEvent(runId, event);
+					if (
+						event.type === "agentStatus" &&
+						TERMINAL_STATUSES.has(event.status)
+					) {
+						return handling.then(publish);
+					}
+					void handling;
+					publish();
 				},
 			},
 			onWorkerReady: () => {
@@ -336,6 +346,8 @@ export class RunSupervisor {
 					.finalizeAssistantMessage(event.messageId, streamed);
 				break;
 			}
+			case "agentHistoryMessage":
+				break;
 			case "agentMessageEnd": {
 				const sig = getStreamingSignal(event.messageId);
 				const text = sig?.value ?? "";
@@ -464,12 +476,16 @@ export class RunSupervisor {
 			"agentMessage",
 			"agentTextDelta",
 			"agentMessageEnd",
+			"agentHistoryMessage",
 			"agentTrace",
 			"agentDiagnostic",
 			"agentError",
 		]);
 		if (persistTypes.has(event.type)) {
 			await this.sink.applyEvent(state.sessionId, event);
+			if (event.type === "agentHistoryMessage") {
+				await this.sink.flush(state.sessionId);
+			}
 		}
 	}
 }

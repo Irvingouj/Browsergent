@@ -1,5 +1,20 @@
 import { describe, expect, test } from "vitest";
-import { computeToolEndTraceStatus } from "../../src/worker/agent-loop";
+import {
+	computeToolEndTraceStatus,
+	contextBudgetForModel,
+} from "../../src/worker/agent-loop";
+
+describe("contextBudgetForModel", () => {
+	test("reserves model output tokens from the model context window", () => {
+		expect(
+			contextBudgetForModel({ contextWindow: 128_000, maxTokens: 4_096 }),
+		).toBe(123_904);
+	});
+
+	test("uses the Rust projection default when the model omits its window", () => {
+		expect(contextBudgetForModel({})).toBe(95_904);
+	});
+});
 
 describe("computeToolEndTraceStatus", () => {
 	test("returns 'error' for error envelope output", () => {

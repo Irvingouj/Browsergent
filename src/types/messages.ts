@@ -1,9 +1,11 @@
 /** Panel <-> Worker message types. */
 
+import type { AgentHistoryEntry } from "@pi-oxide/pi-host-web";
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { FileOp, FileOpResult } from "../worker/file-op-relay";
 import type { WireFormat } from "../worker/provider-schema";
 import type { CellResult } from "./extjs-utils";
+import type { SessionTranscriptEntry } from "./session-transcript";
 
 export type {
 	ProviderConfig,
@@ -25,9 +27,11 @@ export type PanelToWorker =
 			runId: string;
 			sessionId: string;
 			task: string;
+			userMessageId: string;
 			resolvedTask?: string;
 			skillCatalog?: string;
 			activatedSkills?: string[];
+			history: AgentHistoryEntry[];
 			settings: WorkerSettings;
 	  }
 	| { type: "agentStop"; runId?: string }
@@ -49,7 +53,12 @@ export type PanelToWorker =
 			skillBody: string;
 			url: string;
 	  }
-	| { type: "agentSteer"; runId: string; text: string };
+	| {
+			type: "agentSteer";
+			runId: string;
+			messageId: string;
+			text: string;
+	  };
 
 export interface WorkerSettings {
 	wireFormat: WireFormat;
@@ -67,6 +76,11 @@ export type WorkerToPanel =
 	| { type: "agentTrace"; runId: string; entry: AgentTraceEntry }
 	| { type: "agentDiagnostic"; runId: string; event: AgentDiagnosticEvent }
 	| { type: "agentMessageEnd"; runId: string; messageId: string }
+	| {
+			type: "agentHistoryMessage";
+			runId: string;
+			entry: SessionTranscriptEntry;
+	  }
 	| { type: "agentError"; runId: string; error: BrowsergentError }
 	| { type: "extjsOutput"; id: string; output: string }
 	| { type: "extjsError"; id: string; error: string }

@@ -1,3 +1,4 @@
+import type { AgentHistoryEntry } from "@pi-oxide/pi-host-web";
 import { reportError } from "../errors/report";
 import {
 	isAgentDiagnosticEvent,
@@ -17,6 +18,15 @@ import type {
 	ChatMessage,
 } from "../types/messages";
 import {
+	emptySessionTranscript,
+	isSessionTranscript,
+	projectTranscript,
+	type SessionTranscript,
+	selectTranscriptLeaf,
+	transcriptHistory,
+	transcriptPath,
+} from "../types/session-transcript";
+import {
 	applyWindowCloseToIndex,
 	applyWindowMergeToIndex,
 	type SessionIndexEntry,
@@ -32,18 +42,20 @@ import {
 	type SessionLifecycle,
 } from "./session-window-utils";
 
-/** Full persisted chat payload for one session (messages/trace/diagnostics). */
+/** Persisted session body; messages is a UI projection, transcript is authoritative. */
 interface SessionData {
 	id: string;
 	windowId?: number | null;
 	lifecycle?: SessionLifecycle;
 	origin: SessionOrigin;
+	transcript: SessionTranscript;
 	messages: ChatMessage[];
 	trace: AgentTraceEntry[];
 	diagnostics: AgentDiagnosticEvent[];
 	timestamp: number;
 	title?: string;
 	customTitle?: string;
+	forkedFromSessionId?: string;
 	messageCount: number;
 }
 
@@ -173,6 +185,30 @@ export interface ListSessionsResult {
 	prunedIds: string[];
 }
 
+export interface SessionViewSnapshot {
+	messages: ChatMessage[];
+	trace: AgentTraceEntry[];
+	diagnostics: AgentDiagnosticEvent[];
+}
+
+export interface SessionLoadResult extends SessionViewSnapshot {
+	transcript: SessionTranscript;
+	history: AgentHistoryEntry[];
+}
+
+function projectSessionMessages(
+	transcript: SessionTranscript,
+	messages: ChatMessage[],
+): ChatMessage[] {
+	const systemMessages = messages.filter(
+		(message): message is Extract<ChatMessage, { kind: "system" }> =>
+			message.kind === "system",
+	);
+	return [...projectTranscript(transcript), ...systemMessages].sort(
+		(left, right) => left.timestamp - right.timestamp,
+	);
+}
+
 function estimateJsonSize(value: unknown): number {
 	try {
 		return new TextEncoder().encode(JSON.stringify(value)).length;
@@ -265,6 +301,7 @@ function emptySessionData(
 		windowId: windowId ?? null,
 		lifecycle: "foreground",
 		origin,
+		transcript: emptySessionTranscript(),
 		messages: [],
 		trace: [],
 		diagnostics: [],
@@ -407,7 +444,16 @@ export class SessionController {
 			SESSION_STORE,
 			sessionBodyKey(id),
 		);
-		if (!raw || typeof raw !== "object" || !raw.id) return null;
+		if (
+			!raw ||
+			typeof raw !== "object" ||
+			typeof raw.id !== "string" ||
+			!Array.isArray(raw.messages) ||
+			!Array.isArray(raw.trace) ||
+			!isSessionTranscript(raw.transcript)
+		) {
+			return null;
+		}
 		return raw;
 	}
 
@@ -493,8 +539,30 @@ export class SessionController {
 	}
 
 	async refreshMeta(): Promise<void> {
-		const stored = await this.storage.get<SessionMeta>(SESSION_STORE, META_KEY);
-		this.meta = ensureMeta(stored);
+		const stored = ensureMeta(
+			await this.storage.get<SessionMeta>(SESSION_STORE, META_KEY),
+		);
+		const provisional = this.metaLoaded ? ensureMeta(null) : this.meta;
+		const runningSessionsByWindow = {
+			...(provisional.runningSessionsByWindow ?? {}),
+			...(stored.runningSessionsByWindow ?? {}),
+		};
+		this.meta = {
+			panelActiveSession: {
+				...provisional.panelActiveSession,
+				...stored.panelActiveSession,
+			},
+			closedWindowIds: Array.from(
+				new Set([
+					...(stored.closedWindowIds ?? []),
+					...(provisional.closedWindowIds ?? []),
+				]),
+			),
+			runningSessionsByWindow:
+				Object.keys(runningSessionsByWindow).length > 0
+					? runningSessionsByWindow
+					: undefined,
+		};
 	}
 
 	getGlobalRunningSessionIds(): string[] {
@@ -735,26 +803,24 @@ export class SessionController {
 		return this.meta.panelActiveSession[String(this.panelWindowId)] ?? null;
 	}
 
-	async load(): Promise<{
-		messages: ChatMessage[];
-		trace: AgentTraceEntry[];
-		diagnostics: AgentDiagnosticEvent[];
-	} | null> {
+	async load(): Promise<SessionViewSnapshot | null> {
 		try {
 			const activeId = this.getActiveSessionId();
 			if (!activeId) return null;
-			return await this.loadForId(activeId);
+			const loaded = await this.loadForId(activeId);
+			if (!loaded) return null;
+			return {
+				messages: loaded.messages,
+				trace: loaded.trace,
+				diagnostics: loaded.diagnostics,
+			};
 		} catch (err) {
 			this.failStore(err, { operation: "load" });
 			return null;
 		}
 	}
 
-	async loadForSession(id: string): Promise<{
-		messages: ChatMessage[];
-		trace: AgentTraceEntry[];
-		diagnostics: AgentDiagnosticEvent[];
-	} | null> {
+	async loadForSession(id: string): Promise<SessionLoadResult | null> {
 		return this.loadForId(id);
 	}
 
@@ -773,20 +839,24 @@ export class SessionController {
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
+		transcript?: SessionTranscript,
 	): Promise<void> {
 		const existing = await this.getSessionRecord(sessionId);
 		// Ephemeral sessions may not have a body yet — upsert rather than silent no-op.
 		const base =
 			existing ?? emptySessionData(sessionId, this.panelWindowId ?? null);
 
+		const nextTranscript = transcript ?? base.transcript;
+		const nextMessages = projectSessionMessages(nextTranscript, messages);
 		const trimmedDiagnostics = normalizeDiagnostics(diagnostics).diagnostics;
 		const data: SessionData = {
 			...base,
-			messages,
+			transcript: nextTranscript,
+			messages: nextMessages,
 			trace,
 			diagnostics: trimmedDiagnostics,
 			timestamp: Date.now(),
-			messageCount: messages.length,
+			messageCount: nextMessages.length,
 		};
 
 		try {
@@ -830,9 +900,10 @@ export class SessionController {
 	}
 
 	private cleanupStoredSession(raw: SessionData): SessionCleanup {
-		const messages = Array.isArray(raw.messages)
+		const rawMessages = Array.isArray(raw.messages)
 			? raw.messages.filter(isChatMessage)
 			: [];
+		const messages = projectSessionMessages(raw.transcript, rawMessages);
 		const trace = Array.isArray(raw.trace)
 			? raw.trace.filter(isAgentTraceEntry)
 			: [];
@@ -858,53 +929,61 @@ export class SessionController {
 		return { data, bytes: estimateJsonSize(data), changed };
 	}
 
-	private async loadForId(id: string): Promise<{
-		messages: ChatMessage[];
-		trace: AgentTraceEntry[];
-		diagnostics: AgentDiagnosticEvent[];
-	} | null> {
-		const raw = await this.storage.get<SessionData>(
-			SESSION_STORE,
-			sessionBodyKey(id),
-		);
-		if (!raw || typeof raw !== "object") return null;
-		if (!Array.isArray(raw.messages) || !Array.isArray(raw.trace)) return null;
+	private async loadForId(id: string): Promise<SessionLoadResult | null> {
+		const raw = await this.getSessionRecord(id);
+		if (!raw) return null;
 
 		const rawDiagnostics: unknown[] = Array.isArray(raw.diagnostics)
 			? raw.diagnostics
 			: [];
 		const validated = rawDiagnostics.filter(isAgentDiagnosticEvent);
-
 		const normalized = normalizeDiagnostics(validated);
-		const messages = raw.messages.filter(isChatMessage);
-		const trace = raw.trace.filter(isAgentTraceEntry);
+		const rawMessages = Array.isArray(raw.messages)
+			? raw.messages.filter(isChatMessage)
+			: [];
+		const messages = projectSessionMessages(raw.transcript, rawMessages);
+		const trace = Array.isArray(raw.trace)
+			? raw.trace.filter(isAgentTraceEntry)
+			: [];
+		const changed =
+			normalized.kind === "changed" ||
+			JSON.stringify(messages) !== JSON.stringify(raw.messages) ||
+			trace.length !== (Array.isArray(raw.trace) ? raw.trace.length : 0);
 
-		if (normalized.kind === "changed") {
+		if (changed) {
 			const patched: SessionData = {
 				...raw,
 				messages,
 				trace,
 				diagnostics: normalized.diagnostics,
+				messageCount: messages.length,
 			};
 			this.persistSessionBody(patched).catch((err) => {
 				this.failStore(err, { operation: "save" });
 			});
 		}
 
-		return { messages, trace, diagnostics: normalized.diagnostics };
+		return {
+			messages,
+			trace,
+			diagnostics: normalized.diagnostics,
+			transcript: raw.transcript,
+			history: transcriptHistory(raw.transcript),
+		};
 	}
 
 	scheduleSave(
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
+		transcript?: SessionTranscript,
 	): void {
 		if (!this.hydrated) return;
 		if (this.saveTimer) {
 			clearTimeout(this.saveTimer);
 		}
 		this.saveTimer = setTimeout(() => {
-			void this.save(messages, trace, diagnostics);
+			void this.save(messages, trace, diagnostics, transcript);
 		}, 500);
 	}
 
@@ -919,35 +998,42 @@ export class SessionController {
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
+		transcript?: SessionTranscript,
 	): Promise<void> {
 		this.cancelPendingSave();
 		if (!this.hydrated) return;
-		await this.save(messages, trace, diagnostics);
+		await this.save(messages, trace, diagnostics, transcript);
 	}
 
 	async save(
 		messages: ChatMessage[],
 		trace: AgentTraceEntry[],
 		diagnostics: AgentDiagnosticEvent[] = [],
+		transcript?: SessionTranscript,
 	): Promise<void> {
 		const activeId = this.getActiveSessionId();
 		const trimmedDiagnostics = normalizeDiagnostics(diagnostics).diagnostics;
 		if (!activeId) return;
 
 		const existing = await this.getSessionRecord(activeId);
+		const nextTranscript =
+			transcript ?? existing?.transcript ?? emptySessionTranscript();
+		const projectedMessages = projectSessionMessages(nextTranscript, messages);
 
 		const buildSnapshot = (diags: AgentDiagnosticEvent[]): SessionData => ({
 			id: activeId,
 			windowId: existing?.windowId ?? this.panelWindowId,
 			lifecycle: existing?.lifecycle ?? "foreground",
 			origin: existing?.origin === "cli" ? "cli" : "chat",
-			messages,
+			transcript: nextTranscript,
+			messages: projectedMessages,
 			trace,
 			diagnostics: diags,
 			timestamp: Date.now(),
-			messageCount: messages.length,
+			messageCount: projectedMessages.length,
 			title: existing?.title,
 			customTitle: existing?.customTitle,
+			forkedFromSessionId: existing?.forkedFromSessionId,
 		});
 
 		try {
@@ -985,11 +1071,80 @@ export class SessionController {
 		return this.createSessionAttachedTo(this.panelWindowId, origin);
 	}
 
-	async switchSession(id: string): Promise<{
-		messages: ChatMessage[];
-		trace: AgentTraceEntry[];
-		diagnostics: AgentDiagnosticEvent[];
-	} | null> {
+	async selectTranscriptLeaf(
+		sessionId: string,
+		leafId: string | null,
+	): Promise<SessionLoadResult | null> {
+		if (this.getGlobalRunningSessionIds().includes(sessionId)) {
+			throw new Error(
+				"Cannot change the active transcript while the session is running",
+			);
+		}
+		const data = await this.getSessionRecord(sessionId);
+		if (!data) return null;
+		data.transcript = selectTranscriptLeaf(data.transcript, leafId);
+		data.messages = projectSessionMessages(data.transcript, data.messages);
+		data.messageCount = data.messages.length;
+		await this.persistSessionBody(data);
+		return this.loadForSession(sessionId);
+	}
+
+	async forkSession(
+		sessionId: string,
+		leafId?: string | null,
+	): Promise<{ sessionId: string; session: SessionLoadResult } | null> {
+		if (this.panelWindowId === null) {
+			throw new Error("forkSession requires bindPanelWindow");
+		}
+		if (this.getGlobalRunningSessionIds().includes(sessionId)) {
+			throw new Error("Cannot fork a session while it is running");
+		}
+		const source = await this.getSessionRecord(sessionId);
+		if (!source) return null;
+		if (!(await this.canOpenSession(sessionId, this.panelWindowId))) {
+			return null;
+		}
+
+		const selected =
+			leafId === undefined
+				? source.transcript
+				: selectTranscriptLeaf(source.transcript, leafId);
+		const path = transcriptPath(selected);
+		const transcript: SessionTranscript = {
+			version: 1,
+			entries: Object.fromEntries(path.map((entry) => [entry.entryId, entry])),
+			leafId: selected.leafId,
+		};
+		const windowId = this.panelWindowId;
+		const attached = await this.findSessionsForWindow(windowId);
+		for (const attachedSession of attached) {
+			if (attachedSession.lifecycle === "foreground") {
+				await this.setSessionLifecycle(attachedSession.id, "background");
+			}
+		}
+
+		const newId = crypto.randomUUID();
+		const child = emptySessionData(newId, windowId, "chat");
+		child.transcript = transcript;
+		child.messages = projectSessionMessages(transcript, []);
+		child.messageCount = child.messages.length;
+		child.forkedFromSessionId = sessionId;
+		const sourceTitle =
+			source.customTitle || source.title || `Session ${sessionId.slice(0, 8)}`;
+		child.title = `Fork of ${sourceTitle}`;
+		await this.persistSessionBody(child);
+		this.meta.panelActiveSession[String(windowId)] = newId;
+		await this.persistMeta();
+		await this.trimStoredSessions();
+
+		const session = await this.loadForSession(newId);
+		if (!session) {
+			throw new Error(`Forked session ${newId} could not be loaded`);
+		}
+		return { sessionId: newId, session };
+	}
+
+	async switchSession(id: string): Promise<SessionViewSnapshot | null> {
 		if (this.panelWindowId === null) {
 			throw new Error("switchSession requires bindPanelWindow");
 		}
@@ -1001,7 +1156,11 @@ export class SessionController {
 
 		this.meta.panelActiveSession[String(this.panelWindowId)] = id;
 		await this.persistMeta();
-		return data;
+		return {
+			messages: data.messages,
+			trace: data.trace,
+			diagnostics: data.diagnostics,
+		};
 	}
 
 	async deleteSession(id: string): Promise<void> {

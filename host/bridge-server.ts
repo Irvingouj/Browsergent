@@ -105,8 +105,7 @@ export class BridgeServer {
 					ok: false,
 					error: {
 						code: "E_PROTOCOL",
-						message:
-							err instanceof Error ? err.message : "Invalid JSON",
+						message: err instanceof Error ? err.message : "Invalid JSON",
 					},
 				}),
 			);

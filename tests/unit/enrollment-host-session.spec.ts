@@ -90,15 +90,10 @@ describe("EnrollmentHost session effects", () => {
 		const host = new EnrollmentHost({
 			storage,
 			sessions: ctrl,
-			tools: createAgentTools(
-				vi.fn(),
-				vi.fn(),
-				vi.fn(),
-				async (op) => {
-					if (op.op === "write") return { op: "write", bytes: op.content.length };
-					throw new Error(`unexpected ${op.op}`);
-				},
-			),
+			tools: createAgentTools(vi.fn(), vi.fn(), vi.fn(), async (op) => {
+				if (op.op === "write") return { op: "write", bytes: op.content.length };
+				throw new Error(`unexpected ${op.op}`);
+			}),
 		});
 		const token = await host.generate();
 		const created = await host.handle({
@@ -117,9 +112,9 @@ describe("EnrollmentHost session effects", () => {
 			params: { path: "/bridge-note.md", content: "from cli" },
 		});
 		const loaded = await ctrl.loadForSession(created.result.id);
-		expect(
-			loaded?.trace.some((entry) => entry.toolName === "file_write"),
-		).toBe(true);
+		expect(loaded?.trace.some((entry) => entry.toolName === "file_write")).toBe(
+			true,
+		);
 	});
 
 	test("CLI get_doc is persisted on the CLI session as a trace", async () => {

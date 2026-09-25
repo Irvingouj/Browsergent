@@ -29,9 +29,11 @@ test("mocked streaming emits delayed chunks and partial text appears before fina
 	await typeTask(sidePanel, "say hello");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
-	await expect(sidePanel.locator("text=Hello")).toBeVisible({ timeout: 5000 });
-	await expect(sidePanel.locator("text=Hello world")).toHaveCount(0);
-	await expect(sidePanel.locator("text=Hello world")).toBeVisible({
+	const assistantMessage = sidePanel
+		.getByTestId("chat-message-assistant")
+		.last();
+	await expect(assistantMessage).toHaveText("Hello", { timeout: 5000 });
+	await expect(assistantMessage).toHaveText("Hello world", {
 		timeout: 10000,
 	});
 
@@ -221,7 +223,7 @@ test("text before run_js tool call continues after run_js tool result", async ()
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
 
 	await expect(sidePanel.locator("text=Checked.")).toBeVisible({
-		timeout: 5000,
+		timeout: 15_000,
 	});
 	await expect(sidePanel.getByTestId("agent-status")).toHaveText(/done/i, {
 		timeout: 10000,

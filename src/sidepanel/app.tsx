@@ -52,14 +52,15 @@ import {
 } from "../state/selectors";
 import { defaultModelForProvider } from "../state/slices/settings-slice";
 import { browsergentStore } from "../state/store";
-import type { ChatMessage } from "../types/messages";
+import type { ChatMessage, PanelToWorker } from "../types/messages";
 import { WireFormat } from "../worker/provider-schema";
 import { ChatPanel } from "./components/ChatPanel";
+import { EnrollmentPanel } from "./components/EnrollmentPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
 import { refreshShallowFileTree } from "./components/files/refresh-file-tree";
 import { InputBar } from "./components/input/InputBar";
-import { EnrollmentPanel } from "./components/EnrollmentPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { TranscriptTreePanel } from "./components/TranscriptTreePanel";
 import { useAppInit } from "./components/use-app-init";
 import { useTitleGeneration } from "./components/use-title-generation";
 import { mergeSkillAndFileAttachments } from "./merge-run-task";
@@ -112,6 +113,17 @@ function statusDotClass(isRetrying: boolean, status: string): string {
 		default:
 			return "bg-danger text-danger";
 	}
+}
+
+type AgentSteerMessage = Extract<PanelToWorker, { type: "agentSteer" }>;
+
+function clearRunPreparation(
+	preparingRunIds: Set<string>,
+	pendingSteers: Map<string, AgentSteerMessage[]>,
+	runId: string,
+): boolean {
+	pendingSteers.delete(runId);
+	return preparingRunIds.delete(runId);
 }
 
 function currentSessionSnapshot(): {
@@ -184,7 +196,11 @@ const App: FunctionalComponent = () => {
 	const inputRef = useRef<HTMLDivElement | null>(null);
 	const prevIsRunning = useRef<boolean>(false);
 	const shouldFocusRef = useRef<boolean>(false);
+	const preparingRunIdsRef = useRef(new Set<string>());
+	const pendingSteersRef = useRef(new Map<string, AgentSteerMessage[]>());
 	const [runningSessionIds, setRunningSessionIds] = useState<string[]>([]);
+	const [transcriptTreeOpen, setTranscriptTreeOpen] = useState(false);
+	const reloadSessionListRef = useRef<(() => Promise<void>) | null>(null);
 	const [globalRunningBySession, setGlobalRunningBySession] = useState<
 		Record<string, number>
 	>({});
@@ -285,12 +301,96 @@ const App: FunctionalComponent = () => {
 		return unsub;
 	}, [supervisorRef]);
 
+	const forkAndActivate = useCallback(
+		async (sourceSessionId: string, leafId?: string | null): Promise<void> => {
+			const sessionCtrl = sessionControllerRef.current;
+			if (!sessionCtrl) return;
+			try {
+				const fork = await sessionCtrl.forkSession(sourceSessionId, leafId);
+				if (!fork) {
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text: "Could not fork this conversation.",
+						timestamp: Date.now(),
+					});
+					return;
+				}
+				browsergentStore.getState().hydrateChat(fork.session.messages);
+				browsergentStore.getState().hydrateTrace(fork.session.trace);
+				browsergentStore
+					.getState()
+					.hydrateDiagnostics(fork.session.diagnostics);
+				browsergentStore.getState().activeSessionChanged(fork.sessionId);
+				browsergentStore.getState().sessionPanelOpenChanged(false);
+				browsergentStore.getState().setActiveTab("chat");
+				browsergentStore.getState().setTaskDraft("");
+				clearPendingAutoSkills();
+				supervisorRef.current?.startForeground(fork.sessionId);
+				supervisorRef.current?.resetForegroundUi();
+				setTranscriptTreeOpen(false);
+				syncLocalRunningToCoordinator();
+				await reloadSessionListRef.current?.();
+			} catch (error: unknown) {
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: `Could not fork this conversation: ${error instanceof Error ? error.message : String(error)}`,
+					timestamp: Date.now(),
+				});
+			}
+		},
+		[sessionControllerRef, supervisorRef, syncLocalRunningToCoordinator],
+	);
+
+	const handleTreeSelect = useCallback(
+		async (leafId: string | null, draftText: string | null): Promise<void> => {
+			const sessionCtrl = sessionControllerRef.current;
+			const sessionId = sessionCtrl?.getActiveSessionId();
+			if (!sessionCtrl || !sessionId) return;
+			try {
+				const session = await sessionCtrl.selectTranscriptLeaf(
+					sessionId,
+					leafId,
+				);
+				if (!session) return;
+				browsergentStore.getState().hydrateChat(session.messages);
+				browsergentStore.getState().hydrateTrace(session.trace);
+				browsergentStore.getState().hydrateDiagnostics(session.diagnostics);
+				if (draftText !== null) {
+					browsergentStore.getState().setTaskDraft(draftText);
+					setTimeout(() => inputRef.current?.focus(), 0);
+				}
+				setTranscriptTreeOpen(false);
+			} catch (error: unknown) {
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: `Could not change conversation branch: ${error instanceof Error ? error.message : String(error)}`,
+					timestamp: Date.now(),
+				});
+			}
+		},
+		[sessionControllerRef],
+	);
+
 	const handleRun = useCallback(
 		async (submittedText?: string) => {
 			const task = (
 				submittedText ?? browsergentStore.getState().ui.taskDraft
 			).trim();
 			if (!task) return;
+			if (task === "/tree") {
+				browsergentStore.getState().setTaskDraft("");
+				setTranscriptTreeOpen(true);
+				return;
+			}
+			if (task === "/fork") {
+				browsergentStore.getState().setTaskDraft("");
+				const activeId = sessionControllerRef.current?.getActiveSessionId();
+				if (activeId) void forkAndActivate(activeId);
+				return;
+			}
 			if (!activeProvider?.apiKey) {
 				browsergentStore.getState().setActiveTab("settings");
 				return;
@@ -306,13 +406,15 @@ const App: FunctionalComponent = () => {
 			// input sits full for ~500ms then clears while the user bubble only
 			// appears when the worker echoes agentMessage — feels laggy / bouncey.
 			browsergentStore.getState().setTaskDraft("");
+			const userMessageId = crypto.randomUUID();
 			browsergentStore.getState().appendUserMessage({
 				kind: "user",
-				id: crypto.randomUUID(),
+				id: userMessageId,
 				text: task,
 				timestamp: Date.now(),
 			});
 			const runId = crypto.randomUUID();
+			preparingRunIdsRef.current.add(runId);
 			browsergentStore.getState().agentRunRequested(runId);
 
 			// Lazy acting host: init extension-js with this panel's windowId on first Run.
@@ -322,8 +424,18 @@ const App: FunctionalComponent = () => {
 				await extjsControllerRef.current?.init(
 					typeof wid === "number" && wid > 0 ? { windowId: wid } : undefined,
 				);
+				if (!preparingRunIdsRef.current.has(runId)) return;
 				browsergentStore.getState().bootComponentSet("extjs", "ok");
 			} catch (err: unknown) {
+				if (
+					!clearRunPreparation(
+						preparingRunIdsRef.current,
+						pendingSteersRef.current,
+						runId,
+					)
+				) {
+					return;
+				}
 				browsergentStore.getState().bootComponentSet("extjs", "fail");
 				browsergentStore.getState().appendSystemMessage({
 					kind: "system",
@@ -339,10 +451,12 @@ const App: FunctionalComponent = () => {
 			let activatedSkills: string[] = [];
 			try {
 				const resolved = await getSkillService().resolveRunTask(task);
+				if (!preparingRunIdsRef.current.has(runId)) return;
 				resolvedTask = resolved.resolvedTask;
 				skillCatalog = resolved.skillCatalog;
 				activatedSkills = resolved.activatedSkills;
 			} catch (err: unknown) {
+				if (!preparingRunIdsRef.current.has(runId)) return;
 				if (parseSkillActivation(task)) {
 					const message = err instanceof Error ? err.message : String(err);
 					browsergentStore.getState().appendSystemMessage({
@@ -351,6 +465,11 @@ const App: FunctionalComponent = () => {
 						text: `Skill activation failed: ${message}`,
 						timestamp: Date.now(),
 					});
+					clearRunPreparation(
+						preparingRunIdsRef.current,
+						pendingSteersRef.current,
+						runId,
+					);
 					return;
 				}
 				console.warn("Skill catalog failed:", err);
@@ -367,6 +486,7 @@ const App: FunctionalComponent = () => {
 				);
 				try {
 					const allSkills = await getSkillService().listSkills();
+					if (!preparingRunIdsRef.current.has(runId)) return;
 					const url = getUrlTracker().getCurrentUrl();
 					const blocks: string[] = [];
 					for (const name of pendingSkillNames) {
@@ -375,6 +495,7 @@ const App: FunctionalComponent = () => {
 						const body = await getSkillService().loadSkill(name, undefined, {
 							source: "tool",
 						});
+						if (!preparingRunIdsRef.current.has(runId)) return;
 						const inner = buildSkillXmlBlock(meta, body);
 						blocks.push(
 							url
@@ -395,6 +516,11 @@ const App: FunctionalComponent = () => {
 			if (fileMentions.length > 0) {
 				const filesController = filesControllerRef.current;
 				if (!filesController) {
+					clearRunPreparation(
+						preparingRunIdsRef.current,
+						pendingSteersRef.current,
+						runId,
+					);
 					browsergentStore.getState().appendSystemMessage({
 						kind: "system",
 						id: crypto.randomUUID(),
@@ -408,12 +534,22 @@ const App: FunctionalComponent = () => {
 						fileMentions,
 						filesController,
 					);
+					if (!preparingRunIdsRef.current.has(runId)) return;
 					resolvedTask = mergeSkillAndFileAttachments(
 						task,
 						resolvedTask,
 						attachments,
 					);
 				} catch (err: unknown) {
+					if (
+						!clearRunPreparation(
+							preparingRunIdsRef.current,
+							pendingSteersRef.current,
+							runId,
+						)
+					) {
+						return;
+					}
 					const message = err instanceof Error ? err.message : String(err);
 					browsergentStore.getState().appendSystemMessage({
 						kind: "system",
@@ -439,6 +575,7 @@ const App: FunctionalComponent = () => {
 							const nodes = await filesController.listDirectChildren(
 								mention.path,
 							);
+							if (!preparingRunIdsRef.current.has(runId)) return;
 							children = nodes.map(
 								(node): DirContextChild => ({
 									name: node.name,
@@ -451,6 +588,7 @@ const App: FunctionalComponent = () => {
 						} catch {
 							// degrade gracefully: emit note form on failure
 						}
+						if (!preparingRunIdsRef.current.has(runId)) return;
 						blocks.push(buildDirContextXmlBlock(mention, children));
 					}
 					const dirBlock = blocks.join("\n");
@@ -465,6 +603,7 @@ const App: FunctionalComponent = () => {
 			if (tabMentions.length > 0) {
 				try {
 					const resolved = await resolveTabMentions(tabMentions);
+					if (!preparingRunIdsRef.current.has(runId)) return;
 					const missing = resolved.filter(
 						(
 							r,
@@ -474,6 +613,11 @@ const App: FunctionalComponent = () => {
 						} => !r.ok,
 					);
 					if (missing.length > 0) {
+						clearRunPreparation(
+							preparingRunIdsRef.current,
+							pendingSteersRef.current,
+							runId,
+						);
 						const labels = missing
 							.map((m) => `@[tab:${m.missing.tabId}:${m.missing.displayName}]`)
 							.join(", ");
@@ -494,6 +638,15 @@ const App: FunctionalComponent = () => {
 						resolvedTask = `${resolvedTask}\n${tabBlock}`;
 					}
 				} catch (err: unknown) {
+					if (
+						!clearRunPreparation(
+							preparingRunIdsRef.current,
+							pendingSteersRef.current,
+							runId,
+						)
+					) {
+						return;
+					}
 					const message = err instanceof Error ? err.message : String(err);
 					browsergentStore.getState().appendSystemMessage({
 						kind: "system",
@@ -513,6 +666,11 @@ const App: FunctionalComponent = () => {
 				? defaultModelForProvider(activeProvider)
 				: null;
 			if (activeProvider && !activeModel) {
+				clearRunPreparation(
+					preparingRunIdsRef.current,
+					pendingSteersRef.current,
+					runId,
+				);
 				browsergentStore.getState().agentFailed({
 					code: "E_BAD_SETTINGS",
 					message: "Add a model to the active provider before running a task",
@@ -521,6 +679,10 @@ const App: FunctionalComponent = () => {
 				return;
 			}
 
+			const loadedSession =
+				await sessionControllerRef.current?.loadForSession(sessionId);
+			if (!preparingRunIdsRef.current.delete(runId)) return;
+			const history = loadedSession?.history ?? [];
 			supervisorRef.current?.registerRun(sessionId, runId);
 			const local = syncLocalRunningToCoordinator();
 			const persisted =
@@ -538,6 +700,8 @@ const App: FunctionalComponent = () => {
 				runId,
 				sessionId,
 				task,
+				userMessageId,
+				history,
 				resolvedTask,
 				skillCatalog,
 				activatedSkills,
@@ -555,6 +719,11 @@ const App: FunctionalComponent = () => {
 							model: "",
 						},
 			});
+			const pendingSteers = pendingSteersRef.current.get(runId) ?? [];
+			pendingSteersRef.current.delete(runId);
+			for (const steer of pendingSteers) {
+				supervisorRef.current?.postToForeground(steer);
+			}
 		},
 		[
 			activeProvider,
@@ -566,11 +735,23 @@ const App: FunctionalComponent = () => {
 			filesControllerRef,
 			syncLocalRunningToCoordinator,
 			globalRunningBySession,
+			forkAndActivate,
 		],
 	);
 
 	const handleStop = useCallback(() => {
 		const runId = browsergentStore.getState().agent.activeRunId;
+		if (
+			runId &&
+			clearRunPreparation(
+				preparingRunIdsRef.current,
+				pendingSteersRef.current,
+				runId,
+			)
+		) {
+			browsergentStore.getState().agentStopped("Stopped by user");
+			return;
+		}
 		supervisorRef.current?.stopForegroundRun(runId);
 	}, [supervisorRef]);
 
@@ -578,6 +759,21 @@ const App: FunctionalComponent = () => {
 		(text: string) => {
 			const trimmed = text.trim();
 			if (!trimmed) return;
+			if (trimmed === "/tree") {
+				browsergentStore.getState().setTaskDraft("");
+				setTranscriptTreeOpen(true);
+				return;
+			}
+			if (trimmed === "/fork") {
+				browsergentStore.getState().setTaskDraft("");
+				browsergentStore.getState().appendSystemMessage({
+					kind: "system",
+					id: crypto.randomUUID(),
+					text: "Stop the agent before forking this conversation.",
+					timestamp: Date.now(),
+				});
+				return;
+			}
 			if (selectActiveSessionOrigin(browsergentStore.getState()) === "cli") {
 				return;
 			}
@@ -585,19 +781,27 @@ const App: FunctionalComponent = () => {
 			if (!runId) return;
 			browsergentStore.getState().setTaskDraft("");
 			// Optimistic bubble so the user always sees what they steered, even if the
-			// worker rejects (run just ended / runId race). Worker steerUser no longer
-			// emits a second user bubble for the same text.
+			// worker rejects (run just ended / runId race). The same id is persisted
+			// into the transcript entry when the SDK accepts this steer.
+			const messageId = crypto.randomUUID();
 			browsergentStore.getState().appendUserMessage({
 				kind: "user",
-				id: crypto.randomUUID(),
+				id: messageId,
 				text: trimmed,
 				timestamp: Date.now(),
 			});
-			supervisorRef.current?.postToForeground({
+			const steer: AgentSteerMessage = {
 				type: "agentSteer",
 				runId,
+				messageId,
 				text: trimmed,
-			});
+			};
+			if (preparingRunIdsRef.current.has(runId)) {
+				const queued = pendingSteersRef.current.get(runId) ?? [];
+				pendingSteersRef.current.set(runId, [...queued, steer]);
+				return;
+			}
+			supervisorRef.current?.postToForeground(steer);
 		},
 		[supervisorRef],
 	);
@@ -666,6 +870,7 @@ const App: FunctionalComponent = () => {
 		windowId,
 		syncLocalRunningToCoordinator,
 	]);
+	reloadSessionListRef.current = reloadSessionList;
 
 	useEffect(() => {
 		// Running badge updates only — full list reload on every agent event caused IDB storms.
@@ -1101,6 +1306,7 @@ const App: FunctionalComponent = () => {
 	return (
 		<div
 			data-initialized={initialized}
+			data-active-session-id={_activeSessionId ?? ""}
 			data-worker-ready={workerReady}
 			data-window-id={windowId ?? undefined}
 			data-boot-idb={bootHealth.idb}
@@ -1165,9 +1371,7 @@ const App: FunctionalComponent = () => {
 						</button>
 						<button
 							type="button"
-							onClick={() =>
-								browsergentStore.getState().setActiveTab("enroll")
-							}
+							onClick={() => browsergentStore.getState().setActiveTab("enroll")}
 							class={[
 								"px-sm py-[3px] text-xs font-medium cursor-pointer transition-all rounded-full",
 								activeTab === "enroll"
@@ -1192,6 +1396,21 @@ const App: FunctionalComponent = () => {
 							Settings
 						</button>
 					</div>
+					<button
+						type="button"
+						data-testid="open-transcript-tree"
+						title="Conversation history (/tree)"
+						disabled={
+							!_activeSessionId ||
+							!sessionControllerRef.current ||
+							isRunning ||
+							activeSessionOrigin === "cli"
+						}
+						onClick={() => setTranscriptTreeOpen(true)}
+						class="rounded-md border border-border px-sm py-xs text-xs text-text-secondary hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						History
+					</button>
 					<button
 						type="button"
 						class="flex items-center justify-center w-7 h-7 rounded-md bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-all cursor-pointer"
@@ -1314,6 +1533,23 @@ const App: FunctionalComponent = () => {
 					onFilesChanged={handleFilesChanged}
 				/>
 			)}
+
+			{transcriptTreeOpen &&
+				_activeSessionId &&
+				sessionControllerRef.current && (
+					<TranscriptTreePanel
+						sessionController={sessionControllerRef.current}
+						sessionId={_activeSessionId}
+						running={isRunning}
+						onClose={() => setTranscriptTreeOpen(false)}
+						onSelect={(leafId, draftText) => {
+							void handleTreeSelect(leafId, draftText);
+						}}
+						onFork={(leafId) => {
+							void forkAndActivate(_activeSessionId, leafId);
+						}}
+					/>
+				)}
 
 			{sessionPanelOpen && sessionControllerRef.current && (
 				<SessionPanel

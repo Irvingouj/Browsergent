@@ -47,7 +47,8 @@ describe("EnrollmentController.revoke", () => {
 			method: "session.create",
 		});
 		expect(afterRevoke.ok).toBe(false);
-		if (afterRevoke.ok) throw new Error("expected revoked session.create failure");
+		if (afterRevoke.ok)
+			throw new Error("expected revoked session.create failure");
 		expect(afterRevoke.error.code).toBe("E_NOT_PAIRED");
 
 		const run = await gate.handle({

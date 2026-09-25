@@ -1,7 +1,7 @@
 import {
-	parseBridgeResponse,
 	type BridgeResponse,
 	type BridgeWireRequest,
+	parseBridgeResponse,
 } from "../src/protocol/bridge.ts";
 
 export async function postBridgeRequest(

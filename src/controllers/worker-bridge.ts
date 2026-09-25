@@ -23,7 +23,7 @@ export interface RunRouting {
 	shouldUpdateUi: (runId: string) => boolean;
 	/** When false, worker crashes and extjs stream events skip global UI (in-panel background bridge). */
 	shouldApplyBridgeEffects?: () => boolean;
-	onRunEvent?: (runId: string, event: WorkerToPanel) => void;
+	onRunEvent?: (runId: string, event: WorkerToPanel) => void | Promise<void>;
 }
 
 type ExtjsRunRequestHandler = (msg: {
@@ -104,8 +104,11 @@ export class WorkerBridge {
 		return true;
 	}
 
-	private dispatchRunEvent(runId: string, event: WorkerToPanel): void {
-		this.runRouting?.onRunEvent?.(runId, event);
+	private dispatchRunEvent(
+		runId: string,
+		event: WorkerToPanel,
+	): void | Promise<void> {
+		return this.runRouting?.onRunEvent?.(runId, event);
 	}
 
 	start(): void {
@@ -114,7 +117,14 @@ export class WorkerBridge {
 		});
 
 		w.onmessage = (e: MessageEvent<unknown>) => {
-			this.handleMessage(e.data);
+			void this.handleMessage(e.data).catch((err: unknown) => {
+				reportError({
+					code: "E_HOST_UNKNOWN",
+					source: "worker",
+					message: "Failed to persist terminal agent status",
+					cause: err,
+				});
+			});
 		};
 
 		w.onerror = (err) => {
@@ -159,7 +169,7 @@ export class WorkerBridge {
 		this.worker?.postMessage(message);
 	}
 
-	private handleMessage(raw: unknown): void {
+	private async handleMessage(raw: unknown): Promise<void> {
 		if (!isWorkerToPanel(raw)) {
 			const text =
 				typeof raw === "object" && raw !== null
@@ -186,7 +196,15 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentStatus": {
-				this.dispatchRunEvent(raw.runId, raw);
+				const terminal =
+					raw.status === "stopped" ||
+					raw.status === "error" ||
+					raw.status === "done";
+				if (terminal) {
+					await this.dispatchRunEvent(raw.runId, raw);
+				} else {
+					void this.dispatchRunEvent(raw.runId, raw);
+				}
 				if (!this.shouldApplyToUi(raw.runId)) return;
 				browsergentStore.getState().agentStatusChanged(raw.status, raw.reason);
 				if (
@@ -203,7 +221,7 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentMessage": {
-				this.dispatchRunEvent(raw.runId, raw);
+				void this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;
 				const { message } = raw;
 				if (message.kind === "user") {
@@ -224,7 +242,7 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentTextDelta": {
-				this.dispatchRunEvent(raw.runId, raw);
+				void this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;
 				const store = browsergentStore.getState();
 				// Self-heal: if agentMessage was dropped (registry gate race), still
@@ -253,25 +271,29 @@ export class WorkerBridge {
 				break;
 			}
 			case "agentMessageEnd": {
-				this.dispatchRunEvent(raw.runId, raw);
+				void this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;
 				this.finalizeMessageSignal(raw.messageId);
 				break;
 			}
+			case "agentHistoryMessage": {
+				void this.dispatchRunEvent(raw.runId, raw);
+				break;
+			}
 			case "agentTrace": {
-				this.dispatchRunEvent(raw.runId, raw);
+				void this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;
 				browsergentStore.getState().traceUpdated(raw.entry);
 				break;
 			}
 			case "agentDiagnostic": {
-				this.dispatchRunEvent(raw.runId, raw);
+				void this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;
 				browsergentStore.getState().diagnosticAdded(raw.event);
 				break;
 			}
 			case "agentError": {
-				this.dispatchRunEvent(raw.runId, raw);
+				void this.dispatchRunEvent(raw.runId, raw);
 				if (!this.shouldApplyToUi(raw.runId)) return;
 				const error = raw.error;
 				browsergentStore.getState().agentFailed({

@@ -1,8 +1,8 @@
 import type { BridgeRequest, BridgeResponse } from "../protocol/bridge";
 import type { BridgeHost } from "./bridge-host";
 import type { BridgeSessionHost } from "./bridge-session-host";
-import type { BridgeRuntime } from "./enrollment-host";
 import type { EnrollmentController } from "./enrollment-controller";
+import type { BridgeRuntime } from "./enrollment-host";
 
 function unpaired(id: string): BridgeResponse {
 	return {

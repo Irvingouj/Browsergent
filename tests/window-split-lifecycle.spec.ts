@@ -101,14 +101,26 @@ test.describe("window split lifecycle (B2)", () => {
 
 			await typeTask(panelA, "chat A");
 			await clickRun(panelA);
-			await expect(panelA.locator("text=A")).toBeVisible({ timeout: 15_000 });
+			await expect(
+				panelA.getByTestId("chat-message-user").getByText("chat A", {
+					exact: true,
+				}),
+			).toBeVisible({
+				timeout: 15_000,
+			});
 			await expect(panelA.getByTestId("agent-status")).toContainText(/done/, {
 				timeout: 15_000,
 			});
 
 			await typeTask(panelB, "chat B");
 			await clickRun(panelB);
-			await expect(panelB.locator("text=B")).toBeVisible({ timeout: 15_000 });
+			await expect(
+				panelB.getByTestId("chat-message-user").getByText("chat B", {
+					exact: true,
+				}),
+			).toBeVisible({
+				timeout: 15_000,
+			});
 			await expect(panelB.getByTestId("agent-status")).toContainText(/done/, {
 				timeout: 15_000,
 			});

@@ -3,7 +3,7 @@ import { scheduleFileTreeRefresh } from "../sidepanel/components/files/refresh-f
 import { browsergentStore } from "../state/store";
 import type { StorageBackend } from "../storage/storage-backend";
 import type { AgentTraceEntry } from "../types/messages";
-import { createAgentTools } from "../worker/agent-tools";
+import type { createAgentTools } from "../worker/agent-tools";
 import { BridgeGate } from "./bridge-gate";
 import { BridgeHost } from "./bridge-host";
 import { BridgeSessionHost } from "./bridge-session-host";
@@ -22,10 +22,7 @@ type EnrollmentHostDeps = {
 	tools: SharedTools;
 	runtime?: BridgeRuntime;
 	onCliEnrolled?: (enrolled: boolean) => void;
-} & (
-	| { enrollment: EnrollmentController }
-	| { storage: StorageBackend }
-);
+} & ({ enrollment: EnrollmentController } | { storage: StorageBackend });
 
 export class EnrollmentHost {
 	private readonly enrollment: EnrollmentController;
@@ -99,9 +96,7 @@ export class EnrollmentHost {
 			const input =
 				request.method === "run_js"
 					? request.params.code
-					: JSON.stringify(
-							"params" in request ? request.params : {},
-					  );
+					: JSON.stringify("params" in request ? request.params : {});
 			await this.persistTrace(
 				request.sessionId,
 				request.method,

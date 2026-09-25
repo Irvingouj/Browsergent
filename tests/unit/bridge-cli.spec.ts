@@ -153,6 +153,8 @@ describe("BridgeCli enroll", () => {
 				token: "tok-123",
 				method: "status",
 			}),
-		).rejects.toThrow(/host is not running|E_EXTENSION_DISCONNECTED|disconnected/i);
+		).rejects.toThrow(
+			/host is not running|E_EXTENSION_DISCONNECTED|disconnected/i,
+		);
 	});
 });
