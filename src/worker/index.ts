@@ -11,7 +11,11 @@
 
 import type { AgentHistoryEntry } from "@pi-oxide/pi-host-web";
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
-import { isAgentStartMessage } from "../protocol/worker-guards";
+import {
+	describeAgentStartFailure,
+	isAgentStartMessage,
+	repairAgentStartMessage,
+} from "../protocol/worker-guards";
 import type { CellResult } from "../types/extjs-utils";
 import type {
 	AgentTraceEntry,
@@ -414,10 +418,43 @@ function handleAgentReset(): void {
 
 // --- Message dispatch ---
 
+function isAgentStartPayload(
+	// Worker messages are external payloads despite the declared postMessage type.
+	value: unknown,
+): value is Record<string, unknown> {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		"type" in value &&
+		value.type === "agentStart"
+	);
+}
+
 self.onmessage = (event: MessageEvent<PanelToWorker>) => {
-	const msg = event.data;
-	if (msg.type === "agentStart" && !isAgentStartMessage(msg)) {
-		throw new Error("Invalid agentStart message or transcript history");
+	// Narrow the runtime payload before treating it as the protocol union.
+	const raw: unknown = event.data;
+	let msg: PanelToWorker;
+	if (isAgentStartPayload(raw) && !isAgentStartMessage(raw)) {
+		const repaired = repairAgentStartMessage(raw);
+		if (!repaired) {
+			const runId =
+				typeof raw.runId === "string" && raw.runId.length > 0
+					? raw.runId
+					: "unknown";
+			post({
+				type: "agentError",
+				runId,
+				error: {
+					code: "E_PROTOCOL",
+					message: `Could not start the agent: ${describeAgentStartFailure(raw)}`,
+				},
+			});
+			return;
+		}
+		msg = repaired;
+	} else {
+		msg = event.data;
 	}
 	switch (msg.type) {
 		case "agentStart":

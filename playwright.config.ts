@@ -1,5 +1,16 @@
 import { defineConfig } from "@playwright/test";
 
+const ignoredSpecs = [
+	"**/extension-js-types.spec.ts",
+	"**/unit/**/*.spec.ts",
+	"**/unit/**/*.spec.tsx",
+	// Diagnostic / bench harnesses — not product gates
+	"**/_diag-*.spec.ts",
+	"**/_bench-*.spec.ts",
+	// Live DeepSeek smoke — run via real-run skill / explicit path, not mock suite
+	"**/real-deepseek.spec.ts",
+];
+
 export default defineConfig({
 	testDir: "./tests",
 	// Extension boot + two-window flows exceed 30s under load.
@@ -14,14 +25,16 @@ export default defineConfig({
 		trace: "off",
 		actionTimeout: 20_000,
 	},
-	testIgnore: [
-		"**/extension-js-types.spec.ts",
-		"**/unit/**/*.spec.ts",
-		"**/unit/**/*.spec.tsx",
-		// Diagnostic / bench harnesses — not product gates
-		"**/_diag-*.spec.ts",
-		"**/_bench-*.spec.ts",
-		// Live DeepSeek smoke — run via real-run skill / explicit path, not mock suite
-		"**/real-deepseek.spec.ts",
+	projects: [
+		{
+			name: "browser-e2e",
+			testIgnore: [...ignoredSpecs, "**/bridge-cli-e2e.spec.ts"],
+		},
+		{
+			name: "bridge-cli-e2e",
+			testMatch: "**/bridge-cli-e2e.spec.ts",
+			dependencies: ["browser-e2e"],
+			workers: 1,
+		},
 	],
 });

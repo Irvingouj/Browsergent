@@ -1,6 +1,7 @@
 import type {
 	AgentHistoryEntry,
 	AgentHistoryMessage,
+	AgentInitialHistoryEntry,
 	AgentModel,
 	AgentRunResult,
 } from "@pi-oxide/pi-host-web";
@@ -28,6 +29,31 @@ function isTextContentBlock(c: {
 	text?: string;
 }): c is { type: "text"; text: string } {
 	return c.type === "text" && typeof c.text === "string";
+}
+
+function toAgentInitialHistoryEntry(
+	entry: AgentHistoryEntry,
+): AgentInitialHistoryEntry {
+	if (entry.message.role !== "tool_result") {
+		return {
+			entryId: entry.entryId,
+			turnNumber: entry.turnNumber,
+			message: entry.message,
+		};
+	}
+
+	return {
+		entryId: entry.entryId,
+		turnNumber: entry.turnNumber,
+		message: {
+			role: "tool_result",
+			content: entry.message.content,
+			tool_call_id: entry.message.tool_call_id,
+			tool_name: entry.message.tool_name,
+			is_error: entry.message.is_error,
+			timestamp: entry.message.timestamp,
+		},
+	};
 }
 
 export function contextBudgetForModel(
@@ -171,7 +197,7 @@ export class AgentLoop {
 			sessionId,
 			model,
 			tools,
-			initialHistory: history,
+			initialHistory: history.map(toAgentInitialHistoryEntry),
 			instructions: composeSystemPrompt(skillCatalog),
 			context: {
 				maxTokens: contextBudgetForModel(model),

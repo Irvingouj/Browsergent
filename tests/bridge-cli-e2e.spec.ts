@@ -32,6 +32,7 @@ test.describe
 			const { sidePanel, close } = await launchExtension();
 			try {
 				const cli = await enrollCli(sidePanel, configDir);
+				await waitForCliConnection(cli);
 				expect(await cli.status()).toEqual({ connected: true, enrolled: true });
 				expect(await cli.run("1 + 1")).toContain("2");
 				expect(await cli.docs("page")).toMatch(/page\.click|page\.snapshot/i);

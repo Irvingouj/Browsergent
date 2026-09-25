@@ -3,6 +3,7 @@ import type {
 	AgentHistoryEntry,
 	AgentHistoryMessage,
 	AgentHistoryStopReason,
+	TokenUsage,
 } from "@pi-oxide/pi-host-web";
 import type { ChatMessage } from "./messages";
 
@@ -120,6 +121,157 @@ export function isAgentHistoryEntry(
 		value.turnNumber >= 0 &&
 		isAgentHistoryMessage(value.message)
 	);
+}
+
+function finiteTimestamp(value: unknown): number | null {
+	if (isFiniteNumber(value)) return value;
+	if (typeof value === "bigint") {
+		const asNumber = Number(value);
+		return Number.isFinite(asNumber) ? asNumber : null;
+	}
+	return null;
+}
+
+function repairStopReason(value: unknown): AgentHistoryStopReason | null {
+	if (isHistoryStopReason(value)) return value;
+	switch (value) {
+		case "end":
+		case "stop":
+			return "end_turn";
+		case "tool_call":
+		case "tool_calls":
+			return "tool_use";
+		case "length":
+			return "max_tokens";
+		default:
+			return null;
+	}
+}
+
+function repairUsage(value: unknown): TokenUsage {
+	const usage = isRecord(value) ? value : {};
+	const field = (name: string) =>
+		isFiniteNumber(usage[name]) ? usage[name] : 0;
+	return {
+		input: field("input"),
+		output: field("output"),
+		cache_read: field("cache_read"),
+		cache_write: field("cache_write"),
+		total_tokens: field("total_tokens"),
+	};
+}
+
+function repairContentBlock(value: unknown): AgentHistoryContentBlock | null {
+	if (!isRecord(value) || typeof value.type !== "string") return null;
+	switch (value.type) {
+		case "text":
+			return typeof value.text === "string"
+				? { type: "text", text: value.text }
+				: null;
+		case "tool_call":
+			if (typeof value.id !== "string" || typeof value.name !== "string") {
+				return null;
+			}
+			return {
+				type: "tool_call",
+				id: value.id,
+				name: value.name,
+				arguments: value.arguments === undefined ? {} : value.arguments,
+			};
+		case "image":
+			return typeof value.mimeType === "string" &&
+				typeof value.data === "string"
+				? { type: "image", mimeType: value.mimeType, data: value.data }
+				: null;
+		case "file":
+			return typeof value.mimeType === "string"
+				? { type: "text", text: `[file ${value.mimeType}]` }
+				: { type: "text", text: "[file]" };
+		default:
+			return null;
+	}
+}
+
+/** Turn an SDK history message into the shape the start guard accepts. */
+export function repairAgentHistoryMessage(
+	value: unknown,
+): AgentHistoryMessage | null {
+	if (!isRecord(value) || !Array.isArray(value.content)) return null;
+	const timestamp = finiteTimestamp(value.timestamp);
+	if (timestamp === null) return null;
+	const content = value.content
+		.map(repairContentBlock)
+		.filter((block): block is AgentHistoryContentBlock => block !== null);
+	if (content.length === 0) return null;
+
+	switch (value.role) {
+		case "user":
+			return { role: "user", content, timestamp };
+		case "assistant": {
+			const stopReason = repairStopReason(value.stopReason);
+			if (
+				typeof value.api !== "string" ||
+				typeof value.provider !== "string" ||
+				typeof value.model !== "string" ||
+				stopReason === null
+			) {
+				return null;
+			}
+			const message: AgentHistoryMessage = {
+				role: "assistant",
+				content,
+				api: value.api,
+				provider: value.provider,
+				model: value.model,
+				stopReason,
+				timestamp,
+				usage: repairUsage(value.usage),
+			};
+			if (typeof value.errorMessage === "string") {
+				message.errorMessage = value.errorMessage;
+			}
+			return message;
+		}
+		case "tool_result": {
+			if (
+				typeof value.tool_call_id !== "string" ||
+				typeof value.tool_name !== "string"
+			) {
+				return null;
+			}
+			const message: AgentHistoryMessage = {
+				role: "tool_result",
+				content,
+				tool_call_id: value.tool_call_id,
+				tool_name: value.tool_name,
+				is_error: value.is_error === true,
+				timestamp,
+			};
+			if (isRecord(value.details)) message.details = value.details;
+			return message;
+		}
+		default:
+			return null;
+	}
+}
+
+export function repairAgentHistoryEntry(
+	value: unknown,
+): AgentHistoryEntry | null {
+	if (!isRecord(value)) return null;
+	if (typeof value.entryId !== "string" || value.entryId.length === 0) {
+		return null;
+	}
+	if (
+		!isFiniteNumber(value.turnNumber) ||
+		!Number.isInteger(value.turnNumber) ||
+		value.turnNumber < 0
+	) {
+		return null;
+	}
+	const message = repairAgentHistoryMessage(value.message);
+	if (!message) return null;
+	return { entryId: value.entryId, turnNumber: value.turnNumber, message };
 }
 
 export function isSessionTranscriptEntry(
