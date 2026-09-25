@@ -9,6 +9,9 @@ export interface SettingsValues {
 }
 
 export class SettingsController {
+	private saveQueue: Promise<void> = Promise.resolve();
+	private saveRevision = 0;
+
 	constructor(private readonly storage: StorageBackend) {}
 
 	async load(): Promise<void> {
@@ -49,26 +52,33 @@ export class SettingsController {
 		}
 	}
 
-	async save(values: SettingsValues): Promise<void> {
-		try {
-			await this.storage.set("settings", "providers", values.providers);
-			await this.storage.set(
-				"settings",
-				"activeProviderId",
-				values.activeProviderId,
-			);
-			browsergentStore.getState().settingsSaved({
-				providers: values.providers,
-				activeProviderId: values.activeProviderId,
-				loaded: true,
-			});
-		} catch (err) {
-			browsergentStore.getState().settingsSaveFailed({
-				code: "E_SETTINGS_PERSIST",
-				message: err instanceof Error ? err.message : String(err),
-				source: "settings",
-				details: { operation: "save" },
-			});
-		}
+	save(values: SettingsValues): Promise<void> {
+		const revision = ++this.saveRevision;
+		const save = this.saveQueue.then(async () => {
+			try {
+				await this.storage.set("settings", "providers", values.providers);
+				await this.storage.set(
+					"settings",
+					"activeProviderId",
+					values.activeProviderId,
+				);
+				if (revision !== this.saveRevision) return;
+				browsergentStore.getState().settingsSaved({
+					providers: values.providers,
+					activeProviderId: values.activeProviderId,
+					loaded: true,
+				});
+			} catch (err) {
+				if (revision !== this.saveRevision) return;
+				browsergentStore.getState().settingsSaveFailed({
+					code: "E_SETTINGS_PERSIST",
+					message: err instanceof Error ? err.message : String(err),
+					source: "settings",
+					details: { operation: "save" },
+				});
+			}
+		});
+		this.saveQueue = save;
+		return save;
 	}
 }
