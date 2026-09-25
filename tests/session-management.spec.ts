@@ -226,6 +226,9 @@ test("tree rewind preserves the old branch and fork opens a child session", asyn
 			hasText: "Answer on new branch",
 		}),
 	).toBeVisible({ timeout: 10000 });
+	await expect(sidePanel.getByTestId("agent-status")).toHaveText("done", {
+		timeout: 10000,
+	});
 	await expect(sidePanel.locator("text=Answer two")).not.toBeVisible();
 	const branchRequest = JSON.stringify(mock.requestBodies[2]) ?? "";
 	expect(branchRequest).toContain("Question one");
@@ -312,11 +315,18 @@ test("tree rewind preserves the old branch and fork opens a child session", asyn
 			.filter({ hasText: "Answer after reload" }),
 	).toHaveCount(0);
 
+	const activeSessionRoot = sidePanel.locator("[data-initialized]");
+	const previousSessionId = await activeSessionRoot.getAttribute(
+		"data-active-session-id",
+	);
+	expect(previousSessionId).not.toBeNull();
 	await typeTask(sidePanel, "/fork");
 	await sidePanel.getByRole("button", { name: "Run task" }).click();
-	await expect(sidePanel.getByTestId("agent-status")).toHaveText("idle", {
-		timeout: 10000,
-	});
+	await expect(activeSessionRoot).not.toHaveAttribute(
+		"data-active-session-id",
+		previousSessionId ?? "",
+		{ timeout: 10000 },
+	);
 	await expect(
 		sidePanel.locator('[data-testid="chat-message-assistant"]', {
 			hasText: "Answer on new branch",
@@ -328,11 +338,10 @@ test("tree rewind preserves the old branch and fork opens a child session", asyn
 			.filter({ hasText: "Answer after reload" }),
 	).toHaveCount(0);
 	await sidePanel.getByRole("button", { name: "More options" }).click();
-	await expect(
-		sidePanel.locator('[data-testid="session-item"]', {
-			hasText: "Fork of",
-		}),
-	).toHaveCount(2);
+	await expect(sidePanel.getByTestId("close-session-panel")).toBeVisible();
+	await expect(sidePanel.getByTestId("session-item")).toHaveCount(3, {
+		timeout: 10000,
+	});
 	await close();
 });
 

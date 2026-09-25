@@ -1306,6 +1306,7 @@ const App: FunctionalComponent = () => {
 	return (
 		<div
 			data-initialized={initialized}
+			data-active-session-id={_activeSessionId ?? ""}
 			data-worker-ready={workerReady}
 			data-window-id={windowId ?? undefined}
 			data-boot-idb={bootHealth.idb}
