@@ -160,7 +160,8 @@ function isTracedMethod(
 	| "file_read"
 	| "file_list"
 	| "get_doc"
-	| "load_skill" {
+	| "load_skill"
+	| "bash" {
 	switch (method) {
 		case "run_js":
 		case "file_write":
@@ -170,6 +171,7 @@ function isTracedMethod(
 		case "file_list":
 		case "get_doc":
 		case "load_skill":
+		case "bash":
 			return true;
 		case "session.create":
 		case "session.list":

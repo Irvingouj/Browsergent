@@ -21,6 +21,7 @@ ALWAYS call get_doc first when you need any page.*, web.*, web.tab.*, chrome.*, 
 - \`page.find()\` results may omit DOM attributes such as \`src\`, \`href\`, and \`alt\`, and may have a null \`refId\`. Inspect the returned shape before relying on those fields.
 - \`page.fetch()\` / \`web.tab.fetch()\` return binary responses as base64, which can be written with \`fs.writeBase64\`. This only works for fetchable URLs. \`chrome.downloads\` entries do not expose file bytes, and \`blob:\` URLs are only fetchable in the document context that created them.
 - fs.* APIs are accessed through the fs object: \`fs.exists()\`, \`fs.readText()\`, \`fs.writeText()\`, \`fs.list()\`, etc. Call get_doc with namespace='fs' for exact names.
+- Shell-style file work (ls, grep, mv, redirects, pipes) belongs in the bash tool. It sees this same filesystem. fs.* stays available inside run_js.
 
 ## Execution model
 - Each \`run_js\` call is an isolated async cell. Top-level \`let\`, \`const\`, and \`var\` do NOT persist across calls.

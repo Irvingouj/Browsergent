@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { deliverBashResult } from "../../bash/deliver-bash";
+import type { BashShells } from "../../bash/shell";
+import { CLI_BASH_KEY } from "../../bash/types";
 import { EnrollmentController } from "../../controllers/enrollment-controller";
 import { EnrollmentHost } from "../../controllers/enrollment-host";
 import { ExtjsController } from "../../controllers/extjs-controller";
@@ -96,6 +99,8 @@ export function useAppInit(): AppInitResult {
 	const settingsControllerRef = useRef<SettingsController | null>(null);
 	const sessionControllerRef = useRef<SessionController | null>(null);
 	const filesControllerRef = useRef<FilesController | null>(null);
+	const bashShellsRef = useRef<BashShells | null>(null);
+	const bashShellsPromiseRef = useRef<Promise<BashShells> | null>(null);
 	const windowContextRef = useRef<WindowContextController | null>(null);
 	const enrollmentControllerRef = useRef<EnrollmentController | null>(null);
 	const enrollmentHostRef = useRef<EnrollmentHost | null>(null);
@@ -103,6 +108,23 @@ export function useAppInit(): AppInitResult {
 	const [bridgeConnected, setBridgeConnected] = useState(false);
 	const [cliEnrolled, setCliEnrolled] = useState(false);
 	const disconnectBridgeRef = useRef<(() => void) | null>(null);
+
+	const loadBashShells = (): Promise<BashShells> => {
+		const existing = bashShellsRef.current;
+		if (existing) return Promise.resolve(existing);
+		if (!bashShellsPromiseRef.current) {
+			bashShellsPromiseRef.current = import("../../bash/shell").then(
+				({ BashShells: Shells }) => {
+					const shells =
+						bashShellsRef.current ??
+						new Shells(ExtensionJsClient.getInstance());
+					bashShellsRef.current = shells;
+					return shells;
+				},
+			);
+		}
+		return bashShellsPromiseRef.current;
+	};
 
 	useEffect(() => {
 		installGlobalErrorHandlers("panel");
@@ -332,6 +354,17 @@ export function useAppInit(): AppInitResult {
 								});
 							});
 					},
+					onBashRequest: (msg) => {
+						deliverBashResult(
+							loadBashShells().then((shells) =>
+								shells.exec(msg.sessionId, msg.command),
+							),
+							msg.id,
+							(message) => {
+								supervisor.postRelay(msg.id, message);
+							},
+						);
+					},
 					onWorkerReady: (_sessionId) => {
 						setWorkerReady(true);
 						browsergentStore.getState().bootComponentSet("worker", "ok");
@@ -412,6 +445,11 @@ export function useAppInit(): AppInitResult {
 					async (op) => {
 						await ensureActingHost();
 						return handleFileOp({ id: "bridge", op }, filesCtrl);
+					},
+					async (command) => {
+						await ensureActingHost();
+						const shells = await loadBashShells();
+						return shells.exec(CLI_BASH_KEY, command);
 					},
 				),
 				runtime: {
@@ -749,6 +787,20 @@ export function useAppInit(): AppInitResult {
 						sendResponse({ ok: true });
 						return true;
 					}
+					if (message.message.type === "bashRequest") {
+						const request = message.message;
+						deliverBashResult(
+							loadBashShells().then((shells) =>
+								shells.exec(request.sessionId, request.command),
+							),
+							message.requestId,
+							(reply) => {
+								respond(reply);
+							},
+						);
+						sendResponse({ ok: true });
+						return true;
+					}
 				}
 			} catch (err) {
 				reportError({
@@ -764,7 +816,13 @@ export function useAppInit(): AppInitResult {
 		return () => {
 			chrome.runtime.onMessage.removeListener(listener);
 		};
-	}, [supervisorRef, windowContextRef, extjsControllerRef, filesControllerRef]);
+	}, [
+		supervisorRef,
+		windowContextRef,
+		extjsControllerRef,
+		filesControllerRef,
+		bashShellsRef,
+	]);
 
 	useEffect(() => {
 		if (typeof chrome === "undefined" || !chrome.storage?.session?.onChanged) {

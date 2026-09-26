@@ -1,6 +1,7 @@
 import type { FunctionalComponent } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { useStore } from "zustand/react";
+import { ensureCodexAccess, loginWithCodex } from "../../auth/codex-oauth";
 import type { SettingsController } from "../../controllers/settings-controller";
 import type { BrowsergentError } from "../../errors/browsergent-error";
 import {
@@ -32,18 +33,20 @@ function modelsFromPreset(preset: ProviderPreset): {
 	models: ProviderConfig["models"];
 	defaultModelId: string;
 } {
-	if (!preset.defaultModel) return { models: [], defaultModelId: "" };
-	const id = crypto.randomUUID();
-	return {
-		models: [
-			{
-				id,
-				name: preset.defaultModel,
-				model: preset.defaultModel,
-			},
-		],
-		defaultModelId: id,
-	};
+	const ids =
+		preset.modelIds && preset.modelIds.length > 0
+			? preset.modelIds
+			: preset.defaultModel
+				? [preset.defaultModel]
+				: [];
+	const models = ids.map((model) => ({
+		id: crypto.randomUUID(),
+		name: model,
+		model,
+	}));
+	const defaultModel =
+		models.find((model) => model.model === preset.defaultModel) ?? models[0];
+	return { models, defaultModelId: defaultModel?.id ?? "" };
 }
 function newProviderConfig(providerId: ProviderId): ProviderConfig {
 	const preset = getPreset(providerId);
@@ -158,6 +161,11 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		| { status: "error"; message: string }
 	>({ status: "idle" });
 	const [modelDraft, setModelDraft] = useState("");
+	const [codexLogin, setCodexLogin] = useState<
+		| { status: "idle" }
+		| { status: "working" }
+		| { status: "error"; message: string }
+	>({ status: "idle" });
 	const abortRef = useRef<AbortController | null>(null);
 	const discoveryAbortRef = useRef<AbortController | null>(null);
 
@@ -171,6 +179,7 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		discoveryAbortRef.current = null;
 		setTestState({ status: "idle" });
 		setDiscoveryState({ status: "idle" });
+		setCodexLogin({ status: "idle" });
 		setModelDraft("");
 	}, [editingId]);
 
@@ -180,14 +189,48 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		const controller = new AbortController();
 		abortRef.current = controller;
 		setTestState({ status: "testing" });
-		const result = await testConnection(editing, controller.signal);
+		let target = editing;
+		if (editing.providerId === ProviderId.OpenAICodex && editing.oauth) {
+			try {
+				const fresh = await ensureCodexAccess(editing);
+				if (fresh !== editing) {
+					const providers = browsergentStore
+						.getState()
+						.settings.providers.map((item) =>
+							item.id === fresh.id ? fresh : item,
+						);
+					browsergentStore.getState().providersChanged(providers);
+					persist(
+						settingsController,
+						providers,
+						browsergentStore.getState().settings.activeProviderId,
+					);
+					target = fresh;
+				}
+			} catch (err) {
+				if (controller.signal.aborted) return;
+				setTestState({
+					status: "error",
+					error: {
+						code: "E_PROVIDER_AUTH",
+						message:
+							err instanceof Error
+								? err.message
+								: "ChatGPT sign-in expired. Sign in again.",
+						source: "settings",
+					},
+				});
+				return;
+			}
+		}
+		const result = await testConnection(target, controller.signal);
 		if (controller.signal.aborted) return;
 		if (result.ok) {
 			setTestState({ status: "ok" });
 		} else {
 			setTestState({ status: "error", error: result.error });
 		}
-	}, [editing]);
+	}, [editing, settingsController]);
 
 	useEffect(() => {
 		if (editingId && !providers.some((p) => p.id === editingId)) {
@@ -205,6 +248,28 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 		},
 		[settingsController],
 	);
+
+	const signInCodex = useCallback(async () => {
+		if (!editing) return;
+		setCodexLogin({ status: "working" });
+		try {
+			const creds = await loginWithCodex();
+			updateProvider(editing.id, {
+				apiKey: creds.access,
+				oauth: {
+					refreshToken: creds.refresh,
+					expiresAt: creds.expires,
+					accountId: creds.accountId,
+				},
+			});
+			setCodexLogin({ status: "idle" });
+		} catch (err) {
+			setCodexLogin({
+				status: "error",
+				message: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}, [editing, updateProvider]);
 
 	const runModelDiscovery = useCallback(async () => {
 		if (!editing) return;
@@ -409,7 +474,11 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 									break;
 								case "openai":
 									providerId = ProviderId.OpenAI;
-									wireFormat = WireFormat.OpenAIChatCompletions;
+									wireFormat = WireFormat.OpenAIResponses;
+									break;
+								case "openai-codex":
+									providerId = ProviderId.OpenAICodex;
+									wireFormat = WireFormat.OpenAIResponses;
 									break;
 								case "deepseek":
 									providerId = ProviderId.DeepSeek;
@@ -430,6 +499,9 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 							const { models, defaultModelId } = preset
 								? modelsFromPreset(preset)
 								: { models: [], defaultModelId: "" };
+							const leavingCodex =
+								providerId === ProviderId.OpenAICodex ||
+								editing.providerId === ProviderId.OpenAICodex;
 							updateProvider(editing.id, {
 								providerId,
 								wireFormat,
@@ -437,12 +509,14 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 								modelsEndpointUrl: preset?.modelsEndpointUrl ?? "",
 								defaultModelId,
 								models,
+								...(leavingCodex ? { apiKey: "", oauth: undefined } : {}),
 							});
 						}}
 						class={INPUT_CLASS}
 					>
 						<option value="anthropic">Anthropic</option>
-						<option value="openai">OpenAI (Chat Completions)</option>
+						<option value="openai">OpenAI</option>
+						<option value="openai-codex">ChatGPT Plus/Pro</option>
 						<option value="deepseek">DeepSeek</option>
 						<option value="openai-compatible">
 							OpenAI-compatible (Chat Completions)
@@ -483,37 +557,38 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 					/>
 				</label>
 
-				{editing.providerId !== ProviderId.Custom && (
-					<div class="flex flex-col gap-xs">
-						<button
-							type="button"
-							data-testid="settings-fetch-models-button"
-							onClick={() => void runModelDiscovery()}
-							disabled={discoveryState.status === "loading"}
-							class="self-start px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
-						>
-							{discoveryState.status === "loading"
-								? "Fetching…"
-								: "Fetch models"}
-						</button>
-						{discoveryState.status === "ok" && (
-							<span
-								data-testid="settings-fetch-models-result"
-								class="text-xs text-success"
+				{editing.providerId !== ProviderId.Custom &&
+					editing.modelsEndpointUrl && (
+						<div class="flex flex-col gap-xs">
+							<button
+								type="button"
+								data-testid="settings-fetch-models-button"
+								onClick={() => void runModelDiscovery()}
+								disabled={discoveryState.status === "loading"}
+								class="self-start px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
 							>
-								Loaded {discoveryState.count} models
-							</span>
-						)}
-						{discoveryState.status === "error" && (
-							<span
-								data-testid="settings-fetch-models-result"
-								class="text-xs text-error"
-							>
-								{discoveryState.message}
-							</span>
-						)}
-					</div>
-				)}
+								{discoveryState.status === "loading"
+									? "Fetching…"
+									: "Fetch models"}
+							</button>
+							{discoveryState.status === "ok" && (
+								<span
+									data-testid="settings-fetch-models-result"
+									class="text-xs text-success"
+								>
+									Loaded {discoveryState.count} models
+								</span>
+							)}
+							{discoveryState.status === "error" && (
+								<span
+									data-testid="settings-fetch-models-result"
+									class="text-xs text-error"
+								>
+									{discoveryState.message}
+								</span>
+							)}
+						</div>
+					)}
 
 				<div class="flex flex-col gap-sm">
 					<label>
@@ -567,20 +642,76 @@ export const SettingsPanel: FunctionalComponent<SettingsPanelProps> = ({
 					)}
 				</div>
 
-				<label>
-					<span class={LABEL_CLASS}>API Key</span>
-					<input
-						type="password"
-						data-testid="settings-apikey-input"
-						value={editing.apiKey}
-						onInput={(e) =>
-							updateProvider(editing.id, {
-								apiKey: (e.target as HTMLInputElement).value,
-							})
-						}
-						class={INPUT_CLASS}
-					/>
-				</label>
+				{editing.providerId === ProviderId.OpenAICodex ? (
+					<div class="flex flex-col gap-xs">
+						<span class={LABEL_CLASS}>ChatGPT</span>
+						<p class="text-xs text-text-secondary">
+							Sign in with the ChatGPT account that has Codex. Browsergent uses
+							that subscription instead of an API key.
+						</p>
+						<div class="flex gap-sm">
+							<button
+								type="button"
+								data-testid="settings-codex-signin"
+								onClick={() => void signInCodex()}
+								disabled={codexLogin.status === "working"}
+								class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer bg-bg-surface-solid text-text-secondary border border-border-strong hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
+							>
+								{codexLogin.status === "working"
+									? "Waiting for ChatGPT…"
+									: editing.oauth
+										? "Sign in again"
+										: "Sign in with ChatGPT"}
+							</button>
+							{editing.oauth && (
+								<button
+									type="button"
+									data-testid="settings-codex-signout"
+									onClick={() =>
+										updateProvider(editing.id, {
+											apiKey: "",
+											oauth: undefined,
+										})
+									}
+									class="px-sm py-xs rounded-full font-sans text-xs font-semibold cursor-pointer text-text-secondary hover:text-text-primary"
+								>
+									Sign out
+								</button>
+							)}
+						</div>
+						{editing.oauth && (
+							<span
+								data-testid="settings-codex-status"
+								class="text-xs text-success"
+							>
+								Signed in
+							</span>
+						)}
+						{codexLogin.status === "error" && (
+							<span
+								data-testid="settings-codex-error"
+								class="text-xs text-error"
+							>
+								{codexLogin.message}
+							</span>
+						)}
+					</div>
+				) : (
+					<label>
+						<span class={LABEL_CLASS}>API Key</span>
+						<input
+							type="password"
+							data-testid="settings-apikey-input"
+							value={editing.apiKey}
+							onInput={(e) =>
+								updateProvider(editing.id, {
+									apiKey: (e.target as HTMLInputElement).value,
+								})
+							}
+							class={INPUT_CLASS}
+						/>
+					</label>
+				)}
 
 				<div class="flex flex-col gap-xs">
 					<button

@@ -53,6 +53,7 @@ type BridgeHandlers = {
 		sessionId: string;
 		op: FileOp;
 	}) => void;
+	onBashRequest: (msg: Extract<WorkerToPanel, { type: "bashRequest" }>) => void;
 	onWorkerReady?: (sessionId: string) => void;
 	onAgentStopped?: () => void;
 	onRunningSessionsChanged?: RunningSessionsChangedHandler;
@@ -160,6 +161,10 @@ export class RunSupervisor {
 			onFileOpRequest: (msg) => {
 				this.trackRelay(msg.id, bridge);
 				this.handlers.onFileOpRequest(msg);
+			},
+			onBashRequest: (msg) => {
+				this.trackRelay(msg.id, bridge);
+				this.handlers.onBashRequest(msg);
 			},
 			runRouting: {
 				shouldUpdateUi: (runId) => this.registry.shouldUpdateUi(runId),

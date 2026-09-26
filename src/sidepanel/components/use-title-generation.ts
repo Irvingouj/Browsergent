@@ -14,7 +14,12 @@ import {
 	type ProviderConfig,
 } from "../../state/slices/settings-slice";
 import { browsergentStore } from "../../state/store";
-import type { ChatMessage } from "../../types/messages";
+import { type ChatMessage, ProviderId, WireFormat } from "../../types/messages";
+import { readResponsesStreamText } from "../../worker/openai-responses-sse";
+import {
+	buildResponsesRequestBody,
+	responsesOutputText,
+} from "../../worker/openai-responses-wire";
 import {
 	buildProviderChatBody,
 	buildProviderRequest,
@@ -50,15 +55,27 @@ async function requestTitle(
 ): Promise<string | null> {
 	const model = defaultModelForProvider(provider);
 	if (!model) return null;
+	const codex = provider.providerId === ProviderId.OpenAICodex;
 	const request = buildProviderRequest({
 		wireFormat: provider.wireFormat,
 		apiKey: provider.apiKey,
 		chatEndpointUrl: provider.chatEndpointUrl,
+		codexAccountId: codex ? provider.oauth?.accountId : undefined,
 	});
 
-	const body = buildProviderChatBody(request, model.model, 20, [
-		{ role: "user", content: prompt },
-	]);
+	const body =
+		provider.wireFormat === WireFormat.OpenAIResponses
+			? buildResponsesRequestBody({
+					model: model.model,
+					instructions: "Reply with a short title and nothing else.",
+					input: prompt,
+					stream: codex,
+					maxOutputTokens: 20,
+					codex,
+				})
+			: buildProviderChatBody(request, model.model, 20, [
+					{ role: "user", content: prompt },
+				]);
 
 	const resp = await fetch(request.url, {
 		method: "POST",
@@ -69,6 +86,15 @@ async function requestTitle(
 	if (!resp.ok) {
 		const body = await resp.text().catch(() => "");
 		throw classifyTitleResponse(resp.status, body);
+	}
+
+	if (provider.wireFormat === WireFormat.OpenAIResponses) {
+		if (codex && resp.body) {
+			const text = await readResponsesStreamText(resp.body);
+			return text || null;
+		}
+		const raw: unknown = await resp.json();
+		return responsesOutputText(raw);
 	}
 
 	const raw: unknown = await resp.json();

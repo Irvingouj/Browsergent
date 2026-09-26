@@ -1,6 +1,7 @@
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import { reportError } from "../errors/report";
 import {
+	isBashRequest,
 	isExtjsError,
 	isExtjsOutput,
 	isFileOpRequest,
@@ -53,6 +54,10 @@ type FileOpRequestHandler = (msg: {
 	op: FileOp;
 }) => void;
 
+type BashRequestHandler = (
+	msg: Extract<WorkerToPanel, { type: "bashRequest" }>,
+) => void;
+
 type WorkerReadyHandler = () => void;
 type AgentStoppedHandler = () => void;
 
@@ -68,6 +73,7 @@ export class WorkerBridge {
 	private onExtjsDocsRequest: ExtjsDocsRequestHandler | null = null;
 	private onLoadSkillRequest: LoadSkillRequestHandler | null = null;
 	private onFileOpRequest: FileOpRequestHandler | null = null;
+	private onBashRequest: BashRequestHandler | null = null;
 	private onWorkerReady: WorkerReadyHandler | null = null;
 	private onAgentStopped: AgentStoppedHandler | null = null;
 	private runRouting: RunRouting | null = null;
@@ -77,6 +83,7 @@ export class WorkerBridge {
 		onExtjsDocsRequest?: ExtjsDocsRequestHandler;
 		onLoadSkillRequest?: LoadSkillRequestHandler;
 		onFileOpRequest?: FileOpRequestHandler;
+		onBashRequest?: BashRequestHandler;
 		onWorkerReady?: WorkerReadyHandler;
 		onAgentStopped?: AgentStoppedHandler;
 		runRouting?: RunRouting;
@@ -85,6 +92,7 @@ export class WorkerBridge {
 		this.onExtjsDocsRequest = options?.onExtjsDocsRequest ?? null;
 		this.onLoadSkillRequest = options?.onLoadSkillRequest ?? null;
 		this.onFileOpRequest = options?.onFileOpRequest ?? null;
+		this.onBashRequest = options?.onBashRequest ?? null;
 		this.onWorkerReady = options?.onWorkerReady ?? null;
 		this.onAgentStopped = options?.onAgentStopped ?? null;
 		this.runRouting = options?.runRouting ?? null;
@@ -356,6 +364,11 @@ export class WorkerBridge {
 							op: FileOp;
 						},
 					);
+				}
+				break;
+			case "bashRequest":
+				if (isBashRequest(raw) && this.onBashRequest) {
+					this.onBashRequest(raw);
 				}
 				break;
 		}

@@ -6,6 +6,7 @@ import type {
 	AgentRunResult,
 } from "@pi-oxide/pi-host-web";
 import { Agent } from "@pi-oxide/pi-host-web";
+import type { BashCommandResult } from "../bash/types";
 import { truncateSkillBody } from "../skills/resolve-skill-activations";
 import { escapeXmlAttr } from "../skills/validate-skill-meta";
 import type { CellResult } from "../types/extjs-utils";
@@ -14,22 +15,20 @@ import type {
 	AgentStatus,
 	AgentTraceEntry,
 } from "../types/messages";
-import type { SessionTranscriptEntry } from "../types/session-transcript";
+import {
+	isAgentHistoryMessage,
+	repairAgentHistoryMessage,
+	type SessionTranscriptEntry,
+} from "../types/session-transcript";
 import { streamLog } from "../utils/stream-logger";
 import { createAgentTools } from "./agent-tools";
 import { composeSystemPrompt } from "./anthropic";
 import { getCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
+import { visibleAssistantText } from "./openai-responses-wire";
 import type { RuntimeProvider } from "./provider-model";
 import { createProviderModel } from "./provider-model";
 import { isToolErrorEnvelope } from "./tool-error-result";
-
-function isTextContentBlock(c: {
-	type: string;
-	text?: string;
-}): c is { type: "text"; text: string } {
-	return c.type === "text" && typeof c.text === "string";
-}
 
 function toAgentInitialHistoryEntry(
 	entry: AgentHistoryEntry,
@@ -91,6 +90,7 @@ export interface AgentLoopCallbacks {
 	getDocs: (format: "json" | "markdown") => Promise<string>;
 	loadSkill: (skill: string, path?: string) => Promise<string>;
 	fileOp: (op: FileOp) => Promise<FileOpResult>;
+	bash: (command: string) => Promise<BashCommandResult>;
 }
 
 /**
@@ -191,6 +191,7 @@ export class AgentLoop {
 			callbacks.getDocs,
 			callbacks.loadSkill,
 			callbacks.fileOp,
+			callbacks.bash,
 		);
 
 		this.agent = new Agent({
@@ -303,10 +304,7 @@ export class AgentLoop {
 		);
 
 		this.agent.on("messageEnd", (msg) => {
-			const text = msg.content
-				.filter(isTextContentBlock)
-				.map((block) => block.text)
-				.join("");
+			const text = visibleAssistantText(msg.content);
 			let entryId: string;
 			let displayText: string | null = null;
 			let turnNumber = this.historyTurnNumber;
@@ -342,7 +340,11 @@ export class AgentLoop {
 			};
 		});
 
-		this.agent.on("historyMessage", (message: AgentHistoryMessage) => {
+		this.agent.on("historyMessage", (raw: AgentHistoryMessage) => {
+			const message = isAgentHistoryMessage(raw)
+				? raw
+				: repairAgentHistoryMessage(raw);
+			if (!message) return;
 			const pending = this.pendingHistoryEntry;
 			const entry: SessionTranscriptEntry = {
 				entryId: pending?.entryId ?? crypto.randomUUID(),

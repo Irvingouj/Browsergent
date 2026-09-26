@@ -1,3 +1,4 @@
+import { type BashCommandResult, BashErrorCode } from "../bash/types";
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
 import type {
 	AgentDiagnosticEvent,
@@ -42,6 +43,14 @@ function isBoolean(value: unknown): value is boolean {
 
 function isOptionalString(value: unknown): value is string | undefined {
 	return value === undefined || typeof value === "string";
+}
+
+function isKnownWireFormat(value: unknown): boolean {
+	return (
+		value === "anthropic-messages" ||
+		value === "openai-chat-completions" ||
+		value === "openai-responses"
+	);
 }
 
 export function isChatMessage(msg: unknown): msg is ChatMessage {
@@ -104,11 +113,13 @@ export function isAgentStartMessage(
 	}
 	const settings = msg.settings;
 	if (
-		(settings.wireFormat !== "anthropic-messages" &&
-			settings.wireFormat !== "openai-chat-completions") ||
+		!isKnownWireFormat(settings.wireFormat) ||
 		!isString(settings.apiKey) ||
 		!isString(settings.chatEndpointUrl) ||
-		!isString(settings.model)
+		!isString(settings.model) ||
+		!isOptionalString(
+			"codexAccountId" in settings ? settings.codexAccountId : undefined,
+		)
 	) {
 		return false;
 	}
@@ -142,11 +153,14 @@ export function describeAgentStartFailure(msg: unknown): string | null {
 		problems.push("settings");
 	} else {
 		const settings = msg.settings;
-		if (
-			settings.wireFormat !== "anthropic-messages" &&
-			settings.wireFormat !== "openai-chat-completions"
-		) {
+		if (!isKnownWireFormat(settings.wireFormat)) {
 			problems.push(`settings.wireFormat (${String(settings.wireFormat)})`);
+		}
+		if (
+			"codexAccountId" in settings &&
+			!isOptionalString(settings.codexAccountId)
+		) {
+			problems.push("settings.codexAccountId");
 		}
 		for (const key of ["apiKey", "chatEndpointUrl", "model"] as const) {
 			if (!isString(settings[key])) problems.push(`settings.${key}`);
@@ -544,6 +558,80 @@ export function isFileOpError(
 	return true;
 }
 
+function isBashErrorCode(
+	// Untrusted code field on a bashError message.
+	value: unknown,
+): value is BashErrorCode {
+	return (
+		value === BashErrorCode.Failed ||
+		value === BashErrorCode.Timeout ||
+		value === BashErrorCode.Protocol ||
+		value === BashErrorCode.NoSession
+	);
+}
+
+export function isBashRequest(
+	// Untrusted worker → panel postMessage payload.
+	msg: unknown,
+): msg is {
+	type: "bashRequest";
+	id: string;
+	sessionId: string;
+	command: string;
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "bashRequest") return false;
+	if (!isString(msg.id)) return false;
+	if (!isString(msg.sessionId)) return false;
+	if (!isString(msg.command)) return false;
+	return true;
+}
+
+export function isBashCommandResult(
+	// Untrusted field inside a bashResult message.
+	value: unknown,
+): value is BashCommandResult {
+	if (!isObject(value)) return false;
+	if (!isString(value.stdout)) return false;
+	if (!isString(value.stderr)) return false;
+	if (typeof value.exitCode !== "number" || !Number.isFinite(value.exitCode)) {
+		return false;
+	}
+	return true;
+}
+
+export function isBashResult(
+	// Untrusted panel → worker postMessage payload.
+	msg: unknown,
+): msg is {
+	type: "bashResult";
+	id: string;
+	result: BashCommandResult;
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "bashResult") return false;
+	if (!isString(msg.id)) return false;
+	if (!isBashCommandResult(msg.result)) return false;
+	return true;
+}
+
+export function isBashError(
+	// Untrusted panel → worker postMessage payload.
+	msg: unknown,
+): msg is {
+	type: "bashError";
+	id: string;
+	code: BashErrorCode;
+	error: string;
+} {
+	if (!isObject(msg)) return false;
+	if (msg.type !== "bashError") return false;
+	if (!isString(msg.id)) return false;
+	if (!isBashErrorCode(msg.code)) return false;
+	if (!isString(msg.error)) return false;
+	return true;
+}
+
 export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 	return (
 		isWorkerReady(msg) ||
@@ -560,6 +648,7 @@ export function isWorkerToPanel(msg: unknown): msg is WorkerToPanel {
 		isExtjsRunRequest(msg) ||
 		isExtjsDocsRequest(msg) ||
 		isLoadSkillRequest(msg) ||
-		isFileOpRequest(msg)
+		isFileOpRequest(msg) ||
+		isBashRequest(msg)
 	);
 }

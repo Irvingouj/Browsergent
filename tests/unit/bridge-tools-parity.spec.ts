@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import type { BashCommandResult } from "../../src/bash/types";
 import { BridgeHost } from "../../src/controllers/bridge-host";
 import type { BridgeRequest } from "../../src/protocol/bridge";
 import { createAgentTools } from "../../src/worker/agent-tools";
@@ -17,6 +18,7 @@ const CHAT_TOOL_PARAMS = {
 		new_string: "hello world",
 	},
 	file_delete: { path: "/notes.md" },
+	bash: { command: "pwd" },
 } as const;
 
 async function fakeFileOp(op: FileOp): Promise<FileOpResult> {
@@ -34,6 +36,10 @@ async function fakeFileOp(op: FileOp): Promise<FileOpResult> {
 	}
 }
 
+async function fakeBash(): Promise<BashCommandResult> {
+	return { stdout: "/\n", stderr: "", exitCode: 0 };
+}
+
 describe("BridgeHost Chat tool parity", () => {
 	test("CLI can call every Chat tool and gets the same result", async () => {
 		const tools = createAgentTools(
@@ -47,6 +53,7 @@ describe("BridgeHost Chat tool parity", () => {
 			vi.fn().mockResolvedValue("[]"),
 			vi.fn().mockResolvedValue("skill body"),
 			fakeFileOp,
+			fakeBash,
 		);
 		const host = new BridgeHost({ tools });
 		const chatToolNames = tools.definitions.map(

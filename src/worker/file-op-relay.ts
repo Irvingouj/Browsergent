@@ -1,3 +1,5 @@
+import { PendingRelay } from "./pending-relay";
+
 export const FILE_OP_RELAY_TIMEOUT_MS = 30_000;
 
 export interface FileOpListEntry {
@@ -35,58 +37,36 @@ export interface FileOpRelayRequest {
 	op: FileOp;
 }
 
-interface PendingEntry {
-	resolve: (result: FileOpResult) => void;
-	reject: (error: Error) => void;
-	timeoutId: ReturnType<typeof setTimeout>;
-}
-
 export class FileOpRelay {
-	private readonly pending = new Map<string, PendingEntry>();
+	private readonly pending: PendingRelay<FileOpResult>;
 	private counter = 0;
 
 	constructor(
 		private readonly postRequest: (request: FileOpRelayRequest) => void,
-		private readonly timeoutMs: number = FILE_OP_RELAY_TIMEOUT_MS,
-	) {}
+		timeoutMs: number = FILE_OP_RELAY_TIMEOUT_MS,
+	) {
+		this.pending = new PendingRelay(
+			timeoutMs,
+			(ms) => new Error(`File op relay timed out after ${ms}ms`),
+		);
+	}
 
 	relay(sessionId: string, op: FileOp): Promise<FileOpResult> {
 		const relayId = `file-op-${++this.counter}`;
-
-		const promise = new Promise<FileOpResult>((resolve, reject) => {
-			const timeoutId = setTimeout(() => {
-				this.pending.delete(relayId);
-				reject(new Error(`File op relay timed out after ${this.timeoutMs}ms`));
-			}, this.timeoutMs);
-
-			this.pending.set(relayId, { resolve, reject, timeoutId });
-		});
-
+		const promise = this.pending.wait(relayId);
 		this.postRequest({ id: relayId, sessionId, op });
 		return promise;
 	}
 
 	resolve(id: string, result: FileOpResult): void {
-		const entry = this.pending.get(id);
-		if (!entry) return;
-		clearTimeout(entry.timeoutId);
-		this.pending.delete(id);
-		entry.resolve(result);
+		this.pending.resolve(id, result);
 	}
 
 	reject(id: string, error: string): void {
-		const entry = this.pending.get(id);
-		if (!entry) return;
-		clearTimeout(entry.timeoutId);
-		this.pending.delete(id);
-		entry.reject(new Error(error));
+		this.pending.reject(id, new Error(error));
 	}
 
 	rejectAll(reason: string): void {
-		for (const [id, entry] of this.pending) {
-			clearTimeout(entry.timeoutId);
-			entry.reject(new Error(reason));
-			this.pending.delete(id);
-		}
+		this.pending.rejectAll(reason, (message) => new Error(message));
 	}
 }

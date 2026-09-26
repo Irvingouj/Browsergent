@@ -1,6 +1,7 @@
 /** Panel <-> Worker message types. */
 
 import type { AgentHistoryEntry } from "@pi-oxide/pi-host-web";
+import type { BashCommandResult, BashErrorCode } from "../bash/types";
 import type { BrowsergentError } from "../errors/browsergent-error";
 import type { FileOp, FileOpResult } from "../worker/file-op-relay";
 import type { WireFormat } from "../worker/provider-schema";
@@ -46,6 +47,8 @@ export type PanelToWorker =
 	| { type: "loadSkillError"; id: string; error: string }
 	| { type: "fileOpResult"; id: string; result: FileOpResult }
 	| { type: "fileOpError"; id: string; error: string }
+	| { type: "bashResult"; id: string; result: BashCommandResult }
+	| { type: "bashError"; id: string; code: BashErrorCode; error: string }
 	| {
 			type: "skillAutoActivate";
 			runId: string;
@@ -65,6 +68,8 @@ export interface WorkerSettings {
 	apiKey: string;
 	chatEndpointUrl: string;
 	model: string;
+	/** ChatGPT Codex account id. Present only for the coding-plan provider. */
+	codexAccountId?: string;
 }
 // --- Worker -> Panel ---
 
@@ -93,7 +98,8 @@ export type WorkerToPanel =
 			path?: string;
 			activatedSkills?: string[];
 	  }
-	| { type: "fileOpRequest"; id: string; sessionId: string; op: FileOp };
+	| { type: "fileOpRequest"; id: string; sessionId: string; op: FileOp }
+	| { type: "bashRequest"; id: string; sessionId: string; command: string };
 
 // --- Agent Status ---
 
