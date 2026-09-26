@@ -88,7 +88,11 @@ test.describe("background headless session", () => {
 						`event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Still going" } })}\n\n`,
 						`event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
 					],
-					delays: [2000, 0, 0, 0],
+					// Keep the turn open across a slow switch. "Still going" is sent
+					// after the panel has had time to leave and come back, so the
+					// assertion observes the live subscription rather than a run
+					// that already finished and reset to idle.
+					delays: [0, 0, 12_000, 20_000],
 					stopReason: "end_turn",
 				},
 			],
@@ -118,7 +122,7 @@ test.describe("background headless session", () => {
 			);
 			await expect(
 				sidePanel.locator('[data-testid="chat-message-assistant"]').last(),
-			).toContainText("Still going", { timeout: 15000 });
+			).toContainText("Still going", { timeout: 25000 });
 		} finally {
 			await close();
 			mock.server.close();
