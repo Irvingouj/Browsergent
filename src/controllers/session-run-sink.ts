@@ -30,11 +30,9 @@ export class SessionRunSink {
 
 	async applyEvent(sessionId: string, event: WorkerToPanel): Promise<void> {
 		const previous = this.eventQueues.get(sessionId) ?? Promise.resolve();
-		const current = previous.then(async () => {
-			const snapshot = await this.ensureBuffer(sessionId);
-			applyRunEvent(snapshot, event);
-			this.scheduleSave(sessionId, snapshot);
-		});
+		const record = () => this.recordEvent(sessionId, event);
+		// A rejected event must not cancel events already queued behind it.
+		const current = previous.then(record, record);
 		this.eventQueues.set(sessionId, current);
 		try {
 			await current;
@@ -45,6 +43,15 @@ export class SessionRunSink {
 		}
 	}
 
+	private async recordEvent(
+		sessionId: string,
+		event: WorkerToPanel,
+	): Promise<void> {
+		const snapshot = await this.ensureBuffer(sessionId);
+		applyRunEvent(snapshot, event);
+		this.scheduleSave(sessionId, snapshot);
+	}
+
 	private async ensureBuffer(sessionId: string): Promise<SessionSnapshot> {
 		const cached = this.buffers.get(sessionId);
 		if (cached) return cached;
@@ -53,16 +60,19 @@ export class SessionRunSink {
 		if (inflight) return inflight;
 
 		const loadPromise = (async () => {
-			const loaded = await this.sessionController.loadForSession(sessionId);
-			const snapshot = createSessionSnapshot(
-				loaded?.messages ?? [],
-				loaded?.trace ?? [],
-				loaded?.diagnostics ?? [],
-				loaded?.transcript,
-			);
-			this.buffers.set(sessionId, snapshot);
-			this.bufferLoads.delete(sessionId);
-			return snapshot;
+			try {
+				const loaded = await this.sessionController.loadForSession(sessionId);
+				const snapshot = createSessionSnapshot(
+					loaded?.messages ?? [],
+					loaded?.trace ?? [],
+					loaded?.diagnostics ?? [],
+					loaded?.transcript,
+				);
+				this.buffers.set(sessionId, snapshot);
+				return snapshot;
+			} finally {
+				this.bufferLoads.delete(sessionId);
+			}
 		})();
 		this.bufferLoads.set(sessionId, loadPromise);
 		return loadPromise;

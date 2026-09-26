@@ -1026,23 +1026,7 @@ const App: FunctionalComponent = () => {
 					if (panelWid === survivor) {
 						extjsControllerRef.current?.rebindWindow(survivor);
 						const rebound = message.reboundRunningSessionIds ?? [];
-						if (rebound.length > 0 && typeof chrome !== "undefined") {
-							const { sendMessageSafe } = await import("../errors/report");
-							void sendMessageSafe(
-								{
-									type: "offscreenAdoptRuns",
-									sessionIds: rebound,
-									windowId: survivor,
-								},
-								{ source: "lifecycle", op: "offscreenAdoptRuns" },
-							);
-							void sendMessageSafe(
-								{
-									type: "offscreenQueryRuns",
-									sessionIds: rebound,
-								},
-								{ source: "lifecycle", op: "offscreenQueryRuns" },
-							);
+						if (rebound.length > 0) {
 							void sessionCtrl.updateRunningSessionsForWindow(
 								survivor,
 								rebound,

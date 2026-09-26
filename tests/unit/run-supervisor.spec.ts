@@ -34,17 +34,13 @@ describe("RunSupervisor", () => {
 			runtime: { getURL: vi.fn().mockReturnValue("/agent-worker.js") },
 		});
 
-		supervisor = new RunSupervisor(
-			controller,
-			{
-				onExtjsRunRequest: () => {},
-				onExtjsDocsRequest: () => {},
-				onLoadSkillRequest: () => {},
-				onFileOpRequest: () => {},
-				onBashRequest: () => {},
-			},
-			{ hosting: "local" },
-		);
+		supervisor = new RunSupervisor(controller, {
+			onExtjsRunRequest: () => {},
+			onExtjsDocsRequest: () => {},
+			onLoadSkillRequest: () => {},
+			onFileOpRequest: () => {},
+			onBashRequest: () => {},
+		});
 	});
 
 	afterEach(() => {
@@ -96,18 +92,14 @@ describe("RunSupervisor", () => {
 	test("onAgentStopped does not fire while another session is still running", async () => {
 		const onAgentStopped = vi.fn();
 		supervisor.dispose();
-		supervisor = new RunSupervisor(
-			controller,
-			{
-				onExtjsRunRequest: () => {},
-				onExtjsDocsRequest: () => {},
-				onLoadSkillRequest: () => {},
-				onFileOpRequest: () => {},
-				onBashRequest: () => {},
-				onAgentStopped,
-			},
-			{ hosting: "local" },
-		);
+		supervisor = new RunSupervisor(controller, {
+			onExtjsRunRequest: () => {},
+			onExtjsDocsRequest: () => {},
+			onLoadSkillRequest: () => {},
+			onFileOpRequest: () => {},
+			onBashRequest: () => {},
+			onAgentStopped,
+		});
 
 		const sessionA = await controller.resolveOrCreateForWindow(1);
 		const sessionB = await controller.createSessionAttachedTo(1);

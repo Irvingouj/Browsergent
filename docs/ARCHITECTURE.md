@@ -5,7 +5,15 @@ from: **pi-oxide** (the Rust "brain") and **web-js** (the sandboxed JS "hands").
 
 > One-line summary: an AI agent that lives in a Chrome side panel. The LLM **reasons and
 > writes JavaScript**; that JS runs in a sandboxed QuickJS runtime that **yields typed
-> browser commands** to a content script. The agent's *only* tool is `run_js`.
+> browser commands** to a content script.
+
+The narrative below was written when the worker spoke only Anthropic and the model had
+only `run_js`. Current code (`package.json`) also registers `get_doc`, `load_skill`,
+OPFS file tools, and in-browser `bash`. Provider calls are Anthropic Messages, OpenAI
+Responses (including ChatGPT Codex OAuth), or OpenAI Chat Completions (DeepSeek and
+other compatible endpoints). Installed packages are `@pi-oxide/extension-js` ^0.16.0
+and `@pi-oxide/pi-host-web` ^0.9.11. Treat later sections that say "Anthropic only" or
+"the only tool is `run_js`" as historical.
 
 ---
 

@@ -445,6 +445,24 @@ describe("SessionController multi-session", () => {
 		vi.useRealTimers();
 	});
 
+	test("listSessions keeps another window's open session and a running session", async () => {
+		vi.useFakeTimers();
+		const foreign = await ctrl.createSessionAttachedTo(2);
+		ctrl.bindPanelWindow(TEST_WINDOW_ID);
+		const running = await ctrl.createSession();
+		await ctrl.updateRunningSessionsForWindow(TEST_WINDOW_ID, [running]);
+		vi.advanceTimersByTime(2);
+		for (let i = 0; i < 51; i++) {
+			await ctrl.createSession();
+			vi.advanceTimersByTime(2);
+		}
+
+		const { sessions } = await ctrl.listSessions();
+		expect(sessions.find((session) => session.id === foreign)).toBeDefined();
+		expect(sessions.find((session) => session.id === running)).toBeDefined();
+		vi.useRealTimers();
+	});
+
 	test("deleteSession() removes session", async () => {
 		const id1 = requireActiveId(ctrl);
 		await ctrl.save(

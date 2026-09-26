@@ -2,7 +2,7 @@
  * AnthropicProvider — streams LLM responses for the raw WASM host API.
  *
  * Converts SDK AgentMessage[] → Anthropic wire format, streams SSE back as
- * LlmChunk / LlmResult.  The LLM has ONE tool: run_js.
+ * LlmChunk / LlmResult.
  */
 
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";

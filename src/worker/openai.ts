@@ -4,7 +4,7 @@
  * Ollama, LM Studio, Fireworks-openai, etc.).
  *
  * Converts SDK AgentMessage[] → OpenAI wire format, streams SSE back as
- * LlmChunk / LlmResult. The LLM has ONE tool: run_js.
+ * LlmChunk / LlmResult.
  */
 
 import type { LlmChunk, LlmContext } from "@pi-oxide/pi-host-web/raw";

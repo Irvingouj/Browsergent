@@ -17,13 +17,13 @@
 
 > ⚠️ **Experimental.** Browsergent is an exploratory project. Its current philosophy is to expose everything the Chrome extension can access to the agent so we can learn the boundary of browser-agent capability. The agent may be able to read page content, cookies, auth headers, request/response metadata, and other browser-accessible data. Always review its actions and avoid using it on accounts or pages where that level of access is unacceptable. Security controls will be introduced later as the capability boundary becomes clearer.
 
-Type a task in plain English. The agent reasons with an LLM, generates JavaScript, runs it against the current page, observes the result, and iterates until the task is done — just like Claude Code, but for browser automation. Bring your own Anthropic-compatible API key (BYOK). No remote browser farm: it drives your real Chrome tab through a sandboxed `run_js` → `page.*` protocol.
+Type a task in plain English. The agent reasons with an LLM, generates JavaScript, runs it against your Chrome tabs, observes the result, and iterates until the task is done — just like Claude Code, but for browser automation. Bring your own credentials (BYOK): Anthropic, OpenAI, ChatGPT Plus/Pro, DeepSeek, or a compatible endpoint. No remote browser farm: a sandbox runs that JavaScript and turns `page.*` / `web.tab.*` calls into typed browser commands.
 
 ---
 
 ## How it works
 
-The LLM reasons and generates JS. `run_js` is its **only** tool. All `page.*` operations flow through the sandboxed `@pi-oxide/extension-js` runtime. The LLM never touches the DOM or Chrome APIs directly — it only writes JavaScript.
+The LLM reasons and generates JS. Browser actions go through the sandboxed `@pi-oxide/extension-js` runtime via `run_js`. The model also has `get_doc`, `load_skill`, OPFS file tools, and an in-browser `bash` over the same files. It never touches the DOM or Chrome APIs directly — it only writes JavaScript.
 
 ```
 Side Panel (Chat UI)
@@ -31,8 +31,8 @@ Side Panel (Chat UI)
   ▼
 Web Worker
   ├─ @pi-oxide/pi-host-web WASM (state machine, context projection)
-  ├─ Anthropic API call (LLM reasoning)
-  │     └─ LLM's only tool: run_js → generates JS code
+  ├─ Provider call (Anthropic Messages, OpenAI Responses, or Chat Completions)
+  │     └─ tools: run_js, get_doc, load_skill, file_*, bash
   │           │
   │           ▼
   └─ relayExtjsExecution(code) → postMessage to side panel
@@ -80,17 +80,20 @@ Load the extension in Chrome:
 
 ## Configuration
 
-Open **Settings** in the side panel and provide:
+Open **Settings** in the side panel and add a provider. The endpoint URL is exact — the extension does not append `/v1/...` for you.
 
-| Field | Example |
-|-------|---------|
-| API Key | `sk-ant-api03-...` |
-| Base URL | `https://api.anthropic.com` |
-| Model | `claude-sonnet-4-6` |
+| Provider | Wire | Default endpoint |
+|----------|------|------------------|
+| Anthropic | Messages | `https://api.anthropic.com/v1/messages` |
+| OpenAI | Responses | `https://api.openai.com/v1/responses` |
+| ChatGPT Plus/Pro | Responses (Codex OAuth) | `https://chatgpt.com/backend-api/codex/responses` |
+| DeepSeek | Chat Completions | `https://api.deepseek.com/chat/completions` |
+| OpenAI-compatible | Chat Completions | the URL you enter |
+| Anthropic-compatible | Messages | the URL you enter |
 
-Compatible providers: **Anthropic**, **DeepSeek** (`api.deepseek.com/anthropic`), **z.ai / GLM**, or any endpoint implementing the Anthropic Messages API.
+First-class providers can fetch their model list. Compatible providers take model ids by hand. ChatGPT Plus/Pro signs in with the Codex OAuth flow; the access token is stored as that provider's key and refreshed from the refresh token.
 
-Your API key stays in the browser — never sent anywhere except the base URL you configure.
+Your key stays in the browser — never sent anywhere except the endpoint you configure.
 
 ---
 
@@ -101,7 +104,8 @@ Your API key stays in the browser — never sent anywhere except the base URL yo
 - **`@[file:...]` attachments** — reference session files in tasks
 - **Files panel** — upload, edit, and manage files backed by OPFS
 - **Trace view** — expandable per-step trace with JS code blocks, result inspection, and error details
-- **Multi-provider** — Anthropic, DeepSeek, GLM, or any compatible API
+- **Multi-provider** — Anthropic, OpenAI, ChatGPT Plus/Pro, DeepSeek, or a compatible endpoint
+- **In-browser bash** — `just-bash` over the same OPFS files as the Files panel and file tools
 - **BYOK by design** — no inference markup; you bring your own credentials
 
 ---
@@ -145,11 +149,10 @@ Useful public URLs:
 ## Limitations
 
 - **Chrome only.** MV3 side panel + content scripts; not ported to Firefox/Safari.
-- **Anthropic Messages API only.** The wire layer targets the Anthropic schema; OpenAI-native function-calling is not supported.
 - **Closing the side panel ends runs (by design).** Workers live in the side panel document. Closing the panel stops every agent run hosted there — we do **not** keep running after the panel is closed (no offscreen “survive panel close” mode).
 - **In-panel “background” sessions are concurrent runs, not panel-close survival.** While a panel stays open, you can switch the chat UI to another session; the previous session’s run may continue **in the background of that open panel** (N concurrent sessions, only one is the foreground chat view). That is different from keeping work alive after the panel is gone.
 - **Context window bound.** Long sessions are compacted, but very long tasks may still lose earlier detail.
-- **Single tab.** The agent operates on one active tab at a time.
+- **`page.*` follows the active http(s) tab.** `chrome://` and the side panel are never the page target. `web.tab.*` can open and drive a specific tab, including a background one.
 
 ---
 

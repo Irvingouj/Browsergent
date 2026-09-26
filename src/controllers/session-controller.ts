@@ -884,15 +884,29 @@ export class SessionController {
 	 * Uses meta.bytes only — does not keep full SessionData arrays in memory.
 	 * Missing meta is migrated one session at a time via getOrMigrateSessionMeta.
 	 */
+	/** Sessions another window has open, or that still have a live run. */
+	private sessionIdsInUse(): Set<string> {
+		const ids = new Set<string>();
+		for (const id of Object.values(this.meta.panelActiveSession)) {
+			if (id.length > 0) ids.add(id);
+		}
+		for (const list of Object.values(this.meta.runningSessionsByWindow ?? {})) {
+			for (const id of list) {
+				if (id.length > 0) ids.add(id);
+			}
+		}
+		return ids;
+	}
+
 	private async trimStoredSessions(): Promise<void> {
 		const metas = await this.listAllSessionMetas();
-		const activeId = this.getActiveSessionId();
+		const inUse = this.sessionIdsInUse();
 		let totalBytes = metas.reduce((sum, m) => sum + m.bytes, 0);
 		if (totalBytes <= MAX_SESSION_STORE_BYTES) return;
 
 		const oldestFirst = [...metas].sort((a, b) => a.timestamp - b.timestamp);
 		for (const session of oldestFirst) {
-			if (session.id === activeId) continue;
+			if (inUse.has(session.id)) continue;
 			await this.removeSessionKeys(session.id);
 			totalBytes -= session.bytes;
 			if (totalBytes <= MAX_SESSION_STORE_BYTES) return;
@@ -1199,12 +1213,20 @@ export class SessionController {
 
 		const prunedIds: string[] = [];
 		if (sessions.length > SESSION_CAP) {
-			const toDelete = sessions.slice(SESSION_CAP);
-			for (const s of toDelete) {
-				prunedIds.push(s.id);
-				await this.removeSessionKeys(s.id);
+			const inUse = this.sessionIdsInUse();
+			const oldestFirst = [...sessions].reverse();
+			for (const session of oldestFirst) {
+				if (sessions.length - prunedIds.length <= SESSION_CAP) break;
+				if (inUse.has(session.id)) continue;
+				prunedIds.push(session.id);
+				await this.removeSessionKeys(session.id);
 			}
-			sessions.length = SESSION_CAP;
+			if (prunedIds.length > 0) {
+				const dropped = new Set(prunedIds);
+				const kept = sessions.filter((session) => !dropped.has(session.id));
+				sessions.length = 0;
+				sessions.push(...kept);
+			}
 		}
 
 		const closed = new Set(this.meta.closedWindowIds ?? []);

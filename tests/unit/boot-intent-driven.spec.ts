@@ -74,17 +74,13 @@ describe("intent-driven boot contracts (shipped modules)", () => {
 		sessions.bindPanelWindow(1);
 		const id = await sessions.resolveOrCreateForWindow(1);
 
-		const supervisor = new RunSupervisor(
-			sessions,
-			{
-				onExtjsRunRequest: () => {},
-				onExtjsDocsRequest: () => {},
-				onLoadSkillRequest: () => {},
-				onFileOpRequest: () => {},
-				onBashRequest: () => {},
-			},
-			{ hosting: "local" },
-		);
+		const supervisor = new RunSupervisor(sessions, {
+			onExtjsRunRequest: () => {},
+			onExtjsDocsRequest: () => {},
+			onLoadSkillRequest: () => {},
+			onFileOpRequest: () => {},
+			onBashRequest: () => {},
+		});
 		supervisor.startForeground(id);
 		expect(WorkerMock).not.toHaveBeenCalled();
 

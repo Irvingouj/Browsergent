@@ -137,7 +137,7 @@ describe("toOpenAIMessages", () => {
 });
 
 describe("toOpenAITools", () => {
-	test("wraps each tool under {type:function, function:{...}}", () => {
+	test("wraps each tool and fills object schemas OpenAI rejects", () => {
 		const tools: ToolDefinition[] = [
 			{
 				name: "run_js",
@@ -145,7 +145,10 @@ describe("toOpenAITools", () => {
 				description: "run js",
 				parameters: {
 					type: "object",
-					properties: { code: { type: "string" } },
+					properties: {
+						code: { type: "string" },
+						params: { type: "object", description: "free-form" },
+					},
 				},
 				execution_mode: "sequential",
 			},
@@ -159,7 +162,16 @@ describe("toOpenAITools", () => {
 					description: "run js",
 					parameters: {
 						type: "object",
-						properties: { code: { type: "string" } },
+						properties: {
+							code: { type: "string" },
+							params: {
+								type: "object",
+								description: "free-form",
+								properties: {},
+								required: [],
+							},
+						},
+						required: [],
 					},
 				},
 			},

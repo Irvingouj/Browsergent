@@ -32,6 +32,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function sanitizeNode(
+	schema: Record<string, unknown>,
+): Record<string, unknown> {
+	const copy: Record<string, unknown> = { ...schema };
+	if (copy.type === "object" || isRecord(copy.properties)) {
+		copy.type = "object";
+		const props = isRecord(copy.properties) ? copy.properties : {};
+		const next: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(props)) {
+			next[key] = isRecord(value) ? sanitizeNode(value) : value;
+		}
+		copy.properties = next;
+		if (!Array.isArray(copy.required)) copy.required = [];
+	}
+	if (copy.type === "array" && isRecord(copy.items)) {
+		copy.items = sanitizeNode(copy.items);
+	}
+	return copy;
+}
+
+/** Make a JSON schema acceptable to OpenAI function calling. `strict` stays off. */
+export function sanitizeOpenAISchema(schema: unknown): Record<string, unknown> {
+	if (!isRecord(schema)) {
+		return { type: "object", properties: {}, required: [] };
+	}
+	return sanitizeNode(schema);
+}
+
 function assistantToolCalls(content: Content[]): OpenAIToolCall[] {
 	const calls: OpenAIToolCall[] = [];
 	for (const block of content) {
@@ -97,7 +125,7 @@ export function toOpenAITools(tools: ToolDefinition[]): OpenAIToolDefinition[] {
 		function: {
 			name: t.name,
 			description: t.description,
-			parameters: t.parameters,
+			parameters: sanitizeOpenAISchema(t.parameters),
 		},
 	}));
 }

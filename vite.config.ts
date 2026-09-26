@@ -41,20 +41,6 @@ export default defineConfig({
 						dest: "worker.js",
 					},
 				];
-				const staticFiles = [
-					{ src: "public/headless-boot.js", dest: "headless-boot.js" },
-					{ src: "headless.html", dest: "headless.html" },
-				];
-				for (const { src: srcRel, dest: destRel } of staticFiles) {
-					const src = path.resolve(__dirname, srcRel);
-					const dest = path.resolve(outDir, destRel);
-					try {
-						copyFileSync(src, dest);
-					} catch {
-						console.warn(`${srcRel} not found, skipping copy`);
-					}
-				}
-
 				for (const { src: srcRel, dest: destRel } of files) {
 					const src = path.resolve(__dirname, srcRel);
 					const dest = path.resolve(outDir, destRel);

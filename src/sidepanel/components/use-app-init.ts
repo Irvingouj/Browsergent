@@ -19,12 +19,7 @@ import {
 	reportWarn,
 	sendMessageSafe,
 } from "../../errors/report";
-import {
-	isOffscreenPanelRelayMessage,
-	isOffscreenRunEventMessage,
-	isSessionRunRelayMessage,
-	type OffscreenRunStateMessage,
-} from "../../protocol/offscreen-run";
+import { isSessionRunRelayMessage } from "../../protocol/offscreen-run";
 import { getSkillService } from "../../skills/skill-service";
 import { browsergentStore } from "../../state/store";
 import { openPanelStorage } from "../../storage/open-panel-storage";
@@ -290,116 +285,106 @@ export function useAppInit(): AppInitResult {
 			}
 			void settingsLoadPromise;
 
-			const supervisor = new RunSupervisor(
-				sessionCtrl,
-				{
-					onRunningSessionsChanged: () => {
-						onRunningSessionsChangedRef.current?.();
-					},
-					onExtjsRunRequest: (msg, _sessionId) => {
-						extjsControllerRef.current?.handleRelayRequest(msg);
-					},
-					onExtjsDocsRequest: (msg, _sessionId) => {
-						extjsControllerRef.current?.handleDocsRelayRequest(msg);
-					},
-					onLoadSkillRequest: (msg, _sessionId) => {
-						extjsControllerRef.current?.handleLoadSkillRelayRequest(msg);
-					},
-					onFileOpRequest: (msg) => {
-						const filesCtrl = filesControllerRef.current;
-						if (!filesCtrl) {
+			const supervisor = new RunSupervisor(sessionCtrl, {
+				onRunningSessionsChanged: () => {
+					onRunningSessionsChangedRef.current?.();
+				},
+				onExtjsRunRequest: (msg, _sessionId) => {
+					extjsControllerRef.current?.handleRelayRequest(msg);
+				},
+				onExtjsDocsRequest: (msg, _sessionId) => {
+					extjsControllerRef.current?.handleDocsRelayRequest(msg);
+				},
+				onLoadSkillRequest: (msg, _sessionId) => {
+					extjsControllerRef.current?.handleLoadSkillRelayRequest(msg);
+				},
+				onFileOpRequest: (msg) => {
+					const filesCtrl = filesControllerRef.current;
+					if (!filesCtrl) {
+						supervisor.postRelay(msg.id, {
+							type: "fileOpError",
+							id: msg.id,
+							error: "Files controller unavailable",
+						});
+						return;
+					}
+					handleFileOp(msg, filesCtrl)
+						.then(async (result) => {
+							supervisor.postRelay(msg.id, {
+								type: "fileOpResult",
+								id: msg.id,
+								result,
+							});
+							// Mutating tools must refresh Files tree / preview (upload path
+							// already did; agent file_edit/delete/write previously left UI stale).
+							if (
+								result.op === "edit" ||
+								result.op === "write" ||
+								result.op === "delete"
+							) {
+								browsergentStore.getState().incrementFilesVersion();
+								try {
+									await refreshShallowFileTree(filesCtrl);
+								} catch {
+									/* best-effort UI refresh */
+								}
+							}
+						})
+						.catch((err: unknown) => {
+							const message = err instanceof Error ? err.message : String(err);
+							reportWarn({
+								code: "E_HOST_UNKNOWN",
+								source: "panel",
+								message: `fileOp failed: ${message}`,
+								details: { requestId: msg.id },
+								cause: err,
+							});
 							supervisor.postRelay(msg.id, {
 								type: "fileOpError",
 								id: msg.id,
-								error: "Files controller unavailable",
-							});
-							return;
-						}
-						handleFileOp(msg, filesCtrl)
-							.then(async (result) => {
-								supervisor.postRelay(msg.id, {
-									type: "fileOpResult",
-									id: msg.id,
-									result,
-								});
-								// Mutating tools must refresh Files tree / preview (upload path
-								// already did; agent file_edit/delete/write previously left UI stale).
-								if (
-									result.op === "edit" ||
-									result.op === "write" ||
-									result.op === "delete"
-								) {
-									browsergentStore.getState().incrementFilesVersion();
-									try {
-										await refreshShallowFileTree(filesCtrl);
-									} catch {
-										/* best-effort UI refresh */
-									}
-								}
-							})
-							.catch((err: unknown) => {
-								const message =
-									err instanceof Error ? err.message : String(err);
-								reportWarn({
-									code: "E_HOST_UNKNOWN",
-									source: "panel",
-									message: `fileOp failed: ${message}`,
-									details: { requestId: msg.id },
-									cause: err,
-								});
-								supervisor.postRelay(msg.id, {
-									type: "fileOpError",
-									id: msg.id,
-									error: message,
-								});
-							});
-					},
-					onBashRequest: (msg) => {
-						deliverBashResult(
-							loadBashShells().then((shells) =>
-								shells.exec(msg.sessionId, msg.command),
-							),
-							msg.id,
-							(message) => {
-								supervisor.postRelay(msg.id, message);
-							},
-						);
-					},
-					onWorkerReady: (_sessionId) => {
-						setWorkerReady(true);
-						browsergentStore.getState().bootComponentSet("worker", "ok");
-					},
-					onAgentStopped: () => {
-						extjsControllerRef.current?.stop().catch((err: unknown) => {
-							reportWarn({
-								code: "E_BOOT_EXTJS",
-								source: "extjs",
-								message: "JS stop on agent stopped failed",
-								cause: err,
+								error: message,
 							});
 						});
-					},
-					onSessionRunRelay: (sessionId, event) => {
-						if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-							return;
-						}
-						void sendMessageSafe(
-							{
-								type: "sessionRunRelay",
-								sessionId,
-								event,
-							},
-							{ source: "relay", op: "sessionRunRelay" },
-						);
-					},
 				},
-				{
-					// Panel-local workers: close side panel → runs stop (product intent).
-					// In-panel multi-session concurrency is fine while the panel stays open.
-					hosting: "local",
-					getWindowId: () => windowContextRef.current?.getWindowId() ?? null,
+				onBashRequest: (msg) => {
+					deliverBashResult(
+						loadBashShells().then((shells) =>
+							shells.exec(msg.sessionId, msg.command),
+						),
+						msg.id,
+						(message) => {
+							supervisor.postRelay(msg.id, message);
+						},
+					);
 				},
-			);
+				onWorkerReady: (_sessionId) => {
+					setWorkerReady(true);
+					browsergentStore.getState().bootComponentSet("worker", "ok");
+				},
+				onAgentStopped: () => {
+					extjsControllerRef.current?.stop().catch((err: unknown) => {
+						reportWarn({
+							code: "E_BOOT_EXTJS",
+							source: "extjs",
+							message: "JS stop on agent stopped failed",
+							cause: err,
+						});
+					});
+				},
+				onSessionRunRelay: (sessionId, event) => {
+					if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+						return;
+					}
+					void sendMessageSafe(
+						{
+							type: "sessionRunRelay",
+							sessionId,
+							event,
+						},
+						{ source: "relay", op: "sessionRunRelay" },
+					);
+				},
+			});
 			supervisorRef.current = supervisor;
 
 			const extjs = new ExtjsController((msg) => {
@@ -690,117 +675,16 @@ export function useAppInit(): AppInitResult {
 		};
 	}, []);
 
-	// Subscribe to offscreen run events and panel relay requests.
+	// Other open panels publish sessionRunRelay while a run is in progress.
 	useEffect(() => {
 		if (typeof chrome === "undefined" || !chrome.runtime?.onMessage) return;
 
-		const listener = (
-			message: unknown,
-			_sender: chrome.runtime.MessageSender,
-			sendResponse: (response?: unknown) => void,
-		) => {
+		const listener = (message: unknown) => {
 			try {
 				const supervisor = supervisorRef.current;
-				const windowCtx = windowContextRef.current;
-				const panelWindowId = windowCtx?.getWindowId();
-
-				if (isOffscreenRunEventMessage(message) && supervisor) {
+				if (!isSessionRunRelayMessage(message) || !supervisor) return;
+				if (!supervisor.isLocalWorkerHost(message.sessionId)) {
 					supervisor.applyRemoteRunEvent(message.sessionId, message.event);
-					return;
-				}
-
-				if (isSessionRunRelayMessage(message) && supervisor) {
-					if (!supervisor.isLocalWorkerHost(message.sessionId)) {
-						supervisor.applyRemoteRunEvent(message.sessionId, message.event);
-					}
-					return;
-				}
-
-				const stateMsg = message as OffscreenRunStateMessage;
-				if (
-					stateMsg?.type === "offscreenRunState" &&
-					Array.isArray(stateMsg.runs) &&
-					supervisor &&
-					panelWindowId !== null &&
-					panelWindowId !== undefined
-				) {
-					for (const run of stateMsg.runs) {
-						if (run.windowId !== panelWindowId) continue;
-						supervisor.adoptRemoteRun(run.sessionId, run.runId, run.status);
-					}
-					return;
-				}
-
-				if (isOffscreenPanelRelayMessage(message)) {
-					if (panelWindowId !== message.windowId) return;
-					const extjs = extjsControllerRef.current;
-					const filesCtrl = filesControllerRef.current;
-					const respond = (
-						response: import("../../types/messages").PanelToWorker,
-					) => {
-						void sendMessageSafe(
-							{
-								type: "offscreenPanelRelayResponse",
-								requestId: message.requestId,
-								message: response,
-							},
-							{ source: "relay", op: "offscreenPanelRelayResponse" },
-						);
-					};
-
-					if (message.message.type === "extjsRunRequest" && extjs) {
-						extjs.handleRelayRequest(message.message);
-						const prior = ExtensionJsClient.relayCallback;
-						ExtensionJsClient.relayCallback = (relayMsg) => {
-							respond(relayMsg);
-							ExtensionJsClient.relayCallback = prior;
-						};
-						sendResponse({ ok: true });
-						return true;
-					}
-					if (message.message.type === "extjsDocsRequest" && extjs) {
-						extjs.handleDocsRelayRequest(message.message);
-						const prior = ExtensionJsClient.relayCallback;
-						ExtensionJsClient.relayCallback = (relayMsg) => {
-							respond(relayMsg);
-							ExtensionJsClient.relayCallback = prior;
-						};
-						sendResponse({ ok: true });
-						return true;
-					}
-					if (message.message.type === "fileOpRequest" && filesCtrl) {
-						handleFileOp(message.message, filesCtrl)
-							.then((result) => {
-								respond({
-									type: "fileOpResult",
-									id: message.requestId,
-									result,
-								});
-							})
-							.catch((err: unknown) => {
-								respond({
-									type: "fileOpError",
-									id: message.requestId,
-									error: err instanceof Error ? err.message : String(err),
-								});
-							});
-						sendResponse({ ok: true });
-						return true;
-					}
-					if (message.message.type === "bashRequest") {
-						const request = message.message;
-						deliverBashResult(
-							loadBashShells().then((shells) =>
-								shells.exec(request.sessionId, request.command),
-							),
-							message.requestId,
-							(reply) => {
-								respond(reply);
-							},
-						);
-						sendResponse({ ok: true });
-						return true;
-					}
 				}
 			} catch (err) {
 				reportError({
@@ -816,13 +700,7 @@ export function useAppInit(): AppInitResult {
 		return () => {
 			chrome.runtime.onMessage.removeListener(listener);
 		};
-	}, [
-		supervisorRef,
-		windowContextRef,
-		extjsControllerRef,
-		filesControllerRef,
-		bashShellsRef,
-	]);
+	}, [supervisorRef]);
 
 	useEffect(() => {
 		if (typeof chrome === "undefined" || !chrome.storage?.session?.onChanged) {

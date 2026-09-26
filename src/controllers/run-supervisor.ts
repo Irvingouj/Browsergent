@@ -10,7 +10,6 @@ import {
 } from "../state/streaming-signals";
 import type { PanelToWorker, WorkerToPanel } from "../types/messages";
 import type { FileOp } from "../worker/file-op-relay";
-import { OffscreenProxyBridge } from "./offscreen-proxy-bridge";
 import type { SessionController } from "./session-controller";
 import { SessionRunRegistry } from "./session-run-registry";
 import { SessionRunSink } from "./session-run-sink";
@@ -18,7 +17,7 @@ import { WorkerBridge } from "./worker-bridge";
 
 type RunningSessionsChangedHandler = () => void;
 
-export type RunBridge = WorkerBridge | OffscreenProxyBridge;
+export type RunBridge = WorkerBridge;
 
 type BridgeHandlers = {
 	onExtjsRunRequest: (
@@ -57,22 +56,10 @@ type BridgeHandlers = {
 	onWorkerReady?: (sessionId: string) => void;
 	onAgentStopped?: () => void;
 	onRunningSessionsChanged?: RunningSessionsChangedHandler;
-	/** Headless host: publish run events to panels via background relay. */
+	/** Publish run events to other panels via the background relay. */
 	onRunEventPublished?: (sessionId: string, event: WorkerToPanel) => void;
-	/** Local host: relay events for cross-panel merge subscribe. */
+	/** Relay events so another open panel can subscribe during a window merge. */
 	onSessionRunRelay?: (sessionId: string, event: WorkerToPanel) => void;
-};
-
-export type RunSupervisorOptions = {
-	/**
-	 * Where agent workers live.
-	 * - `"local"` (product default): workers in the side panel document. Closing the
-	 *   panel ends runs — intentional. In-panel “background” = other sessions still
-	 *   running in the same open panel, not panel-close survival.
-	 * - `"offscreen"`: legacy option; not a product goal (do not use for “survive panel close”).
-	 */
-	hosting?: "local" | "offscreen";
-	getWindowId?: () => number | null;
 };
 
 const TERMINAL_STATUSES = new Set<AgentRunStatus>(["stopped", "error", "done"]);
@@ -82,19 +69,14 @@ export class RunSupervisor {
 	private readonly sink: SessionRunSink;
 	private readonly bridges = new Map<string, RunBridge>();
 	private readonly relayBridgeByRequestId = new Map<string, RunBridge>();
-	private readonly hosting: "local" | "offscreen";
-	private readonly getWindowId: (() => number | null) | null;
 	private foregroundSessionId: string | null = null;
 	private workerReady = false;
 
 	constructor(
-		private readonly sessionController: SessionController,
+		sessionController: SessionController,
 		private readonly handlers: BridgeHandlers,
-		options: RunSupervisorOptions = {},
 	) {
 		this.sink = new SessionRunSink(sessionController);
-		this.hosting = options.hosting ?? "local";
-		this.getWindowId = options.getWindowId ?? null;
 	}
 
 	getRegistry(): SessionRunRegistry {
@@ -108,7 +90,7 @@ export class RunSupervisor {
 	 * ignored so the origin panel does not re-apply the same events 2–3×.
 	 */
 	isLocalWorkerHost(sessionId: string): boolean {
-		return this.hosting === "local" && this.bridges.has(sessionId);
+		return this.bridges.has(sessionId);
 	}
 
 	isWorkerReady(): boolean {
@@ -123,26 +105,9 @@ export class RunSupervisor {
 		return this.foregroundSessionId;
 	}
 
-	getForegroundBridge(): RunBridge {
-		if (!this.foregroundSessionId) {
-			throw new Error("No foreground session bound");
-		}
-		return this.ensureBridge(this.foregroundSessionId);
-	}
-
 	ensureBridge(sessionId: string): RunBridge {
 		const existing = this.bridges.get(sessionId);
 		if (existing) return existing;
-
-		if (this.hosting === "offscreen") {
-			const proxy = new OffscreenProxyBridge(
-				sessionId,
-				this.getWindowId ?? (() => null),
-			);
-			proxy.start();
-			this.bridges.set(sessionId, proxy);
-			return proxy;
-		}
 
 		const bridgeSessionId = sessionId;
 		const bridge = new WorkerBridge({
@@ -219,7 +184,7 @@ export class RunSupervisor {
 
 	/**
 	 * Bind UI to a session without starting the agent worker (cold boot).
-	 * Worker is created on first postToForeground / postToSession / registerRun.
+	 * Worker is created on first postToForeground / registerRun.
 	 */
 	startForeground(sessionId: string): RunBridge | null {
 		this.foregroundSessionId = sessionId;
@@ -235,17 +200,6 @@ export class RunSupervisor {
 
 	registerRun(sessionId: string, runId: string): void {
 		this.registry.register(sessionId, runId, "loading");
-		this.ensureBridge(sessionId);
-		this.handlers.onRunningSessionsChanged?.();
-	}
-
-	adoptRemoteRun(
-		sessionId: string,
-		runId: string,
-		status: AgentRunStatus,
-	): void {
-		if (this.registry.isRunning(sessionId)) return;
-		this.registry.register(sessionId, runId, status);
 		this.ensureBridge(sessionId);
 		this.handlers.onRunningSessionsChanged?.();
 	}
@@ -420,10 +374,6 @@ export class RunSupervisor {
 		this.ensureBridge(this.foregroundSessionId).post(message);
 	}
 
-	postToSession(sessionId: string, message: PanelToWorker): void {
-		this.ensureBridge(sessionId).post(message);
-	}
-
 	stopForegroundRun(runId?: string): void {
 		const sid = this.foregroundSessionId;
 		if (!sid) return;
@@ -435,10 +385,6 @@ export class RunSupervisor {
 	}
 
 	dispose(): void {
-		if (this.hosting === "offscreen") {
-			this.bridges.clear();
-			return;
-		}
 		for (const bridge of this.bridges.values()) {
 			bridge.stop();
 		}
@@ -467,10 +413,7 @@ export class RunSupervisor {
 				this.registry.clear(state.sessionId);
 				this.sink.invalidate(state.sessionId);
 				this.handlers.onRunningSessionsChanged?.();
-				if (
-					this.hosting === "local" &&
-					state.sessionId !== this.foregroundSessionId
-				) {
+				if (state.sessionId !== this.foregroundSessionId) {
 					this.bridges.get(state.sessionId)?.stop();
 					this.bridges.delete(state.sessionId);
 				}

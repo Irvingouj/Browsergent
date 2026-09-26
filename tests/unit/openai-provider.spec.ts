@@ -185,7 +185,11 @@ describe("OpenAIProvider", () => {
 				function: {
 					name: "run_js",
 					description: "d",
-					parameters: { type: "object" },
+					parameters: {
+						type: "object",
+						properties: {},
+						required: [],
+					},
 				},
 			},
 		]);

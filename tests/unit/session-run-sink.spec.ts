@@ -74,6 +74,78 @@ describe("SessionRunSink", () => {
 		expect(loaded?.history.map((entry) => entry.entryId)).toEqual(["u1", "a1"]);
 	});
 
+	test("a rejected history event does not drop the next one", async () => {
+		const sessionId = await controller.createSessionAttachedTo(1);
+		const transcript = transcriptFromMessages([
+			{ kind: "user", id: "u1", text: "Question", timestamp: 1 },
+			{ kind: "assistant", id: "a1", text: "Answer", timestamp: 2 },
+		]);
+		const [userEntry, assistantEntry] = transcriptPath(transcript);
+		if (!userEntry || !assistantEntry) {
+			throw new Error("missing fixture entries");
+		}
+
+		const rejected = sink.applyEvent(sessionId, {
+			type: "agentHistoryMessage",
+			runId: "run-1",
+			entry: assistantEntry,
+		});
+		const kept = sink.applyEvent(sessionId, {
+			type: "agentHistoryMessage",
+			runId: "run-1",
+			entry: userEntry,
+		});
+		await expect(rejected).rejects.toThrow(/parent mismatch/);
+		await kept;
+		await sink.flush(sessionId);
+
+		const loaded = await controller.loadForSession(sessionId);
+		expect(loaded?.history.map((entry) => entry.entryId)).toEqual(["u1"]);
+	});
+
+	test("retries a session load after the first read fails", async () => {
+		const sessionId = await controller.createSessionAttachedTo(1);
+		const loadForSession = controller.loadForSession.bind(controller);
+		let calls = 0;
+		controller.loadForSession = async (id) => {
+			calls += 1;
+			if (calls === 1) throw new Error("idb down");
+			return loadForSession(id);
+		};
+
+		await expect(
+			sink.applyEvent(sessionId, {
+				type: "agentTrace",
+				runId: "run-1",
+				entry: {
+					id: "t1",
+					step: 1,
+					status: "done",
+					toolName: "run_js",
+					result: "ok",
+					timestamp: 1,
+				},
+			}),
+		).rejects.toThrow("idb down");
+
+		await sink.applyEvent(sessionId, {
+			type: "agentTrace",
+			runId: "run-1",
+			entry: {
+				id: "t2",
+				step: 2,
+				status: "done",
+				toolName: "run_js",
+				result: "kept",
+				timestamp: 2,
+			},
+		});
+		await sink.flush(sessionId);
+
+		const loaded = await controller.loadForSession(sessionId);
+		expect(loaded?.trace.map((entry) => entry.id)).toEqual(["t2"]);
+	});
+
 	test("does not overwrite a different session", async () => {
 		const sessionA = await controller.createSessionAttachedTo(1);
 		const sessionB = await controller.createSessionAttachedTo(1);
