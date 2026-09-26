@@ -14,7 +14,8 @@ type ToolMethod = Extract<
 			| "file_read"
 			| "file_write"
 			| "file_edit"
-			| "file_delete";
+			| "file_delete"
+			| "bash";
 	}
 >;
 
@@ -28,6 +29,7 @@ function isToolMethod(request: BridgeRequest): request is ToolMethod {
 		case "file_write":
 		case "file_edit":
 		case "file_delete":
+		case "bash":
 			return true;
 		case "session.create":
 		case "session.list":

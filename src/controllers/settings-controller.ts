@@ -1,7 +1,10 @@
 import { browsergentStore } from "../state/store";
 import type { StorageBackend } from "../storage/storage-backend";
 import type { ProviderConfig } from "../worker/provider-schema";
-import { providerConfigSchema } from "../worker/provider-schema";
+import {
+	normalizeStoredProvider,
+	providerConfigSchema,
+} from "../worker/provider-schema";
 
 export interface SettingsValues {
 	providers: ProviderConfig[];
@@ -18,7 +21,7 @@ export class SettingsController {
 			const providers = (Array.isArray(raw) ? raw : [])
 				.map((item) => providerConfigSchema.safeParse(item))
 				.filter((r): r is { success: true; data: ProviderConfig } => r.success)
-				.map((r) => r.data);
+				.map((r) => normalizeStoredProvider(r.data));
 			const validIds = new Set(providers.map((p) => p.id));
 			const storedActive =
 				(await this.storage.get<string | null>(

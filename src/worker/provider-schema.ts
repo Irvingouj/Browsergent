@@ -11,22 +11,26 @@ import { z } from "zod";
 export const WireFormat = {
 	AnthropicMessages: "anthropic-messages",
 	OpenAIChatCompletions: "openai-chat-completions",
+	OpenAIResponses: "openai-responses",
 } as const;
 export const wireFormatSchema = z.enum([
 	WireFormat.AnthropicMessages,
 	WireFormat.OpenAIChatCompletions,
+	WireFormat.OpenAIResponses,
 ]);
 export type WireFormat = z.infer<typeof wireFormatSchema>;
 
 export const ProviderId = {
 	Anthropic: "anthropic",
 	OpenAI: "openai",
+	OpenAICodex: "openai-codex",
 	DeepSeek: "deepseek",
 	Custom: "custom",
 } as const;
 export const providerIdSchema = z.enum([
 	ProviderId.Anthropic,
 	ProviderId.OpenAI,
+	ProviderId.OpenAICodex,
 	ProviderId.DeepSeek,
 	ProviderId.Custom,
 ]);
@@ -41,6 +45,14 @@ export const providerModelConfigSchema = z.object({
 });
 export type ProviderModelConfig = z.infer<typeof providerModelConfigSchema>;
 
+/** ChatGPT Codex OAuth. `apiKey` on the provider holds the access token. */
+export const providerOAuthSchema = z.object({
+	refreshToken: z.string().min(1),
+	expiresAt: z.number(),
+	accountId: z.string().min(1),
+});
+export type ProviderOAuth = z.infer<typeof providerOAuthSchema>;
+
 export const providerConfigSchema = z.object({
 	id: z.string().min(1),
 	name: z.string(),
@@ -51,6 +63,7 @@ export const providerConfigSchema = z.object({
 	modelsEndpointUrl: z.string(),
 	defaultModelId: z.string(),
 	models: z.array(providerModelConfigSchema),
+	oauth: providerOAuthSchema.optional(),
 });
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 
@@ -63,6 +76,34 @@ export interface ProviderPreset {
 	chatEndpointUrl: string;
 	modelsEndpointUrl: string;
 	defaultModel: string;
+	/** When set, a new provider starts with these models instead of only defaultModel. */
+	modelIds?: readonly string[];
+}
+
+const LEGACY_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+
+/**
+ * Official OpenAI used to be stored as Chat Completions. Rewrite that default
+ * endpoint to Responses. Custom URLs are left alone so a proxy the user typed
+ * keeps the wire format they saved.
+ */
+export function normalizeStoredProvider(
+	provider: ProviderConfig,
+): ProviderConfig {
+	const url = provider.chatEndpointUrl.trim().replace(/\/+$/, "");
+	if (
+		provider.providerId === ProviderId.OpenAI &&
+		provider.wireFormat === WireFormat.OpenAIChatCompletions &&
+		url === LEGACY_OPENAI_CHAT_URL
+	) {
+		return {
+			...provider,
+			wireFormat: WireFormat.OpenAIResponses,
+			chatEndpointUrl: OPENAI_RESPONSES_URL,
+		};
+	}
+	return provider;
 }
 
 // ── Provider /models endpoint response schemas ───────────────────────────

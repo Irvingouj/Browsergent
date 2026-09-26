@@ -6,6 +6,7 @@ import type {
 	SessionTranscriptEntry,
 } from "../../types/session-transcript";
 import { transcriptPath } from "../../types/session-transcript";
+import { visibleAssistantText } from "../../worker/openai-responses-wire";
 
 interface TranscriptTreePanelProps {
 	sessionController: SessionController;
@@ -53,18 +54,12 @@ function rowsInTree(transcript: SessionTranscript): TreeRow[] {
 function entryText(entry: SessionTranscriptEntry): string {
 	if (entry.displayText) return entry.displayText;
 	if (entry.message.role === "tool_result") {
-		const text = entry.message.content
-			.filter((block) => block.type === "text")
-			.map((block) => block.text)
-			.join(" ");
+		const text = visibleAssistantText(entry.message.content);
 		return text
 			? `${entry.message.tool_name}: ${text}`
 			: entry.message.tool_name;
 	}
-	return entry.message.content
-		.filter((block) => block.type === "text")
-		.map((block) => block.text)
-		.join(" ");
+	return visibleAssistantText(entry.message.content);
 }
 
 function roleLabel(entry: SessionTranscriptEntry): string {

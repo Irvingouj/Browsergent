@@ -7,6 +7,7 @@ export type OffscreenPanelRelayRequest = Extract<
 	| { type: "extjsRunRequest" }
 	| { type: "extjsDocsRequest" }
 	| { type: "fileOpRequest" }
+	| { type: "bashRequest" }
 >;
 
 export type OffscreenRunCommandMessage = {

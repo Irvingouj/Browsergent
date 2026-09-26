@@ -97,6 +97,13 @@ export const bridgeRequestSchema = z.discriminatedUnion("method", [
 	}),
 	z.object({
 		id: z.string().min(1),
+		method: z.literal("bash"),
+		params: z.object({
+			command: z.string(),
+		}),
+	}),
+	z.object({
+		id: z.string().min(1),
 		method: z.literal("status"),
 	}),
 	z.object({
@@ -195,6 +202,12 @@ export type BridgeSuccess =
 			id: string;
 			ok: true;
 			method: "file_delete";
+			result: string;
+	  }
+	| {
+			id: string;
+			ok: true;
+			method: "bash";
 			result: string;
 	  }
 	| {
@@ -299,6 +312,12 @@ const bridgeSuccessSchema = z.discriminatedUnion("method", [
 		id: z.string().min(1),
 		ok: z.literal(true),
 		method: z.literal("file_delete"),
+		result: z.string(),
+	}),
+	z.object({
+		id: z.string().min(1),
+		ok: z.literal(true),
+		method: z.literal("bash"),
 		result: z.string(),
 	}),
 	z.object({

@@ -8,7 +8,8 @@ interface AddProviderButtonProps {
 
 const OPTIONS = [
 	{ id: ProviderId.Anthropic, label: "Anthropic" },
-	{ id: ProviderId.OpenAI, label: "OpenAI (Chat Completions)" },
+	{ id: ProviderId.OpenAI, label: "OpenAI" },
+	{ id: ProviderId.OpenAICodex, label: "ChatGPT Plus/Pro" },
 	{ id: ProviderId.DeepSeek, label: "DeepSeek" },
 ] as const;
 

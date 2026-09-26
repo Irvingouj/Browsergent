@@ -31,6 +31,9 @@ function ensureBridge(sessionId: string): WorkerBridge {
 		onFileOpRequest: (msg) => {
 			publish(sessionId, msg);
 		},
+		onBashRequest: (msg) => {
+			publish(sessionId, msg);
+		},
 		runRouting: {
 			shouldUpdateUi: () => true,
 			shouldApplyBridgeEffects: () => false,

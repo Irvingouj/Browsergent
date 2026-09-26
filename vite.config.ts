@@ -14,7 +14,11 @@ import { defineConfig } from "vite";
 export default defineConfig({
 	base: "./",
 	resolve: {
-		alias: [],
+		alias: {
+			// just-bash's browser build imports node:zlib for gzip. Stub it so
+			// the extension bundle loads; gzip/gunzip throw if a command calls them.
+			"node:zlib": path.resolve(__dirname, "src/bash/node-zlib-stub.ts"),
+		},
 	},
 	plugins: [
 		preact(),

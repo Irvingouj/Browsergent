@@ -66,6 +66,7 @@ Then:
   npm run bridge -- status
   npm run bridge -- docs              # API index (page, chrome, fs, ...)
   npm run bridge -- docs page         # page.click / snapshot / fill / ...
+  npm run bridge -- bash 'ls /'
   npm run bridge -- run 'await page.snapshot()'
   npm run bridge -- run --file cell.js     # prefer this over quoting a novel
   npm run bridge -- run - < cell.js         # stdin
@@ -75,6 +76,13 @@ Then:
 Prefer run --file for multi-line cells. Snapshot before click/fill. Prefer web.tab.*(tabId)
 over page.* after new_tab. Call docs (get_doc) before guessing APIs.
 `);
+	} else if (command === "bash") {
+		const script = args.join(" ").trim();
+		if (!script) {
+			console.error("usage: browsergent bash <command>");
+			process.exit(1);
+		}
+		console.log(await cli.bash(script));
 	} else if (command === "docs") {
 		console.log(await cli.docs(args[0]));
 	} else if (command === "reset") {
@@ -91,7 +99,7 @@ over page.* after new_tab. Call docs (get_doc) before guessing APIs.
 		console.log(await cli.writeFile(pathArg, content));
 	} else {
 		console.error(
-			"usage: browsergent enroll <token> | status | run <js> | docs [namespace] | help | reset | stop | write <path> <content>",
+			"usage: browsergent enroll <token> | status | run <js> | bash <command> | docs [namespace] | help | reset | stop | write <path> <content>",
 		);
 		process.exit(1);
 	}

@@ -84,6 +84,7 @@ export class BridgeGate {
 			case "file_write":
 			case "file_edit":
 			case "file_delete":
+			case "bash":
 				if (!paired) return unpaired(request.id);
 				if (!this.deps.tools) {
 					return unavailable(request.id, "Tool host is not available");

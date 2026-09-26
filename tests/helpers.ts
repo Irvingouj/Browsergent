@@ -1192,16 +1192,28 @@ export async function configureMockOpenAIProvider(
 		await domClickSelector(sidePanel, '[data-testid^="settings-edit-"]');
 	} else {
 		await domClickTestId(sidePanel, "settings-add-provider");
-		await domClickTestId(sidePanel, "settings-add-openai");
+		await domClickTestId(sidePanel, "settings-add-openai-compatible");
 	}
 
 	await waitForTestId(sidePanel, "settings-edit");
+	// The mock speaks Chat Completions. Official OpenAI is Responses now, so
+	// the fixture uses the compatible provider, which stays on that wire.
+	await sidePanel.evaluate(() => {
+		const sel = document.querySelector(
+			'[data-testid="settings-kind-select"]',
+		) as HTMLSelectElement | null;
+		if (!sel) return;
+		sel.value = "openai-compatible";
+		sel.dispatchEvent(new Event("input", { bubbles: true }));
+	});
 	await domFillTestId(
 		sidePanel,
 		"settings-baseurl-input",
 		`${mockUrl}/v1/chat/completions`,
 	);
 	await domFillTestId(sidePanel, "settings-apikey-input", apiKey);
+	await domFillTestId(sidePanel, "settings-model-input", "gpt-4o");
+	await domClickTestId(sidePanel, "settings-add-model-button");
 	// Ensure a model is selected if empty.
 	await sidePanel.evaluate(() => {
 		const sel = document.querySelector(

@@ -81,6 +81,7 @@ describe("intent-driven boot contracts (shipped modules)", () => {
 				onExtjsDocsRequest: () => {},
 				onLoadSkillRequest: () => {},
 				onFileOpRequest: () => {},
+				onBashRequest: () => {},
 			},
 			{ hosting: "local" },
 		);

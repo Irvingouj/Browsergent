@@ -119,6 +119,22 @@ export class BridgeCli {
 		return this.run(code);
 	}
 
+	async bash(command: string): Promise<string> {
+		const config = await this.readConfig();
+		const sessionId = await this.ensureSession(config.token, config.sessionId);
+		const response = await this.deps.send({
+			id: this.nextId("bash"),
+			token: config.token,
+			sessionId,
+			method: "bash",
+			params: { command },
+		});
+		if (!response.ok || response.method !== "bash") {
+			throw new Error(this.responseError(response));
+		}
+		return response.result;
+	}
+
 	async run(code: string): Promise<string> {
 		const config = await this.readConfig();
 		const sessionId = await this.ensureSession(config.token, config.sessionId);

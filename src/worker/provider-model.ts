@@ -9,12 +9,16 @@ import type { AnthropicConfig } from "./anthropic";
 import { createAnthropicModel } from "./anthropic-model";
 import type { OpenAIConfig } from "./openai";
 import { createOpenAIModel } from "./openai-model";
+import type { OpenAIResponsesConfig } from "./openai-responses";
+import { createOpenAIResponsesModel } from "./openai-responses-model";
 
 export interface RuntimeProvider {
 	wireFormat: WireFormat;
 	apiKey: string;
 	chatEndpointUrl: string;
 	model: string;
+	/** Set for ChatGPT Codex. Selects the coding-plan request headers. */
+	codexAccountId?: string;
 }
 
 export function createProviderModel(
@@ -37,6 +41,15 @@ export function createProviderModel(
 				model: provider.model,
 			};
 			return createOpenAIModel(config, onDiagnostic);
+		}
+		case WireFormat.OpenAIResponses: {
+			const config: OpenAIResponsesConfig = {
+				apiKey: provider.apiKey,
+				chatEndpointUrl: provider.chatEndpointUrl,
+				model: provider.model,
+				codexAccountId: provider.codexAccountId,
+			};
+			return createOpenAIResponsesModel(config, onDiagnostic);
 		}
 	}
 }

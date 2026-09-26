@@ -4,6 +4,8 @@ import {
 	defaultModelForProvider,
 	type ProviderConfig,
 } from "../../state/slices/settings-slice";
+import { ProviderId, WireFormat } from "../../types/messages";
+import { buildResponsesRequestBody } from "../../worker/openai-responses-wire";
 import {
 	buildProviderChatBody,
 	buildProviderRequest,
@@ -48,15 +50,27 @@ export async function testConnection(
 		};
 	}
 
+	const codex = provider.providerId === ProviderId.OpenAICodex;
 	const request = buildProviderRequest({
 		wireFormat: provider.wireFormat,
 		apiKey: provider.apiKey,
 		chatEndpointUrl: provider.chatEndpointUrl,
+		codexAccountId: codex ? provider.oauth?.accountId : undefined,
 	});
 
-	const body = buildProviderChatBody(request, model.model, 100, [
-		{ role: "user", content: "ping" },
-	]);
+	const body =
+		provider.wireFormat === WireFormat.OpenAIResponses
+			? buildResponsesRequestBody({
+					model: model.model,
+					instructions: "Reply with ok.",
+					input: "ping",
+					stream: codex,
+					maxOutputTokens: 16,
+					codex,
+				})
+			: buildProviderChatBody(request, model.model, 100, [
+					{ role: "user", content: "ping" },
+				]);
 
 	let resp: Response;
 	try {
@@ -96,6 +110,7 @@ export async function testConnection(
 		return { ok: false, error: classifyProviderResponse(resp.status, text) };
 	}
 
-	// Body is intentionally unread — a 2xx is sufficient proof of reachability.
+	// A 2xx is enough. Cancel a streaming body so the socket does not stay open.
+	await resp.body?.cancel().catch(() => undefined);
 	return { ok: true };
 }

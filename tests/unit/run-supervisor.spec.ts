@@ -41,6 +41,7 @@ describe("RunSupervisor", () => {
 				onExtjsDocsRequest: () => {},
 				onLoadSkillRequest: () => {},
 				onFileOpRequest: () => {},
+				onBashRequest: () => {},
 			},
 			{ hosting: "local" },
 		);
@@ -102,6 +103,7 @@ describe("RunSupervisor", () => {
 				onExtjsDocsRequest: () => {},
 				onLoadSkillRequest: () => {},
 				onFileOpRequest: () => {},
+				onBashRequest: () => {},
 				onAgentStopped,
 			},
 			{ hosting: "local" },

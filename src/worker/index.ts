@@ -10,8 +10,19 @@
 /// <reference lib="webworker" />
 
 import type { AgentHistoryEntry } from "@pi-oxide/pi-host-web";
+import {
+	type BashCommandResult,
+	BashErrorCode,
+	BashRelayError,
+} from "../bash/types";
 import type { BrowsergentErrorCode } from "../errors/browsergent-error";
-import { isAgentStartMessage } from "../protocol/worker-guards";
+import {
+	describeAgentStartFailure,
+	isAgentStartMessage,
+	isBashError,
+	isBashResult,
+	repairAgentStartMessage,
+} from "../protocol/worker-guards";
 import type { CellResult } from "../types/extjs-utils";
 import type {
 	AgentTraceEntry,
@@ -21,6 +32,7 @@ import type {
 } from "../types/messages";
 import { enableStreamDebug, streamLog } from "../utils/stream-logger";
 import { AgentLoop, type AgentLoopCallbacks } from "./agent-loop";
+import { BashRelay } from "./bash-relay";
 import { setCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { FileOpRelay } from "./file-op-relay";
@@ -125,6 +137,15 @@ const fileOpRelay = new FileOpRelay((request) => {
 	});
 }, EXTJS_RELAY_TIMEOUT_MS);
 
+const bashRelay = new BashRelay((request) => {
+	post({
+		type: "bashRequest",
+		id: request.id,
+		sessionId: request.sessionId,
+		command: request.command,
+	});
+});
+
 function relayFileOp(op: FileOp) {
 	if (!currentSessionId) {
 		return Promise.reject(
@@ -140,6 +161,18 @@ function handleFileOpRelayResult(id: string, result: FileOpResult): void {
 
 function handleFileOpRelayError(id: string, error: string): void {
 	fileOpRelay.reject(id, error);
+}
+
+function relayBash(command: string): Promise<BashCommandResult> {
+	if (!currentSessionId) {
+		return Promise.reject(
+			new BashRelayError(
+				BashErrorCode.NoSession,
+				"No active session — cannot run bash",
+			),
+		);
+	}
+	return bashRelay.relay(currentSessionId, command);
 }
 
 /** Send JS code to the side panel for execution via ExtensionSession. */
@@ -345,6 +378,9 @@ function handleAgentStart(
 		fileOp(op) {
 			return relayFileOp(op);
 		},
+		bash(command) {
+			return relayBash(command);
+		},
 	};
 	currentCallbacks = callbacks;
 
@@ -397,6 +433,7 @@ function handleAgentStop(runId?: string): void {
 	rejectAllPendingExtjsDocsRelays("Agent stopped");
 	loadSkillRelay.rejectAll("Agent stopped");
 	fileOpRelay.rejectAll("Agent stopped");
+	bashRelay.rejectAll("Agent stopped");
 }
 
 function handleAgentReset(): void {
@@ -405,6 +442,7 @@ function handleAgentReset(): void {
 	rejectAllPendingExtjsDocsRelays("Agent reset");
 	loadSkillRelay.rejectAll("Agent reset");
 	fileOpRelay.rejectAll("Agent reset");
+	bashRelay.rejectAll("Agent reset");
 	agentLoop = null;
 	currentCallbacks = null;
 	currentSessionId = null;
@@ -412,12 +450,63 @@ function handleAgentReset(): void {
 	post({ type: "agentStatus", runId: "unknown", status: "idle" });
 }
 
+function dispatchBashReply(msg: PanelToWorker): void {
+	// The worker message event is typed, but postMessage payloads are untrusted.
+	const raw: unknown = msg;
+	if (isBashResult(raw)) {
+		bashRelay.resolve(raw.id, raw.result);
+		return;
+	}
+	if (isBashError(raw)) {
+		bashRelay.reject(raw.id, new BashRelayError(raw.code, raw.error));
+		return;
+	}
+	const id = bashReplyId(raw);
+	if (!id) return;
+	bashRelay.reject(
+		id,
+		new BashRelayError(BashErrorCode.Protocol, "Invalid bash reply"),
+	);
+}
+
+function bashReplyId(
+	// Same untrusted payload, read only to reject a malformed reply.
+	raw: unknown,
+): string | null {
+	if (typeof raw !== "object" || raw === null || !("id" in raw)) return null;
+	return typeof raw.id === "string" && raw.id.length > 0 ? raw.id : null;
+}
+
 // --- Message dispatch ---
 
 self.onmessage = (event: MessageEvent<PanelToWorker>) => {
-	const msg = event.data;
-	if (msg.type === "agentStart" && !isAgentStartMessage(msg)) {
-		throw new Error("Invalid agentStart message or transcript history");
+	const raw: unknown = event.data;
+	let msg: PanelToWorker;
+	if (
+		typeof raw === "object" &&
+		raw !== null &&
+		(raw as { type?: unknown }).type === "agentStart" &&
+		!isAgentStartMessage(raw)
+	) {
+		const repaired = repairAgentStartMessage(raw);
+		if (!repaired) {
+			const runIdValue = (raw as { runId?: unknown }).runId;
+			post({
+				type: "agentError",
+				runId:
+					typeof runIdValue === "string" && runIdValue.length > 0
+						? runIdValue
+						: "unknown",
+				error: {
+					code: "E_PROTOCOL",
+					message: `Could not start the agent: ${describeAgentStartFailure(raw)}`,
+				},
+			});
+			return;
+		}
+		msg = repaired;
+	} else {
+		msg = event.data;
 	}
 	switch (msg.type) {
 		case "agentStart":
@@ -444,12 +533,14 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 			rejectAllPendingExtjsDocsRelays("Extjs stopped");
 			loadSkillRelay.rejectAll("Extjs stopped");
 			fileOpRelay.rejectAll("Extjs stopped");
+			bashRelay.rejectAll("Extjs stopped");
 			break;
 		case "extjsReset":
 			rejectAllPendingExtjsRelays("Extjs reset");
 			rejectAllPendingExtjsDocsRelays("Extjs reset");
 			loadSkillRelay.rejectAll("Extjs reset");
 			fileOpRelay.rejectAll("Extjs reset");
+			bashRelay.rejectAll("Extjs reset");
 			break;
 		case "extjsRunResult":
 			handleExtjsRelayResult(msg.id, msg.result);
@@ -474,6 +565,10 @@ self.onmessage = (event: MessageEvent<PanelToWorker>) => {
 			break;
 		case "fileOpError":
 			handleFileOpRelayError(msg.id, msg.error);
+			break;
+		case "bashResult":
+		case "bashError":
+			dispatchBashReply(msg);
 			break;
 		case "skillAutoActivate": {
 			const loop = agentLoop;

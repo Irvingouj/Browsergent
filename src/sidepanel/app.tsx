@@ -7,6 +7,7 @@ import {
 	useState,
 } from "preact/hooks";
 import { useStore } from "zustand/react";
+import { ensureCodexAccess } from "../auth/codex-oauth";
 import {
 	buildExportSnapshot,
 	exportConversation,
@@ -53,7 +54,7 @@ import {
 import { defaultModelForProvider } from "../state/slices/settings-slice";
 import { browsergentStore } from "../state/store";
 import type { ChatMessage, PanelToWorker } from "../types/messages";
-import { WireFormat } from "../worker/provider-schema";
+import { type ProviderConfig, ProviderId } from "../worker/provider-schema";
 import { ChatPanel } from "./components/ChatPanel";
 import { EnrollmentPanel } from "./components/EnrollmentPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
@@ -395,6 +396,37 @@ const App: FunctionalComponent = () => {
 				browsergentStore.getState().setActiveTab("settings");
 				return;
 			}
+			let provider: ProviderConfig = activeProvider;
+			if (provider.providerId === ProviderId.OpenAICodex && provider.oauth) {
+				try {
+					const fresh = await ensureCodexAccess(provider);
+					if (fresh !== provider) {
+						const { providers, activeProviderId } =
+							browsergentStore.getState().settings;
+						const next = providers.map((item) =>
+							item.id === fresh.id ? fresh : item,
+						);
+						browsergentStore.getState().providersChanged(next);
+						void settingsControllerRef.current?.save({
+							providers: next,
+							activeProviderId,
+						});
+						provider = fresh;
+					}
+				} catch (err) {
+					browsergentStore.getState().setActiveTab("settings");
+					browsergentStore.getState().appendSystemMessage({
+						kind: "system",
+						id: crypto.randomUUID(),
+						text:
+							err instanceof Error
+								? err.message
+								: "ChatGPT sign-in expired. Sign in again.",
+						timestamp: Date.now(),
+					});
+					return;
+				}
+			}
 			const sessionId = sessionControllerRef.current?.getActiveSessionId();
 			if (!sessionId) return;
 			if (selectActiveSessionOrigin(browsergentStore.getState()) === "cli") {
@@ -662,10 +694,8 @@ const App: FunctionalComponent = () => {
 			const now = new Date().toISOString();
 			resolvedTask = `${resolvedTask}\n\n[Current time: ${now}]`;
 
-			const activeModel = activeProvider
-				? defaultModelForProvider(activeProvider)
-				: null;
-			if (activeProvider && !activeModel) {
+			const activeModel = defaultModelForProvider(provider);
+			if (!activeModel) {
 				clearRunPreparation(
 					preparingRunIdsRef.current,
 					pendingSteersRef.current,
@@ -705,19 +735,15 @@ const App: FunctionalComponent = () => {
 				resolvedTask,
 				skillCatalog,
 				activatedSkills,
-				settings: activeProvider
-					? {
-							wireFormat: activeProvider.wireFormat,
-							apiKey: activeProvider.apiKey,
-							chatEndpointUrl: activeProvider.chatEndpointUrl,
-							model: activeModel?.model ?? "",
-						}
-					: {
-							wireFormat: WireFormat.AnthropicMessages,
-							apiKey: "",
-							chatEndpointUrl: "",
-							model: "",
-						},
+				settings: {
+					wireFormat: provider.wireFormat,
+					apiKey: provider.apiKey,
+					chatEndpointUrl: provider.chatEndpointUrl,
+					model: activeModel.model,
+					...(provider.providerId === ProviderId.OpenAICodex && provider.oauth
+						? { codexAccountId: provider.oauth.accountId }
+						: {}),
+				},
 			});
 			const pendingSteers = pendingSteersRef.current.get(runId) ?? [];
 			pendingSteersRef.current.delete(runId);
@@ -727,6 +753,7 @@ const App: FunctionalComponent = () => {
 		},
 		[
 			activeProvider,
+			settingsControllerRef,
 			sessionControllerRef,
 			supervisorRef,
 			extjsControllerRef,
