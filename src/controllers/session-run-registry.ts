@@ -88,6 +88,7 @@ export function isAgentRunActive(status: AgentRunStatus): boolean {
 		status === "loading" ||
 		status === "running" ||
 		status === "waiting_for_model" ||
-		status === "executing_tool"
+		status === "executing_tool" ||
+		status === "compacting"
 	);
 }

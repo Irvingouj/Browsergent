@@ -56,6 +56,7 @@ import { browsergentStore } from "../state/store";
 import type { ChatMessage, PanelToWorker } from "../types/messages";
 import { type ProviderConfig, ProviderId } from "../worker/provider-schema";
 import { ChatPanel } from "./components/ChatPanel";
+import { CompactionIndicator } from "./components/CompactionIndicator";
 import { EnrollmentPanel } from "./components/EnrollmentPanel";
 import { FilesPanel } from "./components/files/FilesPanel";
 import { refreshShallowFileTree } from "./components/files/refresh-file-tree";
@@ -109,6 +110,8 @@ function statusDotClass(isRetrying: boolean, status: string): string {
 			return "bg-text-muted text-text-muted animate-pulse-glow";
 		case "executing_tool":
 			return "bg-warning text-warning animate-pulse-glow";
+		case "compacting":
+			return "bg-accent text-accent animate-pulse-glow";
 		case "done":
 			return "bg-success";
 		default:
@@ -285,7 +288,8 @@ const App: FunctionalComponent = () => {
 					agentState.status === "loading" ||
 					agentState.status === "running" ||
 					agentState.status === "waiting_for_model" ||
-					agentState.status === "executing_tool";
+					agentState.status === "executing_tool" ||
+					agentState.status === "compacting";
 				if (isRunning && agentState.activeRunId) {
 					supervisorRef.current?.postToForeground({
 						type: "skillAutoActivate",
@@ -1274,7 +1278,8 @@ const App: FunctionalComponent = () => {
 		status === "loading" ||
 		status === "running" ||
 		status === "waiting_for_model" ||
-		status === "executing_tool";
+		status === "executing_tool" ||
+		status === "compacting";
 	const stepCount = trace.length;
 
 	useEffect(() => {
@@ -1513,9 +1518,13 @@ const App: FunctionalComponent = () => {
 					class={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(retryState !== null, status)}`}
 				/>
 				<span class="flex-1 truncate" data-testid="agent-status">
-					{retryState
-						? `retry ${retryState.attempt}/${retryState.maxAttempts} · ${(retryState.delayMs / 1000).toFixed(1)}s · ${retryState.errorLabel}`
-						: `${status}${statusReason ? ` — ${statusReason}` : ""}`}
+					{status === "compacting" ? (
+						<CompactionIndicator />
+					) : retryState ? (
+						`retry ${retryState.attempt}/${retryState.maxAttempts} · ${(retryState.delayMs / 1000).toFixed(1)}s · ${retryState.errorLabel}`
+					) : (
+						`${status}${statusReason ? ` — ${statusReason}` : ""}`
+					)}
 				</span>
 				{skillDiagnostics.length > 0 ? (
 					<span

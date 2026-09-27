@@ -927,35 +927,65 @@ describe("file_read truncation", () => {
 		mockFileOp.mockReset();
 	});
 
-	test("does not truncate content — WASM handles truncation", async () => {
+	test("keeps the head and tail of a large read and saves the full text", async () => {
 		const huge = "A".repeat(50_001);
-		mockFileOp.mockResolvedValue({
-			op: "read",
-			content: huge,
-			bytes: 50_001,
-		});
+		mockFileOp.mockImplementation(
+			async (op: { op: string; content?: string }) => {
+				if (op.op === "write")
+					return { op: "write", bytes: op.content?.length ?? 0 };
+				return { op: "read", content: huge, bytes: 50_001 };
+			},
+		);
 		const tools = makeTools();
 		const handler = tools.getHandler("file_read");
 		if (!handler) throw new Error("file_read handler not found");
 		const result = (await handler({ path: "big.txt" })) as string;
-		expect(result).toBe(huge);
+		expect(result.startsWith("A".repeat(100))).toBe(true);
+		expect(result.endsWith("A".repeat(100))).toBe(true);
+		expect(result).toContain("characters omitted");
+		expect(result).toContain("/artifacts/");
 		expect(result).not.toContain("[truncated]");
+		expect(result.length).toBeLessThan(huge.length);
+		const writes = mockFileOp.mock.calls.filter(
+			(call) => (call[0] as { op: string }).op === "write",
+		);
+		expect(writes[0]?.[0]).toMatchObject({ op: "write", content: huge });
 	});
 
-	test("does not truncate content at exactly MAX_FILE_READ_CHARS", async () => {
-		const exact = "B".repeat(50_000);
+	test("reads a slice of a saved page without shortening it again", async () => {
+		const huge = `${"a".repeat(40_000)}ONLYINTHEMIDDLE${"b".repeat(40_000)}`;
 		mockFileOp.mockResolvedValue({
 			op: "read",
-			content: exact,
-			bytes: 50_000,
-			truncated: false,
+			content: huge,
+			bytes: huge.length,
+		});
+		const tools = makeTools();
+		const handler = tools.getHandler("file_read");
+		if (!handler) throw new Error("file_read handler not found");
+		const result = (await handler({
+			path: "/artifacts/tc_page.txt",
+			offset: 40_000,
+			limit: "ONLYINTHEMIDDLE".length,
+		})) as string;
+		expect(result).toBe("ONLYINTHEMIDDLE");
+		expect(mockFileOp).not.toHaveBeenCalledWith(
+			expect.objectContaining({ op: "write" }),
+		);
+	});
+
+	test("shapes a read that is past the record cap", async () => {
+		const exact = "B".repeat(50_000);
+		mockFileOp.mockImplementation(async (op: { op: string }) => {
+			if (op.op === "write") return { op: "write", bytes: 50_000 };
+			return { op: "read", content: exact, bytes: 50_000, truncated: false };
 		});
 		const tools = makeTools();
 		const handler = tools.getHandler("file_read");
 		if (!handler) throw new Error("file_read handler not found");
 		const result = (await handler({ path: "exact.txt" })) as string;
-		expect(result).toBe(exact);
+		expect(result).toContain("characters omitted");
 		expect(result).not.toContain("[truncated]");
+		expect(result.length).toBeLessThan(exact.length);
 	});
 });
 

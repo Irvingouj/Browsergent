@@ -12,11 +12,23 @@ import { createLlmModel } from "./llm-model";
 export function createAnthropicModel(
 	config: AnthropicConfig,
 	onDiagnostic: (event: AgentDiagnosticEvent) => void = () => {},
+	onCompaction?: (active: boolean) => void,
+	onCompacted?: (notice: {
+		summary: string;
+		messageCount: number;
+		extractive: boolean;
+	}) => void,
 ): AgentModel {
 	const provider = new AnthropicProvider(config, onDiagnostic);
 	return createLlmModel(
 		provider,
-		{ id: config.model, contextWindow: 200_000, maxTokens: 4096 },
+		{
+			id: config.model,
+			contextWindow: 200_000,
+			maxTokens: 4096,
+			onCompaction,
+			onCompacted,
+		},
 		onDiagnostic,
 	);
 }

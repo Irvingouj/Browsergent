@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { SessionRunRegistry } from "../../src/controllers/session-run-registry";
+import {
+	isAgentRunActive,
+	SessionRunRegistry,
+} from "../../src/controllers/session-run-registry";
 
 describe("SessionRunRegistry", () => {
 	let registry: SessionRunRegistry;
@@ -57,6 +60,11 @@ describe("SessionRunRegistry", () => {
 		expect(registry.getRunningSessionIds()).toEqual(
 			expect.arrayContaining(["session-a", "session-b"]),
 		);
+	});
+
+	test("compacting keeps the run active", () => {
+		expect(isAgentRunActive("compacting")).toBe(true);
+		expect(isAgentRunActive("done")).toBe(false);
 	});
 
 	test("shouldUpdateUi is true only for foreground attachment", () => {

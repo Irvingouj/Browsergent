@@ -1,5 +1,6 @@
 import type { FilesController } from "../controllers/files";
 import { isTextFile } from "../controllers/files";
+import { parentDirPath } from "../controllers/files/paths";
 import type {
 	FileOp,
 	FileOpListEntry,
@@ -59,6 +60,14 @@ export async function handleFileOp(
 		case "write": {
 			if (isUnsafePath(op.path))
 				throw new Error(`File path out of scope: ${op.path}`);
+			const parent = parentDirPath(op.path);
+			if (parent) {
+				try {
+					await filesController.createFolder(parent);
+				} catch {
+					// The directory already exists.
+				}
+			}
 			await filesController.writeFile(op.path, op.content);
 			return { op: "write", bytes: op.content.length };
 		}

@@ -7,8 +7,8 @@ path (e.g. "/user") to list only direct children of that directory. Binary files
 
 export const FILE_READ_DESCRIPTION = `Read text content from a file.
 - \`path\` is the file path (e.g. "/foo.md" or "sub/bar.md"). Relative paths resolve against root "/".
-- Use file_list to discover paths.
-- Returns the text content in full.
+- \`offset\` is a character index to start at (default 0). \`limit\` is how many characters to return.
+- A large tool result is stored under /artifacts/. Read it with offset and limit instead of loading the whole file.
 - Binary files return E_FILE_BINARY.
 Prefer this over run_js when you just want to read a file's content.`;
 

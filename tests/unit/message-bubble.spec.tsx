@@ -7,6 +7,12 @@ const mockMessages: Record<string, ChatMessage> = {
 	mu1: { kind: "user", id: "mu1", text: "Hello user", timestamp: 0 },
 	ma1: { kind: "assistant", id: "ma1", text: "Hello assistant", timestamp: 0 },
 	ms1: { kind: "system", id: "ms1", text: "System alert", timestamp: 0 },
+	mc1: {
+		kind: "system",
+		id: "mc1",
+		text: "Context compacted · 4 messages summarized\nsummary model unavailable — local extract used\n\nno one password",
+		timestamp: 0,
+	},
 };
 
 const mockState = {
@@ -54,6 +60,14 @@ describe("MessageBubble", () => {
 		expect(html).toContain("System alert");
 		expect(html).toContain("chat-message-system");
 		expect(html).toContain("msg-label--system");
+	});
+
+	test("renders a collapsible card after compaction", () => {
+		const html = render(<MessageBubble messageId="mc1" />);
+		expect(html).toContain('data-testid="compaction-card"');
+		expect(html).toContain("Context compacted · 4 messages summarized");
+		expect(html).toContain("local extract");
+		expect(html).toContain("no one password");
 	});
 
 	test("returns null for unknown message id", () => {

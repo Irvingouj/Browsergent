@@ -24,6 +24,12 @@ export interface RuntimeProvider {
 export function createProviderModel(
 	provider: RuntimeProvider,
 	onDiagnostic: (event: AgentDiagnosticEvent) => void = () => {},
+	onCompaction?: (active: boolean) => void,
+	onCompacted?: (notice: {
+		summary: string;
+		messageCount: number;
+		extractive: boolean;
+	}) => void,
 ): AgentModel {
 	switch (provider.wireFormat) {
 		case WireFormat.AnthropicMessages: {
@@ -32,7 +38,12 @@ export function createProviderModel(
 				chatEndpointUrl: provider.chatEndpointUrl,
 				model: provider.model,
 			};
-			return createAnthropicModel(config, onDiagnostic);
+			return createAnthropicModel(
+				config,
+				onDiagnostic,
+				onCompaction,
+				onCompacted,
+			);
 		}
 		case WireFormat.OpenAIChatCompletions: {
 			const config: OpenAIConfig = {
@@ -40,7 +51,7 @@ export function createProviderModel(
 				chatEndpointUrl: provider.chatEndpointUrl,
 				model: provider.model,
 			};
-			return createOpenAIModel(config, onDiagnostic);
+			return createOpenAIModel(config, onDiagnostic, onCompaction, onCompacted);
 		}
 		case WireFormat.OpenAIResponses: {
 			const config: OpenAIResponsesConfig = {
@@ -49,7 +60,12 @@ export function createProviderModel(
 				model: provider.model,
 				codexAccountId: provider.codexAccountId,
 			};
-			return createOpenAIResponsesModel(config, onDiagnostic);
+			return createOpenAIResponsesModel(
+				config,
+				onDiagnostic,
+				onCompaction,
+				onCompacted,
+			);
 		}
 	}
 }

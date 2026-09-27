@@ -21,6 +21,7 @@ const AGENT_STATUSES: readonly AgentStatus[] = [
 	"running",
 	"waiting_for_model",
 	"executing_tool",
+	"compacting",
 	"done",
 	"stopped",
 	"error",

@@ -139,7 +139,9 @@ export const TraceEntryCompact: FunctionalComponent<{
 							<div class="text-[10px] uppercase tracking-wider text-text-dim mb-xs">
 								Result
 							</div>
-							<ResultBody text={entry.result} />
+							<div data-testid="tool-result-body">
+								<ResultBody text={entry.result} />
+							</div>
 						</div>
 					)}
 				</div>

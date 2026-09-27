@@ -23,6 +23,7 @@ import {
 import { streamLog } from "../utils/stream-logger";
 import { createAgentTools } from "./agent-tools";
 import { composeSystemPrompt } from "./anthropic";
+import { formatCompactionNotice } from "./compaction-notice";
 import { getCurrentTraceId } from "./current-trace";
 import type { FileOp, FileOpResult } from "./file-op-relay";
 import { visibleAssistantText } from "./openai-responses-wire";
@@ -185,13 +186,34 @@ export class AgentLoop {
 
 		callbacks.onStatus("loading");
 
-		const model = createProviderModel(provider, callbacks.onDiagnostic);
+		let compactionNumber = 0;
+		const model = createProviderModel(
+			provider,
+			callbacks.onDiagnostic,
+			(active) => {
+				callbacks.onStatus(
+					active ? "compacting" : "running",
+					active ? "Compacting context" : undefined,
+				);
+			},
+			(notice) => {
+				compactionNumber += 1;
+				callbacks.onMessage(
+					"system",
+					formatCompactionNotice({
+						...notice,
+						compactionNumber,
+					}),
+				);
+			},
+		);
 		const tools = createAgentTools(
 			callbacks.runJs,
 			callbacks.getDocs,
 			callbacks.loadSkill,
 			callbacks.fileOp,
 			callbacks.bash,
+			{ maxContextTokens: contextBudgetForModel(model) },
 		);
 
 		this.agent = new Agent({
@@ -202,6 +224,8 @@ export class AgentLoop {
 			instructions: composeSystemPrompt(skillCatalog),
 			context: {
 				maxTokens: contextBudgetForModel(model),
+				// pi-core stores this and does not trim the current turn with it.
+				// Live requests are capped in capToolResultsForModel.
 				toolResultLimit: 50_000,
 				summarize: true,
 			},
@@ -282,7 +306,7 @@ export class AgentLoop {
 					: typeof t.output === "string"
 						? t.output
 						: JSON.stringify(t.output);
-				const resultText = rawOutput.slice(0, 8000);
+				const resultText = rawOutput;
 				const traceStatus = computeToolEndTraceStatus(
 					t.status,
 					t.error,

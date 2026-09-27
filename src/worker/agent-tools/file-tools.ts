@@ -63,11 +63,27 @@ export function createFileTools(
 						description:
 							'File path (e.g. "/foo.md" or "sub/bar.md"; relative resolves against root "/").',
 					},
+					offset: {
+						type: "number",
+						description:
+							"Character index to start at. Defaults to 0. Use with limit to read part of a large /artifacts file.",
+					},
+					limit: {
+						type: "number",
+						description:
+							"Maximum characters to return. Omit to read through the end of the file.",
+					},
 				},
 				required: ["path"],
 			},
 			run: async (input: unknown) => {
-				const parsed = z.object({ path: z.string() }).safeParse(input);
+				const parsed = z
+					.object({
+						path: z.string(),
+						offset: z.number().int().nonnegative().optional(),
+						limit: z.number().int().positive().optional(),
+					})
+					.safeParse(input);
 				if (!parsed.success || !parsed.data.path.trim()) {
 					return formatToolError(
 						"E_FILE_INVALID",
@@ -92,7 +108,15 @@ export function createFileTools(
 							"",
 						);
 					}
-					return result.content;
+					const offset = parsed.data.offset ?? 0;
+					if (offset === 0 && parsed.data.limit === undefined) {
+						return result.content;
+					}
+					const end =
+						parsed.data.limit === undefined
+							? result.content.length
+							: offset + parsed.data.limit;
+					return result.content.slice(offset, end);
 				} catch (err) {
 					return formatFileOpError(err);
 				}

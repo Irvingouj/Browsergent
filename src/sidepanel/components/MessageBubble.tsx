@@ -33,6 +33,31 @@ export const MessageBubble: FunctionalComponent<{ messageId: string }> = ({
 
 	if (!message) return null;
 
+	if (
+		message.kind === "system" &&
+		message.text.startsWith("Context compacted ·")
+	) {
+		const [title, ...rest] = message.text.split("\n");
+		const body = rest.join("\n").trim();
+		const extractive = body.includes(
+			"summary model unavailable — local extract used",
+		);
+		return (
+			<details
+				data-testid="compaction-card"
+				class="self-center w-full rounded-md border border-border bg-bg-muted px-md py-sm text-xs"
+			>
+				<summary class="cursor-pointer text-text-secondary">
+					{title}
+					{extractive ? " · local extract" : ""}
+				</summary>
+				<pre class="mt-sm whitespace-pre-wrap break-words font-sans text-text-primary">
+					{body}
+				</pre>
+			</details>
+		);
+	}
+
 	const streamingSig = getStreamingSignal(messageId);
 	const isStreaming = !!streamingSig;
 	const text = isStreaming
